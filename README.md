@@ -60,7 +60,25 @@ The framework is designed to integrate seamlessly with continuous integration pi
 ## Prerequisites
 
 ### CLI and Development Tools
-*Required command-line tools and development dependencies will be defined here.*
+
+Required command-line tools:
+- **kubectl** - Kubernetes command-line tool (v1.25+)
+- **clusterctl** - Cluster API CLI
+- **kind** - Kubernetes IN Docker for local cluster testing (v0.30.0+)
+- **go** - Go programming language (1.21+)
+- **make** - Build automation tool
+- **git** - Version control (2.52.0+)
+
+Cloud provider CLIs (depending on which provider you're testing):
+- **az** - Azure CLI (for CAPZ)
+- **aws** - AWS CLI (for CAPA)
+- **gcloud** - Google Cloud CLI (for CAPG)
+
+### System Requirements
+
+- Linux, macOS, or Windows with WSL2
+- Minimum 8GB RAM (16GB recommended for running multiple tests)
+- Docker installed and running (for containerized tests)
 
 ### Runtime Requirements
 - Kubernetes cluster access (can be created by tests or provided via configuration)
