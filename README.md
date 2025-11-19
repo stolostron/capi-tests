@@ -44,6 +44,15 @@ The framework uses configuration files to manage:
 
 *Detailed configuration examples and options will be provided.*
 
+## Prerequisites
+
+### CLI and Development Tools
+*Required command-line tools and development dependencies will be defined here.*
+
+### Runtime Requirements
+- Kubernetes cluster access (can be created by tests or provided via configuration)
+- Cloud provider credentials configured according to the specific CAPI implementation being tested
+
 ## Getting Started
 
 *Custom setup process for CAPI testing will be documented here, including:*
@@ -57,15 +66,6 @@ The framework uses configuration files to manage:
 The framework is designed to integrate seamlessly with continuous integration pipelines.
 
 *Details on CI/CD integration patterns, required environment variables, and pipeline examples will be documented.*
-
-## Prerequisites
-
-### CLI and Development Tools
-*Required command-line tools and development dependencies will be defined here.*
-
-### Runtime Requirements
-- Kubernetes cluster access (can be created by tests or provided via configuration)
-- Cloud provider credentials configured according to the specific CAPI implementation being tested
 
 ## Contributing
 
