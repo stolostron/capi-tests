@@ -47,7 +47,6 @@ The framework uses configuration files to manage:
 ## Getting Started
 
 *Custom setup process for CAPI testing will be documented here, including:*
-- Prerequisites and dependencies
 - CLI tools and development environment setup
 - Initial configuration
 - Running your first test
