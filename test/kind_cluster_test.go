@@ -121,7 +121,7 @@ func TestKindCluster_CAPIComponents(t *testing.T) {
 	}
 
 	for _, ns := range expectedNamespaces {
-		output, err := RunCommand(t, "kubectl", "--context", context, "get", "namespace", ns)
+		_, err := RunCommand(t, "kubectl", "--context", context, "get", "namespace", ns)
 		if err != nil {
 			t.Logf("Namespace '%s' may not exist yet (this might be expected): %v", ns, err)
 		} else {
