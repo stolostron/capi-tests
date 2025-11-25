@@ -44,19 +44,6 @@ The framework uses configuration files to manage:
 
 *Detailed configuration examples and options will be provided.*
 
-## Getting Started
-
-*Custom setup process for CAPI testing will be documented here, including:*
-- CLI tools and development environment setup
-- Initial configuration
-- Running your first test
-
-## CI/CD Integration
-
-The framework is designed to integrate seamlessly with continuous integration pipelines.
-
-*Details on CI/CD integration patterns, required environment variables, and pipeline examples will be documented.*
-
 ## Prerequisites
 
 ### CLI and Development Tools
@@ -84,6 +71,18 @@ Cloud provider CLIs (depending on which provider you're testing):
 - Kubernetes cluster access (can be created by tests or provided via configuration)
 - Cloud provider credentials configured according to the specific CAPI implementation being tested
 
+## Getting Started
+
+*Custom setup process for CAPI testing will be documented here, including:*
+- CLI tools and development environment setup
+- Initial configuration
+- Running your first test
+
+## CI/CD Integration
+
+The framework is designed to integrate seamlessly with continuous integration pipelines.
+
+*Details on CI/CD integration patterns, required environment variables, and pipeline examples will be documented.*
 ## Contributing
 
 *Guidelines for contributing to the testing framework.*
