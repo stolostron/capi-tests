@@ -24,5 +24,20 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
+    - name: Install OpenShift CLI
+      run: |
+        wget -q https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz
+        tar -xzf openshift-client-linux.tar.gz
+        sudo mv oc /usr/local/bin/
+        sudo chmod +x /usr/local/bin/oc
+        oc version --client
+
+    - name: Setup Azure CLI (already installed)
+      run: |
+        az version
+
     - name: Run prerequisite tests
       run: make test-prereq
+      env:
+        # Skip Azure login test in CI by running in short mode
+        GOFLAGS: -short
