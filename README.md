@@ -93,6 +93,15 @@ Tests are configured via environment variables:
 
 - `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `30m`). Use Go duration format: `1h`, `45m`, `90m`, etc.
 
+## Prerequisites
+
+### CLI and Development Tools
+*Required command-line tools and development dependencies will be defined here.*
+
+### Runtime Requirements
+- Kubernetes cluster access (can be created by tests or provided via configuration)
+- Cloud provider credentials configured according to the specific CAPI implementation being tested
+
 ## Getting Started
 
 ### Quick Start
@@ -212,71 +221,6 @@ The test suite integrates with GitHub Actions for continuous testing:
 
 - **Prerequisites Workflow** - Runs prerequisite checks on every push
 - **Full Test Workflow** - Can be triggered manually for complete validation
-
-See [.github/workflows/](.github/workflows/) for workflow configurations.
-
-### CI Environment Requirements
-
-1. Required tools installed (docker, kind, az, etc.)
-2. Azure credentials configured as secrets
-3. Appropriate timeout values (full tests can take 30+ minutes)
-
-## Cleanup
-
-Clean up test resources:
-
-```bash
-# Using Makefile
-make clean
-
-# Manual cleanup
-kind delete cluster --name capz-stage
-rm -rf /tmp/cluster-api-installer-aro
-rm -f /tmp/*-kubeconfig.yaml
-```
-
-## Troubleshooting
-
-### Prerequisites Failing
-
-Run prerequisite tests to identify missing tools:
-
-```bash
-make test-prereq
-```
-
-### Azure Authentication Issues
-
-Verify Azure login:
-
-```bash
-az login
-az account show
-```
-
-### Kind Cluster Problems
-
-Check cluster status:
-
-```bash
-kind get clusters
-kubectl cluster-info --context kind-capz-stage
-```
-
-### Deployment Failures
-
-Check management cluster CAPI components:
-
-```bash
-kubectl get pods -A --context kind-capz-stage
-kubectl logs -n capz-system deployment/capz-controller-manager
-```
-
-## Documentation
-
-- [test/README.md](test/README.md) - Detailed test suite documentation
-- [INTEGRATION.md](INTEGRATION.md) - Integration patterns with cluster-api-installer
-- [TEST_COVERAGE.md](TEST_COVERAGE.md) - Test coverage analysis
 
 ## Contributing
 

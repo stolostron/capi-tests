@@ -26,3 +26,86 @@ jobs:
 
     - name: Run prerequisite tests
       run: make test-prereq
+    - name: Install OpenShift CLI
+      run: |
+        wget -q https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz
+        tar -xzf openshift-client-linux.tar.gz
+        sudo mv oc /usr/local/bin/
+        sudo chmod +x /usr/local/bin/oc
+        oc version --client
+
+    - name: Setup Azure CLI (already installed)
+      run: |
+        az version
+
+    - name: Install gotestsum
+      run: |
+        go install gotest.tools/gotestsum@latest
+
+    - name: Run prerequisite tests
+      run: |
+        mkdir -p test-results
+        ~/go/bin/gotestsum --format testname --jsonfile test-results/tests.json --junitfile test-results/junit.xml -- -short -v ./test -run TestPrerequisites
+      continue-on-error: true
+      id: test-run
+
+    - name: Generate test summary
+      if: always()
+      run: |
+        cat > summary.sh << 'SCRIPT'
+        #!/bin/bash
+
+        echo "# Test Prerequisites Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ -f test-results/tests.json ]; then
+          # Parse JSON and create summary table
+          echo "| Test | Status | Duration |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|----------|" >> $GITHUB_STEP_SUMMARY
+
+          # Process each test event
+          jq -r 'select(.Test != null and .Action != null) |
+                 select(.Action == "pass" or .Action == "fail" or .Action == "skip") |
+                 "| \(.Test) | \(if .Action == "pass" then "✅ PASS" elif .Action == "fail" then "❌ FAIL" else "⏭️ SKIP" end) | \(.Elapsed // 0)s |"' \
+                 test-results/tests.json >> $GITHUB_STEP_SUMMARY
+
+          # Add overall summary
+          echo "" >> $GITHUB_STEP_SUMMARY
+          TOTAL=$(jq -r 'select(.Test != null and .Action != null) | select(.Action == "pass" or .Action == "fail" or .Action == "skip")' test-results/tests.json | wc -l)
+          PASSED=$(jq -r 'select(.Action == "pass")' test-results/tests.json | wc -l)
+          FAILED=$(jq -r 'select(.Action == "fail")' test-results/tests.json | wc -l)
+          SKIPPED=$(jq -r 'select(.Action == "skip")' test-results/tests.json | wc -l)
+
+          echo "## Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total Tests:** $TOTAL" >> $GITHUB_STEP_SUMMARY
+          echo "- **Passed:** ✅ $PASSED" >> $GITHUB_STEP_SUMMARY
+          echo "- **Failed:** ❌ $FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "- **Skipped:** ⏭️ $SKIPPED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ No test results found" >> $GITHUB_STEP_SUMMARY
+        fi
+        SCRIPT
+
+        chmod +x summary.sh
+        ./summary.sh
+
+    - name: Create test annotations
+      if: always()
+      run: |
+        if [ -f test-results/tests.json ]; then
+          jq -r 'select(.Test != null and .Action == "fail") |
+                 "::error file=test/prerequisites_test.go,title=Test Failed::\(.Test) failed"' \
+                 test-results/tests.json || true
+        fi
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: test-results/
+        retention-days: 30
+
+    - name: Fail if tests failed
+      if: steps.test-run.outcome == 'failure'
+      run: exit 1
