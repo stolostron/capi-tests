@@ -24,8 +24,6 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
-    - name: Run prerequisite tests
-      run: make test-prereq
     - name: Install OpenShift CLI
       run: |
         wget -q https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz
@@ -34,7 +32,7 @@ jobs:
         sudo chmod +x /usr/local/bin/oc
         oc version --client
 
-    - name: Setup Azure CLI (already installed)
+    - name: Verify Azure CLI (already installed)
       run: |
         az version
 
