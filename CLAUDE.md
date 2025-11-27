@@ -172,6 +172,7 @@ See `INTEGRATION.md` for detailed integration patterns.
 ### Test Behavior
 - Use `-short` flag or `make test-short` to skip long-running tests
 - All tests check `testing.Short()` before executing expensive operations
+- `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `30m`, format: Go duration like `1h`, `45m`)
 
 ## Key Architecture Decisions
 

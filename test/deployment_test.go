@@ -67,8 +67,17 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	config := NewTestConfig()
 	context := fmt.Sprintf("kind-%s", config.KindClusterName)
 
-	// Wait for control plane to be ready (with timeout)
+	// Wait for control plane to be ready (with configurable timeout)
+	// Default timeout is 30 minutes, can be overridden with DEPLOYMENT_TIMEOUT env var
 	timeout := 30 * time.Minute
+	if envTimeout := os.Getenv("DEPLOYMENT_TIMEOUT"); envTimeout != "" {
+		if parsed, err := time.ParseDuration(envTimeout); err == nil {
+			timeout = parsed
+		} else {
+			t.Logf("Invalid DEPLOYMENT_TIMEOUT value %q: %v (using default: %v)", envTimeout, err, timeout)
+		}
+	}
+
 	pollInterval := 30 * time.Second
 	startTime := time.Now()
 

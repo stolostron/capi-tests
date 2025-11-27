@@ -48,7 +48,11 @@ clean: ## Clean up test resources
 	@echo "Cleanup complete"
 
 setup-submodule: ## Add cluster-api-installer as a git submodule
-	git submodule add -b ARO-ASO https://github.com/RadekCap/cluster-api-installer.git vendor/cluster-api-installer || true
+	@if [ ! -d "vendor/cluster-api-installer" ]; then \
+		git submodule add -b ARO-ASO https://github.com/RadekCap/cluster-api-installer.git vendor/cluster-api-installer; \
+	else \
+		echo "Submodule vendor/cluster-api-installer already exists"; \
+	fi
 	git submodule update --init --recursive
 
 update-submodule: ## Update cluster-api-installer submodule

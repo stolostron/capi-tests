@@ -89,6 +89,10 @@ Tests are configured via environment variables:
 - `ENV` - Environment identifier (default: `stage`)
 - `USER` - User identifier
 
+### Test Behavior
+
+- `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `30m`). Use Go duration format: `1h`, `45m`, `90m`, etc.
+
 ## Getting Started
 
 ### Quick Start
