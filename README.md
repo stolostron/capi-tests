@@ -44,6 +44,15 @@ The framework uses configuration files to manage:
 
 *Detailed configuration examples and options will be provided.*
 
+## Prerequisites
+
+### CLI and Development Tools
+*Required command-line tools and development dependencies will be defined here.*
+
+### Runtime Requirements
+- Kubernetes cluster access (can be created by tests or provided via configuration)
+- Cloud provider credentials configured according to the specific CAPI implementation being tested
+
 ## Getting Started
 
 *Custom setup process for CAPI testing will be documented here, including:*
@@ -56,33 +65,6 @@ The framework uses configuration files to manage:
 The framework is designed to integrate seamlessly with continuous integration pipelines.
 
 *Details on CI/CD integration patterns, required environment variables, and pipeline examples will be documented.*
-
-## Prerequisites
-
-### CLI and Development Tools
-
-Required command-line tools:
-- **kubectl** - Kubernetes command-line tool (v1.25+)
-- **clusterctl** - Cluster API CLI
-- **kind** - Kubernetes IN Docker for local cluster testing (v0.30.0+)
-- **go** - Go programming language (1.21+)
-- **make** - Build automation tool
-- **git** - Version control (2.40+)
-
-Cloud provider CLIs (depending on which provider you're testing):
-- **az** - Azure CLI (for CAPZ)
-- **aws** - AWS CLI (for CAPA)
-- **gcloud** - Google Cloud CLI (for CAPG)
-
-### System Requirements
-
-- Linux, macOS, or Windows with WSL2
-- Minimum 8GB RAM (16GB recommended for running multiple tests)
-- Docker installed and running (for containerized tests)
-
-### Runtime Requirements
-- Kubernetes cluster access (can be created by tests or provided via configuration)
-- Cloud provider credentials configured according to the specific CAPI implementation being tested
 
 ## Contributing
 
