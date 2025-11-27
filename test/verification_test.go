@@ -58,14 +58,26 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 			t.Skipf("No method available to retrieve kubeconfig")
 		}
 	} else {
-		// Decode base64 and write to file
-		decoded, err := RunCommand(t, "bash", "-c", fmt.Sprintf("echo '%s' | base64 -d", output))
-		if err != nil {
-			t.Errorf("Failed to decode kubeconfig: %v", err)
+		// Validate secret output is not empty
+		if strings.TrimSpace(output) == "" {
+			t.Errorf("Secret value is empty, cannot decode kubeconfig")
 			return
 		}
 
-		if err := os.WriteFile(kubeconfigPath, []byte(decoded), 0600); err != nil {
+		// Decode base64 using Go's encoding/base64 package (safe from command injection)
+		decoded, err := base64.StdEncoding.DecodeString(output)
+		if err != nil {
+			t.Errorf("Failed to decode kubeconfig (invalid base64): %v", err)
+			return
+		}
+
+		// Validate decoded content is not empty
+		if len(decoded) == 0 {
+			t.Errorf("Decoded kubeconfig is empty")
+			return
+		}
+
+		if err := os.WriteFile(kubeconfigPath, decoded, 0600); err != nil {
 			t.Errorf("Failed to write kubeconfig to file: %v", err)
 			return
 		}
