@@ -36,14 +36,10 @@ jobs:
       run: |
         az version
 
-    - name: Install gotestsum
-      run: |
-        go install gotest.tools/gotestsum@latest
-
     - name: Run prerequisite tests
       run: |
         mkdir -p test-results
-        ~/go/bin/gotestsum --format testname --jsonfile test-results/tests.json --junitfile test-results/junit.xml -- -short -v ./test -run TestPrerequisites
+        go run gotest.tools/gotestsum@v1.12.0 --format testname --jsonfile test-results/tests.json --junitfile test-results/junit.xml -- -short -v ./test -run TestPrerequisites
       continue-on-error: true
       id: test-run
 
