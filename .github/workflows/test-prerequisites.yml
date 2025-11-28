@@ -1,4 +1,4 @@
-name: Test prerequisites
+name: 01 Test Prerequisites
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
 
 jobs:
   test-prereq:
-    name: Test prerequisites
+    name: 01 Test Prerequisites
     runs-on: ubuntu-latest
 
     steps:

@@ -1,4 +1,4 @@
-name: Test repository setup
+name: 02 Test Repository Setup
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
 
 jobs:
   test-setup:
-    name: Test repository setup
+    name: 02 Test Repository Setup
     runs-on: ubuntu-latest
 
     steps:
