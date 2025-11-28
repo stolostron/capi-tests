@@ -239,39 +239,39 @@ Smoshing, Hatching, Munching, Tinkering, Finagling
 
 ## Quick Czech Translation Reference
 
-| English | Czech |
-|---------|-------|
-| Inferring | odvozovat, usuzovat |
-| Spelunking | procházení (kódu), zkoumání |
-| Pondering | uvažovat, přemýšlet |
-| Manifesting | projevovat se, zobrazovat se |
-| Smoshing | mačkat dohromady, slučovat |
-| Sussing | zjišťovat, pátrat |
-| Wandering | bloudit, toulat se |
-| Puzzling | lámání hlavy, přemýšlení |
-| Envisioning | představovat si, vizualizovat |
-| Finagling | vymýšlet si, vyhrávat |
-| Hatching | vymýšlet (plány), kout |
-| Unfurling | rozvíjet se, rozvinovat se |
-| Analyzing | analyzovat |
-| Wrangling | potýkat se, řešit |
-| Tinkering | kutit, experimentovat |
-| Crafting | vytvářet, řemeslně zpracovávat |
-| Parsing | parsovat, analyzovat |
-| Exploring | zkoumat, prozkumávat |
-| Investigating | vyšetřovat, zkoumat |
-| Traversing | procházet, překonávat |
-| Examining | zkoumat, prohlížet |
-| Navigating | navigovat, orientovat se |
-| Scanning | skenovat, prohledávat |
-| Digging | rýt (do), prohrabávat se |
-| Juggling | žonglovat (s) |
-| Brewing | chystat, připravovat |
-| Evaluating | vyhodnocovat, posuzovat |
-| Synthesizing | syntetizovat, slučovat |
-| Scrutinizing | zkoumat důkladně |
-| Refining | zpřesňovat, vylepšovat |
-| Orchestrating | orchestrovat, řídit |
+| English | Pronunciation | Czech |
+|---------|--------------|-------|
+| Inferring | in-FUR-ring | odvozovat, usuzovat |
+| Spelunking | spuh-LUNK-ing | procházení (kódu), zkoumání |
+| Pondering | PON-der-ing | uvažovat, přemýšlet |
+| Manifesting | man-ih-FEST-ing | projevovat se, zobrazovat se |
+| Smoshing | SMOSH-ing | mačkat dohromady, slučovat |
+| Sussing | SUSS-ing | zjišťovat, pátrat |
+| Wandering | WON-der-ing | bloudit, toulat se |
+| Puzzling | PUZ-ling | lámání hlavy, přemýšlení |
+| Envisioning | en-VIZH-un-ing | představovat si, vizualizovat |
+| Finagling | fih-NAY-gling | vymýšlet si, vyhrávat |
+| Hatching | HATCH-ing | vymýšlet (plány), kout |
+| Unfurling | un-FUR-ling | rozvíjet se, rozvinovat se |
+| Analyzing | AN-uh-lize-ing | analyzovat |
+| Wrangling | RANG-gling | potýkat se, řešit |
+| Tinkering | TINK-er-ing | kutit, experimentovat |
+| Crafting | KRAFT-ing | vytvářet, řemeslně zpracovávat |
+| Parsing | PAR-sing | parsovat, analyzovat |
+| Exploring | ex-PLOR-ing | zkoumat, prozkumávat |
+| Investigating | in-VEST-ih-gate-ing | vyšetřovat, zkoumat |
+| Traversing | truh-VERS-ing | procházet, překonávat |
+| Examining | eg-ZAM-in-ing | zkoumat, prohlížet |
+| Navigating | NAV-ih-gate-ing | navigovat, orientovat se |
+| Scanning | SKAN-ing | skenovat, prohledávat |
+| Digging | DIG-ing | rýt (do), prohrabávat se |
+| Juggling | JUG-ling | žonglovat (s) |
+| Brewing | BROO-ing | chystat, připravovat |
+| Evaluating | ee-VAL-yoo-ate-ing | vyhodnocovat, posuzovat |
+| Synthesizing | SIN-thuh-size-ing | syntetizovat, slučovat |
+| Scrutinizing | SKROO-tin-ize-ing | zkoumat důkladně |
+| Refining | ree-FINE-ing | zpřesňovat, vylepšovat |
+| Orchestrating | OR-kuh-strate-ing | orchestrovat, řídit |
 
 ---
 
