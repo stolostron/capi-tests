@@ -48,7 +48,7 @@ jobs:
     - name: Run Kind cluster tests
       run: |
         mkdir -p test-results
-        go run gotest.tools/gotestsum@v1.12.0 --format testname --jsonfile test-results/tests.json --junitfile test-results/junit.xml -- -v ./test -run TestKindCluster -timeout 30m
+        go run gotest.tools/gotestsum@v1.13.0 --format testname --jsonfile test-results/tests.json --junitfile test-results/junit.xml -- -v ./test -run TestKindCluster -timeout 30m
       continue-on-error: true
       id: test-run
 
