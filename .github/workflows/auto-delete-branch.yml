@@ -9,10 +9,13 @@ jobs:
   delete-branch:
     name: Delete merged branch
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     if: github.event.pull_request.merged == true
 
     steps:
     - name: Delete branch
+      if: github.event.pull_request.head.repo.full_name == github.repository
       run: |
         echo "PR #${{ github.event.pull_request.number }} was merged"
         echo "Deleting branch: ${{ github.event.pull_request.head.ref }}"
