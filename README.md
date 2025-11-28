@@ -202,11 +202,11 @@ See [INTEGRATION.md](INTEGRATION.md) for detailed integration patterns.
 
 ```
 test/
-├── prerequisites_test.go   # Tool and auth verification
-├── setup_test.go           # Repository setup
-├── kind_cluster_test.go    # Management cluster deployment
-├── infrastructure_test.go  # Resource generation
-├── deployment_test.go      # Cluster provisioning monitoring
+├── 01_prerequisites_test.go   # Tool and auth verification
+├── setup_test.go              # Repository setup
+├── kind_cluster_test.go       # Management cluster deployment
+├── infrastructure_test.go     # Resource generation
+├── deployment_test.go         # Cluster provisioning monitoring
 ├── verification_test.go    # Final cluster validation
 ├── config.go               # Configuration management
 ├── helpers.go              # Shared utilities

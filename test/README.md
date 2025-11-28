@@ -10,7 +10,7 @@ This test suite validates each step of the ARO deployment process as documented 
 
 ### Test Files
 
-1. **`prerequisites_test.go`** - Verifies required tools and authentication
+1. **`01_prerequisites_test.go`** - Verifies required tools and authentication
    - Checks for required CLI tools (docker/podman, kind, az, oc, helm, git)
    - Validates Azure CLI login status
    - Verifies tool versions

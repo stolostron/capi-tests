@@ -10,7 +10,7 @@ The test suite provides end-to-end coverage of the Azure Red Hat OpenShift (ARO)
 
 ### Test Files and Coverage
 
-#### 1. Prerequisites Verification (`test/prerequisites_test.go`)
+#### 1. Prerequisites Verification (`test/01_prerequisites_test.go`)
 
 **Purpose**: Validates that all required tools and authentication are in place before attempting deployment.
 
