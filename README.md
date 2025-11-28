@@ -15,40 +15,6 @@ The test suite validates:
 - **ARO Deployment** - Azure Red Hat OpenShift cluster provisioning
 - **ASO Integration** - Azure Service Operator for managing Azure resources
 
-## Test Coverage
-
-The suite provides comprehensive testing across six test phases:
-
-### 1. Prerequisites Verification
-- Validates required CLI tools (docker/podman, kind, az, oc, helm, git, kubectl)
-- Checks Azure CLI authentication status
-- Verifies tool versions and availability
-
-### 2. Repository Setup
-- Clones or validates cluster-api-installer repository
-- Verifies repository structure and required files
-- Sets appropriate script permissions
-
-### 3. Kind Cluster Deployment
-- Deploys local Kind cluster as management cluster
-- Installs CAPZ and CAPI components
-- Verifies cluster accessibility and component health
-
-### 4. Infrastructure Generation
-- Generates ARO infrastructure resource manifests
-- Validates YAML structure and content
-- Applies resources to management cluster
-
-### 5. Deployment Monitoring
-- Monitors ARO cluster provisioning on Azure
-- Waits for control plane readiness
-- Tracks deployment conditions and status
-
-### 6. Cluster Verification
-- Retrieves workload cluster kubeconfig
-- Verifies cluster nodes and OpenShift components
-- Performs health checks on deployed cluster
-
 ## Prerequisites
 
 ### Required Tools
