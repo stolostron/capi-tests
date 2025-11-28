@@ -34,7 +34,7 @@ The test suite provides end-to-end coverage of the Azure Red Hat OpenShift (ARO)
 
 ---
 
-#### 2. Repository Setup (`test/setup_test.go`)
+#### 2. Repository Setup (`test/02_setup_test.go`)
 
 **Purpose**: Ensures the cluster-api-installer repository is properly cloned and configured.
 

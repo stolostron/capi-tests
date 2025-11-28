@@ -15,7 +15,7 @@ This is a Go-based test suite for validating Azure Red Hat OpenShift (ARO) deplo
 Tests are designed to run **sequentially** in a specific order, with each phase depending on the previous phase's success:
 
 1. **Prerequisites** (`01_prerequisites_test.go`) - Tool availability and authentication
-2. **Setup** (`setup_test.go`) - Repository cloning and validation
+2. **Setup** (`02_setup_test.go`) - Repository cloning and validation
 3. **Kind Cluster** (`kind_cluster_test.go`) - Management cluster deployment
 4. **Infrastructure** (`infrastructure_test.go`) - Resource generation
 5. **Deployment** (`deployment_test.go`) - Cluster provisioning monitoring

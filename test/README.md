@@ -15,7 +15,7 @@ This test suite validates each step of the ARO deployment process as documented 
    - Validates Azure CLI login status
    - Verifies tool versions
 
-2. **`setup_test.go`** - Repository setup and preparation
+2. **`02_setup_test.go`** - Repository setup and preparation
    - Clones cluster-api-installer repository
    - Verifies repository structure
    - Sets script permissions

@@ -194,7 +194,7 @@ See [INTEGRATION.md](docs/INTEGRATION.md) for detailed integration patterns.
 ```
 test/
 ├── 01_prerequisites_test.go   # Tool and auth verification
-├── setup_test.go              # Repository setup
+├── 02_setup_test.go           # Repository setup
 ├── kind_cluster_test.go       # Management cluster deployment
 ├── infrastructure_test.go     # Resource generation
 ├── deployment_test.go         # Cluster provisioning monitoring
