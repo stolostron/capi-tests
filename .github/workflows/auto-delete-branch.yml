@@ -1,0 +1,26 @@
+name: Auto-delete merged branches
+
+on:
+  pull_request:
+    types:
+      - closed
+
+jobs:
+  delete-branch:
+    name: Delete merged branch
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+
+    steps:
+    - name: Delete branch
+      run: |
+        echo "PR #${{ github.event.pull_request.number }} was merged"
+        echo "Deleting branch: ${{ github.event.pull_request.head.ref }}"
+
+        # Delete the branch using GitHub API
+        gh api \
+          --method DELETE \
+          /repos/${{ github.repository }}/git/refs/heads/${{ github.event.pull_request.head.ref }} \
+          || echo "Branch may have been already deleted or is protected"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
