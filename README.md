@@ -93,15 +93,6 @@ Tests are configured via environment variables:
 
 - `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `30m`). Use Go duration format: `1h`, `45m`, `90m`, etc.
 
-## Prerequisites
-
-### CLI and Development Tools
-*Required command-line tools and development dependencies will be defined here.*
-
-### Runtime Requirements
-- Kubernetes cluster access (can be created by tests or provided via configuration)
-- Cloud provider credentials configured according to the specific CAPI implementation being tested
-
 ## Getting Started
 
 ### Quick Start
