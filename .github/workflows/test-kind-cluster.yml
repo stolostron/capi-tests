@@ -45,6 +45,15 @@ jobs:
       with:
         version: 'latest'
 
+    - name: Clone cluster-api-installer repository
+      run: |
+        if [ -d "/tmp/cluster-api-installer-aro" ]; then
+          echo "Repository already exists, skipping clone"
+        else
+          git clone -b ARO-ASO https://github.com/RadekCap/cluster-api-installer.git /tmp/cluster-api-installer-aro
+          echo "Repository cloned successfully"
+        fi
+
     - name: Run Kind cluster tests
       run: |
         mkdir -p test-results
