@@ -38,22 +38,30 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 	SetEnvVar(t, "KUBECONFIG", fmt.Sprintf("%s/.kube/config", os.Getenv("HOME")))
 
 	// First, check if cluster resource exists
+	fmt.Fprintf(os.Stderr, "\n=== Monitoring cluster deployment ===\n")
+	fmt.Fprintf(os.Stderr, "Cluster: %s\n", config.ClusterName)
+	fmt.Fprintf(os.Stderr, "Context: %s\n\n", context)
 	t.Logf("Checking for cluster resource: %s", config.ClusterName)
 
 	output, err := RunCommand(t, "kubectl", "--context", context, "get", "cluster", config.ClusterName)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  Cluster resource not found (may not be deployed yet)\n\n")
 		t.Skipf("Cluster resource not found (may not be deployed yet): %v", err)
 	}
 
+	fmt.Fprintf(os.Stderr, "✅ Cluster resource exists\n\n")
 	t.Logf("Cluster resource exists:\n%s", output)
 
 	// Use clusterctl to describe the cluster
+	fmt.Fprintf(os.Stderr, "📊 Fetching cluster status with clusterctl...\n")
 	t.Logf("Monitoring cluster deployment status using clusterctl...")
 
 	output, err = RunCommand(t, clusterctlPath, "describe", "cluster", config.ClusterName, "--show-conditions=all")
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  clusterctl describe failed (cluster may still be initializing)\n\n")
 		t.Logf("clusterctl describe failed (cluster may still be initializing): %v\nOutput: %s", err, output)
 	} else {
+		fmt.Fprintf(os.Stderr, "\nCluster Status:\n%s\n\n", output)
 		t.Logf("Cluster status:\n%s", output)
 	}
 }
@@ -72,10 +80,18 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	pollInterval := 30 * time.Second
 	startTime := time.Now()
 
+	// Print to stderr for immediate visibility (unbuffered)
+	fmt.Fprintf(os.Stderr, "\n=== Waiting for control plane to be ready ===\n")
+	fmt.Fprintf(os.Stderr, "Timeout: %v | Poll interval: %v\n\n", timeout, pollInterval)
 	t.Logf("Waiting for control plane to be ready (timeout: %v)...", timeout)
 
+	iteration := 0
 	for {
-		if time.Since(startTime) > timeout {
+		elapsed := time.Since(startTime)
+		remaining := timeout - elapsed
+
+		if elapsed > timeout {
+			fmt.Fprintf(os.Stderr, "\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
 			t.Errorf("Timeout waiting for control plane to be ready")
 			return
 		}
@@ -84,11 +100,25 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 			"kubeadmcontrolplane", "-A", "-o", "jsonpath={.items[0].status.ready}")
 
 		if err == nil && strings.TrimSpace(output) == "true" {
+			fmt.Fprintf(os.Stderr, "\n✅ Control plane is ready! (took %v)\n\n", elapsed.Round(time.Second))
 			t.Log("Control plane is ready!")
 			return
 		}
 
-		t.Logf("Control plane not ready yet, waiting %v... (elapsed: %v)", pollInterval, time.Since(startTime))
+		iteration++
+		percentage := int((float64(elapsed) / float64(timeout)) * 100)
+
+		// Print progress to stderr for real-time visibility
+		fmt.Fprintf(os.Stderr, "[%d] ⏳ Waiting... | Elapsed: %v | Remaining: %v | Progress: %d%%\n",
+			iteration,
+			elapsed.Round(time.Second),
+			remaining.Round(time.Second),
+			percentage)
+
+		// Also log to test output
+		t.Logf("Control plane not ready yet, waiting %v... (elapsed: %v, remaining: %v, %d%%)",
+			pollInterval, elapsed.Round(time.Second), remaining.Round(time.Second), percentage)
+
 		time.Sleep(pollInterval)
 	}
 }
