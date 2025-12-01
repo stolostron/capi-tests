@@ -25,14 +25,16 @@ Process all GitHub Copilot code review findings for a pull request. Analyze each
       - Test that code still works (if applicable)
       - Post individual reply to the specific comment using GitHub CLI:
         ```bash
-        gh pr review {pr_number} --comment --body "✅ Implemented.
+        gh pr review {pr_number} --comment --body "$(cat <<'EOF'
+✅ Implemented.
 
-        [Detailed description of what was changed and why]
+[Detailed description of what was changed and why]
 
-        Changes:
-        - [Specific change 1]
-        - [Specific change 2]
-        "
+Changes:
+- [Specific change 1]
+- [Specific change 2]
+EOF
+)"
         ```
       - Mark comment as resolved (if supported by GitHub CLI or done manually in UI)
 
@@ -40,12 +42,14 @@ Process all GitHub Copilot code review findings for a pull request. Analyze each
       - Provide clear rationale (e.g., "This conflicts with our sequential test pattern", "This would break idempotency", etc.)
       - Post individual reply to the specific comment:
         ```bash
-        gh pr review {pr_number} --comment --body "❌ Not implementing.
+        gh pr review {pr_number} --comment --body "$(cat <<'EOF'
+❌ Not implementing.
 
-        **Rationale**: [Detailed explanation]
+**Rationale**: [Detailed explanation]
 
-        [Additional context about why this doesn't fit the project]
-        "
+[Additional context about why this doesn't fit the project]
+EOF
+)"
         ```
       - Mark comment as resolved
 
@@ -131,14 +135,31 @@ gh api -X POST repos/{owner}/{repo}/pulls/comments/{comment_id}/replies \
   -f body="Your reply here"
 ```
 
-Note: Thread replies may not always work due to API limitations. Use `gh pr review --comment` as the primary method.
+Note: Thread replies may not always work when replying to review comments (as opposed to issue comments) due to GitHub API limitations. Use `gh pr review --comment` as the primary method.
 
 ### Mark as Resolved
 
-GitHub doesn't provide a CLI command to mark conversations as resolved. Options:
-1. Note in your reply that the finding is addressed (✅ or ❌ emoji helps)
-2. Manually resolve in GitHub UI after posting replies
-3. Copilot may auto-resolve when it detects implementation
+There is no direct built-in `gh` CLI command to mark conversations as resolved, but you can resolve review threads using the GitHub GraphQL API via `gh api`. Options:
+
+1. **Use GraphQL API to resolve threads**:
+   ```bash
+   gh api graphql -f query='
+     mutation {
+       resolveReviewThread(input: {threadId: "<thread_id>"}) {
+         thread {
+           isResolved
+         }
+       }
+     }
+   '
+   ```
+   Replace `<thread_id>` with the actual thread ID (you can fetch thread IDs using the GraphQL API).
+
+2. **Note in your reply** that the finding is addressed (✅ or ❌ emoji helps)
+
+3. **Manually resolve** in GitHub UI after posting replies
+
+4. **Copilot may auto-resolve** when it detects implementation
 
 ## Summary Report
 
