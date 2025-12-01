@@ -13,6 +13,8 @@ func TestPrerequisites_ToolsAvailable(t *testing.T) {
 		"oc",
 		"helm",
 		"git",
+		"kubectl",
+		"go",
 	}
 
 	for _, tool := range requiredTools {
