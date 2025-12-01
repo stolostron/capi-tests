@@ -15,8 +15,8 @@ ifeq (,$(filter $(GOTESTSUM_FORMAT),$(ALLOWED_FORMATS)))
 endif
 
 # Determine Go binary installation path
-# go install puts binaries in $(go env GOPATH)/bin or $HOME/go/bin by default
-GOBIN := $(shell go env GOPATH 2>/dev/null || echo "$$HOME/go")/bin
+# Prefer GOBIN if set, otherwise use GOPATH/bin, with fallback to $HOME/go/bin
+GOBIN := $(shell if [ -n "$$(go env GOBIN 2>/dev/null)" ]; then go env GOBIN; else echo "$$(go env GOPATH 2>/dev/null || echo "$$HOME/go")/bin"; fi)
 GOTESTSUM := $(GOBIN)/gotestsum --format='$(GOTESTSUM_FORMAT)' --
 
 help: ## Display this help message
@@ -114,7 +114,7 @@ install-gotestsum: ## Install gotestsum for test summaries
 	@command -v go >/dev/null 2>&1 || (echo "Error: go is required to install gotestsum. Install Go from https://golang.org/dl/" && exit 1)
 	@go install gotest.tools/gotestsum@v1.13.0
 	@echo "gotestsum installed successfully to $(GOBIN)/gotestsum"
-	@if ! echo "$$PATH" | grep -q "$(GOBIN)"; then \
+	@if ! echo ":$$PATH:" | grep -q ":$(GOBIN):"; then \
 		echo ""; \
 		echo "⚠️  Warning: $(GOBIN) is not in your PATH"; \
 		echo "   Add it to your PATH by running:"; \
