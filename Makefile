@@ -13,7 +13,11 @@ ALLOWED_FORMATS := testname pkgname standard-verbose testdox github-actions
 ifeq (,$(filter $(GOTESTSUM_FORMAT),$(ALLOWED_FORMATS)))
   $(error Invalid GOTESTSUM_FORMAT "$(GOTESTSUM_FORMAT)". Allowed: $(ALLOWED_FORMATS))
 endif
-GOTESTSUM := gotestsum --format='$(GOTESTSUM_FORMAT)' --
+
+# Determine Go binary installation path
+# Prefer GOBIN if set, otherwise use GOPATH/bin, with fallback to $HOME/go/bin
+GOBIN := $(shell if [ -n "$$(go env GOBIN 2>/dev/null)" ]; then go env GOBIN; else echo "$$(go env GOPATH 2>/dev/null || echo "$$HOME/go")/bin"; fi)
+GOTESTSUM := $(GOBIN)/gotestsum --format='$(GOTESTSUM_FORMAT)' --
 
 help: ## Display this help message
 	@echo "ARO-CAPZ Test Suite Makefile"
@@ -109,10 +113,19 @@ install-gotestsum: ## Install gotestsum for test summaries
 	@echo "Installing gotestsum v1.13.0..."
 	@command -v go >/dev/null 2>&1 || (echo "Error: go is required to install gotestsum. Install Go from https://golang.org/dl/" && exit 1)
 	@go install gotest.tools/gotestsum@v1.13.0
-	@echo "gotestsum installed successfully!"
+	@echo "gotestsum installed successfully to $(GOBIN)/gotestsum"
+	@if ! echo ":$$PATH:" | grep -q ":$(GOBIN):"; then \
+		echo ""; \
+		echo "⚠️  Warning: $(GOBIN) is not in your PATH"; \
+		echo "   Add it to your PATH by running:"; \
+		echo "   export PATH=\"\$$PATH:$(GOBIN)\""; \
+		echo ""; \
+		echo "   To make it permanent, add this line to your ~/.zshrc or ~/.bash_profile"; \
+		echo "   The Makefile will use the full path, so tests will still work."; \
+	fi
 
 check-gotestsum: ## Check if gotestsum is installed, install if missing
-	@command -v gotestsum >/dev/null 2>&1 || $(MAKE) install-gotestsum
+	@test -f $(GOBIN)/gotestsum || $(MAKE) install-gotestsum
 
 fmt: ## Format Go code
 	go fmt ./...
