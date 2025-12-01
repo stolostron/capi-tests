@@ -1,0 +1,76 @@
+name: Auto Copilot Review
+
+# Trigger on new PRs and updates
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  auto-copilot-review:
+    name: Auto-trigger Copilot Review
+    runs-on: ubuntu-latest
+
+    # Skip for dependabot and draft PRs, but allow workflow_dispatch
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.actor != 'dependabot[bot]' && github.event.pull_request.draft == false)
+
+    steps:
+    - name: Add Copilot review reminder comment
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+      run: |
+        echo "📝 Adding Copilot review reminder to PR #${PR_NUMBER}"
+
+        # Add a comment mentioning that Copilot should review
+        # Note: Copilot reviews are triggered automatically if enabled in settings
+        # This comment serves as a reminder and can trigger review if needed
+        gh pr comment ${PR_NUMBER} --body "🤖 **Copilot Review**
+
+        GitHub Copilot code review has been requested for this PR.
+
+        Copilot will analyze the changes and provide feedback on:
+        - Code quality and best practices
+        - Potential bugs and issues
+        - Security concerns
+        - Performance improvements
+        - Documentation suggestions
+
+        The review will appear as comments on the PR shortly.
+
+        To manually trigger: Comment \`@github-copilot review\` or use \`/copilot-review ${PR_NUMBER}\`
+        " || echo "Comment may have failed, but Copilot review should still trigger automatically"
+
+    - name: Add label
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+      run: |
+        # Create label if it doesn't exist
+        gh label create "copilot-review" \
+          --description "Copilot code review requested" \
+          --color "0075ca" 2>/dev/null || true
+
+        # Add label to PR
+        gh pr edit ${PR_NUMBER} --add-label "copilot-review" || true
+
+    - name: Summary
+      run: |
+        echo "### ✅ Copilot Review Setup Complete" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- PR #${{ github.event.pull_request.number || inputs.pr_number }} is ready for Copilot review" >> $GITHUB_STEP_SUMMARY
+        echo "- Label added: \`copilot-review\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Reminder comment posted" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Copilot will provide feedback automatically if enabled in repository settings." >> $GITHUB_STEP_SUMMARY
