@@ -26,42 +26,42 @@ help: ## Display this help message
 test: check-gotestsum ## Run all tests
 	@echo "=== Running All Tests ==="
 	@echo ""
-	@$(GOTESTSUM) go test -v ./test -timeout 60m
+	@$(GOTESTSUM) -v ./test -timeout 60m
 
 test-short: check-gotestsum ## Run quick tests only (skip long-running tests)
 	@echo "=== Running Quick Tests (Short Mode) ==="
 	@echo ""
-	@$(GOTESTSUM) go test -v -short ./test
+	@$(GOTESTSUM) -v -short ./test
 
 test-prereq: check-gotestsum ## Run prerequisite verification tests only
 	@echo "=== Running Prerequisites Tests ==="
 	@echo ""
-	@$(GOTESTSUM) go test -v ./test -run TestPrerequisites
+	@$(GOTESTSUM) -v ./test -run TestPrerequisites
 
 test-setup: check-gotestsum ## Run repository setup tests only
 	@echo "=== Running Repository Setup Tests ==="
 	@echo ""
-	@$(GOTESTSUM) go test -v ./test -run TestSetup
+	@$(GOTESTSUM) -v ./test -run TestSetup
 
 test-kind: check-gotestsum ## Run Kind cluster deployment tests only
 	@echo "=== Running Kind Cluster Deployment Tests ==="
 	@echo ""
-	@$(GOTESTSUM) go test -v ./test -run TestKindCluster -timeout 30m
+	@$(GOTESTSUM) -v ./test -run TestKindCluster -timeout 30m
 
 test-infra: check-gotestsum ## Run infrastructure generation tests only
 	@echo "=== Running Infrastructure Generation Tests ==="
 	@echo ""
-	@$(GOTESTSUM) go test -v ./test -run TestInfrastructure -timeout 20m
+	@$(GOTESTSUM) -v ./test -run TestInfrastructure -timeout 20m
 
 test-deploy: check-gotestsum ## Run deployment monitoring tests only
 	@echo "=== Running Deployment Monitoring Tests ==="
 	@echo ""
-	@$(GOTESTSUM) go test -v ./test -run TestDeployment -timeout 40m
+	@$(GOTESTSUM) -v ./test -run TestDeployment -timeout 40m
 
 test-verify: check-gotestsum ## Run cluster verification tests only
 	@echo "=== Running Cluster Verification Tests ==="
 	@echo ""
-	@$(GOTESTSUM) go test -v ./test -run TestVerification -timeout 20m
+	@$(GOTESTSUM) -v ./test -run TestVerification -timeout 20m
 
 test-all: ## Run all test phases sequentially
 	@echo "========================================"
