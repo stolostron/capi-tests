@@ -9,13 +9,17 @@ import (
 
 // TestDeployment_ProgressDemo demonstrates the real-time progress output
 // This test simulates the waiting behavior to verify progress is shown in real-time
-// Run with: go test -v ./test -run TestDeployment_ProgressDemo
+// Run with: RUN_DEMO_TESTS=1 go test -v ./test -run TestDeployment_ProgressDemo
 func TestDeployment_ProgressDemo(t *testing.T) {
+	if os.Getenv("RUN_DEMO_TESTS") != "1" {
+		t.Skip("Skipping demo test (set RUN_DEMO_TESTS=1 to run)")
+	}
 	if testing.Short() {
 		t.Skip("Skipping progress demo in short mode")
 	}
 
-	// Simulate a 30-second wait with 5-second intervals (like the real test but faster)
+	// Simulate a wait with a 30-second timeout and 5-second intervals
+	// Demo completes after 15 seconds to show the success case
 	timeout := 30 * time.Second
 	pollInterval := 5 * time.Second
 	startTime := time.Now()
@@ -39,18 +43,9 @@ func TestDeployment_ProgressDemo(t *testing.T) {
 		// In real test, this would be: kubectl get kubeadmcontrolplane ...
 
 		iteration++
-		percentage := int((float64(elapsed) / float64(timeout)) * 100)
 
-		// Print progress to stderr for real-time visibility
-		fmt.Fprintf(os.Stderr, "[%d] ⏳ Waiting... | Elapsed: %v | Remaining: %v | Progress: %d%%\n",
-			iteration,
-			elapsed.Round(time.Second),
-			remaining.Round(time.Second),
-			percentage)
-
-		// Also log to test output
-		t.Logf("Demo iteration %d (elapsed: %v, remaining: %v, %d%%)",
-			iteration, elapsed.Round(time.Second), remaining.Round(time.Second), percentage)
+		// Report progress using helper function
+		ReportProgress(t, os.Stderr, iteration, elapsed, remaining, timeout)
 
 		// For demo, complete after 15 seconds
 		if elapsed > 15*time.Second {

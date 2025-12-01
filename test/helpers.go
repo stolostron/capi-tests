@@ -1,10 +1,13 @@
 package test
 
 import (
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 )
 
 // CommandExists checks if a command is available in the system PATH
@@ -56,6 +59,25 @@ func GetEnvOrDefault(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// ReportProgress prints progress information to stderr for real-time visibility
+// and to test log for test output. This helper ensures consistent progress
+// reporting across all deployment tests.
+func ReportProgress(t *testing.T, w io.Writer, iteration int, elapsed, remaining, timeout time.Duration) {
+	t.Helper()
+	percentage := int((float64(elapsed) / float64(timeout)) * 100)
+
+	// Print to stderr for real-time visibility (unbuffered)
+	fmt.Fprintf(w, "[%d] ⏳ Waiting... | Elapsed: %v | Remaining: %v | Progress: %d%%\n",
+		iteration,
+		elapsed.Round(time.Second),
+		remaining.Round(time.Second),
+		percentage)
+
+	// Also log to test output
+	t.Logf("Waiting iteration %d (elapsed: %v, remaining: %v, %d%%)",
+		iteration, elapsed.Round(time.Second), remaining.Round(time.Second), percentage)
 }
 
 // IsKubectlApplySuccess checks if kubectl apply output indicates success.

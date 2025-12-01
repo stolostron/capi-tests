@@ -106,18 +106,9 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 		}
 
 		iteration++
-		percentage := int((float64(elapsed) / float64(timeout)) * 100)
 
-		// Print progress to stderr for real-time visibility
-		fmt.Fprintf(os.Stderr, "[%d] ⏳ Waiting... | Elapsed: %v | Remaining: %v | Progress: %d%%\n",
-			iteration,
-			elapsed.Round(time.Second),
-			remaining.Round(time.Second),
-			percentage)
-
-		// Also log to test output
-		t.Logf("Control plane not ready yet, waiting %v... (elapsed: %v, remaining: %v, %d%%)",
-			pollInterval, elapsed.Round(time.Second), remaining.Round(time.Second), percentage)
+		// Report progress using helper function
+		ReportProgress(t, os.Stderr, iteration, elapsed, remaining, timeout)
 
 		time.Sleep(pollInterval)
 	}
