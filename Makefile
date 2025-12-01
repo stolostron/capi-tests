@@ -6,6 +6,10 @@ ENV ?= stage
 REGION ?= eastus
 KIND_CLUSTER_NAME ?= capz-stage
 
+# Test configuration
+GOTESTSUM_FORMAT ?= testname
+GOTESTSUM := gotestsum --format=$(GOTESTSUM_FORMAT) --
+
 help: ## Display this help message
 	@echo "ARO-CAPZ Test Suite Makefile"
 	@echo ""
@@ -14,31 +18,61 @@ help: ## Display this help message
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 
-test: ## Run all tests
-	go test -v ./test -timeout 60m
+test: check-gotestsum ## Run all tests
+	@echo "=== Running All Tests ==="
+	@echo ""
+	@$(GOTESTSUM) -v ./test -timeout 60m
 
-test-short: ## Run quick tests only (skip long-running tests)
-	go test -v -short ./test
+test-short: check-gotestsum ## Run quick tests only (skip long-running tests)
+	@echo "=== Running Quick Tests (Short Mode) ==="
+	@echo ""
+	@$(GOTESTSUM) -v -short ./test
 
-test-prereq: ## Run prerequisite verification tests only
-	go test -v ./test -run TestPrerequisites
+test-prereq: check-gotestsum ## Run prerequisite verification tests only
+	@echo "=== Running Prerequisites Tests ==="
+	@echo ""
+	@$(GOTESTSUM) -v ./test -run TestPrerequisites
 
-test-setup: ## Run repository setup tests only
-	go test -v ./test -run TestSetup
+test-setup: check-gotestsum ## Run repository setup tests only
+	@echo "=== Running Repository Setup Tests ==="
+	@echo ""
+	@$(GOTESTSUM) -v ./test -run TestSetup
 
-test-kind: ## Run Kind cluster deployment tests only
-	go test -v ./test -run TestKindCluster -timeout 30m
+test-kind: check-gotestsum ## Run Kind cluster deployment tests only
+	@echo "=== Running Kind Cluster Deployment Tests ==="
+	@echo ""
+	@$(GOTESTSUM) -v ./test -run TestKindCluster -timeout 30m
 
-test-infra: ## Run infrastructure generation tests only
-	go test -v ./test -run TestInfrastructure -timeout 20m
+test-infra: check-gotestsum ## Run infrastructure generation tests only
+	@echo "=== Running Infrastructure Generation Tests ==="
+	@echo ""
+	@$(GOTESTSUM) -v ./test -run TestInfrastructure -timeout 20m
 
-test-deploy: ## Run deployment monitoring tests only
-	go test -v ./test -run TestDeployment -timeout 40m
+test-deploy: check-gotestsum ## Run deployment monitoring tests only
+	@echo "=== Running Deployment Monitoring Tests ==="
+	@echo ""
+	@$(GOTESTSUM) -v ./test -run TestDeployment -timeout 40m
 
-test-verify: ## Run cluster verification tests only
-	go test -v ./test -run TestVerification -timeout 20m
+test-verify: check-gotestsum ## Run cluster verification tests only
+	@echo "=== Running Cluster Verification Tests ==="
+	@echo ""
+	@$(GOTESTSUM) -v ./test -run TestVerification -timeout 20m
 
-test-all: test-prereq test-setup test-kind test-infra test-deploy test-verify ## Run all test phases sequentially
+test-all: ## Run all test phases sequentially
+	@echo "========================================"
+	@echo "=== Running Full Test Suite ==="
+	@echo "========================================"
+	@echo ""
+	@$(MAKE) --no-print-directory test-prereq && \
+	$(MAKE) --no-print-directory test-setup && \
+	$(MAKE) --no-print-directory test-kind && \
+	$(MAKE) --no-print-directory test-infra && \
+	$(MAKE) --no-print-directory test-deploy && \
+	$(MAKE) --no-print-directory test-verify && \
+	echo "" && \
+	echo "=======================================" && \
+	echo "=== All Test Phases Completed Successfully ===" && \
+	echo "======================================="
 
 clean: ## Clean up test resources
 	@echo "Cleaning up test resources..."
@@ -64,6 +98,14 @@ check-prereq: ## Check if required tools are installed
 	@command -v git >/dev/null 2>&1 || (echo "Error: git required" && exit 1)
 	@command -v kubectl >/dev/null 2>&1 || (echo "Error: kubectl required" && exit 1)
 	@echo "All prerequisites are installed!"
+
+install-gotestsum: ## Install gotestsum for test summaries
+	@echo "Installing gotestsum v1.13.0..."
+	@go install gotest.tools/gotestsum@v1.13.0
+	@echo "gotestsum installed successfully!"
+
+check-gotestsum: ## Check if gotestsum is installed, install if missing
+	@command -v gotestsum >/dev/null 2>&1 || $(MAKE) install-gotestsum
 
 fmt: ## Format Go code
 	go fmt ./...
