@@ -33,7 +33,15 @@ Process all GitHub Copilot code review findings for a pull request. Analyze each
                    path
                    line
                  }
+                 pageInfo {
+                   hasNextPage
+                   endCursor
+                 }
                }
+             }
+             pageInfo {
+               hasNextPage
+               endCursor
              }
            }
          }
@@ -41,10 +49,23 @@ Process all GitHub Copilot code review findings for a pull request. Analyze each
      }
    ' -F owner="$OWNER" -F repo="$REPO" -F pr="$PR_NUMBER")
 
+   # Warn if pagination limits are exceeded for review threads
+   THREADS_HAS_NEXT=$(echo "$THREADS_JSON" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage')
+   if [ "$THREADS_HAS_NEXT" = "true" ]; then
+     echo "WARNING: More than 100 review threads exist. Only the first 100 were fetched. Some Copilot findings may be missing."
+   fi
+
+   # Warn if pagination limits are exceeded for comments in any thread
+   COMMENTS_OVER_LIMIT=$(echo "$THREADS_JSON" | jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.comments.pageInfo.hasNextPage == true)] | length')
+   if [ "$COMMENTS_OVER_LIMIT" -gt 0 ]; then
+     echo "WARNING: One or more review threads have more than 50 comments. Only the first 50 comments per thread were fetched. Some Copilot findings may be missing."
+   fi
+
    # Filter for Copilot comments only
    COPILOT_THREADS=$(echo "$THREADS_JSON" | jq '[
      .data.repository.pullRequest.reviewThreads.nodes[] |
-     select(.comments.nodes[0].author.login | test("copilot|Copilot"; "i"))
+     select(.comments.nodes | length > 0) |
+     select((.comments.nodes[0].author.login // "") | test("copilot|Copilot"; "i"))
    ]')
 
    TOTAL_FINDINGS=$(echo "$COPILOT_THREADS" | jq 'length')
@@ -56,10 +77,10 @@ Process all GitHub Copilot code review findings for a pull request. Analyze each
    a. **Extract finding details**:
       ```bash
       # For finding index $i (0-based)
-      FINDING_DATA=$(echo "$COPILOT_THREADS" | jq -r ".[$i]")
+      FINDING_DATA=$(echo "$COPILOT_THREADS" | jq ".[$i]")
       THREAD_ID=$(echo "$FINDING_DATA" | jq -r '.id')
       IS_RESOLVED=$(echo "$FINDING_DATA" | jq -r '.isResolved')
-      COMMENT=$(echo "$FINDING_DATA" | jq -r '.comments.nodes[0]')
+      COMMENT=$(echo "$FINDING_DATA" | jq '.comments.nodes[0]')
       COMMENT_BODY=$(echo "$COMMENT" | jq -r '.body')
       FILE_PATH=$(echo "$COMMENT" | jq -r '.path')
       LINE=$(echo "$COMMENT" | jq -r '.line')
@@ -115,7 +136,7 @@ EOF
         ' -F threadId="$THREAD_ID" 2>&1)
 
         # Verify success
-        if echo "$RESOLVE_RESULT" | jq -e '.data.resolveReviewThread.thread.isResolved' > /dev/null 2>&1; then
+        if echo "$RESOLVE_RESULT" | jq -e '.data.resolveReviewThread.thread.isResolved == true' > /dev/null 2>&1; then
           echo "✅ Thread $THREAD_ID resolved successfully"
         else
           echo "⚠️ Warning: Failed to resolve thread $THREAD_ID"
@@ -155,7 +176,7 @@ EOF
         ' -F threadId="$THREAD_ID" 2>&1)
 
         # Verify success
-        if echo "$RESOLVE_RESULT" | jq -e '.data.resolveReviewThread.thread.isResolved' > /dev/null 2>&1; then
+        if echo "$RESOLVE_RESULT" | jq -e '.data.resolveReviewThread.thread.isResolved == true' > /dev/null 2>&1; then
           echo "✅ Thread $THREAD_ID resolved successfully"
         else
           echo "⚠️ Warning: Failed to resolve thread $THREAD_ID"
