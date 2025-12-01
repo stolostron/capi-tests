@@ -164,7 +164,7 @@ See `docs/INTEGRATION.md` for detailed integration patterns.
 - `CLUSTER_NAME` - ARO cluster name (default: `test-cluster`)
 - `RESOURCE_GROUP` - Azure resource group
 - `OPENSHIFT_VERSION` - OpenShift version (default: `4.18`)
-- `REGION` - Azure region (default: `eastus`)
+- `REGION` - Azure region (default: `uksouth`)
 - `AZURE_SUBSCRIPTION_NAME` - Azure subscription ID (required for deployment)
 - `ENV` - Environment identifier (default: `stage`)
 - `USER` - User identifier (default: current user)

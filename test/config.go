@@ -41,7 +41,7 @@ func NewTestConfig() *TestConfig {
 		ClusterName:       GetEnvOrDefault("CLUSTER_NAME", "test-cluster"),
 		ResourceGroup:     GetEnvOrDefault("RESOURCE_GROUP", "test-rg"),
 		OpenShiftVersion:  GetEnvOrDefault("OPENSHIFT_VERSION", "4.18"),
-		Region:            GetEnvOrDefault("REGION", "eastus"),
+		Region:            GetEnvOrDefault("REGION", "uksouth"),
 		AzureSubscription: os.Getenv("AZURE_SUBSCRIPTION_NAME"),
 		Environment:       GetEnvOrDefault("ENV", "stage"),
 		User:              GetEnvOrDefault("USER", os.Getenv("USER")),

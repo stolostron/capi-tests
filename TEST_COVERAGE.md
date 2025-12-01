@@ -416,7 +416,7 @@ make check-prereq
 ```bash
 # Set configuration
 export CLUSTER_NAME=my-test-cluster
-export REGION=eastus
+export REGION=uksouth
 export AZURE_SUBSCRIPTION_NAME=your-subscription-id
 
 # Run all tests

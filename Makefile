@@ -3,7 +3,7 @@
 # Default values
 CLUSTER_NAME ?= test-cluster
 ENV ?= stage
-REGION ?= eastus
+REGION ?= uksouth
 KIND_CLUSTER_NAME ?= capz-stage
 
 help: ## Display this help message

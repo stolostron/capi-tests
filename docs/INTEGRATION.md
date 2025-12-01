@@ -215,7 +215,7 @@ KIND_CLUSTER_NAME=capz-stage
 CLUSTER_NAME=test-cluster
 RESOURCE_GROUP=test-rg
 OPENSHIFT_VERSION=4.18
-REGION=eastus
+REGION=uksouth
 ENV=stage
 
 # Azure Configuration (set your actual values)
