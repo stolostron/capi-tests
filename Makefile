@@ -128,35 +128,45 @@ check-gotestsum: ## Check if gotestsum is installed, install if missing
 	@test -f $(GOBIN)/gotestsum || $(MAKE) install-gotestsum
 
 fix-docker-config: ## Fix Docker credential helper configuration issues
-	@echo "Fixing Docker credential helper configuration..."
-	@if [ ! -f ~/.docker/config.json ]; then \
+	@DOCKER_CONFIG_DIR="$${DOCKER_CONFIG:-$$HOME/.docker}"; \
+	CONFIG_FILE="$$DOCKER_CONFIG_DIR/config.json"; \
+	BACKUP_FILE="$$DOCKER_CONFIG_DIR/config.json.backup"; \
+	TMP_FILE="$$DOCKER_CONFIG_DIR/config.json.tmp"; \
+	echo "Fixing Docker credential helper configuration..."; \
+	if [ ! -f "$$CONFIG_FILE" ]; then \
 		echo "✅ No Docker config file found - nothing to fix"; \
 		exit 0; \
-	fi
-	@echo "Current Docker config:"
-	@cat ~/.docker/config.json
-	@echo ""
-	@echo "Creating backup at ~/.docker/config.json.backup..."
-	@cp ~/.docker/config.json ~/.docker/config.json.backup
-	@echo "Removing credsStore from Docker config..."
-	@if command -v jq >/dev/null 2>&1; then \
-		jq 'del(.credsStore) | del(.credHelpers)' ~/.docker/config.json > ~/.docker/config.json.tmp && \
-		mv ~/.docker/config.json.tmp ~/.docker/config.json; \
-		echo "✅ Docker config fixed using jq"; \
+	fi; \
+	echo "Current Docker config:"; \
+	cat "$$CONFIG_FILE"; \
+	echo ""; \
+	echo "Creating backup at $$BACKUP_FILE..."; \
+	cp "$$CONFIG_FILE" "$$BACKUP_FILE"; \
+	echo "Removing credsStore from Docker config..."; \
+	if command -v jq >/dev/null 2>&1; then \
+		if jq 'del(.credsStore) | del(.credHelpers)' "$$CONFIG_FILE" > "$$TMP_FILE" 2>/dev/null; then \
+			mv "$$TMP_FILE" "$$CONFIG_FILE" && \
+			echo "✅ Docker config fixed using jq"; \
+		else \
+			rm -f "$$TMP_FILE"; \
+			echo "❌ Failed to fix Docker config with jq"; \
+			exit 1; \
+		fi; \
 	else \
 		echo "⚠️  jq not found - using sed fallback"; \
-		sed -E '/"credsStore":/d; /"credHelpers":/,/}/d' ~/.docker/config.json > ~/.docker/config.json.tmp && \
-		mv ~/.docker/config.json.tmp ~/.docker/config.json; \
+		sed -E '/"credsStore":/d; /"credHelpers":/,/}/d' "$$CONFIG_FILE" > "$$TMP_FILE" && \
+		sed -E -i '' 's/,\s*([}]])/\1/g' "$$TMP_FILE" && \
+		mv "$$TMP_FILE" "$$CONFIG_FILE"; \
 		echo "✅ Docker config fixed using sed"; \
-	fi
-	@echo ""
-	@echo "Updated Docker config:"
-	@cat ~/.docker/config.json
-	@echo ""
-	@echo "✅ Docker credential helper configuration fixed!"
-	@echo "   Backup saved to ~/.docker/config.json.backup"
-	@echo ""
-	@echo "You can now run 'make test-kind' to deploy the Kind cluster"
+	fi; \
+	echo ""; \
+	echo "Updated Docker config:"; \
+	cat "$$CONFIG_FILE"; \
+	echo ""; \
+	echo "✅ Docker credential helper configuration fixed!"; \
+	echo "   Backup saved to $$BACKUP_FILE"; \
+	echo ""; \
+	echo "You can now run 'make test-kind' to deploy the Kind cluster"
 
 fmt: ## Format Go code
 	go fmt ./...
