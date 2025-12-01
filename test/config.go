@@ -13,14 +13,14 @@ type TestConfig struct {
 	RepoDir    string
 
 	// Cluster configuration
-	KindClusterName     string
-	ClusterName         string
-	ResourceGroup       string
-	OpenShiftVersion    string
-	Region              string
-	AzureSubscription   string
-	Environment         string
-	User                string
+	KindClusterName   string
+	ClusterName       string
+	ResourceGroup     string
+	OpenShiftVersion  string
+	Region            string
+	AzureSubscription string
+	Environment       string
+	User              string
 
 	// Paths
 	ClusterctlBinPath string

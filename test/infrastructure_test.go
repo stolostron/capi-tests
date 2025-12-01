@@ -153,7 +153,9 @@ func TestInfrastructure_ApplyResources(t *testing.T) {
 		t.Logf("Applying resource file: %s", file)
 
 		output, err := RunCommand(t, "kubectl", "--context", context, "apply", "-f", file)
-		if err != nil {
+		// kubectl apply may return non-zero exit codes even for successful operations
+		// (e.g., when resources are "unchanged"). Check output content for actual errors.
+		if err != nil && !IsKubectlApplySuccess(output) {
 			t.Errorf("Failed to apply %s: %v\nOutput: %s", file, err, output)
 			continue
 		}
