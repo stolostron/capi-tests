@@ -63,16 +63,29 @@ func GetEnvOrDefault(key, defaultValue string) string {
 // particularly when resources are "unchanged".
 func IsKubectlApplySuccess(output string) bool {
 	// Error indicators in kubectl output
-	errorKeywords := []string{"error:", "failed", "invalid", "unable to"}
+	errorKeywords := []string{
+		"error", "failed", "invalid", "unable to", "warning", "forbidden", "unauthorized", "not found",
+	}
 
 	lowerOutput := strings.ToLower(output)
+
+	// Check for error keywords
 	for _, keyword := range errorKeywords {
 		if strings.Contains(lowerOutput, keyword) {
 			return false
 		}
 	}
 
-	// If no error keywords found, consider it successful
+	// Check for success indicators to ensure operation actually completed
 	// kubectl apply outputs "created", "configured", "unchanged" for success
-	return true
+	successKeywords := []string{"created", "configured", "unchanged"}
+	for _, keyword := range successKeywords {
+		if strings.Contains(lowerOutput, keyword) {
+			return true
+		}
+	}
+
+	// If output has no errors but also no success indicators, it's likely empty or unexpected
+	// Return false to be conservative
+	return false
 }
