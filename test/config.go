@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 )
 
 var (
@@ -20,17 +21,10 @@ func getDefaultRepoDir() string {
 			return
 		}
 
-		// Create a unique temporary directory path using mktemp pattern
-		tmpDir, err := os.MkdirTemp("", "cluster-api-installer-aro-*")
-		if err != nil {
-			// Fallback to process-based unique name if mktemp fails
-			defaultRepoDir = fmt.Sprintf("/tmp/cluster-api-installer-aro-%d", os.Getpid())
-			return
-		}
-
-		// Remove the directory since git clone will create it
-		os.RemoveAll(tmpDir)
-		defaultRepoDir = tmpDir
+		// Generate unique name without creating directory to avoid race conditions
+		// Combines PID and nanosecond timestamp for uniqueness
+		defaultRepoDir = fmt.Sprintf("%s/cluster-api-installer-aro-%d-%d",
+			os.TempDir(), os.Getpid(), time.Now().UnixNano())
 	})
 
 	return defaultRepoDir
