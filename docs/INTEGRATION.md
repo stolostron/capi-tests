@@ -213,7 +213,7 @@ ARO_REPO_DIR=/tmp/cluster-api-installer-aro
 # Cluster Configuration
 KIND_CLUSTER_NAME=capz-tests-stage
 CLUSTER_NAME=capz-tests-cluster
-RESOURCE_GROUP=capz-test-rg
+RESOURCE_GROUP=capz-tests-rg
 OPENSHIFT_VERSION=4.18
 REGION=uksouth
 ENV=stage

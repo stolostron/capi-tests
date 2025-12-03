@@ -64,7 +64,7 @@ func NewTestConfig() *TestConfig {
 		// Cluster defaults
 		KindClusterName:   GetEnvOrDefault("KIND_CLUSTER_NAME", "capz-tests-stage"),
 		ClusterName:       GetEnvOrDefault("CLUSTER_NAME", "capz-tests-cluster"),
-		ResourceGroup:     GetEnvOrDefault("RESOURCE_GROUP", "capz-test-rg"),
+		ResourceGroup:     GetEnvOrDefault("RESOURCE_GROUP", "capz-tests-rg"),
 		OpenShiftVersion:  GetEnvOrDefault("OPENSHIFT_VERSION", "4.18"),
 		Region:            GetEnvOrDefault("REGION", "uksouth"),
 		AzureSubscription: os.Getenv("AZURE_SUBSCRIPTION_NAME"),
