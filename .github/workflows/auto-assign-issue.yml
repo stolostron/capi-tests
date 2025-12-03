@@ -1,0 +1,28 @@
+name: Auto-assign Issues
+
+on:
+  issues:
+    types:
+      - opened
+
+jobs:
+  assign-issue:
+    name: Assign Issue to RadekCap
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+    - name: Assign Issue to RadekCap
+      run: |
+        echo "Issue #${{ github.event.issue.number }} opened by ${{ github.event.issue.user.login }}"
+        echo "Assigning to RadekCap..."
+
+        # Assign the issue to RadekCap using GitHub API
+        gh api \
+          --method POST \
+          /repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/assignees \
+          -f assignees[]='RadekCap' \
+          || echo "Failed to assign issue (user may not have permissions)"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
