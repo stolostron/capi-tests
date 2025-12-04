@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"time"
 )
 
 var (
@@ -12,8 +11,9 @@ var (
 	defaultRepoDirOnce sync.Once
 )
 
-// getDefaultRepoDir returns a unique temporary directory path for the repository.
-// The path is generated once per test run to ensure consistency across all test phases.
+// getDefaultRepoDir returns the default repository directory path.
+// The path is stable across test runs to allow sequential execution via separate
+// make commands (test-prereq, test-setup, test-kind, etc.).
 func getDefaultRepoDir() string {
 	defaultRepoDirOnce.Do(func() {
 		if dir := os.Getenv("ARO_REPO_DIR"); dir != "" {
@@ -21,10 +21,9 @@ func getDefaultRepoDir() string {
 			return
 		}
 
-		// Generate unique name without creating directory to avoid race conditions
-		// Combines PID and nanosecond timestamp for uniqueness
-		defaultRepoDir = fmt.Sprintf("%s/cluster-api-installer-aro-%d-%d",
-			os.TempDir(), os.Getpid(), time.Now().UnixNano())
+		// Use a stable path that persists across test invocations
+		// This allows make test-setup and make test-kind to share the same repository
+		defaultRepoDir = fmt.Sprintf("%s/cluster-api-installer-aro", os.TempDir())
 	})
 
 	return defaultRepoDir
