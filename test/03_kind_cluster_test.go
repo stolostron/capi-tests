@@ -17,8 +17,16 @@ func TestKindCluster_Deploy(t *testing.T) {
 
 	config := NewTestConfig()
 
+	// Ensure repository is cloned (idempotent)
 	if !DirExists(config.RepoDir) {
-		t.Skipf("Repository not cloned yet at %s", config.RepoDir)
+		t.Logf("Repository not found at %s, cloning...", config.RepoDir)
+		output, err := RunCommand(t, "git", "clone", "-b", config.RepoBranch, config.RepoURL, config.RepoDir)
+		if err != nil {
+			t.Fatalf("Failed to clone repository: %v\nOutput: %s", err, output)
+		}
+		t.Logf("Repository cloned successfully to %s", config.RepoDir)
+	} else {
+		t.Logf("Using existing repository at %s", config.RepoDir)
 	}
 
 	// Check if cluster already exists
@@ -74,12 +82,11 @@ func TestKindCluster_Verify(t *testing.T) {
 	// Check if cluster exists
 	output, err := RunCommand(t, "kind", "get", "clusters")
 	if err != nil {
-		t.Errorf("Failed to get Kind clusters: %v", err)
-		return
+		t.Fatalf("Failed to get Kind clusters: %v", err)
 	}
 
 	if !strings.Contains(output, config.KindClusterName) {
-		t.Skipf("Kind cluster '%s' not found. Run deployment test first.", config.KindClusterName)
+		t.Fatalf("Kind cluster '%s' not found. Please run 'make test-kind' or TestKindCluster_Deploy first to create the cluster.", config.KindClusterName)
 	}
 
 	t.Logf("Kind cluster '%s' exists", config.KindClusterName)
