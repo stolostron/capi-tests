@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// TestPrerequisites_ToolAvailable verifies all required tools are installed
-func TestPrerequisites_ToolAvailable(t *testing.T) {
+// TestCheckDependencies_ToolAvailable verifies all required tools are installed
+func TestCheckDependencies_ToolAvailable(t *testing.T) {
 	requiredTools := []string{
 		"docker",
 		"kind",
@@ -37,8 +37,8 @@ func TestPrerequisites_ToolAvailable(t *testing.T) {
 	}
 }
 
-// TestPrerequisites_AzureCLILogin_IsLoggedIn checks if Azure CLI is logged in
-func TestPrerequisites_AzureCLILogin_IsLoggedIn(t *testing.T) {
+// TestCheckDependencies_AzureCLILogin_IsLoggedIn checks if Azure CLI is logged in
+func TestCheckDependencies_AzureCLILogin_IsLoggedIn(t *testing.T) {
 	output, err := RunCommand(t, "az", "account", "show")
 	if err != nil {
 		t.Errorf("Azure CLI not logged in. Please run 'az login': %v", err)
@@ -48,8 +48,8 @@ func TestPrerequisites_AzureCLILogin_IsLoggedIn(t *testing.T) {
 	t.Logf("Azure CLI is logged in\n%s", output)
 }
 
-// TestPrerequisites_OpenShiftCLI_IsAvailable verifies OpenShift CLI is functional
-func TestPrerequisites_OpenShiftCLI_IsAvailable(t *testing.T) {
+// TestCheckDependencies_OpenShiftCLI_IsAvailable verifies OpenShift CLI is functional
+func TestCheckDependencies_OpenShiftCLI_IsAvailable(t *testing.T) {
 	output, err := RunCommand(t, "oc", "version", "--client")
 	if err != nil {
 		t.Errorf("OpenShift CLI check failed: %v", err)
@@ -59,8 +59,8 @@ func TestPrerequisites_OpenShiftCLI_IsAvailable(t *testing.T) {
 	t.Logf("OpenShift CLI version:\n%s", output)
 }
 
-// TestPrerequisites_Helm_IsAvailable verifies Helm is installed and functional
-func TestPrerequisites_Helm_IsAvailable(t *testing.T) {
+// TestCheckDependencies_Helm_IsAvailable verifies Helm is installed and functional
+func TestCheckDependencies_Helm_IsAvailable(t *testing.T) {
 	output, err := RunCommand(t, "helm", "version", "--short")
 	if err != nil {
 		t.Errorf("Helm version check failed: %v", err)
@@ -70,8 +70,8 @@ func TestPrerequisites_Helm_IsAvailable(t *testing.T) {
 	t.Logf("Helm version: %s", output)
 }
 
-// TestPrerequisites_Kind_IsAvailable verifies Kind is installed
-func TestPrerequisites_Kind_IsAvailable(t *testing.T) {
+// TestCheckDependencies_Kind_IsAvailable verifies Kind is installed
+func TestCheckDependencies_Kind_IsAvailable(t *testing.T) {
 	output, err := RunCommand(t, "kind", "version")
 	if err != nil {
 		t.Errorf("Kind version check failed: %v", err)
@@ -81,10 +81,10 @@ func TestPrerequisites_Kind_IsAvailable(t *testing.T) {
 	t.Logf("Kind version: %s", output)
 }
 
-// TestPrerequisites_DockerCredentialHelper checks that any Docker credential helpers
+// TestCheckDependencies_DockerCredentialHelper checks that any Docker credential helpers
 // configured in the Docker config file (credsStore or credHelpers) are available in PATH.
 // Only runs on macOS, where missing credential helpers are a common issue with Docker Desktop alternatives.
-func TestPrerequisites_DockerCredentialHelper(t *testing.T) {
+func TestCheckDependencies_DockerCredentialHelper(t *testing.T) {
 	// Only run on macOS where this is a common issue
 	if runtime.GOOS != "darwin" {
 		t.Skip("Skipping Docker credential helper check (not macOS)")

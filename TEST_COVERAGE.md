@@ -10,7 +10,7 @@ The test suite provides end-to-end coverage of the Azure Red Hat OpenShift (ARO)
 
 ### Test Files and Coverage
 
-#### 1. Prerequisites Verification (`test/01_prerequisites_test.go`)
+#### 1. Check Dependencies Verification (`test/01_check_dependencies_test.go`)
 
 **Purpose**: Validates that all required tools and authentication are in place before attempting deployment.
 
@@ -26,9 +26,9 @@ The test suite provides end-to-end coverage of the Azure Red Hat OpenShift (ARO)
 - ✓ Tool version compatibility
 
 **Key Test Cases**:
-- `TestPrerequisites_CheckRequiredTools` - Verifies all CLI tools are installed
-- `TestPrerequisites_CheckAzureAuth` - Validates Azure authentication
-- `TestPrerequisites_CheckToolVersions` - Checks minimum version requirements
+- `TestCheckDependencies_ToolAvailable` - Verifies all CLI tools are installed
+- `TestCheckDependencies_AzureCLILogin_IsLoggedIn` - Validates Azure authentication
+- `TestCheckDependencies_DockerCredentialHelper` - Checks Docker credential helper configuration
 
 **Why This Matters**: Catching missing tools early prevents failures deep into the deployment process.
 
@@ -215,10 +215,10 @@ make test
 
 ### Quick Validation
 
-Prerequisite validation without deployment tests.
+Check dependencies validation without deployment tests.
 
 ```bash
-go test -v ./test -run TestPrerequisites
+go test -v ./test -run TestCheckDependencies
 ```
 
 **Duration**: < 2 minutes
@@ -234,8 +234,8 @@ go test -v ./test -run TestPrerequisites
 Run individual test phases for targeted validation.
 
 ```bash
-# Check prerequisites only
-make test-prereq
+# Check dependencies only
+make test
 
 # Validate repository setup
 make test-setup
@@ -261,7 +261,7 @@ make test-verify
 
 | Phase | Test Files | Test Cases | Lines of Code | Coverage |
 |-------|-----------|------------|---------------|----------|
-| Prerequisites | 1 | 3 | 80 | Tool validation, auth checks |
+| Check Dependencies | 1 | 6 | 80 | Tool validation, auth checks |
 | Setup | 1 | 3 | 116 | Repository structure, scripts |
 | Kind Cluster | 1 | 3 | 142 | Cluster deployment, CAPI |
 | Infrastructure | 1 | 3 | 163 | Resource generation, YAML validation |
@@ -273,7 +273,7 @@ make test-verify
 
 The test suite covers 100% of the documented ARO-CAPZ deployment workflow:
 
-- ✅ Prerequisites verification
+- ✅ Check dependencies verification
 - ✅ Repository setup
 - ✅ Management cluster deployment
 - ✅ CAPI components installation
@@ -315,9 +315,9 @@ All three approaches are documented and tested in `docs/INTEGRATION.md`.
 
 Two workflow files provide automated testing:
 
-1. **`test-prerequisites.yml`**
+1. **`check-dependencies.yml`**
    - Runs on all pushes and PRs
-   - Validates prerequisite checks
+   - Validates dependency checks
    - Quick feedback (< 2 minutes)
 
 2. **`test.yml`**
@@ -325,7 +325,7 @@ Two workflow files provide automated testing:
    - Can be triggered manually
    - Requires Azure credentials as secrets
 
-**Coverage**: CI/CD pipeline validates prerequisites on every commit.
+**Coverage**: CI/CD pipeline validates dependencies on every commit.
 
 ---
 
@@ -434,9 +434,9 @@ make clean
 
 ## Troubleshooting Test Failures
 
-### Prerequisites Failures
+### Check Dependencies Failures
 
-**Symptom**: Tests fail during prerequisite checks
+**Symptom**: Tests fail during dependency checks
 **Solution**: Install missing tools or update versions
 ```bash
 make check-prereq
@@ -486,7 +486,7 @@ timeout := 60 * time.Minute  # default is 30m
 1. **Main README** (`README.md`)
    - Framework overview
    - Getting started guide
-   - Prerequisites
+   - Check Dependencies
 
 2. **Test README** (`test/README.md`)
    - Detailed test documentation

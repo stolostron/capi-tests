@@ -1,4 +1,4 @@
-name: 01 Test Prerequisites
+name: 01 Check Dependencies
 
 on:
   push:
@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-prereq:
-    name: 01 Test Prerequisites
+  check-dep:
+    name: 01 Check Dependencies
     runs-on: ubuntu-latest
 
     steps:
@@ -36,10 +36,10 @@ jobs:
       run: |
         az version
 
-    - name: Run prerequisite tests
+    - name: Run check dependencies
       run: |
         mkdir -p test-results
-        go run gotest.tools/gotestsum@v1.13.0 --format testname --jsonfile test-results/tests.json --junitfile test-results/junit.xml -- -short -v ./test -run TestPrerequisites
+        go run gotest.tools/gotestsum@v1.13.0 --format testname --jsonfile test-results/tests.json --junitfile test-results/junit.xml -- -short -v ./test -run TestCheckDependencies
       continue-on-error: true
       id: test-run
 
@@ -49,7 +49,7 @@ jobs:
         cat > summary.sh << 'SCRIPT'
         #!/bin/bash
 
-        echo "# Test Prerequisites Results" >> $GITHUB_STEP_SUMMARY
+        echo "# Check Dependencies Results" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
 
         if [ -f test-results/tests.json ]; then
@@ -88,7 +88,7 @@ jobs:
       run: |
         if [ -f test-results/tests.json ]; then
           jq -r 'select(.Test != null and .Action == "fail") |
-                 "::error file=test/01_prerequisites_test.go,title=Test Failed::\(.Test) failed"' \
+                 "::error file=test/01_check_dependencies_test.go,title=Test Failed::\(.Test) failed"' \
                  test-results/tests.json || true
         fi
 
@@ -106,7 +106,7 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # Check if there's already an open issue for this workflow
-        WORKFLOW_NAME="Test Prerequisites"
+        WORKFLOW_NAME="Check Dependencies"
         EXISTING_ISSUE=$(gh issue list --label "automated" --label "test-failure" --state open --json number,title --jq ".[] | select(.title | contains(\"[$WORKFLOW_NAME]\")) | .number | select(. != null)" | head -1)
 
         if [ -n "$EXISTING_ISSUE" ]; then
@@ -121,7 +121,7 @@ jobs:
 
           # Create issue body
           cat > issue_body.md << EOF
-        ## Test Prerequisites Workflow Failed
+        ## Check Dependencies Workflow Failed
 
         **Run URL:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         **Branch:** ${{ github.ref_name }}

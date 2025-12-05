@@ -10,7 +10,7 @@ This test suite validates each step of the ARO deployment process as documented 
 
 ### Test Files
 
-1. **`01_prerequisites_test.go`** - Verifies required tools and authentication
+1. **`01_check_dependencies_test.go`** - Verifies required tools and authentication
    - Checks for required CLI tools (docker/podman, kind, az, oc, helm, git)
    - Validates Azure CLI login status
    - Verifies tool versions
@@ -97,8 +97,8 @@ go test -v ./test
 ### Run Specific Test Phase
 
 ```bash
-# Prerequisites only
-go test -v ./test -run TestPrerequisites
+# Check dependencies only
+go test -v ./test -run TestCheckDependencies
 
 # Setup only
 go test -v ./test -run TestSetup
@@ -130,7 +130,7 @@ go test -v -short ./test
 
 For full deployment validation, tests should run in this order:
 
-1. Prerequisites verification
+1. Check dependencies verification
 2. Repository setup
 3. Kind cluster deployment
 4. Infrastructure generation
@@ -197,7 +197,7 @@ rm -rf /tmp/*-kubeconfig.yaml
 Ensure all prerequisites are installed. Run:
 
 ```bash
-go test -v ./test -run TestPrerequisites
+go test -v ./test -run TestCheckDependencies
 ```
 
 ### Azure Authentication Issues

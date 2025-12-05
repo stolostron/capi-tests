@@ -146,7 +146,7 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Install Prerequisites
+      - name: Install Dependencies
         run: |
           # Install kind
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
@@ -172,8 +172,8 @@ jobs:
             https://github.com/RadekCap/cluster-api-installer.git \
             /tmp/cluster-api-installer-aro
 
-      - name: Run Prerequisite Tests
-        run: go test -v ./test -run TestPrerequisites
+      - name: Run Check Dependencies Tests
+        run: go test -v ./test -run TestCheckDependencies
 
       - name: Run Setup Tests
         run: |
@@ -280,7 +280,7 @@ make test-setup
 make test
 
 # Or step by step
-make test-prereq
+make test
 make test-setup
 make test-kind
 make test-infra

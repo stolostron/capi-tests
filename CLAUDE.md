@@ -14,7 +14,7 @@ This is a Go-based test suite for validating Azure Red Hat OpenShift (ARO) deplo
 
 Tests are designed to run **sequentially** in a specific order, with each phase depending on the previous phase's success:
 
-1. **Prerequisites** (`01_prerequisites_test.go`) - Tool availability and authentication
+1. **Check Dependencies** (`01_check_dependencies_test.go`) - Tool availability and authentication
 2. **Setup** (`02_setup_test.go`) - Repository cloning and validation
 3. **Kind Cluster** (`03_kind_cluster_test.go`) - Management cluster deployment
 4. **Infrastructure** (`04_infrastructure_test.go`) - Resource generation
@@ -73,14 +73,14 @@ func TestPhase_Specific(t *testing.T) {
 ### Running Tests
 
 ```bash
-# Prerequisite tests only (fast, no Azure resources)
+# Check dependencies tests only (fast, no Azure resources)
 make test
 
 # Full test suite (all phases sequentially)
 make test-all
 
 # Individual test phases (internal use - called by test-all)
-make _test-prereq    # Prerequisites verification
+make _check_dep      # Check dependencies
 make _test-setup     # Repository setup
 make _test-kind      # Kind cluster deployment
 make _test-infra     # Infrastructure generation
@@ -88,7 +88,7 @@ make _test-deploy    # Deployment monitoring
 make _test-verify    # Cluster verification
 
 # Run specific test function
-go test -v ./test -run TestPrerequisites_ToolAvailable
+go test -v ./test -run TestCheckDependencies_ToolAvailable
 go test -v ./test -run TestInfrastructure
 
 # With custom configuration
@@ -223,8 +223,8 @@ Centralized helpers in `helpers.go` ensure:
 
 - Main branch for PRs: `readme`
 - Tests run on: `main`, `readme`, and specific feature branches
-- CI runs prerequisite tests automatically via GitHub Actions
-- Use `make test` locally before pushing (runs fast prerequisite tests)
+- CI runs check dependencies tests automatically via GitHub Actions
+- Use `make test` locally before pushing (runs fast check dependencies tests)
 
 ## Known Issues
 
@@ -242,7 +242,7 @@ These are tracked issues and should be fixed in separate PRs when addressed.
 - Appropriate permissions for ARO deployment
 - 30+ minutes for full deployment
 
-Always run `make test` (prerequisites only) locally. Full tests should run in CI/CD or with explicit intent.
+Always run `make test` (check dependencies only) locally. Full tests should run in CI/CD or with explicit intent.
 
 ## Claude Code Slash Commands
 

@@ -102,7 +102,7 @@ Automatically analyze a GitHub issue, implement the required changes, and create
    - Determine which tests to run based on changes:
      - If config changed: `go test -v ./test -run TestConfig`
      - If helpers changed: `go test -v ./test -run TestHelpers`
-     - For general changes: `make test-prereq`
+     - For general changes: `make test`
    - If tests fail:
      - Analyze failure
      - Fix implementation

@@ -58,7 +58,7 @@ Tests are configured via environment variables:
 ### Test Behavior
 
 - `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `30m`). Use Go duration format: `1h`, `45m`, `90m`, etc.
-- `TEST_VERBOSITY` - Test output verbosity (default: `-v` for verbose). Set to empty string for quiet output: `TEST_VERBOSITY= make test-prereq`
+- `TEST_VERBOSITY` - Test output verbosity (default: `-v` for verbose). Set to empty string for quiet output: `TEST_VERBOSITY= make test`
 
 ## Getting Started
 
@@ -75,9 +75,9 @@ Tests are configured via environment variables:
    az login
    ```
 
-3. **Run prerequisite tests**:
+3. **Run check dependencies tests**:
    ```bash
-   make test-prereq
+   make test
    ```
 
 4. **Run full test suite**:
@@ -90,7 +90,7 @@ Tests are configured via environment variables:
 #### Using Makefile
 
 ```bash
-# Run prerequisite tests only (fast, no Azure resources created)
+# Run check dependencies tests only (fast, no Azure resources created)
 make test
 
 # Run full test suite (all phases sequentially)
@@ -104,10 +104,10 @@ make test-deploy      # Deployment monitoring
 make test-verify      # Cluster verification
 
 # Run tests with quiet output (no verbose flag)
-TEST_VERBOSITY= make test-prereq
+TEST_VERBOSITY= make test
 
 # Run tests with verbose output (default)
-TEST_VERBOSITY=-v make test-prereq
+TEST_VERBOSITY=-v make test
 ```
 
 **Note**: All test targets automatically generate JUnit XML reports in a timestamped `results/` directory. The path to the results directory is displayed when tests run.
@@ -119,7 +119,7 @@ TEST_VERBOSITY=-v make test-prereq
 go test -v ./test -timeout 60m
 
 # Run specific test phase
-go test -v ./test -run TestPrerequisites
+go test -v ./test -run TestCheckDependencies
 go test -v ./test -run TestInfrastructure
 
 # Run with custom configuration
@@ -139,7 +139,7 @@ All Makefile test targets automatically generate JUnit XML reports for test resu
 results/
 └── 20251205_093128/          # Timestamp: YYYYMMDD_HHMMSS
     ├── junit-all.xml         # Full test suite results (from 'make test')
-    ├── junit-prereq.xml      # Prerequisites test results
+    ├── junit-check-dep.xml   # Check dependencies test results
     ├── junit-setup.xml       # Setup test results
     ├── junit-kind.xml        # Kind cluster test results
     ├── junit-infra.xml       # Infrastructure test results
@@ -152,13 +152,13 @@ results/
 When you run a test target, the results path is printed to the terminal:
 
 ```bash
-$ make test-prereq
-=== Running Prerequisites Tests ===
+$ make test
+=== Running Check Dependencies Tests ===
 Results will be saved to: results/20251205_093128
 
 # ... test output ...
 
-Test results saved to: results/20251205_093128/junit-prereq.xml
+Test results saved to: results/20251205_093128/junit-check-dep.xml
 ```
 
 The JUnit XML files can be:
@@ -211,7 +211,7 @@ See [INTEGRATION.md](docs/INTEGRATION.md) for detailed integration patterns.
 
 ```
 test/
-├── 01_prerequisites_test.go   # Tool and auth verification
+├── 01_check_dependencies_test.go  # Tool and auth verification
 ├── 02_setup_test.go           # Repository setup
 ├── 03_kind_cluster_test.go    # Management cluster deployment
 ├── 04_infrastructure_test.go  # Resource generation
@@ -228,7 +228,7 @@ For detailed test documentation, see [test/README.md](test/README.md).
 
 The test suite integrates with GitHub Actions for continuous testing:
 
-- **Prerequisites Workflow** - Runs prerequisite checks on every push
+- **Check Dependencies Workflow** - Runs dependency checks on every push
 - **Full Test Workflow** - Can be triggered manually for complete validation
 
 ## Contributing
