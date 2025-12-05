@@ -30,12 +30,12 @@ This test suite validates each step of the ARO deployment process as documented 
    - Validates generated YAML files
    - Applies resources to the management cluster
 
-5. **`deployment_test.go`** - Cluster deployment monitoring
+5. **`05_deployment_test.go`** - Cluster deployment monitoring
    - Monitors ARO cluster deployment
    - Waits for control plane readiness
    - Checks cluster conditions
 
-6. **`verification_test.go`** - Cluster verification
+6. **`06_verification_test.go`** - Cluster verification
    - Retrieves cluster kubeconfig
    - Verifies cluster nodes
    - Checks OpenShift version and operators

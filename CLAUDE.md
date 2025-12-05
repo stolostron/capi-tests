@@ -18,8 +18,8 @@ Tests are designed to run **sequentially** in a specific order, with each phase 
 2. **Setup** (`02_setup_test.go`) - Repository cloning and validation
 3. **Kind Cluster** (`03_kind_cluster_test.go`) - Management cluster deployment
 4. **Infrastructure** (`04_infrastructure_test.go`) - Resource generation
-5. **Deployment** (`deployment_test.go`) - Cluster provisioning monitoring
-6. **Verification** (`verification_test.go`) - Final cluster validation
+5. **Deployment** (`05_deployment_test.go`) - Cluster provisioning monitoring
+6. **Verification** (`06_verification_test.go`) - Final cluster validation
 
 Tests are **idempotent** - they skip steps already completed, allowing re-runs.
 
@@ -239,7 +239,7 @@ Centralized helpers in `helpers.go` ensure:
 
 - `go.mod` specifies invalid Go version 1.25.4 (should be 1.21 or 1.22)
 - `test/start_test.go` contains trivial test with unreachable code
-- Command injection vulnerability in `verification_test.go:61` (base64 decode)
+- Command injection vulnerability in `06_verification_test.go:68` (base64 decode)
 
 These are tracked issues and should be fixed in separate PRs when addressed.
 

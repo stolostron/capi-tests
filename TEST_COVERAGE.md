@@ -107,7 +107,7 @@ The test suite provides end-to-end coverage of the Azure Red Hat OpenShift (ARO)
 
 ---
 
-#### 5. Deployment Monitoring (`test/deployment_test.go`)
+#### 5. Deployment Monitoring (`test/05_deployment_test.go`)
 
 **Purpose**: Monitors the ARO cluster deployment progress and validates successful provisioning.
 
@@ -135,7 +135,7 @@ The test suite provides end-to-end coverage of the Azure Red Hat OpenShift (ARO)
 
 ---
 
-#### 6. Cluster Verification (`test/verification_test.go`)
+#### 6. Cluster Verification (`test/06_verification_test.go`)
 
 **Purpose**: Performs comprehensive validation of the deployed ARO cluster.
 
@@ -473,7 +473,7 @@ az account show
 **Symptom**: Tests timeout waiting for cluster
 **Solution**: Check Azure portal for resource status, increase timeout
 ```bash
-# Increase timeout in deployment_test.go
+# Increase timeout in 05_deployment_test.go
 timeout := 60 * time.Minute  # default is 30m
 ```
 

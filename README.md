@@ -219,8 +219,8 @@ test/
 ├── 02_setup_test.go           # Repository setup
 ├── 03_kind_cluster_test.go    # Management cluster deployment
 ├── 04_infrastructure_test.go  # Resource generation
-├── deployment_test.go         # Cluster provisioning monitoring
-├── verification_test.go       # Final cluster validation
+├── 05_deployment_test.go      # Cluster provisioning monitoring
+├── 06_verification_test.go    # Final cluster validation
 ├── config.go                  # Configuration management
 ├── helpers.go                 # Shared utilities
 └── README.md               # Detailed test documentation
