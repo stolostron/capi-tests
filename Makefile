@@ -1,4 +1,4 @@
-.PHONY: test _test-check-dep _test-setup _test-kind _test-infra _test-deploy _test-verify test-all clean help
+.PHONY: test _check-dep _setup _kind _infra _deploy _verify test-all clean help
 
 # Default values
 CLUSTER_NAME ?= test-cluster
@@ -36,9 +36,9 @@ help: ## Display this help message
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 
-test: _test-check-dep ## Run check dependencies tests only
+test: _check-dep ## Run check dependencies tests only
 
-_test-check-dep: check-gotestsum
+_check-dep: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Check Dependencies Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -47,7 +47,7 @@ _test-check-dep: check-gotestsum
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-check-dep.xml"
 
-_test-setup: check-gotestsum
+_setup: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Repository Setup Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -56,7 +56,7 @@ _test-setup: check-gotestsum
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-setup.xml"
 
-_test-kind: check-gotestsum
+_kind: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Kind Cluster Deployment Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -65,7 +65,7 @@ _test-kind: check-gotestsum
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-kind.xml"
 
-_test-infra: check-gotestsum
+_infra: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Infrastructure Generation Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -74,7 +74,7 @@ _test-infra: check-gotestsum
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-infra.xml"
 
-_test-deploy: check-gotestsum
+_deploy: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Deployment Monitoring Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -83,7 +83,7 @@ _test-deploy: check-gotestsum
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-deploy.xml"
 
-_test-verify: check-gotestsum
+_verify: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Cluster Verification Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -100,12 +100,12 @@ test-all: ## Run all test phases sequentially
 	@echo ""
 	@echo "All test results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(MAKE) --no-print-directory _test-check-dep && \
-	$(MAKE) --no-print-directory _test-setup && \
-	$(MAKE) --no-print-directory _test-kind && \
-	$(MAKE) --no-print-directory _test-infra && \
-	$(MAKE) --no-print-directory _test-deploy && \
-	$(MAKE) --no-print-directory _test-verify && \
+	@$(MAKE) --no-print-directory _check-dep && \
+	$(MAKE) --no-print-directory _setup && \
+	$(MAKE) --no-print-directory _kind && \
+	$(MAKE) --no-print-directory _infra && \
+	$(MAKE) --no-print-directory _deploy && \
+	$(MAKE) --no-print-directory _verify && \
 	echo "" && \
 	echo "=======================================" && \
 	echo "=== All Test Phases Completed Successfully ===" && \
@@ -197,7 +197,7 @@ fix-docker-config: ## Fix Docker credential helper configuration issues
 	echo "✅ Docker credential helper configuration fixed!"; \
 	echo "   Backup saved to $$BACKUP_FILE"; \
 	echo ""; \
-	echo "You can now run 'make test-kind' to deploy the Kind cluster"
+	echo "You can now run 'make _kind' to deploy the Kind cluster"
 
 fmt: ## Format Go code
 	go fmt ./...

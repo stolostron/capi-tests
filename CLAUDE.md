@@ -80,12 +80,12 @@ make test
 make test-all
 
 # Individual test phases (internal use - called by test-all)
-make _test-check-dep # Check dependencies
-make _test-setup     # Repository setup
-make _test-kind      # Kind cluster deployment
-make _test-infra     # Infrastructure generation
-make _test-deploy    # Deployment monitoring
-make _test-verify    # Cluster verification
+make _check-dep      # Check dependencies
+make _setup          # Repository setup
+make _kind           # Kind cluster deployment
+make _infra          # Infrastructure generation
+make _deploy         # Deployment monitoring
+make _verify         # Cluster verification
 
 # Run specific test function
 go test -v ./test -run TestCheckDependencies_ToolAvailable
