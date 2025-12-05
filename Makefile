@@ -197,7 +197,7 @@ fix-docker-config: ## Fix Docker credential helper configuration issues
 	echo "✅ Docker credential helper configuration fixed!"; \
 	echo "   Backup saved to $$BACKUP_FILE"; \
 	echo ""; \
-	echo "You can now run 'make _kind' to deploy the Kind cluster"
+	echo "You can now run 'make test-all' to deploy the Kind cluster and run all tests"
 
 fmt: ## Format Go code
 	go fmt ./...
