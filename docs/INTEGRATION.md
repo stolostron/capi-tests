@@ -273,19 +273,18 @@ git commit -m "Update vendored installer scripts"
 ## Testing the Integration
 
 ```bash
-# Verify repository is accessible
-make test-setup
-
-# Run full test suite
+# Run check dependencies tests (fast, no Azure resources)
 make test
 
-# Or step by step
-make test
-make test-setup
-make test-kind
-make test-infra
-make test-deploy
-make test-verify
+# Run full test suite (all phases sequentially)
+make test-all
+
+# Or run specific test phases using Go test directly
+go test -v ./test -run TestSetup
+go test -v ./test -run TestKindCluster
+go test -v ./test -run TestInfrastructure
+go test -v ./test -run TestDeployment
+go test -v ./test -run TestVerification
 ```
 
 ## Troubleshooting
