@@ -14,10 +14,15 @@ ifeq (,$(filter $(GOTESTSUM_FORMAT),$(ALLOWED_FORMATS)))
   $(error Invalid GOTESTSUM_FORMAT "$(GOTESTSUM_FORMAT)". Allowed: $(ALLOWED_FORMATS))
 endif
 
+# Results directory configuration
+# Create unique results directory for each test run using timestamp
+TIMESTAMP := $(shell date +%Y%m%d_%H%M%S)
+RESULTS_DIR := results/$(TIMESTAMP)
+
 # Determine Go binary installation path
 # Prefer GOBIN if set, otherwise use GOPATH/bin, with fallback to $HOME/go/bin
 GOBIN := $(shell if [ -n "$$(go env GOBIN 2>/dev/null)" ]; then go env GOBIN; else echo "$$(go env GOPATH 2>/dev/null || echo "$$HOME/go")/bin"; fi)
-GOTESTSUM := $(GOBIN)/gotestsum --format='$(GOTESTSUM_FORMAT)' --
+GOTESTSUM := $(GOBIN)/gotestsum --format='$(GOTESTSUM_FORMAT)'
 
 help: ## Display this help message
 	@echo "ARO-CAPZ Test Suite Makefile"
@@ -38,49 +43,84 @@ help: ## Display this help message
 	@echo "Or run all phases sequentially with: make test-all"
 
 test: check-gotestsum ## Run all tests
+	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running All Tests ==="
+	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(GOTESTSUM) -v ./test -timeout 60m
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-all.xml -- -v ./test -timeout 60m
+	@echo ""
+	@echo "Test results saved to: $(RESULTS_DIR)/junit-all.xml"
 
 test-short: check-gotestsum ## Run quick tests only (skip long-running tests)
+	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Quick Tests (Short Mode) ==="
+	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(GOTESTSUM) -v -short ./test
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-short.xml -- -v -short ./test
+	@echo ""
+	@echo "Test results saved to: $(RESULTS_DIR)/junit-short.xml"
 
 test-prereq: check-gotestsum ## Run prerequisite verification tests only
+	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Prerequisites Tests ==="
+	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(GOTESTSUM) -v ./test -run TestPrerequisites
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-prereq.xml -- -v ./test -run TestPrerequisites
+	@echo ""
+	@echo "Test results saved to: $(RESULTS_DIR)/junit-prereq.xml"
 
 test-setup: check-gotestsum ## Run repository setup tests only
+	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Repository Setup Tests ==="
+	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(GOTESTSUM) -v ./test -run TestSetup
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-setup.xml -- -v ./test -run TestSetup
+	@echo ""
+	@echo "Test results saved to: $(RESULTS_DIR)/junit-setup.xml"
 
 test-kind: check-gotestsum ## Run Kind cluster deployment tests only
+	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Kind Cluster Deployment Tests ==="
+	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(GOTESTSUM) -v ./test -run TestKindCluster -timeout 30m
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-kind.xml -- -v ./test -run TestKindCluster -timeout 30m
+	@echo ""
+	@echo "Test results saved to: $(RESULTS_DIR)/junit-kind.xml"
 
 test-infra: check-gotestsum ## Run infrastructure generation tests only
+	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Infrastructure Generation Tests ==="
+	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(GOTESTSUM) -v ./test -run TestInfrastructure -timeout 20m
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-infra.xml -- -v ./test -run TestInfrastructure -timeout 20m
+	@echo ""
+	@echo "Test results saved to: $(RESULTS_DIR)/junit-infra.xml"
 
 test-deploy: check-gotestsum ## Run deployment monitoring tests only
+	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Deployment Monitoring Tests ==="
+	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(GOTESTSUM) -v ./test -run TestDeployment -timeout 40m
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy.xml -- -v ./test -run TestDeployment -timeout 40m
+	@echo ""
+	@echo "Test results saved to: $(RESULTS_DIR)/junit-deploy.xml"
 
 test-verify: check-gotestsum ## Run cluster verification tests only
+	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Cluster Verification Tests ==="
+	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(GOTESTSUM) -v ./test -run TestVerification -timeout 20m
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-verify.xml -- -v ./test -run TestVerification -timeout 20m
+	@echo ""
+	@echo "Test results saved to: $(RESULTS_DIR)/junit-verify.xml"
 
 test-all: ## Run all test phases sequentially
+	@mkdir -p $(RESULTS_DIR)
 	@echo "========================================"
 	@echo "=== Running Full Test Suite ==="
 	@echo "========================================"
+	@echo ""
+	@echo "All test results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@$(MAKE) --no-print-directory test-prereq && \
 	$(MAKE) --no-print-directory test-setup && \
@@ -91,13 +131,16 @@ test-all: ## Run all test phases sequentially
 	echo "" && \
 	echo "=======================================" && \
 	echo "=== All Test Phases Completed Successfully ===" && \
-	echo "======================================="
+	echo "=======================================" && \
+	echo "" && \
+	echo "All test results saved to: $(RESULTS_DIR)"
 
 clean: ## Clean up test resources
 	@echo "Cleaning up test resources..."
 	-kind delete cluster --name $(KIND_CLUSTER_NAME)
 	-rm -rf /tmp/cluster-api-installer-aro
 	-rm -f /tmp/*-kubeconfig.yaml
+	-rm -rf results
 	@echo "Cleanup complete"
 
 setup-submodule: ## Add cluster-api-installer as a git submodule

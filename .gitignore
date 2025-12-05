@@ -19,3 +19,4 @@ vendor/
 # Test results
 *.log
 *.out
+results/

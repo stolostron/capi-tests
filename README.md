@@ -106,6 +106,8 @@ make test-verify      # Cluster verification
 make test-short
 ```
 
+**Note**: All test targets automatically generate JUnit XML reports in a timestamped `results/` directory. The path to the results directory is displayed when tests run.
+
 #### Using Go Test Directly
 
 ```bash
@@ -121,6 +123,51 @@ ENV=prod \
 CLUSTER_NAME=my-aro-cluster \
 REGION=westus2 \
 go test -v ./test -timeout 60m
+```
+
+### Test Results and Reports
+
+All Makefile test targets automatically generate JUnit XML reports for test results. Each test run creates a unique timestamped directory under `results/` containing the XML reports.
+
+#### Results Directory Structure
+
+```
+results/
+└── 20251205_093128/          # Timestamp: YYYYMMDD_HHMMSS
+    ├── junit-prereq.xml      # Prerequisites test results
+    ├── junit-setup.xml       # Setup test results
+    ├── junit-kind.xml        # Kind cluster test results
+    ├── junit-infra.xml       # Infrastructure test results
+    ├── junit-deploy.xml      # Deployment test results
+    └── junit-verify.xml      # Verification test results
+```
+
+#### Using Test Results
+
+When you run a test target, the results path is printed to the terminal:
+
+```bash
+$ make test-prereq
+=== Running Prerequisites Tests ===
+Results will be saved to: results/20251205_093128
+
+# ... test output ...
+
+Test results saved to: results/20251205_093128/junit-prereq.xml
+```
+
+The JUnit XML files can be:
+- Consumed by CI/CD systems (GitHub Actions, Jenkins, GitLab CI)
+- Visualized in test reporting tools
+- Parsed for automated analysis
+- Archived for historical tracking
+
+#### Cleanup
+
+The `results/` directory is excluded from git (via `.gitignore`) and can be cleaned up with:
+
+```bash
+make clean  # Removes results/ directory and other test artifacts
 ```
 
 ## Integration with cluster-api-installer
