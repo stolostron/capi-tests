@@ -44,7 +44,7 @@ For each test file, check and report on:
 - ❌ Check for command injection vulnerabilities
 - ❌ Check for hardcoded secrets or credentials
 - ❌ Check for unsafe file operations
-- ❌ Flag the known issue in `verification_test.go:61` (base64 decode vulnerability)
+- ❌ Flag the known issue in `06_verification_test.go:61` (base64 decode vulnerability)
 
 ### 7. CLAUDE.md Compliance
 - ✅ Follows patterns documented in CLAUDE.md
