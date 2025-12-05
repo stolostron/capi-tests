@@ -234,23 +234,18 @@ go test -v ./test -run TestCheckDependencies
 Run individual test phases for targeted validation.
 
 ```bash
-# Check dependencies only
+# Check dependencies only (fast, no Azure resources)
 make test
 
-# Validate repository setup
-make test-setup
+# Run all test phases sequentially
+make test-all
 
-# Test Kind cluster deployment
-make test-kind
-
-# Test infrastructure generation
-make test-infra
-
-# Monitor deployment
-make test-deploy
-
-# Verify deployed cluster
-make test-verify
+# Run specific test phase using Go test directly
+go test -v ./test -run TestSetup
+go test -v ./test -run TestKindCluster
+go test -v ./test -run TestInfrastructure
+go test -v ./test -run TestDeployment
+go test -v ./test -run TestVerification
 ```
 
 ---

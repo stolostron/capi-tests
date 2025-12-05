@@ -82,7 +82,7 @@ make test-all
 # Individual test phases (internal use - called by test-all)
 make _check-dep      # Check dependencies
 make _setup          # Repository setup
-make _kind           # Kind cluster deployment
+make _cluster        # Cluster deployment
 make _infra          # Infrastructure generation
 make _deploy         # Deployment monitoring
 make _verify         # Cluster verification

@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _kind _infra _deploy _verify test-all clean help
+.PHONY: test _check-dep _setup _cluster _infra _deploy _verify test-all clean help
 
 # Default values
 CLUSTER_NAME ?= test-cluster
@@ -56,14 +56,14 @@ _setup: check-gotestsum
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-setup.xml"
 
-_kind: check-gotestsum
+_cluster: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
-	@echo "=== Running Kind Cluster Deployment Tests ==="
+	@echo "=== Running Cluster Deployment Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-kind.xml -- $(TEST_VERBOSITY) ./test -run TestKindCluster -timeout 30m
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-cluster.xml -- $(TEST_VERBOSITY) ./test -run TestKindCluster -timeout 30m
 	@echo ""
-	@echo "Test results saved to: $(RESULTS_DIR)/junit-kind.xml"
+	@echo "Test results saved to: $(RESULTS_DIR)/junit-cluster.xml"
 
 _infra: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
@@ -102,7 +102,7 @@ test-all: ## Run all test phases sequentially
 	@echo ""
 	@$(MAKE) --no-print-directory _check-dep && \
 	$(MAKE) --no-print-directory _setup && \
-	$(MAKE) --no-print-directory _kind && \
+	$(MAKE) --no-print-directory _cluster && \
 	$(MAKE) --no-print-directory _infra && \
 	$(MAKE) --no-print-directory _deploy && \
 	$(MAKE) --no-print-directory _verify && \
