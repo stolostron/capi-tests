@@ -80,7 +80,7 @@ The test suite provides end-to-end coverage of the Azure Red Hat OpenShift (ARO)
 
 ---
 
-#### 4. Infrastructure Generation (`test/infrastructure_test.go`)
+#### 4. Infrastructure Generation (`test/03_infrastructure_test.go`)
 
 **Purpose**: Generates and applies ARO infrastructure resources to the management cluster.
 

@@ -218,7 +218,7 @@ test/
 ├── 01_prerequisites_test.go   # Tool and auth verification
 ├── 02_setup_test.go           # Repository setup
 ├── 03_kind_cluster_test.go    # Management cluster deployment
-├── infrastructure_test.go     # Resource generation
+├── 03_infrastructure_test.go  # Resource generation
 ├── deployment_test.go         # Cluster provisioning monitoring
 ├── verification_test.go       # Final cluster validation
 ├── config.go                  # Configuration management

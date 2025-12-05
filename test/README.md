@@ -25,7 +25,7 @@ This test suite validates each step of the ARO deployment process as documented 
    - Verifies cluster accessibility
    - Checks CAPI components installation
 
-4. **`infrastructure_test.go`** - Infrastructure resource generation
+4. **`03_infrastructure_test.go`** - Infrastructure resource generation
    - Generates ARO infrastructure resources
    - Validates generated YAML files
    - Applies resources to the management cluster
