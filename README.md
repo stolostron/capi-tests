@@ -96,12 +96,12 @@ make test
 # Run full test suite (all phases sequentially)
 make test-all
 
-# Run specific test phase
-make test-setup       # Repository setup
-make test-kind        # Kind cluster deployment
-make test-infra       # Infrastructure generation
-make test-deploy      # Deployment monitoring
-make test-verify      # Cluster verification
+# Run specific test phase using Go test directly
+go test -v ./test -run TestSetup
+go test -v ./test -run TestKindCluster
+go test -v ./test -run TestInfrastructure
+go test -v ./test -run TestDeployment
+go test -v ./test -run TestVerification
 
 # Run tests with quiet output (no verbose flag)
 TEST_VERBOSITY= make test
@@ -137,14 +137,13 @@ All Makefile test targets automatically generate JUnit XML reports for test resu
 
 ```
 results/
-└── 20251205_093128/          # Timestamp: YYYYMMDD_HHMMSS
-    ├── junit-all.xml         # Full test suite results (from 'make test')
-    ├── junit-check-dep.xml   # Check dependencies test results
-    ├── junit-setup.xml       # Setup test results
-    ├── junit-kind.xml        # Kind cluster test results
-    ├── junit-infra.xml       # Infrastructure test results
-    ├── junit-deploy.xml      # Deployment test results
-    └── junit-verify.xml      # Verification test results
+└── 20251205_093128/               # Timestamp: YYYYMMDD_HHMMSS
+    ├── junit-check-dep.xml        # Check dependencies test results
+    ├── junit-setup.xml            # Setup test results
+    ├── junit-cluster.xml          # Cluster deployment test results
+    ├── junit-generate-yamls.xml   # YAML generation test results
+    ├── junit-deploy.xml           # Deployment test results
+    └── junit-verify.xml           # Verification test results
 ```
 
 #### Using Test Results

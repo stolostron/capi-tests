@@ -17,7 +17,7 @@ Tests are designed to run **sequentially** in a specific order, with each phase 
 1. **Check Dependencies** (`01_check_dependencies_test.go`) - Tool availability and authentication
 2. **Setup** (`02_setup_test.go`) - Repository cloning and validation
 3. **Kind Cluster** (`03_kind_cluster_test.go`) - Management cluster deployment
-4. **Infrastructure** (`04_infrastructure_test.go`) - Resource generation
+4. **Infrastructure** (`04_infrastructure_test.go`) - YAML generation
 5. **Deployment** (`05_deployment_test.go`) - Cluster provisioning monitoring
 6. **Verification** (`06_verification_test.go`) - Final cluster validation
 
@@ -83,7 +83,7 @@ make test-all
 make _check-dep      # Check dependencies
 make _setup          # Repository setup
 make _cluster        # Cluster deployment
-make _infra          # Infrastructure generation
+make _generate-yamls # YAML generation
 make _deploy         # Deployment monitoring
 make _verify         # Cluster verification
 

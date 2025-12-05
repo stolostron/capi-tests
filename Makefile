@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _cluster _infra _deploy _verify test-all clean help
+.PHONY: test _check-dep _setup _cluster _generate-yamls _deploy _verify test-all clean help
 
 # Default values
 CLUSTER_NAME ?= test-cluster
@@ -65,14 +65,14 @@ _cluster: check-gotestsum
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-cluster.xml"
 
-_infra: check-gotestsum
+_generate-yamls: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
-	@echo "=== Running Infrastructure Generation Tests ==="
+	@echo "=== Running YAML Generation Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-infra.xml -- $(TEST_VERBOSITY) ./test -run TestInfrastructure -timeout 20m
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-generate-yamls.xml -- $(TEST_VERBOSITY) ./test -run TestInfrastructure -timeout 20m
 	@echo ""
-	@echo "Test results saved to: $(RESULTS_DIR)/junit-infra.xml"
+	@echo "Test results saved to: $(RESULTS_DIR)/junit-generate-yamls.xml"
 
 _deploy: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
@@ -103,7 +103,7 @@ test-all: ## Run all test phases sequentially
 	@$(MAKE) --no-print-directory _check-dep && \
 	$(MAKE) --no-print-directory _setup && \
 	$(MAKE) --no-print-directory _cluster && \
-	$(MAKE) --no-print-directory _infra && \
+	$(MAKE) --no-print-directory _generate-yamls && \
 	$(MAKE) --no-print-directory _deploy && \
 	$(MAKE) --no-print-directory _verify && \
 	echo "" && \
