@@ -11,9 +11,6 @@ import (
 
 // TestKindCluster_Deploy tests deploying a Kind cluster with CAPZ
 func TestKindCluster_Deploy(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping Kind cluster deployment in short mode")
-	}
 
 	config := NewTestConfig()
 
@@ -65,9 +62,6 @@ func TestKindCluster_Deploy(t *testing.T) {
 
 // TestKindCluster_Verify verifies the Kind cluster is running and accessible
 func TestKindCluster_Verify(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping Kind cluster verification in short mode")
-	}
 
 	config := NewTestConfig()
 
@@ -101,9 +95,6 @@ func TestKindCluster_Verify(t *testing.T) {
 
 // TestKindCluster_CAPIComponents verifies CAPI components are installed
 func TestKindCluster_CAPIComponents(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping CAPI components check in short mode")
-	}
 
 	config := NewTestConfig()
 

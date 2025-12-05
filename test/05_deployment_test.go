@@ -11,9 +11,6 @@ import (
 
 // TestDeployment_MonitorCluster tests monitoring the ARO cluster deployment
 func TestDeployment_MonitorCluster(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping cluster monitoring in short mode")
-	}
 
 	config := NewTestConfig()
 
@@ -68,9 +65,6 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 
 // TestDeployment_WaitForControlPlane waits for control plane to be ready
 func TestDeployment_WaitForControlPlane(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping control plane wait in short mode")
-	}
 
 	config := NewTestConfig()
 	context := fmt.Sprintf("kind-%s", config.KindClusterName)
@@ -116,9 +110,6 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 
 // TestDeployment_CheckClusterConditions checks various cluster conditions
 func TestDeployment_CheckClusterConditions(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping cluster conditions check in short mode")
-	}
 
 	config := NewTestConfig()
 	context := fmt.Sprintf("kind-%s", config.KindClusterName)

@@ -8,10 +8,6 @@ import (
 
 // TestSetup_CloneRepository tests cloning the cluster-api-installer repository
 func TestSetup_CloneRepository(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping repository clone in short mode")
-	}
-
 	config := NewTestConfig()
 
 	// Check if directory already exists
@@ -43,10 +39,6 @@ func TestSetup_CloneRepository(t *testing.T) {
 
 // TestSetup_VerifyRepositoryStructure verifies the cloned repository has expected structure
 func TestSetup_VerifyRepositoryStructure(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping repository structure verification in short mode")
-	}
-
 	config := NewTestConfig()
 
 	if !DirExists(config.RepoDir) {
@@ -73,10 +65,6 @@ func TestSetup_VerifyRepositoryStructure(t *testing.T) {
 
 // TestSetup_ScriptPermissions verifies scripts have executable permissions
 func TestSetup_ScriptPermissions(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping script permissions check in short mode")
-	}
-
 	config := NewTestConfig()
 
 	if !DirExists(config.RepoDir) {

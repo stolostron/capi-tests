@@ -1,4 +1,4 @@
-.PHONY: test _test-prereq _test-setup _test-kind _test-infra _test-deploy _test-verify test-all test-short clean help
+.PHONY: test _test-prereq _test-setup _test-kind _test-infra _test-deploy _test-verify test-all clean help
 
 # Default values
 CLUSTER_NAME ?= test-cluster
@@ -44,15 +44,6 @@ test: check-gotestsum ## Run all tests
 	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-all.xml -- $(TEST_VERBOSITY) ./test -timeout 60m
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-all.xml"
-
-test-short: check-gotestsum ## Run quick tests only (skip long-running tests)
-	@mkdir -p $(RESULTS_DIR)
-	@echo "=== Running Quick Tests (Short Mode) ==="
-	@echo "Results will be saved to: $(RESULTS_DIR)"
-	@echo ""
-	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-short.xml -- $(TEST_VERBOSITY) -short ./test
-	@echo ""
-	@echo "Test results saved to: $(RESULTS_DIR)/junit-short.xml"
 
 _test-prereq: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)

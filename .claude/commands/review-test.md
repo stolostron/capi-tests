@@ -23,10 +23,9 @@ For each test file, check and report on:
 
 ### 3. Test Structure
 - ✅ Function names follow `Test<Phase>_<Functionality>` pattern
-- ✅ Includes `testing.Short()` check for long-running tests
 - ✅ Has prerequisite validation with `t.Skipf()`
 - ✅ Uses `t.Run()` for subtests when appropriate
-- ❌ Report any missing short-mode checks or prerequisite validations
+- ❌ Report any missing prerequisite validations
 
 ### 4. Error Handling
 - ✅ Uses `t.Errorf()` for non-fatal errors (can continue)

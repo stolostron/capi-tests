@@ -9,9 +9,6 @@ import (
 
 // TestInfrastructure_GenerateResources tests generating ARO infrastructure resources
 func TestInfrastructure_GenerateResources(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping infrastructure generation in short mode")
-	}
 
 	config := NewTestConfig()
 
@@ -72,9 +69,6 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 
 // TestInfrastructure_VerifyGeneratedFiles verifies generated resource files
 func TestInfrastructure_VerifyGeneratedFiles(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping generated files verification in short mode")
-	}
 
 	config := NewTestConfig()
 	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
@@ -113,9 +107,6 @@ func TestInfrastructure_VerifyGeneratedFiles(t *testing.T) {
 
 // TestInfrastructure_ApplyResources tests applying generated resources to the cluster
 func TestInfrastructure_ApplyResources(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping resource application in short mode")
-	}
 
 	config := NewTestConfig()
 	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())

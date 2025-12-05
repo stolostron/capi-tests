@@ -14,9 +14,6 @@ func TestDeployment_ProgressDemo(t *testing.T) {
 	if os.Getenv("RUN_DEMO_TESTS") != "1" {
 		t.Skip("Skipping demo test (set RUN_DEMO_TESTS=1 to run)")
 	}
-	if testing.Short() {
-		t.Skip("Skipping progress demo in short mode")
-	}
 
 	// Simulate a wait with a 30-second timeout and 5-second intervals
 	// Demo completes after 15 seconds to show the success case

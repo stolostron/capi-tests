@@ -11,9 +11,6 @@ import (
 
 // TestVerification_RetrieveKubeconfig tests retrieving the cluster kubeconfig
 func TestVerification_RetrieveKubeconfig(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping kubeconfig retrieval in short mode")
-	}
 
 	config := NewTestConfig()
 	context := fmt.Sprintf("kind-%s", config.KindClusterName)
@@ -92,9 +89,6 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 
 // TestVerification_ClusterNodes verifies cluster nodes are available
 func TestVerification_ClusterNodes(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping cluster nodes verification in short mode")
-	}
 
 	kubeconfigPath := os.Getenv("ARO_CLUSTER_KUBECONFIG")
 	if kubeconfigPath == "" {
@@ -129,9 +123,6 @@ func TestVerification_ClusterNodes(t *testing.T) {
 
 // TestVerification_ClusterVersion verifies the OpenShift cluster version
 func TestVerification_ClusterVersion(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping cluster version verification in short mode")
-	}
 
 	kubeconfigPath := os.Getenv("ARO_CLUSTER_KUBECONFIG")
 	if kubeconfigPath == "" {
@@ -157,9 +148,6 @@ func TestVerification_ClusterVersion(t *testing.T) {
 
 // TestVerification_ClusterOperators checks cluster operators status
 func TestVerification_ClusterOperators(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping cluster operators check in short mode")
-	}
 
 	kubeconfigPath := os.Getenv("ARO_CLUSTER_KUBECONFIG")
 	if kubeconfigPath == "" {
@@ -185,9 +173,6 @@ func TestVerification_ClusterOperators(t *testing.T) {
 
 // TestVerification_ClusterHealth performs basic health checks
 func TestVerification_ClusterHealth(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping cluster health check in short mode")
-	}
 
 	kubeconfigPath := os.Getenv("ARO_CLUSTER_KUBECONFIG")
 	if kubeconfigPath == "" {

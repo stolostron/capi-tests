@@ -39,10 +39,6 @@ func TestPrerequisites_ToolAvailable(t *testing.T) {
 
 // TestPrerequisites_AzureCLILogin_IsLoggedIn checks if Azure CLI is logged in
 func TestPrerequisites_AzureCLILogin_IsLoggedIn(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping Azure login check in short mode")
-	}
-
 	output, err := RunCommand(t, "az", "account", "show")
 	if err != nil {
 		t.Errorf("Azure CLI not logged in. Please run 'az login': %v", err)

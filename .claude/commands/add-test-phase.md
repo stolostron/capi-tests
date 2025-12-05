@@ -8,10 +8,7 @@ Create a new test phase file for the ARO-CAPZ test suite following the establish
    - A brief description of what this test phase will validate
 
 2. Create the test file `test/XX_<name>_test.go` with:
-   - Standard package declaration and imports
-   - `testing.Short()` check at the beginning of each test function
-   - `config := NewTestConfig()` for configuration
-   - Proper error handling using `t.Errorf()` for non-fatal and `t.Fatalf()` for fatal errors
+   - Standard package declaration and imports (excluding testing.Short checks)
    - Use of helper functions from `test/helpers.go` (CommandExists, RunCommand, FileExists, etc.)
    - Clear logging with `t.Logf()` for progress
    - Prerequisite checks with `t.Skipf()` when conditions aren't met
@@ -40,9 +37,6 @@ import (
 
 // Test<Phase>_<Functionality> describes what this test validates
 func Test<Phase>_<Functionality>(t *testing.T) {
-    if testing.Short() {
-        t.Skip("Skipping in short mode")
-    }
 
     config := NewTestConfig()
 

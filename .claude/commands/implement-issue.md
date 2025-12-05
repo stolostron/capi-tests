@@ -205,7 +205,7 @@ Automatically analyze a GitHub issue, implement the required changes, and create
 ### Repository-Specific Patterns
 - **Configuration**: Use `config := NewTestConfig()` pattern
 - **Helpers**: Reuse functions from `helpers.go`
-- **Tests**: Follow sequential test pattern, use `testing.Short()` for long tests
+- **Tests**: Follow sequential test pattern with proper prerequisite validation
 - **Error handling**: Use `t.Errorf()` for non-fatal, `t.Fatalf()` for fatal errors
 - **Environment**: Use `GetEnvOrDefault()` for config values
 

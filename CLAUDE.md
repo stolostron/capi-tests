@@ -54,10 +54,6 @@ Always use these helpers instead of reimplementing functionality.
 All test functions follow this pattern:
 ```go
 func TestPhase_Specific(t *testing.T) {
-    if testing.Short() {
-        t.Skip("Skipping in short mode")
-    }
-
     config := NewTestConfig()
 
     // Validate prerequisites
@@ -83,16 +79,13 @@ make test
 # Full test suite (all phases sequentially)
 make test-all
 
-# Individual test phases
-make test-prereq    # Prerequisites verification
-make test-setup     # Repository setup
-make test-kind      # Kind cluster deployment
-make test-infra     # Infrastructure generation
-make test-deploy    # Deployment monitoring
-make test-verify    # Cluster verification
-
-# Quick tests (uses Go's -short flag)
-make test-short
+# Individual test phases (internal use - called by test-all)
+make _test-prereq    # Prerequisites verification
+make _test-setup     # Repository setup
+make _test-kind      # Kind cluster deployment
+make _test-infra     # Infrastructure generation
+make _test-deploy    # Deployment monitoring
+make _test-verify    # Cluster verification
 
 # Run specific test function
 go test -v ./test -run TestPrerequisites_ToolAvailable
@@ -170,8 +163,6 @@ See `docs/INTEGRATION.md` for detailed integration patterns.
 - `USER` - User identifier (default: current user)
 
 ### Test Behavior
-- Use `-short` flag or `make test-short` to skip long-running tests
-- All tests check `testing.Short()` before executing expensive operations
 - `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `30m`, format: Go duration like `1h`, `45m`)
 
 ## Key Architecture Decisions
@@ -281,7 +272,6 @@ Review test files for compliance with repo patterns.
 - Validates configuration usage (NewTestConfig)
 - Checks helper function usage
 - Verifies error handling patterns
-- Confirms testing.Short() implementation
 - Reports issues with file:line references
 
 **Example**: `/review-test test/03_kind_cluster_test.go`
