@@ -83,7 +83,7 @@ make test-all
 make _check-dep      # Check dependencies
 make _setup          # Repository setup
 make _cluster        # Cluster deployment
-make _generate_yamls # YAML generation
+make _generate-yamls # YAML generation
 make _deploy         # Deployment monitoring
 make _verify         # Cluster verification
 
