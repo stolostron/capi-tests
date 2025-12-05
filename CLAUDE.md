@@ -16,9 +16,9 @@ Tests are designed to run **sequentially** in a specific order, with each phase 
 
 1. **Check Dependencies** (`01_check_dependencies_test.go`) - Tool availability and authentication
 2. **Setup** (`02_setup_test.go`) - Repository cloning and validation
-3. **Kind Cluster** (`03_kind_cluster_test.go`) - Management cluster deployment
-4. **Infrastructure** (`04_infrastructure_test.go`) - YAML generation
-5. **Deployment** (`05_deployment_test.go`) - CRD deployment monitoring
+3. **Kind Cluster** (`03_cluster_test.go`) - Management cluster deployment
+4. **Infrastructure** (`04_generate_yamls_test.go`) - YAML generation
+5. **Deployment** (`05_deploy_crds_test.go`) - CRD deployment monitoring
 6. **Verification** (`06_verification_test.go`) - Final cluster validation
 
 Tests are **idempotent** - they skip steps already completed, allowing re-runs.
@@ -274,7 +274,7 @@ Review test files for compliance with repo patterns.
 - Verifies error handling patterns
 - Reports issues with file:line references
 
-**Example**: `/review-test test/03_kind_cluster_test.go`
+**Example**: `/review-test test/03_cluster_test.go`
 
 #### `/copilot-review`
 Process GitHub Copilot code review findings for a PR and automatically resolve review threads.

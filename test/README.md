@@ -20,17 +20,17 @@ This test suite validates each step of the ARO deployment process as documented 
    - Verifies repository structure
    - Sets script permissions
 
-3. **`03_kind_cluster_test.go`** - Kind cluster deployment
+3. **`03_cluster_test.go`** - Kind cluster deployment
    - Deploys Kind cluster with CAPZ components
    - Verifies cluster accessibility
    - Checks CAPI components installation
 
-4. **`04_infrastructure_test.go`** - Infrastructure resource generation
+4. **`04_generate_yamls_test.go`** - Infrastructure resource generation
    - Generates ARO infrastructure resources
    - Validates generated YAML files
    - Applies resources to the management cluster
 
-5. **`05_deployment_test.go`** - Cluster deployment monitoring
+5. **`05_deploy_crds_test.go`** - Cluster deployment monitoring
    - Monitors ARO cluster deployment
    - Waits for control plane readiness
    - Checks cluster conditions

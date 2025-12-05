@@ -108,7 +108,7 @@ jobs:
       run: |
         if [ -f test-results/tests.json ]; then
           jq -r 'select(.Test != null and .Action == "fail") |
-                 "::error file=test/03_kind_cluster_test.go,title=Test Failed::\(.Test) failed"' \
+                 "::error file=test/03_cluster_test.go,title=Test Failed::\(.Test) failed"' \
                  test-results/tests.json || true
         fi
 
