@@ -95,7 +95,7 @@ make test-verify    # Cluster verification
 make test-short
 
 # Run specific test function
-go test -v ./test -run TestPrerequisites_ToolsAvailable
+go test -v ./test -run TestPrerequisites_ToolAvailable
 go test -v ./test -run TestInfrastructure
 
 # With custom configuration

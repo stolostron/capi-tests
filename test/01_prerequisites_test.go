@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// TestPrerequisites_ToolsAvailable verifies all required tools are installed
-func TestPrerequisites_ToolsAvailable(t *testing.T) {
+// TestPrerequisites_ToolAvailable verifies all required tools are installed
+func TestPrerequisites_ToolAvailable(t *testing.T) {
 	requiredTools := []string{
 		"docker",
 		"kind",
@@ -37,8 +37,8 @@ func TestPrerequisites_ToolsAvailable(t *testing.T) {
 	}
 }
 
-// TestPrerequisites_AzureCLILogin checks if Azure CLI is logged in
-func TestPrerequisites_AzureCLILogin(t *testing.T) {
+// TestPrerequisites_AzureCLILogin_IsWorking checks if Azure CLI is logged in
+func TestPrerequisites_AzureCLILogin_IsWorking(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping Azure login check in short mode")
 	}
@@ -52,8 +52,8 @@ func TestPrerequisites_AzureCLILogin(t *testing.T) {
 	t.Logf("Azure CLI is logged in\n%s", output)
 }
 
-// TestPrerequisites_OpenShiftCLI verifies OpenShift CLI is functional
-func TestPrerequisites_OpenShiftCLI(t *testing.T) {
+// TestPrerequisites_OpenShiftCLI_IsAvailable verifies OpenShift CLI is functional
+func TestPrerequisites_OpenShiftCLI_IsAvailable(t *testing.T) {
 	output, err := RunCommand(t, "oc", "version", "--client")
 	if err != nil {
 		t.Errorf("OpenShift CLI check failed: %v", err)
@@ -63,8 +63,8 @@ func TestPrerequisites_OpenShiftCLI(t *testing.T) {
 	t.Logf("OpenShift CLI version:\n%s", output)
 }
 
-// TestPrerequisites_HelmVersion verifies Helm is installed and functional
-func TestPrerequisites_HelmVersion(t *testing.T) {
+// TestPrerequisites_Helm_IsAvailable verifies Helm is installed and functional
+func TestPrerequisites_Helm_IsAvailable(t *testing.T) {
 	output, err := RunCommand(t, "helm", "version", "--short")
 	if err != nil {
 		t.Errorf("Helm version check failed: %v", err)
