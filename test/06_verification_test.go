@@ -26,6 +26,7 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 	// Method 1: Using kubectl to get secret
 	secretName := fmt.Sprintf("%s-kubeconfig", config.ClusterName)
 
+	t.Logf("Attempting Method 1: kubectl --context %s get secret %s -o jsonpath={.data.value}", context, secretName)
 	output, err := RunCommand(t, "kubectl", "--context", context, "get", "secret",
 		secretName, "-o", "jsonpath={.data.value}")
 
@@ -39,7 +40,7 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 		}
 
 		if FileExists(clusterctlPath) || CommandExists("clusterctl") {
-			t.Log("Trying method 2: clusterctl get kubeconfig")
+			t.Logf("Attempting Method 2: %s get kubeconfig %s", clusterctlPath, config.ClusterName)
 
 			output, err = RunCommand(t, clusterctlPath, "get", "kubeconfig", config.ClusterName)
 			if err != nil {
