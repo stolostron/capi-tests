@@ -39,6 +39,12 @@ func TestCheckDependencies_ToolAvailable(t *testing.T) {
 
 // TestCheckDependencies_AzureCLILogin_IsLoggedIn checks if Azure CLI is logged in
 func TestCheckDependencies_AzureCLILogin_IsLoggedIn(t *testing.T) {
+	// Skip in CI environments where Azure login is not available
+	if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
+		t.Skip("Skipping Azure CLI login check in CI environment")
+		return
+	}
+
 	output, err := RunCommand(t, "az", "account", "show")
 	if err != nil {
 		t.Errorf("Azure CLI not logged in. Please run 'az login': %v", err)
