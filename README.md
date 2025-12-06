@@ -1,5 +1,9 @@
 # ARO-CAPZ Test Suite
 
+[![01 Check Dependencies](https://github.com/RadekCap/CAPZTests/actions/workflows/check-dependencies.yml/badge.svg)](https://github.com/RadekCap/CAPZTests/actions/workflows/check-dependencies.yml)
+[![02 Test Repository Setup](https://github.com/RadekCap/CAPZTests/actions/workflows/test-setup.yml/badge.svg)](https://github.com/RadekCap/CAPZTests/actions/workflows/test-setup.yml)
+[![03 Kind Cluster Preparation](https://github.com/RadekCap/CAPZTests/actions/workflows/test-kind-cluster.yml/badge.svg)](https://github.com/RadekCap/CAPZTests/actions/workflows/test-kind-cluster.yml)
+
 Comprehensive test suite for Azure Red Hat OpenShift (ARO) deployment using Cluster API Provider Azure (CAPZ) and Azure Service Operator (ASO).
 
 ## Overview
