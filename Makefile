@@ -134,7 +134,8 @@ test-all: ## Run all test phases sequentially
 	$(MAKE) --no-print-directory _deploy-crds && \
 	$(MAKE) --no-print-directory _verify && \
 	echo "" && \
-	echo "=======================================" && \	echo "=== All Test Phases Completed Successfully ===" && \
+	echo "=======================================" && \
+	echo "=== All Test Phases Completed Successfully ===" && \
 	echo "=======================================" && \
 	echo "" && \
 	echo "All test results saved to: $(RESULTS_DIR)" && \
