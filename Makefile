@@ -127,12 +127,48 @@ test-all: ## Run all test phases sequentially
 	@echo ""
 	@echo "All test results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(MAKE) --no-print-directory _check-dep || { echo ""; echo "❌ ERROR: Check dependencies phase failed. Cannot continue with test suite."; echo "   Please ensure all required tools are installed and try again."; echo ""; exit 1; }
-	@$(MAKE) --no-print-directory _setup || { echo ""; echo "❌ ERROR: Repository setup phase failed. Cannot continue with test suite."; echo "   Previous stage (check dependencies) completed successfully."; echo ""; exit 1; }
-	@$(MAKE) --no-print-directory _cluster || { echo ""; echo "❌ ERROR: Cluster deployment phase failed. Cannot continue with test suite."; echo "   Previous stages (check dependencies, setup) completed successfully."; echo ""; exit 1; }
-	@$(MAKE) --no-print-directory _generate-yamls || { echo ""; echo "❌ ERROR: YAML generation phase failed. Cannot continue with test suite."; echo "   Previous stages (check dependencies, setup, cluster) completed successfully."; echo ""; exit 1; }
-	@$(MAKE) --no-print-directory _deploy-crds || { echo ""; echo "❌ ERROR: CRD deployment phase failed. Cannot continue with test suite."; echo "   Previous stages (check dependencies, setup, cluster, YAML generation) completed successfully."; echo ""; exit 1; }
-	@$(MAKE) --no-print-directory _verify || { echo ""; echo "❌ ERROR: Cluster verification phase failed."; echo "   Previous stages completed successfully but final verification encountered issues."; echo ""; exit 1; }
+	@$(MAKE) --no-print-directory _check-dep || ( \
+		echo ""; \
+		echo "❌ ERROR: Check dependencies phase failed. Cannot continue with test suite."; \
+		echo "   Please ensure all required tools are installed and try again."; \
+		echo ""; \
+		exit 1 \
+	)
+	@$(MAKE) --no-print-directory _setup || ( \
+		echo ""; \
+		echo "❌ ERROR: Repository setup phase failed. Cannot continue with test suite."; \
+		echo "   Previous stage (check dependencies) completed successfully."; \
+		echo ""; \
+		exit 1 \
+	)
+	@$(MAKE) --no-print-directory _cluster || ( \
+		echo ""; \
+		echo "❌ ERROR: Cluster deployment phase failed. Cannot continue with test suite."; \
+		echo "   Previous stages (check dependencies, setup) completed successfully."; \
+		echo ""; \
+		exit 1 \
+	)
+	@$(MAKE) --no-print-directory _generate-yamls || ( \
+		echo ""; \
+		echo "❌ ERROR: YAML generation phase failed. Cannot continue with test suite."; \
+		echo "   Previous stages (check dependencies, setup, cluster) completed successfully."; \
+		echo ""; \
+		exit 1 \
+	)
+	@$(MAKE) --no-print-directory _deploy-crds || ( \
+		echo ""; \
+		echo "❌ ERROR: CRD deployment phase failed. Cannot continue with test suite."; \
+		echo "   Previous stages (check dependencies, setup, cluster, YAML generation) completed successfully."; \
+		echo ""; \
+		exit 1 \
+	)
+	@$(MAKE) --no-print-directory _verify || ( \
+		echo ""; \
+		echo "❌ ERROR: Cluster verification phase failed."; \
+		echo "   Previous stages completed successfully but final verification encountered issues."; \
+		echo ""; \
+		exit 1 \
+	)
 	@echo ""
 	@echo "======================================="
 	@echo "=== All Test Phases Completed Successfully ==="
