@@ -130,3 +130,72 @@ func TestKindCluster_CAPIComponents(t *testing.T) {
 		t.Logf("CAPI pods:\n%s", output)
 	}
 }
+
+// TestKindCluster_CAPIControllerReady waits for CAPI controller to be ready
+func TestKindCluster_CAPIControllerReady(t *testing.T) {
+
+	config := NewTestConfig()
+	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
+
+	t.Log("Waiting for CAPI controller deployment to be available...")
+
+	// Wait for CAPI controller manager deployment to be available
+	// kubectl -n capi-system wait deployment/capi-controller-manager --for condition=Available=True --timeout=10m
+	output, err := RunCommand(t, "kubectl", "--context", context, "-n", "capi-system",
+		"wait", "deployment/capi-controller-manager",
+		"--for", "condition=Available=True",
+		"--timeout=10m")
+
+	if err != nil {
+		t.Errorf("CAPI controller manager deployment is not available: %v\nOutput: %s", err, output)
+		return
+	}
+
+	t.Log("CAPI controller manager deployment is available")
+}
+
+// TestKindCluster_CAPZControllerReady waits for CAPZ controller to be ready
+func TestKindCluster_CAPZControllerReady(t *testing.T) {
+
+	config := NewTestConfig()
+	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
+
+	t.Log("Waiting for CAPZ controller deployment to be available...")
+
+	// Wait for CAPZ controller manager deployment to be available
+	// kubectl -n capz-system wait deployment/capz-controller-manager --for condition=Available=True --timeout=10m
+	output, err := RunCommand(t, "kubectl", "--context", context, "-n", "capz-system",
+		"wait", "deployment/capz-controller-manager",
+		"--for", "condition=Available=True",
+		"--timeout=10m")
+
+	if err != nil {
+		t.Errorf("CAPZ controller manager deployment is not available: %v\nOutput: %s", err, output)
+		return
+	}
+
+	t.Log("CAPZ controller manager deployment is available")
+}
+
+// TestKindCluster_ASOControllerReady waits for Azure Service Operator controller to be ready
+func TestKindCluster_ASOControllerReady(t *testing.T) {
+
+	config := NewTestConfig()
+	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
+
+	t.Log("Waiting for Azure Service Operator controller deployment to be available...")
+
+	// Wait for ASO controller manager deployment to be available
+	// kubectl -n capz-system wait deployment/azureserviceoperator-controller-manager --for condition=Available=True --timeout=10m
+	output, err := RunCommand(t, "kubectl", "--context", context, "-n", "capz-system",
+		"wait", "deployment/azureserviceoperator-controller-manager",
+		"--for", "condition=Available=True",
+		"--timeout=10m")
+
+	if err != nil {
+		t.Errorf("Azure Service Operator controller manager deployment is not available: %v\nOutput: %s", err, output)
+		return
+	}
+
+	t.Log("Azure Service Operator controller manager deployment is available")
+}
