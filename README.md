@@ -21,7 +21,7 @@ The test suite validates:
 
 ## Consumers
 
-This test suite is used by:
+Target usage of this test suite will be:
 
 - **OSCI (OpenShift CI)** - Automated continuous integration testing for OpenShift deployments
 - **ACM (Advanced Cluster Management)** - Multi-cluster management and validation workflows
