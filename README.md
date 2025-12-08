@@ -19,6 +19,14 @@ The test suite validates:
 - **ARO Deployment** - Azure Red Hat OpenShift cluster provisioning
 - **ASO Integration** - Azure Service Operator for managing Azure resources
 
+## Consumers
+
+Target usage of this test suite will be:
+
+- **OSCI (OpenShift CI)** - Automated continuous integration testing for OpenShift deployments
+- **ACM (Advanced Cluster Management)** - Multi-cluster management and validation workflows
+- **Manual Testing** - Developer and QA validation of ARO-CAPZ deployments
+
 ## Prerequisites
 
 ### Required Tools
