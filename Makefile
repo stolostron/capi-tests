@@ -63,6 +63,8 @@ _check-dep: check-gotestsum
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-check-dep.xml"
 	@echo "Latest results copied to: $(LATEST_RESULTS_DIR)/"
+	@echo "✅ Check Dependencies Tests completed"
+	@echo ""
 
 _setup: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
@@ -74,6 +76,8 @@ _setup: check-gotestsum
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-setup.xml"
 	@echo "Latest results copied to: $(LATEST_RESULTS_DIR)/"
+	@echo "✅ Repository Setup Tests completed"
+	@echo ""
 
 _cluster: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
@@ -85,6 +89,8 @@ _cluster: check-gotestsum
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-cluster.xml"
 	@echo "Latest results copied to: $(LATEST_RESULTS_DIR)/"
+	@echo "✅ Cluster Deployment Tests completed"
+	@echo ""
 
 _generate-yamls: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
@@ -96,6 +102,8 @@ _generate-yamls: check-gotestsum
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-generate-yamls.xml"
 	@echo "Latest results copied to: $(LATEST_RESULTS_DIR)/"
+	@echo "✅ YAML Generation Tests completed"
+	@echo ""
 
 _deploy-crds: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
@@ -107,6 +115,8 @@ _deploy-crds: check-gotestsum
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-deploy-crds.xml"
 	@echo "Latest results copied to: $(LATEST_RESULTS_DIR)/"
+	@echo "✅ CRD Deployment Tests completed"
+	@echo ""
 
 _verify: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
@@ -118,6 +128,8 @@ _verify: check-gotestsum
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-verify.xml"
 	@echo "Latest results copied to: $(LATEST_RESULTS_DIR)/"
+	@echo "✅ Cluster Verification Tests completed"
+	@echo ""
 
 test-all: ## Run all test phases sequentially
 	@mkdir -p $(RESULTS_DIR)

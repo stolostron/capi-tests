@@ -12,22 +12,33 @@ import (
 // TestDeployment_MonitorCluster tests monitoring the ARO cluster deployment
 func TestDeployment_MonitorCluster(t *testing.T) {
 
+	fmt.Fprintf(os.Stderr, "\n=== Starting Cluster Monitoring Test ===\n")
+
 	config := NewTestConfig()
 
+	fmt.Fprintf(os.Stderr, "Checking prerequisites...\n")
 	if !DirExists(config.RepoDir) {
+		fmt.Fprintf(os.Stderr, "⚠️  Repository not cloned yet at %s\n", config.RepoDir)
 		t.Skipf("Repository not cloned yet at %s", config.RepoDir)
 	}
+	fmt.Fprintf(os.Stderr, "✅ Repository directory exists: %s\n", config.RepoDir)
 
 	clusterctlPath := filepath.Join(config.RepoDir, config.ClusterctlBinPath)
 
 	// If clusterctl binary doesn't exist, try to use system clusterctl
+	fmt.Fprintf(os.Stderr, "Looking for clusterctl binary...\n")
 	if !FileExists(clusterctlPath) {
 		t.Logf("clusterctl binary not found at %s, checking system PATH", clusterctlPath)
+		fmt.Fprintf(os.Stderr, "clusterctl binary not found at %s, checking system PATH...\n", clusterctlPath)
 		if CommandExists("clusterctl") {
 			clusterctlPath = "clusterctl"
+			fmt.Fprintf(os.Stderr, "✅ Using clusterctl from system PATH\n")
 		} else {
+			fmt.Fprintf(os.Stderr, "❌ clusterctl not found in system PATH\n")
 			t.Skipf("clusterctl not found")
 		}
+	} else {
+		fmt.Fprintf(os.Stderr, "✅ Found clusterctl at: %s\n", clusterctlPath)
 	}
 
 	// Set kubectl context to Kind cluster
@@ -37,7 +48,8 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 	// First, check if cluster resource exists
 	fmt.Fprintf(os.Stderr, "\n=== Monitoring cluster deployment ===\n")
 	fmt.Fprintf(os.Stderr, "Cluster: %s\n", config.ClusterName)
-	fmt.Fprintf(os.Stderr, "Context: %s\n\n", context)
+	fmt.Fprintf(os.Stderr, "Context: %s\n", context)
+	fmt.Fprintf(os.Stderr, "\nChecking if cluster resource exists...\n")
 	t.Logf("Checking for cluster resource: %s", config.ClusterName)
 
 	output, err := RunCommand(t, "kubectl", "--context", context, "get", "cluster", config.ClusterName)
@@ -46,21 +58,27 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 		t.Skipf("Cluster resource not found (may not be deployed yet): %v", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "✅ Cluster resource exists\n\n")
+	fmt.Fprintf(os.Stderr, "✅ Cluster resource exists\n")
 	t.Logf("Cluster resource exists:\n%s", output)
 
 	// Use clusterctl to describe the cluster
-	fmt.Fprintf(os.Stderr, "📊 Fetching cluster status with clusterctl...\n")
+	fmt.Fprintf(os.Stderr, "\n📊 Fetching cluster status with clusterctl...\n")
+	fmt.Fprintf(os.Stderr, "Running: %s describe cluster %s --show-conditions=all\n", clusterctlPath, config.ClusterName)
+	fmt.Fprintf(os.Stderr, "This may take a few moments...\n")
 	t.Logf("Monitoring cluster deployment status using clusterctl...")
 
 	output, err = RunCommand(t, clusterctlPath, "describe", "cluster", config.ClusterName, "--show-conditions=all")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  clusterctl describe failed (cluster may still be initializing)\n\n")
+		fmt.Fprintf(os.Stderr, "\n⚠️  clusterctl describe failed (cluster may still be initializing)\n")
+		fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
 		t.Logf("clusterctl describe failed (cluster may still be initializing): %v\nOutput: %s", err, output)
 	} else {
+		fmt.Fprintf(os.Stderr, "\n✅ Successfully retrieved cluster status\n")
 		fmt.Fprintf(os.Stderr, "\nCluster Status:\n%s\n\n", output)
 		t.Logf("Cluster status:\n%s", output)
 	}
+
+	fmt.Fprintf(os.Stderr, "=== Cluster Monitoring Test Complete ===\n\n")
 }
 
 // TestDeployment_WaitForControlPlane waits for control plane to be ready
