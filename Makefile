@@ -189,13 +189,80 @@ test-all: ## Run all test phases sequentially
 	@echo "All test results saved to: $(RESULTS_DIR)"
 	@echo "Latest results copied to: $(LATEST_RESULTS_DIR)/"
 
-clean: ## Clean up test resources
-	@echo "Cleaning up test resources..."
-	-kind delete cluster --name $(KIND_CLUSTER_NAME)
-	-rm -rf /tmp/cluster-api-installer-aro
-	-rm -f /tmp/*-kubeconfig.yaml
-	-rm -rf results
-	@echo "Cleanup complete"
+clean: ## Clean up test resources (interactive)
+	@echo "========================================"
+	@echo "=== Interactive Cleanup ==="
+	@echo "========================================"
+	@echo ""
+	@echo "This will guide you through cleaning up test resources."
+	@echo "You can choose what to delete."
+	@echo ""
+	@# Check if Kind cluster exists
+	@if kind get clusters 2>/dev/null | grep -q "^$(KIND_CLUSTER_NAME)$$"; then \
+		echo "Kind cluster '$(KIND_CLUSTER_NAME)' exists."; \
+		read -p "Delete Kind cluster '$(KIND_CLUSTER_NAME)'? [y/N] " -n 1 -r; \
+		echo ""; \
+		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+			echo "Deleting Kind cluster..."; \
+			kind delete cluster --name $(KIND_CLUSTER_NAME) || echo "Failed to delete cluster"; \
+		else \
+			echo "Skipped Kind cluster deletion."; \
+		fi; \
+	else \
+		echo "Kind cluster '$(KIND_CLUSTER_NAME)' not found (already clean)."; \
+	fi
+	@echo ""
+	@# Check if cluster-api-installer directory exists
+	@if [ -d "/tmp/cluster-api-installer-aro" ]; then \
+		echo "Directory /tmp/cluster-api-installer-aro exists."; \
+		read -p "Delete /tmp/cluster-api-installer-aro? [y/N] " -n 1 -r; \
+		echo ""; \
+		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+			echo "Deleting directory..."; \
+			rm -rf /tmp/cluster-api-installer-aro || echo "Failed to delete directory"; \
+		else \
+			echo "Skipped directory deletion."; \
+		fi; \
+	else \
+		echo "Directory /tmp/cluster-api-installer-aro not found (already clean)."; \
+	fi
+	@echo ""
+	@# Check if kubeconfig files exist
+	@if ls /tmp/*-kubeconfig.yaml 1> /dev/null 2>&1; then \
+		echo "Kubeconfig files found in /tmp:"; \
+		ls -1 /tmp/*-kubeconfig.yaml; \
+		read -p "Delete kubeconfig files? [y/N] " -n 1 -r; \
+		echo ""; \
+		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+			echo "Deleting kubeconfig files..."; \
+			rm -f /tmp/*-kubeconfig.yaml || echo "Failed to delete kubeconfig files"; \
+		else \
+			echo "Skipped kubeconfig files deletion."; \
+		fi; \
+	else \
+		echo "No kubeconfig files found in /tmp (already clean)."; \
+	fi
+	@echo ""
+	@# Check if results directory exists
+	@if [ -d "results" ]; then \
+		echo "Results directory exists."; \
+		echo "Contents:"; \
+		du -sh results/* 2>/dev/null || echo "  (empty)"; \
+		read -p "Delete results directory? [y/N] " -n 1 -r; \
+		echo ""; \
+		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+			echo "Deleting results directory..."; \
+			rm -rf results || echo "Failed to delete results directory"; \
+		else \
+			echo "Skipped results directory deletion."; \
+		fi; \
+	else \
+		echo "Results directory not found (already clean)."; \
+	fi
+	@echo ""
+	@echo "========================================"
+	@echo "=== Cleanup Complete ==="
+	@echo "========================================"
 
 setup-submodule: ## Add cluster-api-installer as a git submodule
 	git submodule add -b ARO-ASO https://github.com/RadekCap/cluster-api-installer.git vendor/cluster-api-installer || true

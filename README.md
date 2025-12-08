@@ -175,8 +175,16 @@ The JUnit XML files can be:
 The `results/` directory is excluded from git (via `.gitignore`) and can be cleaned up with:
 
 ```bash
-make clean  # Removes results/ directory and other test artifacts
+make clean  # Interactive cleanup - prompts for confirmation before deleting each resource
 ```
+
+The `make clean` command will interactively ask you to confirm deletion of:
+- Kind cluster (if it exists)
+- Cluster-api-installer repository clone in `/tmp`
+- Kubeconfig files in `/tmp`
+- Results directory
+
+This allows you to selectively clean up resources while preserving anything you want to keep.
 
 ## Integration with cluster-api-installer
 

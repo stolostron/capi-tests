@@ -107,9 +107,17 @@ make setup-submodule
 # Update submodule
 make update-submodule
 
-# Clean up test resources
+# Clean up test resources (interactive - prompts before deleting each resource)
 make clean
 ```
+
+The `make clean` command is interactive and will prompt you to confirm deletion of:
+- Kind cluster
+- Cluster-api-installer repository clone
+- Kubeconfig files
+- Results directory
+
+This prevents accidental deletion and allows selective cleanup.
 
 ### Code Quality
 

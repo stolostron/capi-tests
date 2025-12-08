@@ -422,8 +422,16 @@ make test
 
 After testing, clean up resources:
 ```bash
-make clean
+make clean  # Interactive - prompts before deleting each resource
 ```
+
+The cleanup process will ask you to confirm deletion of:
+- Kind cluster
+- Repository clone in `/tmp`
+- Kubeconfig files
+- Results directory
+
+You can selectively choose what to delete, preserving resources you want to keep.
 
 ---
 
