@@ -35,6 +35,9 @@ LATEST_RESULTS_DIR := results/latest
 GOBIN := $(shell if [ -n "$$(go env GOBIN 2>/dev/null)" ]; then go env GOBIN; else echo "$$(go env GOPATH 2>/dev/null || echo "$$HOME/go")/bin"; fi)
 GOTESTSUM := $(GOBIN)/gotestsum --format='$(GOTESTSUM_FORMAT)'
 
+# Default target - show help when running 'make' with no arguments
+.DEFAULT_GOAL := help
+
 # Internal target to copy latest results
 .PHONY: _copy-latest-results
 _copy-latest-results:
