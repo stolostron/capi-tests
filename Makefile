@@ -18,6 +18,13 @@ endif
 # Set to -v for verbose output (default), or empty string for quiet output
 TEST_VERBOSITY ?= -v
 
+# Test timeout configuration
+# Individual phase timeouts (format: Go duration like 30m, 1h, etc.)
+CLUSTER_TIMEOUT ?= 30m
+GENERATE_YAMLS_TIMEOUT ?= 20m
+DEPLOY_CRDS_TIMEOUT ?= 40m
+VERIFY_TIMEOUT ?= 20m
+
 # Results directory configuration
 # Create unique results directory for each test run using timestamp
 TIMESTAMP := $(shell date +%Y%m%d_%H%M%S)
@@ -84,7 +91,7 @@ _cluster: check-gotestsum
 	@echo "=== Running Cluster Deployment Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-cluster.xml -- $(TEST_VERBOSITY) ./test -run TestKindCluster -timeout 30m
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-cluster.xml -- $(TEST_VERBOSITY) ./test -run TestKindCluster -timeout $(CLUSTER_TIMEOUT)
 	@$(MAKE) --no-print-directory _copy-latest-results
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-cluster.xml"
@@ -97,7 +104,7 @@ _generate-yamls: check-gotestsum
 	@echo "=== Running YAML Generation Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-generate-yamls.xml -- $(TEST_VERBOSITY) ./test -run TestInfrastructure -timeout 20m
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-generate-yamls.xml -- $(TEST_VERBOSITY) ./test -run TestInfrastructure -timeout $(GENERATE_YAMLS_TIMEOUT)
 	@$(MAKE) --no-print-directory _copy-latest-results
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-generate-yamls.xml"
@@ -110,7 +117,7 @@ _deploy-crds: check-gotestsum
 	@echo "=== Running CRD Deployment Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-crds.xml -- $(TEST_VERBOSITY) ./test -run TestDeployment -timeout 40m
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-crds.xml -- $(TEST_VERBOSITY) ./test -run TestDeployment -timeout $(DEPLOY_CRDS_TIMEOUT)
 	@$(MAKE) --no-print-directory _copy-latest-results
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-deploy-crds.xml"
@@ -123,7 +130,7 @@ _verify: check-gotestsum
 	@echo "=== Running Cluster Verification Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-verify.xml -- $(TEST_VERBOSITY) ./test -run TestVerification -timeout 20m
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-verify.xml -- $(TEST_VERBOSITY) ./test -run TestVerification -timeout $(VERIFY_TIMEOUT)
 	@$(MAKE) --no-print-directory _copy-latest-results
 	@echo ""
 	@echo "Test results saved to: $(RESULTS_DIR)/junit-verify.xml"
