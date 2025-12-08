@@ -37,7 +37,7 @@ func TestSetup_CloneRepository(t *testing.T) {
 	t.Logf("Repository cloned successfully to %s", config.RepoDir)
 }
 
-// TestSetup_VerifyRepositoryStructure verifies the cloned repository has expected structure
+// TestSetup_VerifyRepositoryStructure verifies the cloned repository has required scripts
 func TestSetup_VerifyRepositoryStructure(t *testing.T) {
 	config := NewTestConfig()
 
@@ -45,20 +45,18 @@ func TestSetup_VerifyRepositoryStructure(t *testing.T) {
 		t.Skipf("Repository not cloned yet at %s", config.RepoDir)
 	}
 
-	// Check for expected directories and files
-	expectedPaths := []string{
-		"scripts",
-		"doc/aro-hcp-scripts",
-		"doc/ARO-capz.md",
-		"doc/aro-hcp-scripts/aro-hcp-gen.sh",
+	// Check for scripts actually used by tests
+	requiredScripts := []string{
+		"scripts/deploy-charts-kind-capz.sh", // Used by TestKindCluster_Deploy (03_cluster_test.go)
+		"doc/aro-hcp-scripts/aro-hcp-gen.sh", // Used by TestInfrastructure_GenerateResources (04_generate_yamls_test.go)
 	}
 
-	for _, expectedPath := range expectedPaths {
-		fullPath := filepath.Join(config.RepoDir, expectedPath)
-		if !FileExists(fullPath) && !DirExists(fullPath) {
-			t.Errorf("Expected path does not exist: %s", fullPath)
+	for _, requiredScript := range requiredScripts {
+		fullPath := filepath.Join(config.RepoDir, requiredScript)
+		if !FileExists(fullPath) {
+			t.Errorf("Required script does not exist: %s", fullPath)
 		} else {
-			t.Logf("Found expected path: %s", expectedPath)
+			t.Logf("Found required script: %s", requiredScript)
 		}
 	}
 }
