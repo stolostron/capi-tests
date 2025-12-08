@@ -140,10 +140,10 @@ func TestKindCluster_CAPIControllerReady(t *testing.T) {
 	t.Log("Waiting for CAPI controller deployment to be available...")
 
 	// Wait for CAPI controller manager deployment to be available
-	// kubectl -n capi-system wait deployment/capi-controller-manager --for condition=Available=True --timeout=10m
+	// kubectl -n capi-system wait deployment/capi-controller-manager --for condition=Available --timeout=10m
 	output, err := RunCommand(t, "kubectl", "--context", context, "-n", "capi-system",
 		"wait", "deployment/capi-controller-manager",
-		"--for", "condition=Available=True",
+		"--for", "condition=Available",
 		"--timeout=10m")
 
 	if err != nil {
@@ -163,10 +163,10 @@ func TestKindCluster_CAPZControllerReady(t *testing.T) {
 	t.Log("Waiting for CAPZ controller deployment to be available...")
 
 	// Wait for CAPZ controller manager deployment to be available
-	// kubectl -n capz-system wait deployment/capz-controller-manager --for condition=Available=True --timeout=10m
+	// kubectl -n capz-system wait deployment/capz-controller-manager --for condition=Available --timeout=10m
 	output, err := RunCommand(t, "kubectl", "--context", context, "-n", "capz-system",
 		"wait", "deployment/capz-controller-manager",
-		"--for", "condition=Available=True",
+		"--for", "condition=Available",
 		"--timeout=10m")
 
 	if err != nil {
@@ -186,10 +186,10 @@ func TestKindCluster_ASOControllerReady(t *testing.T) {
 	t.Log("Waiting for Azure Service Operator controller deployment to be available...")
 
 	// Wait for ASO controller manager deployment to be available
-	// kubectl -n capz-system wait deployment/azureserviceoperator-controller-manager --for condition=Available=True --timeout=10m
+	// kubectl -n capz-system wait deployment/azureserviceoperator-controller-manager --for condition=Available --timeout=10m
 	output, err := RunCommand(t, "kubectl", "--context", context, "-n", "capz-system",
 		"wait", "deployment/azureserviceoperator-controller-manager",
-		"--for", "condition=Available=True",
+		"--for", "condition=Available",
 		"--timeout=10m")
 
 	if err != nil {
