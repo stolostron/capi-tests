@@ -53,11 +53,13 @@ func TestKindCluster_Deploy(t *testing.T) {
 	t.Log("Running deployment script (this may take several minutes)...")
 	output, err = RunCommand(t, "bash", scriptPath)
 	if err != nil {
+		// On error, show output for debugging (may contain sensitive info, but needed for troubleshooting)
 		t.Errorf("Failed to deploy Kind cluster: %v\nOutput: %s", err, output)
 		return
 	}
 
-	t.Logf("Kind cluster deployment script completed\nOutput: %s", output)
+	// Don't log full script output as it may contain sensitive Azure configuration
+	t.Log("Kind cluster deployment script completed successfully")
 }
 
 // TestKindCluster_Verify verifies the Kind cluster is running and accessible

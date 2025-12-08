@@ -45,13 +45,14 @@ func TestCheckDependencies_AzureCLILogin_IsLoggedIn(t *testing.T) {
 		return
 	}
 
-	output, err := RunCommand(t, "az", "account", "show")
+	_, err := RunCommand(t, "az", "account", "show")
 	if err != nil {
 		t.Errorf("Azure CLI not logged in. Please run 'az login': %v", err)
 		return
 	}
 
-	t.Logf("Azure CLI is logged in\n%s", output)
+	// Successfully logged in - don't log output as it contains sensitive information (tenant ID, subscription ID)
+	t.Log("Azure CLI is logged in")
 }
 
 // TestCheckDependencies_OpenShiftCLI_IsAvailable verifies OpenShift CLI is functional

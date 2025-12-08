@@ -52,11 +52,13 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	t.Log("Running infrastructure generation script...")
 	output, err := RunCommand(t, "bash", genScriptPath, config.GetOutputDirName())
 	if err != nil {
+		// On error, show output for debugging (may contain sensitive info, but needed for troubleshooting)
 		t.Errorf("Failed to generate infrastructure resources: %v\nOutput: %s", err, output)
 		return
 	}
 
-	t.Logf("Infrastructure generation completed\nOutput: %s", output)
+	// Don't log full output as it may contain Azure resource IDs and other sensitive information
+	t.Log("Infrastructure generation completed successfully")
 
 	// Verify generated files exist
 	if !DirExists(outputDir) {
@@ -147,10 +149,12 @@ func TestInfrastructure_ApplyResources(t *testing.T) {
 		// kubectl apply may return non-zero exit codes even for successful operations
 		// (e.g., when resources are "unchanged"). Check output content for actual errors.
 		if err != nil && !IsKubectlApplySuccess(output) {
+			// On error, show output for debugging (may contain sensitive info, but needed for troubleshooting)
 			t.Errorf("Failed to apply %s: %v\nOutput: %s", file, err, output)
 			continue
 		}
 
-		t.Logf("Successfully applied %s\nOutput: %s", file, output)
+		// Don't log full kubectl output as it may contain Azure subscription IDs and resource details
+		t.Logf("Successfully applied %s", file)
 	}
 }
