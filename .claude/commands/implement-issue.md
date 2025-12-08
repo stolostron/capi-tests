@@ -187,8 +187,46 @@ Automatically analyze a GitHub issue, implement the required changes, and create
       )"
       ```
 
-14. **Provide summary to user**
+14. **Post comment on the issue explaining the implementation**
+    - After creating the PR, post a comment on the original issue
+    - The comment should explain what was implemented, not just link to the PR
+    - Include key details about the solution, changes, and testing
+    - Use `gh issue comment <issue-number>` with a comprehensive explanation
+    - Format:
+      ```bash
+      gh issue comment <issue-number> --body "$(cat <<'EOF'
+      ## Implementation Complete ✅
+
+      I've implemented a fix for this issue. Here's what was done:
+
+      ### Solution
+      <Brief explanation of the approach taken>
+
+      ### Key Changes
+      - <Important change 1>
+      - <Important change 2>
+      - <Important change 3>
+
+      ### Files Modified
+      - `<file1>` - <what changed>
+      - `<file2>` - <what changed>
+
+      ### Testing
+      - ✅ <Test result 1>
+      - ✅ <Test result 2>
+
+      ### Pull Request
+      The full implementation details are available in PR #<pr-number>
+
+      🤖 Automated implementation via [Claude Code](https://claude.com/claude-code)
+      EOF
+      )"
+      ```
+    - **Important**: The comment should be informative enough that someone reading just the issue can understand what was done, without having to click through to the PR
+
+15. **Provide summary to user**
     - Display PR URL
+    - Display issue comment confirmation
     - List files changed
     - Show test results
     - Remind user that CI will run automatically
@@ -265,8 +303,10 @@ Tests passed ✅
 Committed changes ✅
 Pushed to remote ✅
 Created PR #73 ✅
+Posted explanation on issue #72 ✅
 
 Pull Request: https://github.com/RadekCap/CAPZTests/pull/73
+Issue updated: https://github.com/RadekCap/CAPZTests/issues/72
 ```
 
 ### Example 2: New feature with tests
@@ -294,6 +334,7 @@ Tests passed ✅ (added 12 new test cases)
 Committed changes ✅
 Pushed to remote ✅
 Created PR #76 ✅
+Posted explanation on issue #75 ✅
 
 Files changed:
 - test/helpers.go (+25 lines)
@@ -301,6 +342,7 @@ Files changed:
 - CLAUDE.md (+10 lines)
 
 Pull Request: https://github.com/RadekCap/CAPZTests/pull/76
+Issue updated: https://github.com/RadekCap/CAPZTests/issues/75
 ```
 
 ### Example 3: CI/Workflow fix
@@ -324,10 +366,12 @@ Tests cannot be run locally (requires CI environment)
 Committed changes ✅
 Pushed to remote ✅
 Created PR #78 ✅
+Posted explanation on issue #77 ✅
 
 Note: CI will validate this fix when the PR runs
 
 Pull Request: https://github.com/RadekCap/CAPZTests/pull/78
+Issue updated: https://github.com/RadekCap/CAPZTests/issues/77
 ```
 
 ## Post-Implementation Checklist
@@ -343,6 +387,7 @@ After completing implementation, verify:
 - [ ] PR description is comprehensive and clear
 - [ ] Branch pushed to remote
 - [ ] PR created successfully
+- [ ] Issue comment posted explaining the implementation
 
 ## Tips for Success
 
