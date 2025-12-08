@@ -146,7 +146,7 @@ results/
     ├── junit-setup.xml            # Setup test results
     ├── junit-cluster.xml          # Cluster deployment test results
     ├── junit-generate-yamls.xml   # YAML generation test results
-    ├── junit-deploy-crds.xml      # CRD deployment test results
+    ├── junit-deploy-crs.xml       # CR deployment test results
     └── junit-verify.xml           # Verification test results
 ```
 
@@ -226,7 +226,7 @@ test/
 ├── 02_setup_test.go           # Repository setup
 ├── 03_cluster_test.go         # Management cluster deployment
 ├── 04_generate_yamls_test.go  # Resource generation
-├── 05_deploy_crds_test.go     # Cluster provisioning monitoring
+├── 05_deploy_crs_test.go      # Cluster provisioning monitoring
 ├── 06_verification_test.go    # Final cluster validation
 ├── config.go                  # Configuration management
 ├── helpers.go                 # Shared utilities

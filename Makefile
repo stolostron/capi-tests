@@ -21,7 +21,7 @@ TEST_VERBOSITY ?= -v
 # Individual phase timeouts (format: Go duration like 30m, 1h, etc.)
 CLUSTER_TIMEOUT ?= 30m
 GENERATE_YAMLS_TIMEOUT ?= 20m
-DEPLOY_CRDS_TIMEOUT ?= 40m
+DEPLOY_CRS_TIMEOUT ?= 40m
 VERIFY_TIMEOUT ?= 20m
 
 # Results directory configuration
@@ -54,7 +54,7 @@ help: ## Display this help message
 	@echo "  2. make _setup           # Setup and prepare input repositories with helm charts and CRDs"
 	@echo "  3. make _cluster         # Prepare cluster for testing, and prepare operators needed for testing"
 	@echo "  4. make _generate-yamls  # Generate script for resource creation (yaml)"
-	@echo "  5. make _deploy-crds     # Deploy CRDs and verify deployment"
+	@echo "  5. make _deploy-crs      # Deploy CRs and verify deployment"
 	@echo "  6. make _verify          # Verify deployed cluster"
 
 test: _check-dep ## Run check dependencies tests only
@@ -111,17 +111,17 @@ _generate-yamls: check-gotestsum
 	@echo "✅ YAML Generation Tests completed"
 	@echo ""
 
-_deploy-crds: check-gotestsum
+_deploy-crs: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
-	@echo "=== Running CRD Deployment Tests ==="
+	@echo "=== Running CR Deployment Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
-	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-crds.xml -- $(TEST_VERBOSITY) ./test -run TestDeployment -timeout $(DEPLOY_CRDS_TIMEOUT)
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-crs.xml -- $(TEST_VERBOSITY) ./test -run TestDeployment -timeout $(DEPLOY_CRS_TIMEOUT)
 	@$(MAKE) --no-print-directory _copy-latest-results
 	@echo ""
-	@echo "Test results saved to: $(RESULTS_DIR)/junit-deploy-crds.xml"
+	@echo "Test results saved to: $(RESULTS_DIR)/junit-deploy-crs.xml"
 	@echo "Latest results copied to: $(LATEST_RESULTS_DIR)/"
-	@echo "✅ CRD Deployment Tests completed"
+	@echo "✅ CR Deployment Tests completed"
 	@echo ""
 
 _verify: check-gotestsum
@@ -173,9 +173,9 @@ test-all: ## Run all test phases sequentially
 		echo ""; \
 		exit 1 \
 	)
-	@$(MAKE) --no-print-directory _deploy-crds || ( \
+	@$(MAKE) --no-print-directory _deploy-crs || ( \
 		echo ""; \
-		echo "❌ ERROR: CRD deployment phase failed. Cannot continue with test suite."; \
+		echo "❌ ERROR: CR deployment phase failed. Cannot continue with test suite."; \
 		echo "   Previous stages (check dependencies, setup, cluster, YAML generation) completed successfully."; \
 		echo ""; \
 		exit 1 \

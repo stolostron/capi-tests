@@ -18,7 +18,7 @@ Tests are designed to run **sequentially** in a specific order, with each phase 
 2. **Setup** (`02_setup_test.go`) - Repository cloning and validation
 3. **Kind Cluster** (`03_cluster_test.go`) - Management cluster deployment
 4. **Infrastructure** (`04_generate_yamls_test.go`) - YAML generation
-5. **Deployment** (`05_deploy_crds_test.go`) - CRD deployment monitoring
+5. **Deployment** (`05_deploy_crs_test.go`) - CR deployment monitoring
 6. **Verification** (`06_verification_test.go`) - Final cluster validation
 
 Tests are **idempotent** - they skip steps already completed, allowing re-runs.
@@ -84,7 +84,7 @@ make _check-dep      # Check dependencies
 make _setup          # Repository setup
 make _cluster        # Cluster deployment
 make _generate-yamls # YAML generation
-make _deploy-crds    # CRD deployment
+make _deploy-crs     # CR deployment
 make _verify         # Cluster verification
 
 # Run specific test function

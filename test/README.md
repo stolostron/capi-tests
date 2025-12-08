@@ -30,7 +30,7 @@ This test suite validates each step of the ARO deployment process as documented 
    - Validates generated YAML files
    - Applies resources to the management cluster
 
-5. **`05_deploy_crds_test.go`** - Cluster deployment monitoring
+5. **`05_deploy_crs_test.go`** - Cluster deployment monitoring
    - Monitors ARO cluster deployment
    - Waits for control plane readiness
    - Checks cluster conditions
