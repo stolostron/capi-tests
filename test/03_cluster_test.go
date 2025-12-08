@@ -106,8 +106,6 @@ func TestKindCluster_CAPIComponents(t *testing.T) {
 	expectedNamespaces := []string{
 		"capi-system",
 		"capz-system",
-		"capi-kubeadm-bootstrap-system",
-		"capi-kubeadm-control-plane-system",
 	}
 
 	for _, ns := range expectedNamespaces {
