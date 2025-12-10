@@ -9,6 +9,145 @@ import (
 	"time"
 )
 
+// TestDeployment_ApplyResources tests applying generated resources to the cluster
+func TestDeployment_ApplyResources(t *testing.T) {
+
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	// Get files to apply from centralized list (from 04_generate_yamls_test.go)
+	expectedFiles := []string{
+		"credentials.yaml",
+		"is.yaml",
+		"aro.yaml",
+	}
+
+	// Set kubectl context to Kind cluster
+	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
+
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	defer os.Chdir(originalDir)
+
+	if err := os.Chdir(outputDir); err != nil {
+		t.Fatalf("Failed to change to output directory: %v", err)
+	}
+
+	for _, file := range expectedFiles {
+		if !FileExists(file) {
+			t.Errorf("Cannot apply missing file: %s", file)
+			continue
+		}
+
+		t.Logf("Applying resource file: %s", file)
+
+		output, err := RunCommand(t, "kubectl", "--context", context, "apply", "-f", file)
+		// kubectl apply may return non-zero exit codes even for successful operations
+		// (e.g., when resources are "unchanged"). Check output content for actual errors.
+		if err != nil && !IsKubectlApplySuccess(output) {
+			// On error, show output for debugging (may contain sensitive info, but needed for troubleshooting)
+			t.Errorf("Failed to apply %s: %v\nOutput: %s", file, err, output)
+			continue
+		}
+
+		// Don't log full kubectl output as it may contain Azure subscription IDs and resource details
+		t.Logf("Successfully applied %s", file)
+	}
+}
+
+// TestDeployment_ApplyCredentialsYAML tests applying credentials.yaml to the cluster
+func TestDeployment_ApplyCredentialsYAML(t *testing.T) {
+	file := "credentials.yaml"
+	t.Logf("Applying %s", file)
+
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	filePath := filepath.Join(outputDir, file)
+	if !FileExists(filePath) {
+		t.Errorf("%s not found", filePath)
+		return
+	}
+
+	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
+	output, err := RunCommand(t, "kubectl", "--context", context, "apply", "-f", filePath)
+
+	if err != nil && !IsKubectlApplySuccess(output) {
+		t.Errorf("Failed to apply %s: %v\nOutput: %s", file, err, output)
+		return
+	}
+
+	t.Logf("Successfully applied %s", file)
+}
+
+// TestDeployment_ApplyInfrastructureSecretsYAML tests applying is.yaml to the cluster
+func TestDeployment_ApplyInfrastructureSecretsYAML(t *testing.T) {
+	file := "is.yaml"
+	t.Logf("Applying %s (infrastructure secrets)", file)
+
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	filePath := filepath.Join(outputDir, file)
+	if !FileExists(filePath) {
+		t.Errorf("%s not found", filePath)
+		return
+	}
+
+	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
+	output, err := RunCommand(t, "kubectl", "--context", context, "apply", "-f", filePath)
+
+	if err != nil && !IsKubectlApplySuccess(output) {
+		t.Errorf("Failed to apply %s: %v\nOutput: %s", file, err, output)
+		return
+	}
+
+	t.Logf("Successfully applied %s", file)
+}
+
+// TestDeployment_ApplyAROClusterYAML tests applying aro.yaml to the cluster
+func TestDeployment_ApplyAROClusterYAML(t *testing.T) {
+	file := "aro.yaml"
+	t.Logf("Applying %s (ARO cluster configuration)", file)
+
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	filePath := filepath.Join(outputDir, file)
+	if !FileExists(filePath) {
+		t.Errorf("%s not found", filePath)
+		return
+	}
+
+	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
+	output, err := RunCommand(t, "kubectl", "--context", context, "apply", "-f", filePath)
+
+	if err != nil && !IsKubectlApplySuccess(output) {
+		t.Errorf("Failed to apply %s: %v\nOutput: %s", file, err, output)
+		return
+	}
+
+	t.Logf("Successfully applied %s", file)
+}
+
 // TestDeployment_MonitorCluster tests monitoring the ARO cluster deployment
 func TestDeployment_MonitorCluster(t *testing.T) {
 
