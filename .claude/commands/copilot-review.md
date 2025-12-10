@@ -28,7 +28,22 @@ This command runs in **autonomous mode** with the following behavior:
 
 1. Ask me for the PR number if not provided as argument (e.g., `/copilot-review 123`)
 
-2. Extract repository information and fetch all review threads with GraphQL:
+2. Use the pre-approved `.claude/scripts/copilot-review.sh` script to fetch review threads:
+   ```bash
+   .claude/scripts/copilot-review.sh {pr_number}
+   ```
+   This script:
+   - Fetches all review threads via GraphQL
+   - Filters for Copilot/GitHub Advanced Security comments
+   - Saves results to `/tmp/copilot_threads_{pr_number}.json`
+   - Outputs repository info and finding count
+
+3. Load the fetched data:
+   ```bash
+   cat /tmp/copilot_threads_{pr_number}.json
+   ```
+
+4. Extract repository information and fetch all review threads with GraphQL (LEGACY - use script instead):
    ```bash
    # Get repository owner and name
    REPO_INFO=$(gh repo view --json owner,name)
