@@ -39,6 +39,91 @@ func RunCommand(t *testing.T, name string, args ...string) (string, error) {
 	return strings.TrimSpace(string(output)), err
 }
 
+// RunCommandWithStreaming executes a shell command and streams output in real-time.
+// This is useful for long-running commands where users need to see progress.
+// Returns the complete output and any error that occurred.
+func RunCommandWithStreaming(t *testing.T, name string, args ...string) (string, error) {
+	t.Helper()
+
+	// Print command being executed
+	cmdStr := name
+	if len(args) > 0 {
+		cmdStr = fmt.Sprintf("%s %s", name, strings.Join(args, " "))
+	}
+	if testing.Verbose() {
+		fmt.Fprintf(os.Stderr, "Running (streaming): %s\n", cmdStr)
+	}
+
+	t.Logf("Executing command (streaming): %s", cmdStr)
+
+	cmd := exec.Command(name, args...)
+
+	// Create pipes for stdout and stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("failed to start command: %w", err)
+	}
+
+	// Buffer to collect all output
+	var outputBuilder strings.Builder
+
+	// Stream output in real-time
+	done := make(chan bool)
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stdout.Read(buf)
+			if n > 0 {
+				chunk := string(buf[:n])
+				outputBuilder.WriteString(chunk)
+				// Print to stderr for real-time visibility
+				fmt.Fprint(os.Stderr, chunk)
+			}
+			if err != nil {
+				break
+			}
+		}
+		done <- true
+	}()
+
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stderr.Read(buf)
+			if n > 0 {
+				chunk := string(buf[:n])
+				outputBuilder.WriteString(chunk)
+				// Print to stderr for real-time visibility
+				fmt.Fprint(os.Stderr, chunk)
+			}
+			if err != nil {
+				break
+			}
+		}
+		done <- true
+	}()
+
+	// Wait for both readers to finish
+	<-done
+	<-done
+
+	// Wait for command to complete
+	cmdErr := cmd.Wait()
+
+	output := strings.TrimSpace(outputBuilder.String())
+	return output, cmdErr
+}
+
 // SetEnvVar sets an environment variable for testing
 func SetEnvVar(t *testing.T, key, value string) {
 	t.Helper()

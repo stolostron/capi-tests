@@ -48,8 +48,10 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 		}
 
 		// Run the deployment script (this might take several minutes)
+		// Use streaming to show progress in real-time
 		t.Log("Running deployment script (this may take several minutes)...")
-		output, err = RunCommand(t, "bash", scriptPath)
+		t.Log("Note: Output will be streamed in real-time below")
+		output, err = RunCommandWithStreaming(t, "bash", scriptPath)
 		if err != nil {
 			// On error, show output for debugging (may contain sensitive info, but needed for troubleshooting)
 			t.Errorf("Failed to deploy Kind cluster: %v\nOutput: %s", err, output)
