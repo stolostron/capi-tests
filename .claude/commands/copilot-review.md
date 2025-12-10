@@ -1,49 +1,10 @@
 Process all GitHub Copilot code review findings for a pull request. Analyze each finding, implement fixes or provide rationale for denial, reply to each comment, and automatically resolve review threads via GitHub GraphQL API.
 
-## Execution Mode (Autonomous Configuration)
-
-This command runs in **autonomous mode** with the following behavior:
-
-| Category | Behavior |
-|----------|----------|
-| 1. Repository Read Operations | ✅ Show progress ("Reading PR #189... Found 7 findings"), auto-execute |
-| 2. Code Analysis & Decisions | ✅ Silent processing, show results at end only |
-| 3. Code Modifications | ✅ Auto-approve and implement, no confirmation needed |
-| 4. Git Operations (commit + push) | ✅ Auto-approve, silent |
-| 5. GitHub API (comments + threads) | ✅ Auto-approve, silent |
-| 6. External Tools (gh, jq, bash) | ✅ Auto-approve, silent |
-
-**Output Format**: Minimal - show only:
-- Initial: Repository and PR information
-- Progress: Fetching data, found X findings
-- Final: Summary of actions taken
-
-**Comment Behavior**:
-- Individual finding responses → Posted as **threaded replies** to each Copilot comment
-- Final summary → Posted as **general PR comment** in main thread
-
-**No interaction required** - command runs completely autonomously and reports results at the end.
-
 ## Instructions
 
 1. Ask me for the PR number if not provided as argument (e.g., `/copilot-review 123`)
 
-2. Use the pre-approved `.claude/scripts/copilot-review.sh` script to fetch review threads:
-   ```bash
-   .claude/scripts/copilot-review.sh {pr_number}
-   ```
-   This script:
-   - Fetches all review threads via GraphQL
-   - Filters for Copilot/GitHub Advanced Security comments
-   - Saves results to `/tmp/copilot_threads_{pr_number}.json`
-   - Outputs repository info and finding count
-
-3. Load the fetched data:
-   ```bash
-   cat /tmp/copilot_threads_{pr_number}.json
-   ```
-
-4. Extract repository information and fetch all review threads with GraphQL (LEGACY - use script instead):
+2. Extract repository information and fetch all review threads with GraphQL:
    ```bash
    # Get repository owner and name
    REPO_INFO=$(gh repo view --json owner,name)
@@ -113,52 +74,57 @@ This command runs in **autonomous mode** with the following behavior:
 
 3. For EACH finding (iterate through COPILOT_THREADS), perform this workflow:
 
-   a. **Extract finding details** (silent processing):
+   a. **Extract finding details**:
       ```bash
       # For finding index $i (0-based)
       FINDING_DATA=$(echo "$COPILOT_THREADS" | jq ".[$i]")
       THREAD_ID=$(echo "$FINDING_DATA" | jq -r '.id')
       IS_RESOLVED=$(echo "$FINDING_DATA" | jq -r '.isResolved')
       COMMENT=$(echo "$FINDING_DATA" | jq '.comments.nodes[0]')
-      COMMENT_ID=$(echo "$COMMENT" | jq -r '.databaseId')
       COMMENT_BODY=$(echo "$COMMENT" | jq -r '.body')
       FILE_PATH=$(echo "$COMMENT" | jq -r '.path')
       LINE=$(echo "$COMMENT" | jq -r '.line')
 
-      # Skip if already resolved (no output)
+      echo "Finding #$((i+1))/$TOTAL_FINDINGS"
+      echo "Thread ID: $THREAD_ID"
+      echo "File: $FILE_PATH:$LINE"
+
+      # Skip if already resolved
       if [ "$IS_RESOLVED" = "true" ]; then
+        echo "ℹ️ Thread already resolved, skipping"
         continue
       fi
       ```
 
-   b. **Analyze the finding** (silent processing):
+   b. **Analyze the finding**:
       - Read the code context at $FILE_PATH:$LINE
       - Understand the suggestion in $COMMENT_BODY
       - Evaluate if it aligns with repo patterns (CLAUDE.md)
       - Check if it improves code quality, security, or maintainability
-      - **No output during analysis**
 
    c. **Make a decision**:
 
-      **Option 1: ACCEPT** (silent execution)
+      **Option 1: ACCEPT**
       - Implement the suggested fix
       - Ensure fix follows repo patterns
       - Test that code still works (if applicable)
-      - Post threaded reply directly to the Copilot finding (silent):
+      - Post individual reply to the specific comment using GitHub CLI:
         ```bash
-        # Reply directly in the comment thread
-        gh api -X POST repos/$OWNER/$REPO/pulls/comments/$COMMENT_ID/replies \
-          -f body="✅ Implemented.
+        gh pr review {pr_number} --comment --body "$(cat <<'EOF'
+✅ Implemented.
 
 [Detailed description of what was changed and why]
 
 Changes:
 - [Specific change 1]
-- [Specific change 2]" > /dev/null 2>&1
+- [Specific change 2]
+EOF
+)"
         ```
-      - Resolve thread via GraphQL (silent):
+      - Resolve thread via GraphQL:
         ```bash
-        gh api graphql -f query='
+        echo "Resolving thread $THREAD_ID..."
+        RESOLVE_RESULT=$(gh api graphql -f query='
           mutation($threadId: ID!) {
             resolveReviewThread(input: {threadId: $threadId}) {
               thread {
@@ -167,27 +133,38 @@ Changes:
               }
             }
           }
-        ' -F threadId="$THREAD_ID" > /dev/null 2>&1
+        ' -F threadId="$THREAD_ID" 2>&1)
+
+        # Verify success
+        if echo "$RESOLVE_RESULT" | jq -e '.data.resolveReviewThread.thread.isResolved == true' > /dev/null 2>&1; then
+          echo "✅ Thread $THREAD_ID resolved successfully"
+        else
+          echo "⚠️ Warning: Failed to resolve thread $THREAD_ID"
+          echo "Error: $RESOLVE_RESULT"
+          echo "You can resolve manually in GitHub UI if needed"
+        fi
 
         # Small delay to avoid rate limiting
         sleep 0.5
         ```
 
-      **Option 2: DENY** (silent execution)
+      **Option 2: DENY**
       - Provide clear rationale (e.g., "This conflicts with our sequential test pattern", "This would break idempotency", etc.)
-      - Post threaded reply directly to the Copilot finding (silent):
+      - Post individual reply to the specific comment:
         ```bash
-        # Reply directly in the comment thread
-        gh api -X POST repos/$OWNER/$REPO/pulls/comments/$COMMENT_ID/replies \
-          -f body="❌ Not implementing.
+        gh pr review {pr_number} --comment --body "$(cat <<'EOF'
+❌ Not implementing.
 
 **Rationale**: [Detailed explanation]
 
-[Additional context about why this doesn't fit the project]" > /dev/null 2>&1
+[Additional context about why this doesn't fit the project]
+EOF
+)"
         ```
-      - Resolve thread via GraphQL (silent):
+      - Resolve thread via GraphQL (same as ACCEPT):
         ```bash
-        gh api graphql -f query='
+        echo "Resolving thread $THREAD_ID..."
+        RESOLVE_RESULT=$(gh api graphql -f query='
           mutation($threadId: ID!) {
             resolveReviewThread(input: {threadId: $threadId}) {
               thread {
@@ -196,40 +173,33 @@ Changes:
               }
             }
           }
-        ' -F threadId="$THREAD_ID" > /dev/null 2>&1
+        ' -F threadId="$THREAD_ID" 2>&1)
+
+        # Verify success
+        if echo "$RESOLVE_RESULT" | jq -e '.data.resolveReviewThread.thread.isResolved == true' > /dev/null 2>&1; then
+          echo "✅ Thread $THREAD_ID resolved successfully"
+        else
+          echo "⚠️ Warning: Failed to resolve thread $THREAD_ID"
+          echo "Error: $RESOLVE_RESULT"
+          echo "You can resolve manually in GitHub UI if needed"
+        fi
 
         # Small delay to avoid rate limiting
         sleep 0.5
         ```
 
-4. After processing all findings (silent git operations):
-   - If any implementations were made, commit changes (silent):
-     ```bash
-     git add . > /dev/null 2>&1
+4. After processing all findings:
+   - If any implementations were made, commit changes:
+     ```
+     git add .
      git commit -m "Address GitHub Copilot code review findings for PR #XXX
 
      - [List major changes]
 
      Generated with Claude Code
-     Co-Authored-By: Claude <noreply@anthropic.com>" > /dev/null 2>&1
-     git push > /dev/null 2>&1
+     Co-Authored-By: Claude <noreply@anthropic.com>"
      ```
-   - Post final summary as a general PR comment:
-     ```bash
-     gh pr review {pr_number} --comment --body "✅ Copilot Review Complete
-
-Summary:
-- Total findings: X
-- Accepted: Y
-- Denied: Z
-- Files modified: [list files with +/- lines]
-- Committed: [commit hash]
-- Posted X threaded replies to findings
-- Resolved X threads
-
-See individual findings above for implementation details."
-     ```
-   - Display summary in console output (see Summary Report section)
+   - Provide summary of actions taken
 
 ## Important Guidelines
 
@@ -238,6 +208,17 @@ See individual findings above for implementation details."
 - **Test impact**: Consider if changes affect test behavior or idempotency
 - **Be thorough**: Every finding gets a response and resolution
 - **Be respectful**: Provide clear rationale for denials
+
+## Response Format for Each Finding
+
+**Finding #N: [Brief description]**
+- **Location**: `file.go:line`
+- **Thread ID**: `PRRT_...`
+- **Copilot Suggestion**: [Summary of what Copilot suggested]
+- **Decision**: ✅ ACCEPTED / ❌ DENIED
+- **Action**: [What was implemented OR why it was denied]
+- **Reply Posted**: ✅ Yes
+- **Thread Resolved**: ✅ Yes / ⚠️ Failed (manual resolution needed)
 
 ### Template for Individual Replies
 
@@ -345,43 +326,19 @@ This command automatically resolves GitHub review threads after posting replies 
 - [GitHub GraphQL API - Mutations](https://docs.github.com/en/graphql/reference/mutations)
 - [Resolve PR conversations](https://stackoverflow.com/questions/71421045/)
 
-## Summary Report (Minimal Output Format)
+## Summary Report
 
-At the end of execution, display this minimal summary in console AND post as general PR comment:
+At the end, provide:
 
-**Console Output**:
-```
-✅ Copilot Review Complete
+**GitHub Copilot Review Summary for PR #XXX**
 
-Summary:
-- Total findings: X
-- Accepted: Y
-- Denied: Z
-- Files modified: [list files with +/- lines]
-- Committed: [commit hash]
-- Posted X threaded replies to findings
-- Resolved X threads
+- **Total Findings**: X
+- **Accepted**: Y
+- **Denied**: Z
+- **Commits Made**: [Yes/No]
 
-See PR #XXX for details.
-```
+**Key Changes**:
+- [List significant implementations]
 
-**Posted as PR Comment** (same content):
-- Allows reviewers to see summary in GitHub UI
-- Posted in main comment thread (not threaded)
-- Individual finding responses remain threaded under each Copilot comment
-
-**Example**:
-```
-✅ Copilot Review Complete
-
-Summary:
-- Total findings: 7
-- Accepted: 6
-- Denied: 1
-- Files modified: test/helpers.go (+56, -20)
-- Committed: aad86a9
-- Posted 7 review comments
-- Resolved 7 threads
-
-See PR #189 for details.
-```
+**Denied Items**:
+- [List denials with brief rationale]
