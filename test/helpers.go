@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // CommandExists checks if a command is available in the system PATH
@@ -279,4 +281,39 @@ func IsKubectlApplySuccess(output string) bool {
 	// If output has no errors but also no success indicators, it's likely empty or unexpected
 	// Return false to be conservative
 	return false
+}
+
+// ValidateYAMLFile validates that a file contains valid YAML.
+// Returns an error if the file is empty, unreadable, or contains invalid YAML syntax.
+// This is more robust than just checking file size, as it verifies YAML structure.
+func ValidateYAMLFile(filePath string) error {
+	// Check if file exists
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("file not accessible: %w", err)
+	}
+
+	// Check if file is empty
+	if info.Size() == 0 {
+		return fmt.Errorf("file is empty")
+	}
+
+	// Read file contents
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Parse YAML to validate syntax
+	var content interface{}
+	if err := yaml.Unmarshal(data, &content); err != nil {
+		return fmt.Errorf("invalid YAML syntax: %w", err)
+	}
+
+	// Ensure YAML actually contains data (not just whitespace/comments)
+	if content == nil {
+		return fmt.Errorf("YAML file contains no data")
+	}
+
+	return nil
 }

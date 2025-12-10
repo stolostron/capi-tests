@@ -105,16 +105,18 @@ func TestInfrastructure_VerifyCredentialsYAML(t *testing.T) {
 		return
 	}
 
+	// Validate YAML syntax and structure
+	if err := ValidateYAMLFile(filePath); err != nil {
+		t.Errorf("credentials.yaml validation failed: %v", err)
+		return
+	}
+
 	info, err := os.Stat(filePath)
 	if err != nil {
 		t.Fatalf("Failed to stat credentials.yaml: %v", err)
 	}
 
-	if info.Size() == 0 {
-		t.Errorf("credentials.yaml is empty")
-	} else {
-		t.Logf("credentials.yaml is valid (size: %d bytes)", info.Size())
-	}
+	t.Logf("credentials.yaml is valid YAML (size: %d bytes)", info.Size())
 }
 
 // TestInfrastructure_VerifyInfrastructureSecretsYAML verifies is.yaml exists and is valid
@@ -134,16 +136,18 @@ func TestInfrastructure_VerifyInfrastructureSecretsYAML(t *testing.T) {
 		return
 	}
 
+	// Validate YAML syntax and structure
+	if err := ValidateYAMLFile(filePath); err != nil {
+		t.Errorf("is.yaml validation failed: %v", err)
+		return
+	}
+
 	info, err := os.Stat(filePath)
 	if err != nil {
 		t.Fatalf("Failed to stat is.yaml: %v", err)
 	}
 
-	if info.Size() == 0 {
-		t.Errorf("is.yaml is empty")
-	} else {
-		t.Logf("is.yaml is valid (size: %d bytes)", info.Size())
-	}
+	t.Logf("is.yaml is valid YAML (size: %d bytes)", info.Size())
 }
 
 // TestInfrastructure_VerifyAROClusterYAML verifies aro.yaml exists and is valid
@@ -163,14 +167,16 @@ func TestInfrastructure_VerifyAROClusterYAML(t *testing.T) {
 		return
 	}
 
+	// Validate YAML syntax and structure
+	if err := ValidateYAMLFile(filePath); err != nil {
+		t.Errorf("aro.yaml validation failed: %v", err)
+		return
+	}
+
 	info, err := os.Stat(filePath)
 	if err != nil {
 		t.Fatalf("Failed to stat aro.yaml: %v", err)
 	}
 
-	if info.Size() == 0 {
-		t.Errorf("aro.yaml is empty")
-	} else {
-		t.Logf("aro.yaml is valid (size: %d bytes)", info.Size())
-	}
+	t.Logf("aro.yaml is valid YAML (size: %d bytes)", info.Size())
 }
