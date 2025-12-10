@@ -35,8 +35,8 @@ func TestKindCluster_Deploy(t *testing.T) {
 
 	t.Logf("Deploying Kind cluster '%s' using script", config.ManagementClusterName)
 
-	// Set environment variable for the script
-	SetEnvVar(t, "MANAGEMENT_CLUSTER_NAME", config.ManagementClusterName)
+	// Set environment variable for the script (deploy-charts-kind-capz.sh expects KIND_CLUSTER_NAME)
+	SetEnvVar(t, "KIND_CLUSTER_NAME", config.ManagementClusterName)
 
 	// Change to repository directory for script execution
 	originalDir, err := os.Getwd()
