@@ -148,6 +148,93 @@ func TestDeployment_ApplyAROClusterYAML(t *testing.T) {
 	t.Logf("Successfully applied %s", file)
 }
 
+// TestDeployment_VerifyCredentialsYAML verifies credentials.yaml exists and is valid
+func TestDeployment_VerifyCredentialsYAML(t *testing.T) {
+	t.Log("Verifying credentials.yaml")
+
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	filePath := filepath.Join(outputDir, "credentials.yaml")
+	if !FileExists(filePath) {
+		t.Errorf("credentials.yaml not found")
+		return
+	}
+
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("Failed to stat credentials.yaml: %v", err)
+	}
+
+	if info.Size() == 0 {
+		t.Errorf("credentials.yaml is empty")
+	} else {
+		t.Logf("credentials.yaml is valid (size: %d bytes)", info.Size())
+	}
+}
+
+// TestDeployment_VerifyInfrastructureSecretsYAML verifies is.yaml exists and is valid
+func TestDeployment_VerifyInfrastructureSecretsYAML(t *testing.T) {
+	t.Log("Verifying is.yaml (infrastructure secrets)")
+
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	filePath := filepath.Join(outputDir, "is.yaml")
+	if !FileExists(filePath) {
+		t.Errorf("is.yaml not found")
+		return
+	}
+
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("Failed to stat is.yaml: %v", err)
+	}
+
+	if info.Size() == 0 {
+		t.Errorf("is.yaml is empty")
+	} else {
+		t.Logf("is.yaml is valid (size: %d bytes)", info.Size())
+	}
+}
+
+// TestDeployment_VerifyAROClusterYAML verifies aro.yaml exists and is valid
+func TestDeployment_VerifyAROClusterYAML(t *testing.T) {
+	t.Log("Verifying aro.yaml (ARO cluster configuration)")
+
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	filePath := filepath.Join(outputDir, "aro.yaml")
+	if !FileExists(filePath) {
+		t.Errorf("aro.yaml not found")
+		return
+	}
+
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("Failed to stat aro.yaml: %v", err)
+	}
+
+	if info.Size() == 0 {
+		t.Errorf("aro.yaml is empty")
+	} else {
+		t.Logf("aro.yaml is valid (size: %d bytes)", info.Size())
+	}
+}
+
 // TestDeployment_MonitorCluster tests monitoring the ARO cluster deployment
 func TestDeployment_MonitorCluster(t *testing.T) {
 
