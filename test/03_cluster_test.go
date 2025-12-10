@@ -11,6 +11,8 @@ import (
 
 // TestKindCluster_KindClusterReady tests deploying a Kind cluster with CAPZ and verifies it's ready
 func TestKindCluster_KindClusterReady(t *testing.T) {
+	PrintTestHeader(t, "TestKindCluster_KindClusterReady",
+		"Deploy Kind cluster with CAPI/CAPZ/ASO controllers (may take 5-10 minutes)")
 
 	config := NewTestConfig()
 
@@ -48,8 +50,12 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 		}
 
 		// Run the deployment script (this might take several minutes)
-		t.Log("Running deployment script (this may take several minutes)...")
-		output, err = RunCommand(t, "bash", scriptPath)
+		// Use streaming to show progress in real-time
+		t.Logf("Executing deployment script: %s", scriptPath)
+		t.Log("This will: create Kind cluster, install cert-manager, deploy CAPI/CAPZ/ASO controllers")
+		t.Log("Expected duration: 5-10 minutes")
+		t.Log("Output streaming below...")
+		output, err = RunCommandWithStreaming(t, "bash", scriptPath)
 		if err != nil {
 			// On error, show output for debugging (may contain sensitive info, but needed for troubleshooting)
 			t.Errorf("Failed to deploy Kind cluster: %v\nOutput: %s", err, output)
@@ -80,6 +86,8 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 
 // TestKindCluster_CAPINamespacesExists verifies CAPI namespaces are installed
 func TestKindCluster_CAPINamespacesExists(t *testing.T) {
+	PrintTestHeader(t, "TestKindCluster_CAPINamespacesExists",
+		"Verify CAPI and CAPZ namespaces exist in the management cluster")
 
 	config := NewTestConfig()
 
@@ -116,11 +124,11 @@ func TestKindCluster_CAPINamespacesExists(t *testing.T) {
 
 // TestKindCluster_CAPIControllerReady waits for CAPI controller to be ready
 func TestKindCluster_CAPIControllerReady(t *testing.T) {
+	PrintTestHeader(t, "TestKindCluster_CAPIControllerReady",
+		"Wait for CAPI controller manager deployment to become available (timeout: 10m)")
 
 	config := NewTestConfig()
 	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
-
-	t.Log("Waiting for CAPI controller deployment to be available...")
 
 	// Wait for CAPI controller manager deployment to be available
 	// kubectl -n capi-system wait deployment/capi-controller-manager --for condition=Available --timeout=10m
@@ -139,11 +147,11 @@ func TestKindCluster_CAPIControllerReady(t *testing.T) {
 
 // TestKindCluster_CAPZControllerReady waits for CAPZ controller to be ready
 func TestKindCluster_CAPZControllerReady(t *testing.T) {
+	PrintTestHeader(t, "TestKindCluster_CAPZControllerReady",
+		"Wait for CAPZ controller manager deployment to become available (timeout: 10m)")
 
 	config := NewTestConfig()
 	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
-
-	t.Log("Waiting for CAPZ controller deployment to be available...")
 
 	// Wait for CAPZ controller manager deployment to be available
 	// kubectl -n capz-system wait deployment/capz-controller-manager --for condition=Available --timeout=10m
@@ -162,11 +170,11 @@ func TestKindCluster_CAPZControllerReady(t *testing.T) {
 
 // TestKindCluster_ASOControllerReady waits for Azure Service Operator controller to be ready
 func TestKindCluster_ASOControllerReady(t *testing.T) {
+	PrintTestHeader(t, "TestKindCluster_ASOControllerReady",
+		"Wait for Azure Service Operator controller manager to become available (timeout: 10m)")
 
 	config := NewTestConfig()
 	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
-
-	t.Log("Waiting for Azure Service Operator controller deployment to be available...")
 
 	// Wait for ASO controller manager deployment to be available
 	// kubectl -n capz-system wait deployment/azureserviceoperator-controller-manager --for condition=Available --timeout=10m

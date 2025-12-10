@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -37,6 +38,135 @@ func RunCommand(t *testing.T, name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	output, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(output)), err
+}
+
+// openTTY attempts to open /dev/tty for unbuffered output.
+// Returns the file handle and a boolean indicating whether it should be closed.
+// Falls back to os.Stderr if /dev/tty is unavailable (e.g., Windows, CI, or non-interactive).
+func openTTY() (*os.File, bool) {
+	tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+	if err != nil {
+		// Fallback to stderr if /dev/tty unavailable (Windows, CI, etc.)
+		return os.Stderr, false
+	}
+	return tty, true
+}
+
+// RunCommandWithStreaming executes a shell command and streams output in real-time.
+// This is useful for long-running commands where users need to see progress.
+// Returns the complete output and any error that occurred.
+//
+// This function bypasses test framework buffering by writing directly to /dev/tty,
+// ensuring output appears immediately even when run through gotestsum or go test.
+func RunCommandWithStreaming(t *testing.T, name string, args ...string) (string, error) {
+	t.Helper()
+
+	// Print command being executed
+	cmdStr := name
+	if len(args) > 0 {
+		cmdStr = fmt.Sprintf("%s %s", name, strings.Join(args, " "))
+	}
+
+	// Open TTY for unbuffered output (bypasses test framework buffering)
+	tty, shouldClose := openTTY()
+	if shouldClose {
+		defer func() {
+			if err := tty.Close(); err != nil {
+				t.Logf("Warning: failed to close /dev/tty: %v", err)
+			}
+		}()
+	}
+
+	fmt.Fprintf(tty, "Running (streaming): %s\n", cmdStr)
+	t.Logf("Executing command (streaming): %s", cmdStr)
+
+	cmd := exec.Command(name, args...)
+
+	// Create pipes for stdout and stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("failed to start command: %w", err)
+	}
+
+	// Buffer to collect all output with mutex for thread-safety
+	var outputBuilder strings.Builder
+	var mu sync.Mutex
+
+	// Stream output in real-time
+	// Buffered channel prevents goroutine leaks if cmd.Wait() returns early
+	done := make(chan bool, 2)
+
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stdout.Read(buf)
+			if n > 0 {
+				chunk := string(buf[:n])
+
+				// Thread-safe write to output builder
+				mu.Lock()
+				outputBuilder.WriteString(chunk)
+				mu.Unlock()
+
+				// Write to TTY for immediate visibility (best-effort, errors logged)
+				if _, writeErr := tty.Write([]byte(chunk)); writeErr != nil {
+					t.Logf("Warning: failed to write stdout to tty: %v", writeErr)
+				}
+			}
+			if err != nil {
+				break
+			}
+		}
+		done <- true
+	}()
+
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stderr.Read(buf)
+			if n > 0 {
+				chunk := string(buf[:n])
+
+				// Thread-safe write to output builder
+				mu.Lock()
+				outputBuilder.WriteString(chunk)
+				mu.Unlock()
+
+				// Write to TTY for immediate visibility (best-effort, errors logged)
+				if _, writeErr := tty.Write([]byte(chunk)); writeErr != nil {
+					t.Logf("Warning: failed to write stderr to tty: %v", writeErr)
+				}
+			}
+			if err != nil {
+				break
+			}
+		}
+		done <- true
+	}()
+
+	// Wait for both readers to finish
+	<-done
+	<-done
+
+	// Wait for command to complete
+	cmdErr := cmd.Wait()
+
+	// Thread-safe read of final output
+	mu.Lock()
+	output := strings.TrimSpace(outputBuilder.String())
+	mu.Unlock()
+
+	return output, cmdErr
 }
 
 // SetEnvVar sets an environment variable for testing
@@ -74,6 +204,30 @@ func GetEnvOrDefault(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// PrintTestHeader prints a clear test identification header to both terminal and test log.
+// This helps users understand which test is running and what it does.
+func PrintTestHeader(t *testing.T, testName, description string) {
+	t.Helper()
+
+	// Use openTTY helper for unbuffered output
+	tty, shouldClose := openTTY()
+	if shouldClose {
+		defer func() {
+			if err := tty.Close(); err != nil {
+				t.Logf("Warning: failed to close /dev/tty: %v", err)
+			}
+		}()
+	}
+
+	// Print to terminal
+	fmt.Fprintf(tty, "\n=== RUN: %s ===\n", testName)
+	fmt.Fprintf(tty, "    %s\n\n", description)
+
+	// Also log to test output
+	t.Logf("=== RUN: %s ===", testName)
+	t.Logf("    %s", description)
 }
 
 // ReportProgress prints progress information to stderr for real-time visibility
