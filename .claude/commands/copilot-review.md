@@ -1,5 +1,25 @@
 Process all GitHub Copilot code review findings for a pull request. Analyze each finding, implement fixes or provide rationale for denial, reply to each comment, and automatically resolve review threads via GitHub GraphQL API.
 
+## Execution Mode (Autonomous Configuration)
+
+This command runs in **autonomous mode** with the following behavior:
+
+| Category | Behavior |
+|----------|----------|
+| 1. Repository Read Operations | ✅ Show progress ("Reading PR #189... Found 7 findings"), auto-execute |
+| 2. Code Analysis & Decisions | ✅ Silent processing, show results at end only |
+| 3. Code Modifications | ✅ Auto-approve and implement, no confirmation needed |
+| 4. Git Operations (commit + push) | ✅ Auto-approve, silent |
+| 5. GitHub API (comments + threads) | ✅ Auto-approve, silent |
+| 6. External Tools (gh, jq, bash) | ✅ Auto-approve, silent |
+
+**Output Format**: Minimal - show only:
+- Initial: Repository and PR information
+- Progress: Fetching data, found X findings
+- Final: Summary of actions taken
+
+**No interaction required** - command runs completely autonomously and reports results at the end.
+
 ## Instructions
 
 1. Ask me for the PR number if not provided as argument (e.g., `/copilot-review 123`)
@@ -74,7 +94,7 @@ Process all GitHub Copilot code review findings for a pull request. Analyze each
 
 3. For EACH finding (iterate through COPILOT_THREADS), perform this workflow:
 
-   a. **Extract finding details**:
+   a. **Extract finding details** (silent processing):
       ```bash
       # For finding index $i (0-based)
       FINDING_DATA=$(echo "$COPILOT_THREADS" | jq ".[$i]")
@@ -85,30 +105,26 @@ Process all GitHub Copilot code review findings for a pull request. Analyze each
       FILE_PATH=$(echo "$COMMENT" | jq -r '.path')
       LINE=$(echo "$COMMENT" | jq -r '.line')
 
-      echo "Finding #$((i+1))/$TOTAL_FINDINGS"
-      echo "Thread ID: $THREAD_ID"
-      echo "File: $FILE_PATH:$LINE"
-
-      # Skip if already resolved
+      # Skip if already resolved (no output)
       if [ "$IS_RESOLVED" = "true" ]; then
-        echo "ℹ️ Thread already resolved, skipping"
         continue
       fi
       ```
 
-   b. **Analyze the finding**:
+   b. **Analyze the finding** (silent processing):
       - Read the code context at $FILE_PATH:$LINE
       - Understand the suggestion in $COMMENT_BODY
       - Evaluate if it aligns with repo patterns (CLAUDE.md)
       - Check if it improves code quality, security, or maintainability
+      - **No output during analysis**
 
    c. **Make a decision**:
 
-      **Option 1: ACCEPT**
+      **Option 1: ACCEPT** (silent execution)
       - Implement the suggested fix
       - Ensure fix follows repo patterns
       - Test that code still works (if applicable)
-      - Post individual reply to the specific comment using GitHub CLI:
+      - Post individual reply to the specific comment using GitHub CLI (silent):
         ```bash
         gh pr review {pr_number} --comment --body "$(cat <<'EOF'
 ✅ Implemented.
@@ -119,12 +135,11 @@ Changes:
 - [Specific change 1]
 - [Specific change 2]
 EOF
-)"
+)" > /dev/null 2>&1
         ```
-      - Resolve thread via GraphQL:
+      - Resolve thread via GraphQL (silent):
         ```bash
-        echo "Resolving thread $THREAD_ID..."
-        RESOLVE_RESULT=$(gh api graphql -f query='
+        gh api graphql -f query='
           mutation($threadId: ID!) {
             resolveReviewThread(input: {threadId: $threadId}) {
               thread {
@@ -133,24 +148,15 @@ EOF
               }
             }
           }
-        ' -F threadId="$THREAD_ID" 2>&1)
-
-        # Verify success
-        if echo "$RESOLVE_RESULT" | jq -e '.data.resolveReviewThread.thread.isResolved == true' > /dev/null 2>&1; then
-          echo "✅ Thread $THREAD_ID resolved successfully"
-        else
-          echo "⚠️ Warning: Failed to resolve thread $THREAD_ID"
-          echo "Error: $RESOLVE_RESULT"
-          echo "You can resolve manually in GitHub UI if needed"
-        fi
+        ' -F threadId="$THREAD_ID" > /dev/null 2>&1
 
         # Small delay to avoid rate limiting
         sleep 0.5
         ```
 
-      **Option 2: DENY**
+      **Option 2: DENY** (silent execution)
       - Provide clear rationale (e.g., "This conflicts with our sequential test pattern", "This would break idempotency", etc.)
-      - Post individual reply to the specific comment:
+      - Post individual reply to the specific comment (silent):
         ```bash
         gh pr review {pr_number} --comment --body "$(cat <<'EOF'
 ❌ Not implementing.
@@ -159,12 +165,11 @@ EOF
 
 [Additional context about why this doesn't fit the project]
 EOF
-)"
+)" > /dev/null 2>&1
         ```
-      - Resolve thread via GraphQL (same as ACCEPT):
+      - Resolve thread via GraphQL (silent):
         ```bash
-        echo "Resolving thread $THREAD_ID..."
-        RESOLVE_RESULT=$(gh api graphql -f query='
+        gh api graphql -f query='
           mutation($threadId: ID!) {
             resolveReviewThread(input: {threadId: $threadId}) {
               thread {
@@ -173,33 +178,25 @@ EOF
               }
             }
           }
-        ' -F threadId="$THREAD_ID" 2>&1)
-
-        # Verify success
-        if echo "$RESOLVE_RESULT" | jq -e '.data.resolveReviewThread.thread.isResolved == true' > /dev/null 2>&1; then
-          echo "✅ Thread $THREAD_ID resolved successfully"
-        else
-          echo "⚠️ Warning: Failed to resolve thread $THREAD_ID"
-          echo "Error: $RESOLVE_RESULT"
-          echo "You can resolve manually in GitHub UI if needed"
-        fi
+        ' -F threadId="$THREAD_ID" > /dev/null 2>&1
 
         # Small delay to avoid rate limiting
         sleep 0.5
         ```
 
-4. After processing all findings:
-   - If any implementations were made, commit changes:
-     ```
-     git add .
+4. After processing all findings (silent git operations):
+   - If any implementations were made, commit changes (silent):
+     ```bash
+     git add . > /dev/null 2>&1
      git commit -m "Address GitHub Copilot code review findings for PR #XXX
 
      - [List major changes]
 
      Generated with Claude Code
-     Co-Authored-By: Claude <noreply@anthropic.com>"
+     Co-Authored-By: Claude <noreply@anthropic.com>" > /dev/null 2>&1
+     git push > /dev/null 2>&1
      ```
-   - Provide summary of actions taken
+   - Provide **minimal summary** at the end (see Summary Report section)
 
 ## Important Guidelines
 
@@ -208,17 +205,6 @@ EOF
 - **Test impact**: Consider if changes affect test behavior or idempotency
 - **Be thorough**: Every finding gets a response and resolution
 - **Be respectful**: Provide clear rationale for denials
-
-## Response Format for Each Finding
-
-**Finding #N: [Brief description]**
-- **Location**: `file.go:line`
-- **Thread ID**: `PRRT_...`
-- **Copilot Suggestion**: [Summary of what Copilot suggested]
-- **Decision**: ✅ ACCEPTED / ❌ DENIED
-- **Action**: [What was implemented OR why it was denied]
-- **Reply Posted**: ✅ Yes
-- **Thread Resolved**: ✅ Yes / ⚠️ Failed (manual resolution needed)
 
 ### Template for Individual Replies
 
@@ -326,19 +312,37 @@ This command automatically resolves GitHub review threads after posting replies 
 - [GitHub GraphQL API - Mutations](https://docs.github.com/en/graphql/reference/mutations)
 - [Resolve PR conversations](https://stackoverflow.com/questions/71421045/)
 
-## Summary Report
+## Summary Report (Minimal Output Format)
 
-At the end, provide:
+At the end of execution, provide **only** this minimal summary:
 
-**GitHub Copilot Review Summary for PR #XXX**
+```
+✅ Copilot Review Complete
 
-- **Total Findings**: X
-- **Accepted**: Y
-- **Denied**: Z
-- **Commits Made**: [Yes/No]
+Summary:
+- Total findings: X
+- Accepted: Y
+- Denied: Z
+- Files modified: [list files with +/- lines]
+- Committed: [commit hash]
+- Posted X review comments
+- Resolved X threads
 
-**Key Changes**:
-- [List significant implementations]
+See PR #XXX for details.
+```
 
-**Denied Items**:
-- [List denials with brief rationale]
+**Example**:
+```
+✅ Copilot Review Complete
+
+Summary:
+- Total findings: 7
+- Accepted: 6
+- Denied: 1
+- Files modified: test/helpers.go (+56, -20)
+- Committed: aad86a9
+- Posted 7 review comments
+- Resolved 7 threads
+
+See PR #189 for details.
+```
