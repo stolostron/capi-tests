@@ -7,6 +7,15 @@ import (
 	"testing"
 )
 
+// expectedYAMLFiles returns the list of YAML files expected to be generated
+func expectedYAMLFiles() []string {
+	return []string{
+		"credentials.yaml",
+		"is.yaml",
+		"aro.yaml",
+	}
+}
+
 // TestInfrastructure_GenerateResources tests generating ARO infrastructure resources
 func TestInfrastructure_GenerateResources(t *testing.T) {
 
@@ -69,7 +78,94 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	t.Logf("Output directory created: %s", outputDir)
 }
 
-// TestInfrastructure_VerifyGeneratedFiles verifies generated resource files
+// TestInfrastructure_GenerateCredentialsYAML tests generation of credentials.yaml
+func TestInfrastructure_GenerateCredentialsYAML(t *testing.T) {
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	t.Log("Verifying generation of credentials.yaml")
+
+	filePath := filepath.Join(outputDir, "credentials.yaml")
+	if !FileExists(filePath) {
+		t.Errorf("Generated file not found: credentials.yaml")
+		return
+	}
+
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("Failed to stat credentials.yaml: %v", err)
+	}
+
+	if info.Size() == 0 {
+		t.Errorf("Generated credentials.yaml is empty")
+	} else {
+		t.Logf("Successfully generated credentials.yaml (size: %d bytes)", info.Size())
+	}
+}
+
+// TestInfrastructure_GenerateInfrastructureSecretsYAML tests generation of is.yaml (infrastructure secrets)
+func TestInfrastructure_GenerateInfrastructureSecretsYAML(t *testing.T) {
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	t.Log("Verifying generation of is.yaml (infrastructure secrets)")
+
+	filePath := filepath.Join(outputDir, "is.yaml")
+	if !FileExists(filePath) {
+		t.Errorf("Generated file not found: is.yaml")
+		return
+	}
+
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("Failed to stat is.yaml: %v", err)
+	}
+
+	if info.Size() == 0 {
+		t.Errorf("Generated is.yaml is empty")
+	} else {
+		t.Logf("Successfully generated is.yaml (size: %d bytes)", info.Size())
+	}
+}
+
+// TestInfrastructure_GenerateAROClusterYAML tests generation of aro.yaml (main cluster configuration)
+func TestInfrastructure_GenerateAROClusterYAML(t *testing.T) {
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	t.Log("Verifying generation of aro.yaml (ARO cluster configuration)")
+
+	filePath := filepath.Join(outputDir, "aro.yaml")
+	if !FileExists(filePath) {
+		t.Errorf("Generated file not found: aro.yaml")
+		return
+	}
+
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("Failed to stat aro.yaml: %v", err)
+	}
+
+	if info.Size() == 0 {
+		t.Errorf("Generated aro.yaml is empty")
+	} else {
+		t.Logf("Successfully generated aro.yaml (size: %d bytes)", info.Size())
+	}
+}
+
+// TestInfrastructure_VerifyGeneratedFiles verifies all generated resource files exist
 func TestInfrastructure_VerifyGeneratedFiles(t *testing.T) {
 
 	config := NewTestConfig()
@@ -79,12 +175,8 @@ func TestInfrastructure_VerifyGeneratedFiles(t *testing.T) {
 		t.Skipf("Output directory does not exist: %s", outputDir)
 	}
 
-	// Expected generated files based on documentation
-	expectedFiles := []string{
-		"credentials.yaml",
-		"is.yaml",  // infrastructure secrets
-		"aro.yaml", // main cluster configuration
-	}
+	// Get expected files from centralized list
+	expectedFiles := expectedYAMLFiles()
 
 	for _, file := range expectedFiles {
 		filePath := filepath.Join(outputDir, file)
@@ -107,6 +199,93 @@ func TestInfrastructure_VerifyGeneratedFiles(t *testing.T) {
 	}
 }
 
+// TestInfrastructure_VerifyCredentialsYAML verifies credentials.yaml exists and is valid
+func TestInfrastructure_VerifyCredentialsYAML(t *testing.T) {
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	t.Log("Verifying credentials.yaml")
+
+	filePath := filepath.Join(outputDir, "credentials.yaml")
+	if !FileExists(filePath) {
+		t.Errorf("credentials.yaml not found")
+		return
+	}
+
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("Failed to stat credentials.yaml: %v", err)
+	}
+
+	if info.Size() == 0 {
+		t.Errorf("credentials.yaml is empty")
+	} else {
+		t.Logf("credentials.yaml is valid (size: %d bytes)", info.Size())
+	}
+}
+
+// TestInfrastructure_VerifyInfrastructureSecretsYAML verifies is.yaml exists and is valid
+func TestInfrastructure_VerifyInfrastructureSecretsYAML(t *testing.T) {
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	t.Log("Verifying is.yaml (infrastructure secrets)")
+
+	filePath := filepath.Join(outputDir, "is.yaml")
+	if !FileExists(filePath) {
+		t.Errorf("is.yaml not found")
+		return
+	}
+
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("Failed to stat is.yaml: %v", err)
+	}
+
+	if info.Size() == 0 {
+		t.Errorf("is.yaml is empty")
+	} else {
+		t.Logf("is.yaml is valid (size: %d bytes)", info.Size())
+	}
+}
+
+// TestInfrastructure_VerifyAROClusterYAML verifies aro.yaml exists and is valid
+func TestInfrastructure_VerifyAROClusterYAML(t *testing.T) {
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	t.Log("Verifying aro.yaml (ARO cluster configuration)")
+
+	filePath := filepath.Join(outputDir, "aro.yaml")
+	if !FileExists(filePath) {
+		t.Errorf("aro.yaml not found")
+		return
+	}
+
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("Failed to stat aro.yaml: %v", err)
+	}
+
+	if info.Size() == 0 {
+		t.Errorf("aro.yaml is empty")
+	} else {
+		t.Logf("aro.yaml is valid (size: %d bytes)", info.Size())
+	}
+}
+
 // TestInfrastructure_ApplyResources tests applying generated resources to the cluster
 func TestInfrastructure_ApplyResources(t *testing.T) {
 
@@ -117,12 +296,8 @@ func TestInfrastructure_ApplyResources(t *testing.T) {
 		t.Skipf("Output directory does not exist: %s", outputDir)
 	}
 
-	// Files to apply in order
-	filesToApply := []string{
-		"credentials.yaml",
-		"is.yaml",
-		"aro.yaml",
-	}
+	// Get files to apply from centralized list
+	filesToApply := expectedYAMLFiles()
 
 	// Set kubectl context to Kind cluster
 	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
@@ -157,4 +332,91 @@ func TestInfrastructure_ApplyResources(t *testing.T) {
 		// Don't log full kubectl output as it may contain Azure subscription IDs and resource details
 		t.Logf("Successfully applied %s", file)
 	}
+}
+
+// TestInfrastructure_ApplyCredentialsYAML tests applying credentials.yaml to the cluster
+func TestInfrastructure_ApplyCredentialsYAML(t *testing.T) {
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	file := "credentials.yaml"
+	filePath := filepath.Join(outputDir, file)
+
+	if !FileExists(filePath) {
+		t.Skipf("Cannot apply missing file: %s", file)
+	}
+
+	t.Logf("Applying %s", file)
+
+	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
+	output, err := RunCommand(t, "kubectl", "--context", context, "apply", "-f", filePath)
+
+	if err != nil && !IsKubectlApplySuccess(output) {
+		t.Errorf("Failed to apply %s: %v\nOutput: %s", file, err, output)
+		return
+	}
+
+	t.Logf("Successfully applied %s", file)
+}
+
+// TestInfrastructure_ApplyInfrastructureSecretsYAML tests applying is.yaml to the cluster
+func TestInfrastructure_ApplyInfrastructureSecretsYAML(t *testing.T) {
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	file := "is.yaml"
+	filePath := filepath.Join(outputDir, file)
+
+	if !FileExists(filePath) {
+		t.Skipf("Cannot apply missing file: %s", file)
+	}
+
+	t.Logf("Applying %s (infrastructure secrets)", file)
+
+	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
+	output, err := RunCommand(t, "kubectl", "--context", context, "apply", "-f", filePath)
+
+	if err != nil && !IsKubectlApplySuccess(output) {
+		t.Errorf("Failed to apply %s: %v\nOutput: %s", file, err, output)
+		return
+	}
+
+	t.Logf("Successfully applied %s", file)
+}
+
+// TestInfrastructure_ApplyAROClusterYAML tests applying aro.yaml to the cluster
+func TestInfrastructure_ApplyAROClusterYAML(t *testing.T) {
+	config := NewTestConfig()
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	if !DirExists(outputDir) {
+		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	file := "aro.yaml"
+	filePath := filepath.Join(outputDir, file)
+
+	if !FileExists(filePath) {
+		t.Skipf("Cannot apply missing file: %s", file)
+	}
+
+	t.Logf("Applying %s (ARO cluster configuration)", file)
+
+	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
+	output, err := RunCommand(t, "kubectl", "--context", context, "apply", "-f", filePath)
+
+	if err != nil && !IsKubectlApplySuccess(output) {
+		t.Errorf("Failed to apply %s: %v\nOutput: %s", file, err, output)
+		return
+	}
+
+	t.Logf("Successfully applied %s", file)
 }
