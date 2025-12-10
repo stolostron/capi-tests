@@ -141,7 +141,7 @@ func TestInfrastructure_GenerateInfrastructureSecretsYAML(t *testing.T) {
 	}
 }
 
-// TestInfrastructure_GenerateAROClusterYAML tests generation of aro.yaml (main cluster configuration)
+// TestInfrastructure_GenerateAROClusterYAML tests generation of aro.yaml (ARO cluster configuration)
 func TestInfrastructure_GenerateAROClusterYAML(t *testing.T) {
 	t.Log("Verifying generation of aro.yaml (ARO cluster configuration)")
 
