@@ -162,6 +162,8 @@ See `docs/INTEGRATION.md` for detailed integration patterns.
 
 ### Cluster Configuration
 - `MANAGEMENT_CLUSTER_NAME` - Management cluster name (default: `capz-tests-stage`)
+  - **Note**: Tests automatically translate this to `KIND_CLUSTER_NAME` for the deployment script
+  - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - ARO workload cluster name (default: `capz-tests-cluster`)
 - `RESOURCE_GROUP` - Azure resource group
 - `OPENSHIFT_VERSION` - OpenShift version (default: `4.18`)

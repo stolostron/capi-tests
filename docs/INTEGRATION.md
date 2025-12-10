@@ -211,7 +211,10 @@ ARO_REPO_BRANCH=ARO-ASO
 ARO_REPO_DIR=/tmp/cluster-api-installer-aro
 
 # Cluster Configuration
-KIND_CLUSTER_NAME=capz-tests-stage
+# Note: When running tests, use MANAGEMENT_CLUSTER_NAME (tests translate to KIND_CLUSTER_NAME internally)
+# When using deployment scripts directly, use KIND_CLUSTER_NAME as shown below
+MANAGEMENT_CLUSTER_NAME=capz-tests-stage  # For running tests
+KIND_CLUSTER_NAME=capz-tests-stage        # For direct script usage (advanced)
 CLUSTER_NAME=capz-tests-cluster
 RESOURCE_GROUP=capz-tests-rg
 OPENSHIFT_VERSION=4.18
