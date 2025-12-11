@@ -250,6 +250,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	// Print to stderr for immediate visibility (unbuffered)
 	fmt.Fprintf(os.Stderr, "\n=== Waiting for control plane to be ready ===\n")
 	fmt.Fprintf(os.Stderr, "Timeout: %v | Poll interval: %v\n\n", timeout, pollInterval)
+	os.Stderr.Sync() // Force immediate output
 	t.Logf("Waiting for control plane to be ready (timeout: %v)...", timeout)
 
 	iteration := 0
@@ -259,23 +260,40 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 
 		if elapsed > timeout {
 			fmt.Fprintf(os.Stderr, "\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
+			os.Stderr.Sync() // Force immediate output
 			t.Errorf("Timeout waiting for control plane to be ready")
-			return
-		}
-
-		output, err := RunCommand(t, "kubectl", "--context", context, "get",
-			"kubeadmcontrolplane", "-A", "-o", "jsonpath={.items[0].status.ready}")
-
-		if err == nil && strings.TrimSpace(output) == "true" {
-			fmt.Fprintf(os.Stderr, "\n✅ Control plane is ready! (took %v)\n\n", elapsed.Round(time.Second))
-			t.Log("Control plane is ready!")
 			return
 		}
 
 		iteration++
 
+		// Print current check status
+		fmt.Fprintf(os.Stderr, "[%d] Checking control plane status...\n", iteration)
+		os.Stderr.Sync() // Force immediate output
+
+		output, err := RunCommand(t, "kubectl", "--context", context, "get",
+			"kubeadmcontrolplane", "-A", "-o", "jsonpath={.items[0].status.ready}")
+
+		// Print the result of the check
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[%d] ⚠️  Status check failed: %v (output: %s)\n", iteration, err, output)
+			os.Stderr.Sync() // Force immediate output
+		} else {
+			status := strings.TrimSpace(output)
+			fmt.Fprintf(os.Stderr, "[%d] 📊 Control plane ready status: %s\n", iteration, status)
+			os.Stderr.Sync() // Force immediate output
+
+			if status == "true" {
+				fmt.Fprintf(os.Stderr, "\n✅ Control plane is ready! (took %v)\n\n", elapsed.Round(time.Second))
+				os.Stderr.Sync() // Force immediate output
+				t.Log("Control plane is ready!")
+				return
+			}
+		}
+
 		// Report progress using helper function
 		ReportProgress(t, os.Stderr, iteration, elapsed, remaining, timeout)
+		os.Stderr.Sync() // Force immediate output
 
 		time.Sleep(pollInterval)
 	}
