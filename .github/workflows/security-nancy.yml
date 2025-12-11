@@ -1,0 +1,139 @@
+name: Security - nancy
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+  schedule:
+    # Run daily at 3:30 AM UTC
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  nancy:
+    name: Nancy Dependency Scanner
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod'
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Write Go Dependencies List
+      run: go list -json -deps ./... > go.list
+
+    - name: Run nancy dependency scanner
+      uses: sonatype-nexus-community/nancy-github-action@main
+      with:
+        nancyCommand: sleuth --loud
+      continue-on-error: true
+      id: nancy-scan
+
+    - name: Generate summary
+      if: always()
+      run: |
+        echo "# nancy Dependency Security Scan Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Scanning Go dependencies for known vulnerabilities using Sonatype OSS Index." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Check nancy scan result
+        if [ "${{ steps.nancy-scan.outcome }}" = "success" ]; then
+          echo "## ✅ No vulnerable dependencies found!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All Go dependencies passed nancy security checks." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## ❌ Vulnerable dependencies detected!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Nancy found one or more dependencies with known vulnerabilities." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Remediation Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review the vulnerabilities in the workflow logs" >> $GITHUB_STEP_SUMMARY
+          echo "2. Update affected dependencies: \`go get -u <package>\`" >> $GITHUB_STEP_SUMMARY
+          echo "3. Run \`go mod tidy\` to clean up" >> $GITHUB_STEP_SUMMARY
+          echo "4. Test thoroughly after updates" >> $GITHUB_STEP_SUMMARY
+          echo "5. Re-run this workflow to verify fixes" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Upload dependency list
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: nancy-dependency-list
+        path: go.list
+        retention-days: 30
+
+    - name: Create GitHub issue on vulnerability
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        WORKFLOW_NAME="nancy Dependency Scan"
+        EXISTING_ISSUE=$(gh issue list --label "security" --label "nancy" --label "dependencies" --state open --json number,title --jq ".[] | select(.title | contains(\"[$WORKFLOW_NAME]\")) | .number | select(. != null)" | head -1)
+
+        if [ -n "$EXISTING_ISSUE" ]; then
+          echo "Issue already exists: #$EXISTING_ISSUE"
+          gh issue comment $EXISTING_ISSUE --body "Vulnerable dependencies detected again in run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        else
+          cat > issue_body.md << EOF
+        ## nancy Dependency Security Scan Failed
+
+        **Run URL:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        **Branch:** ${{ github.ref_name }}
+        **Commit:** ${{ github.sha }}
+        **Triggered by:** ${{ github.event_name }}
+
+        ### Vulnerable Dependencies Found
+
+        Nancy detected one or more Go dependencies with known vulnerabilities from the Sonatype OSS Index.
+
+        ### Remediation Steps
+
+        1. Review the workflow logs for specific vulnerable packages
+        2. Update each affected dependency to a patched version:
+           \`\`\`bash
+           go get -u <package>@<version>
+           \`\`\`
+        3. Clean up dependencies:
+           \`\`\`bash
+           go mod tidy
+           \`\`\`
+        4. Run tests to ensure compatibility:
+           \`\`\`bash
+           make test
+           \`\`\`
+        5. Re-run the nancy scan to verify all vulnerabilities are resolved
+
+        ### Related Resources
+
+        - [Go Vulnerability Database](https://vuln.go.dev/)
+        - [Sonatype OSS Index](https://ossindex.sonatype.org/)
+
+        ---
+        *This issue was automatically created by the nancy security workflow*
+        EOF
+
+          gh issue create \
+            --title "[$WORKFLOW_NAME] Vulnerable dependencies detected on ${{ github.ref_name }}" \
+            --body-file issue_body.md \
+            --label "security" \
+            --label "nancy" \
+            --label "dependencies" \
+            --label "automated"
+        fi
+
+    - name: Fail if vulnerabilities found
+      if: steps.nancy-scan.outcome == 'failure'
+      run: exit 1

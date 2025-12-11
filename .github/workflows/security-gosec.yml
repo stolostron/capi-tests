@@ -1,0 +1,127 @@
+name: Security - gosec
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+  schedule:
+    # Run daily at 2:30 AM UTC
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  gosec:
+    name: Go Security Scanner
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod'
+
+    - name: Run gosec security scanner
+      uses: securego/gosec@master
+      with:
+        args: '-fmt=json -out=gosec-results.json -stdout -verbose=text ./...'
+      continue-on-error: true
+      id: gosec-scan
+
+    - name: Generate summary
+      if: always()
+      run: |
+        echo "# gosec Security Scan Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ -f gosec-results.json ]; then
+          # Parse JSON results
+          ISSUES=$(jq -r '.Issues // [] | length' gosec-results.json 2>/dev/null || echo "0")
+
+          if [ "$ISSUES" = "0" ]; then
+            echo "## ✅ No security issues found!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Go source code passed all gosec security checks." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Security issues detected: $ISSUES" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Issues Found" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Severity | Rule | File | Line | Details |" >> $GITHUB_STEP_SUMMARY
+            echo "|----------|------|------|------|---------|" >> $GITHUB_STEP_SUMMARY
+
+            jq -r '.Issues[] | "| \(.severity) | \(.rule_id) | \(.file) | \(.line) | \(.details) |"' gosec-results.json >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Recommendations" >> $GITHUB_STEP_SUMMARY
+            echo "1. Review each security issue listed above" >> $GITHUB_STEP_SUMMARY
+            echo "2. Apply recommended fixes from gosec documentation" >> $GITHUB_STEP_SUMMARY
+            echo "3. Re-run the scan to verify fixes" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "⚠️ No results file generated" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Upload gosec results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: gosec-results
+        path: gosec-results.json
+        retention-days: 30
+
+    - name: Create GitHub issue on security findings
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        WORKFLOW_NAME="gosec Security Scan"
+        EXISTING_ISSUE=$(gh issue list --label "security" --label "gosec" --state open --json number,title --jq ".[] | select(.title | contains(\"[$WORKFLOW_NAME]\")) | .number | select(. != null)" | head -1)
+
+        if [ -n "$EXISTING_ISSUE" ]; then
+          echo "Issue already exists: #$EXISTING_ISSUE"
+          gh issue comment $EXISTING_ISSUE --body "Security issues detected again in run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        else
+          ISSUES=$(jq -r '.Issues // [] | length' gosec-results.json 2>/dev/null || echo "0")
+
+          cat > issue_body.md << EOF
+        ## gosec Security Scan Failed
+
+        **Run URL:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        **Branch:** ${{ github.ref_name }}
+        **Commit:** ${{ github.sha }}
+        **Issues Found:** $ISSUES
+
+        ### Security Issues
+
+        See the workflow run for detailed results and recommended fixes.
+
+        ### Next Steps
+
+        1. Review the security issues in the workflow logs
+        2. Apply fixes according to gosec recommendations
+        3. Test your changes thoroughly
+        4. Re-run the workflow to verify all issues are resolved
+
+        ---
+        *This issue was automatically created by the gosec security workflow*
+        EOF
+
+          gh issue create \
+            --title "[$WORKFLOW_NAME] Security issues detected on ${{ github.ref_name }}" \
+            --body-file issue_body.md \
+            --label "security" \
+            --label "gosec" \
+            --label "automated"
+        fi
+
+    - name: Fail if security issues found
+      if: steps.gosec-scan.outcome == 'failure'
+      run: exit 1

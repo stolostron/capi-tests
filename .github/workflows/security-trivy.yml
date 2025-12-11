@@ -1,0 +1,161 @@
+name: Security - Trivy
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+  schedule:
+    # Run daily at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  trivy:
+    name: Trivy Security Scanner
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner in repo mode
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+        exit-code: '1'
+      continue-on-error: true
+      id: trivy-scan
+
+    - name: Run Trivy for human-readable output
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'table'
+        output: 'trivy-results.txt'
+        severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+      continue-on-error: true
+
+    - name: Generate summary
+      if: always()
+      run: |
+        echo "# Trivy Security Scan Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Comprehensive security scan for vulnerabilities, misconfigurations, secrets, and dependencies." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ -f trivy-results.txt ]; then
+          # Count vulnerabilities by severity
+          CRITICAL=$(grep -c "CRITICAL" trivy-results.txt 2>/dev/null || echo "0")
+          HIGH=$(grep -c "HIGH" trivy-results.txt 2>/dev/null || echo "0")
+          MEDIUM=$(grep -c "MEDIUM" trivy-results.txt 2>/dev/null || echo "0")
+          LOW=$(grep -c "LOW" trivy-results.txt 2>/dev/null || echo "0")
+
+          TOTAL=$((CRITICAL + HIGH + MEDIUM + LOW))
+
+          if [ "$TOTAL" = "0" ]; then
+            echo "## ✅ No vulnerabilities found!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Repository passed all Trivy security checks." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Vulnerabilities detected: $TOTAL" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| 🔴 CRITICAL | $CRITICAL |" >> $GITHUB_STEP_SUMMARY
+            echo "| 🟠 HIGH | $HIGH |" >> $GITHUB_STEP_SUMMARY
+            echo "| 🟡 MEDIUM | $MEDIUM |" >> $GITHUB_STEP_SUMMARY
+            echo "| 🟢 LOW | $LOW |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Scan Results" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat trivy-results.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "⚠️ No results file generated" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Upload Trivy results (SARIF)
+      if: always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
+      continue-on-error: true
+
+    - name: Upload Trivy results (artifact)
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: trivy-results
+        path: |
+          trivy-results.sarif
+          trivy-results.txt
+        retention-days: 30
+
+    - name: Create GitHub issue on vulnerability
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        WORKFLOW_NAME="Trivy Security Scan"
+        EXISTING_ISSUE=$(gh issue list --label "security" --label "trivy" --state open --json number,title --jq ".[] | select(.title | contains(\"[$WORKFLOW_NAME]\")) | .number | select(. != null)" | head -1)
+
+        if [ -n "$EXISTING_ISSUE" ]; then
+          echo "Issue already exists: #$EXISTING_ISSUE"
+          gh issue comment $EXISTING_ISSUE --body "Vulnerabilities detected again in run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        else
+          CRITICAL=$(grep -c "CRITICAL" trivy-results.txt 2>/dev/null || echo "0")
+          HIGH=$(grep -c "HIGH" trivy-results.txt 2>/dev/null || echo "0")
+          MEDIUM=$(grep -c "MEDIUM" trivy-results.txt 2>/dev/null || echo "0")
+          LOW=$(grep -c "LOW" trivy-results.txt 2>/dev/null || echo "0")
+          TOTAL=$((CRITICAL + HIGH + MEDIUM + LOW))
+
+          cat > issue_body.md << EOF
+        ## Trivy Security Scan Failed
+
+        **Run URL:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        **Branch:** ${{ github.ref_name }}
+        **Commit:** ${{ github.sha }}
+
+        ### Vulnerabilities Summary
+
+        | Severity | Count |
+        |----------|-------|
+        | 🔴 CRITICAL | $CRITICAL |
+        | 🟠 HIGH | $HIGH |
+        | 🟡 MEDIUM | $MEDIUM |
+        | 🟢 LOW | $LOW |
+        | **TOTAL** | **$TOTAL** |
+
+        ### Next Steps
+
+        1. Review detailed results in the Security tab
+        2. Update vulnerable dependencies to patched versions
+        3. Address any misconfigurations found
+        4. Re-run the scan to verify fixes
+
+        ---
+        *This issue was automatically created by the Trivy security workflow*
+        EOF
+
+          gh issue create \
+            --title "[$WORKFLOW_NAME] Vulnerabilities detected on ${{ github.ref_name }}" \
+            --body-file issue_body.md \
+            --label "security" \
+            --label "trivy" \
+            --label "automated"
+        fi
+
+    - name: Fail if vulnerabilities found
+      if: steps.trivy-scan.outcome == 'failure'
+      run: exit 1

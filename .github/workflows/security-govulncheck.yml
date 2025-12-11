@@ -1,0 +1,107 @@
+name: Security - govulncheck
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  govulncheck:
+    name: Go Vulnerability Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod'
+
+    - name: Install govulncheck
+      run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+    - name: Run govulncheck
+      run: |
+        echo "# govulncheck Security Scan Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Scanning Go code and dependencies for known vulnerabilities..." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Run govulncheck and capture output
+        if govulncheck ./... 2>&1 | tee govulncheck-output.txt; then
+          echo "## ✅ No vulnerabilities found!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All Go dependencies are free from known vulnerabilities." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## ❌ Vulnerabilities detected!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat govulncheck-output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+
+    - name: Upload scan results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: govulncheck-results
+        path: govulncheck-output.txt
+        retention-days: 30
+
+    - name: Create GitHub issue on vulnerability
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        WORKFLOW_NAME="govulncheck Security Scan"
+        EXISTING_ISSUE=$(gh issue list --label "security" --label "vulnerability" --state open --json number,title --jq ".[] | select(.title | contains(\"[$WORKFLOW_NAME]\")) | .number | select(. != null)" | head -1)
+
+        if [ -n "$EXISTING_ISSUE" ]; then
+          echo "Issue already exists: #$EXISTING_ISSUE"
+          gh issue comment $EXISTING_ISSUE --body "Vulnerability detected again in run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        else
+          cat > issue_body.md << EOF
+        ## govulncheck Security Scan Failed
+
+        **Run URL:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        **Branch:** ${{ github.ref_name }}
+        **Commit:** ${{ github.sha }}
+        **Triggered by:** ${{ github.event_name }}
+
+        ### Vulnerabilities Found
+
+        \`\`\`
+        $(cat govulncheck-output.txt 2>/dev/null || echo "See workflow logs for details")
+        \`\`\`
+
+        ### Remediation
+
+        1. Review the vulnerabilities listed above
+        2. Update affected dependencies to patched versions
+        3. Run \`go get -u\` to update dependencies
+        4. Test thoroughly after updates
+        5. Re-run this workflow to verify fixes
+
+        ---
+        *This issue was automatically created by the govulncheck security workflow*
+        EOF
+
+          gh issue create \
+            --title "[$WORKFLOW_NAME] Vulnerabilities detected on ${{ github.ref_name }}" \
+            --body-file issue_body.md \
+            --label "security" \
+            --label "vulnerability" \
+            --label "automated"
+        fi
