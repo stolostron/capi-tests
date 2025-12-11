@@ -74,22 +74,22 @@ jobs:
           echo "Existing issue found: #$EXISTING_ISSUE"
 
           # Add detailed comment to existing issue
-          cat > comment_body.md << 'COMMENT_EOF'
+          cat > comment_body.md << COMMENT_EOF
 ## 🔄 Vulnerability Still Present
 
-**New Detection**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+**New Detection**: \${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }}
 **Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-**Branch**: ${{ github.ref_name }}
-**Commit**: ${{ github.sha }}
+**Branch**: \${{ github.ref_name }}
+**Commit**: \${{ github.sha }}
 
 ### Latest Scan Output
 
 <details>
 <summary>Click to expand scan results</summary>
 
-```
+\`\`\`
 $(cat govulncheck-output.txt 2>/dev/null | head -100 || echo "See workflow logs for full details")
-```
+\`\`\`
 
 </details>
 
@@ -103,7 +103,7 @@ COMMENT_EOF
           # Count vulnerabilities if possible
           VULN_COUNT=$(grep -c "Vulnerability" govulncheck-output.txt 2>/dev/null || echo "unknown")
 
-          cat > issue_body.md << 'ISSUE_EOF'
+          cat > issue_body.md << ISSUE_EOF
 # 🚨 Security Alert: Go Vulnerabilities Detected
 
 ## Overview
@@ -115,10 +115,10 @@ The **govulncheck** security scanner has detected vulnerabilities in Go dependen
 | **Scanner** | govulncheck (Official Go vulnerability checker) |
 | **Status** | ❌ FAILED |
 | **Vulnerabilities** | $VULN_COUNT |
-| **Workflow Run** | [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
-| **Branch** | `${{ github.ref_name }}` |
-| **Commit** | `${{ github.sha }}` |
-| **Triggered By** | ${{ github.event_name }} |
+| **Workflow Run** | [\${{ github.run_id }}](\${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }}) |
+| **Branch** | \`\${{ github.ref_name }}\` |
+| **Commit** | \`\${{ github.sha }}\` |
+| **Triggered By** | \${{ github.event_name }} |
 | **Date** | $(date -u +"%Y-%m-%d %H:%M:%S UTC") |
 
 ## 📋 Vulnerability Details
@@ -126,9 +126,9 @@ The **govulncheck** security scanner has detected vulnerabilities in Go dependen
 <details open>
 <summary><b>Scan Results (Click to collapse)</b></summary>
 
-```
+\`\`\`
 $(cat govulncheck-output.txt 2>/dev/null || echo "See workflow run logs for complete details")
-```
+\`\`\`
 
 </details>
 
@@ -140,23 +140,23 @@ $(cat govulncheck-output.txt 2>/dev/null || echo "See workflow run logs for comp
 - Review [Go Vulnerability Database](https://vuln.go.dev/) for details
 
 ### 2️⃣ Update Dependencies
-```bash
+\`\`\`bash
 # Update specific vulnerable package
 go get -u <vulnerable-package>@<patched-version>
 
 # Or update all dependencies (careful - test thoroughly)
 go get -u ./...
 go mod tidy
-```
+\`\`\`
 
 ### 3️⃣ Test Changes
-```bash
+\`\`\`bash
 # Run tests
 make test
 
 # Run all security scans
 make test-all
-```
+\`\`\`
 
 ### 4️⃣ Verify Fix
 - Push changes to a branch
@@ -167,7 +167,7 @@ make test-all
 
 - [Go Vulnerability Database](https://vuln.go.dev/)
 - [govulncheck Documentation](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck)
-- [Workflow File](${{ github.server_url }}/${{ github.repository }}/blob/main/.github/workflows/security-govulncheck.yml)
+- [Workflow File](\${{ github.server_url }}/\${{ github.repository }}/blob/main/.github/workflows/security-govulncheck.yml)
 
 ## 🔔 Next Steps
 
@@ -179,7 +179,7 @@ make test-all
 
 ---
 
-*🤖 This issue was automatically created by the [govulncheck security workflow](${{ github.server_url }}/${{ github.repository }}/actions/workflows/security-govulncheck.yml)*
+*🤖 This issue was automatically created by the [govulncheck security workflow](\${{ github.server_url }}/\${{ github.repository }}/actions/workflows/security-govulncheck.yml)*
 ISSUE_EOF
 
           # Create issue with security labels
