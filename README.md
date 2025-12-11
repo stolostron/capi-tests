@@ -5,8 +5,10 @@
 [![Cluster Preparation](https://github.com/RadekCap/CAPZTests/actions/workflows/test-kind-cluster.yml/badge.svg)](https://github.com/RadekCap/CAPZTests/actions/workflows/test-kind-cluster.yml)
 
 **Security Scanning:**
+
 [![govulncheck](https://github.com/RadekCap/CAPZTests/actions/workflows/security-govulncheck.yml/badge.svg)](https://github.com/RadekCap/CAPZTests/actions/workflows/security-govulncheck.yml)
 [![gosec](https://github.com/RadekCap/CAPZTests/actions/workflows/security-gosec.yml/badge.svg)](https://github.com/RadekCap/CAPZTests/actions/workflows/security-gosec.yml)
+
 [![Trivy](https://github.com/RadekCap/CAPZTests/actions/workflows/security-trivy.yml/badge.svg)](https://github.com/RadekCap/CAPZTests/actions/workflows/security-trivy.yml)
 [![nancy](https://github.com/RadekCap/CAPZTests/actions/workflows/security-nancy.yml/badge.svg)](https://github.com/RadekCap/CAPZTests/actions/workflows/security-nancy.yml)
 
