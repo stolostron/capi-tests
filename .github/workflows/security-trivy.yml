@@ -108,52 +108,204 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         WORKFLOW_NAME="Trivy Security Scan"
-        EXISTING_ISSUE=$(gh issue list --label "security" --label "trivy" --state open --json number,title --jq ".[] | select(.title | contains(\"[$WORKFLOW_NAME]\")) | .number | select(. != null)" | head -1)
+
+        # Search for existing open issues with security label
+        EXISTING_ISSUE=$(gh issue list --state open --label "security" --label "trivy" --search "[$WORKFLOW_NAME]" --json number,title --jq ".[0].number" 2>/dev/null || echo "")
+
+        # Count vulnerabilities by severity
+        CRITICAL=$(grep -o "CRITICAL" trivy-results.txt 2>/dev/null | wc -l || echo "0")
+        HIGH=$(grep -o "HIGH" trivy-results.txt 2>/dev/null | wc -l || echo "0")
+        MEDIUM=$(grep -o "MEDIUM" trivy-results.txt 2>/dev/null | wc -l || echo "0")
+        LOW=$(grep -o "LOW" trivy-results.txt 2>/dev/null | wc -l || echo "0")
+        TOTAL=$((CRITICAL + HIGH + MEDIUM + LOW))
 
         if [ -n "$EXISTING_ISSUE" ]; then
-          echo "Issue already exists: #$EXISTING_ISSUE"
-          gh issue comment $EXISTING_ISSUE --body "Vulnerabilities detected again in run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "Existing issue found: #$EXISTING_ISSUE"
+
+          cat > comment_body.md << 'COMMENT_EOF'
+## 🔄 Vulnerabilities Still Present
+
+**New Detection**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+**Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+**Branch**: ${{ github.ref_name }}
+**Commit**: ${{ github.sha }}
+
+### Current Vulnerability Count
+
+| Severity | Count |
+|----------|-------|
+| 🔴 CRITICAL | $CRITICAL |
+| 🟠 HIGH | $HIGH |
+| 🟡 MEDIUM | $MEDIUM |
+| 🟢 LOW | $LOW |
+| **TOTAL** | **$TOTAL** |
+
+### Latest Scan Results
+
+<details>
+<summary>Click to expand Trivy scan output</summary>
+
+```
+$(cat trivy-results.txt 2>/dev/null | head -200 || echo "See workflow logs for full details")
+```
+
+</details>
+
+**Action Required**: Vulnerabilities persist. Please prioritize CRITICAL and HIGH severity issues.
+
+**Security Tab**: Check the [Security tab](${{ github.server_url }}/${{ github.repository }}/security/code-scanning) for detailed SARIF results.
+COMMENT_EOF
+
+          gh issue comment $EXISTING_ISSUE --body-file comment_body.md
         else
-          CRITICAL=$(grep -c "CRITICAL" trivy-results.txt 2>/dev/null || echo "0")
-          HIGH=$(grep -c "HIGH" trivy-results.txt 2>/dev/null || echo "0")
-          MEDIUM=$(grep -c "MEDIUM" trivy-results.txt 2>/dev/null || echo "0")
-          LOW=$(grep -c "LOW" trivy-results.txt 2>/dev/null || echo "0")
-          TOTAL=$((CRITICAL + HIGH + MEDIUM + LOW))
+          echo "Creating new issue..."
 
-          cat > issue_body.md << EOF
-        ## Trivy Security Scan Failed
+          cat > issue_body.md << 'ISSUE_EOF'
+# 🚨 Security Alert: Multiple Vulnerabilities Detected (Trivy)
 
-        **Run URL:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        **Branch:** ${{ github.ref_name }}
-        **Commit:** ${{ github.sha }}
+## Overview
 
-        ### Vulnerabilities Summary
+The **Trivy** comprehensive security scanner has detected vulnerabilities, misconfigurations, or other security issues.
 
-        | Severity | Count |
-        |----------|-------|
-        | 🔴 CRITICAL | $CRITICAL |
-        | 🟠 HIGH | $HIGH |
-        | 🟡 MEDIUM | $MEDIUM |
-        | 🟢 LOW | $LOW |
-        | **TOTAL** | **$TOTAL** |
+| Field | Value |
+|-------|-------|
+| **Scanner** | Trivy (Multi-purpose security scanner) |
+| **Status** | ❌ FAILED |
+| **🔴 CRITICAL** | $CRITICAL |
+| **🟠 HIGH** | $HIGH |
+| **🟡 MEDIUM** | $MEDIUM |
+| **🟢 LOW** | $LOW |
+| **TOTAL** | **$TOTAL** |
+| **Workflow Run** | [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+| **Branch** | `${{ github.ref_name }}` |
+| **Commit** | `${{ github.sha }}` |
+| **Date** | $(date -u +"%Y-%m-%d %H:%M:%S UTC") |
 
-        ### Next Steps
+## 📊 Severity Breakdown
 
-        1. Review detailed results in the Security tab
-        2. Update vulnerable dependencies to patched versions
-        3. Address any misconfigurations found
-        4. Re-run the scan to verify fixes
+```
+CRITICAL: $CRITICAL issues - ⚠️  IMMEDIATE ACTION REQUIRED
+HIGH:     $HIGH issues    - 🔥 High priority, fix soon
+MEDIUM:   $MEDIUM issues  - ⚡ Medium priority
+LOW:      $LOW issues     - 📝 Low priority
+```
 
-        ---
-        *This issue was automatically created by the Trivy security workflow*
-        EOF
+## 📋 Detailed Scan Results
 
+### View in GitHub Security Tab
+
+🔒 **SARIF Results**: [View in Security Tab](${{ github.server_url }}/${{ github.repository }}/security/code-scanning)
+
+The SARIF output has been uploaded to GitHub's Security tab for detailed analysis.
+
+### Scan Output
+
+<details open>
+<summary><b>Trivy Findings (Click to collapse)</b></summary>
+
+```
+$(cat trivy-results.txt 2>/dev/null || echo "See workflow run logs for complete details")
+```
+
+</details>
+
+## 🎯 What Trivy Scans
+
+Trivy checks for:
+- ✅ **Vulnerabilities** in dependencies (Go modules, npm, etc.)
+- ✅ **Misconfigurations** in IaC files (Kubernetes, Docker, etc.)
+- ✅ **Secrets** accidentally committed to the repository
+- ✅ **License** compliance issues
+- ✅ **Container** image vulnerabilities (if applicable)
+
+## 🔧 Remediation Steps
+
+### 1️⃣ Prioritize by Severity
+
+Focus on CRITICAL and HIGH severity issues first:
+1. **CRITICAL**: Fix immediately (potential for severe impact)
+2. **HIGH**: Fix within days (significant security risk)
+3. **MEDIUM**: Fix within weeks (moderate risk)
+4. **LOW**: Fix when convenient (low risk)
+
+### 2️⃣ Update Vulnerable Dependencies
+
+```bash
+# For Go dependencies
+go get -u <vulnerable-package>@<safe-version>
+go mod tidy
+
+# Verify updates
+go mod verify
+```
+
+### 3️⃣ Fix Misconfigurations
+
+Review and fix any configuration issues identified in:
+- Kubernetes YAML files
+- Docker configurations
+- Infrastructure as Code files
+
+### 4️⃣ Remove Secrets
+
+If secrets were detected:
+```bash
+# Remove from current commit
+git rm <file-with-secret>
+
+# Remove from history (DANGEROUS - coordinate with team)
+git filter-branch --force --index-filter \
+  'git rm --cached --ignore-unmatch <file-with-secret>' \
+  --prune-empty --tag-name-filter cat -- --all
+```
+
+### 5️⃣ Test Changes
+
+```bash
+# Run tests
+make test
+
+# Run Trivy locally
+docker run --rm -v $(pwd):/scan aquasec/trivy fs /scan
+```
+
+### 6️⃣ Verify Fix
+
+- Push changes to a branch
+- Trivy workflow runs automatically
+- Check Security tab for SARIF results
+- Verify workflow passes
+
+## 📚 Resources
+
+- [Trivy Documentation](https://aquasecurity.github.io/trivy/)
+- [Trivy GitHub](https://github.com/aquasecurity/trivy)
+- [Security Best Practices](https://aquasecurity.github.io/trivy/latest/docs/best-practices/)
+- [GitHub Security Tab](${{ github.server_url }}/${{ github.repository }}/security)
+- [Workflow File](${{ github.server_url }}/${{ github.repository }}/blob/main/.github/workflows/security-trivy.yml)
+
+## 🔔 Next Steps
+
+1. **Review** the Security tab for detailed SARIF results
+2. **Triage** by severity (CRITICAL → HIGH → MEDIUM → LOW)
+3. **Fix** vulnerabilities and misconfigurations
+4. **Remove** any detected secrets
+5. **Test** thoroughly
+6. **Verify** the scan passes
+7. **Close** this issue once resolved
+
+---
+
+*🤖 This issue was automatically created by the [Trivy security workflow](${{ github.server_url }}/${{ github.repository }}/actions/workflows/security-trivy.yml)*
+ISSUE_EOF
+
+          # Create issue with security labels
           gh issue create \
-            --title "[$WORKFLOW_NAME] Vulnerabilities detected on ${{ github.ref_name }}" \
-            --body-file issue_body.md \
+            --title "🚨 [Trivy] $TOTAL vulnerabilities detected on ${{ github.ref_name }}" \
             --label "security" \
             --label "trivy" \
-            --label "automated"
+            --body-file issue_body.md || \
+          echo "Failed to create issue, but continuing workflow"
         fi
 
     - name: Fail if vulnerabilities found
