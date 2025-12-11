@@ -237,7 +237,11 @@ func PrintTestHeader(t *testing.T, testName, description string) {
 func PrintToTTY(format string, args ...interface{}) {
 	tty, shouldClose := openTTY()
 	if shouldClose {
-		defer tty.Close()
+		defer func() {
+			if err := tty.Close(); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to close /dev/tty: %v\n", err)
+			}
+		}()
 	}
 	fmt.Fprintf(tty, format, args...)
 }
