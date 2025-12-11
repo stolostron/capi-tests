@@ -173,12 +173,18 @@ func RunCommandWithStreaming(t *testing.T, name string, args ...string) (string,
 func SetEnvVar(t *testing.T, key, value string) {
 	t.Helper()
 	oldValue := os.Getenv(key)
-	os.Setenv(key, value)
+	if err := os.Setenv(key, value); err != nil {
+		t.Fatalf("Failed to set environment variable %s: %v", key, err)
+	}
 	t.Cleanup(func() {
 		if oldValue == "" {
-			os.Unsetenv(key)
+			if err := os.Unsetenv(key); err != nil {
+				t.Logf("Warning: failed to unset environment variable %s: %v", key, err)
+			}
 		} else {
-			os.Setenv(key, oldValue)
+			if err := os.Setenv(key, oldValue); err != nil {
+				t.Logf("Warning: failed to restore environment variable %s: %v", key, err)
+			}
 		}
 	})
 }
@@ -312,6 +318,7 @@ func ValidateYAMLFile(filePath string) error {
 	}
 
 	// Read file contents
+	// #nosec G304 - filePath is validated via os.Stat above and comes from test configuration
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
