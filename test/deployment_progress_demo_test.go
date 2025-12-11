@@ -42,7 +42,7 @@ func TestDeployment_ProgressDemo(t *testing.T) {
 		iteration++
 
 		// Report progress using helper function
-		ReportProgress(t, os.Stderr, iteration, elapsed, remaining, timeout)
+		ReportProgress(t, iteration, elapsed, remaining, timeout)
 
 		// For demo, complete after 15 seconds
 		if elapsed > 15*time.Second {
