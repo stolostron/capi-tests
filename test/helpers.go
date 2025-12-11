@@ -20,19 +20,18 @@ func CommandExists(cmd string) bool {
 }
 
 // RunCommand executes a shell command and returns output and error.
-// In verbose mode (-v flag), the command being executed is printed to stderr
-// for immediate visibility.
+// The command being executed is printed to TTY for immediate visibility.
 func RunCommand(t *testing.T, name string, args ...string) (string, error) {
 	t.Helper()
 
-	// Print command being executed to stderr when in verbose mode
+	// Build command string
 	cmdStr := name
 	if len(args) > 0 {
 		cmdStr = fmt.Sprintf("%s %s", name, strings.Join(args, " "))
 	}
-	if testing.Verbose() {
-		fmt.Fprintf(os.Stderr, "Running: %s\n", cmdStr)
-	}
+
+	// Print command being executed to TTY for immediate visibility
+	PrintToTTY("Running: %s\n", cmdStr)
 
 	// Also log to test output
 	t.Logf("Executing command: %s", cmdStr)
@@ -232,15 +231,30 @@ func PrintTestHeader(t *testing.T, testName, description string) {
 	t.Logf("    %s", description)
 }
 
-// ReportProgress prints progress information to stderr for real-time visibility
+// PrintToTTY writes a message directly to the terminal (TTY), bypassing all
+// buffering including test framework and gotestsum buffering. This ensures
+// immediate visibility of output during test execution.
+func PrintToTTY(format string, args ...interface{}) {
+	tty, shouldClose := openTTY()
+	if shouldClose {
+		defer func() {
+			if err := tty.Close(); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to close /dev/tty: %v\n", err)
+			}
+		}()
+	}
+	fmt.Fprintf(tty, format, args...)
+}
+
+// ReportProgress prints progress information to TTY for real-time visibility
 // and to test log for test output. This helper ensures consistent progress
 // reporting across all deployment tests.
-func ReportProgress(t *testing.T, w io.Writer, iteration int, elapsed, remaining, timeout time.Duration) {
+func ReportProgress(t *testing.T, iteration int, elapsed, remaining, timeout time.Duration) {
 	t.Helper()
 	percentage := int((float64(elapsed) / float64(timeout)) * 100)
 
-	// Print to stderr for real-time visibility (unbuffered)
-	fmt.Fprintf(w, "[%d] ⏳ Waiting... | Elapsed: %v | Remaining: %v | Progress: %d%%\n",
+	// Print to TTY for real-time visibility (bypasses all buffering)
+	PrintToTTY("[%d] ⏳ Waiting... | Elapsed: %v | Remaining: %v | Progress: %d%%\n",
 		iteration,
 		elapsed.Round(time.Second),
 		remaining.Round(time.Second),
