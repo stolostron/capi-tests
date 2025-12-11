@@ -176,30 +176,58 @@ func TestKindCluster_CAPIControllerReady(t *testing.T) {
 	config := NewTestConfig()
 	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
 
+	timeout := 10 * time.Minute
+	pollInterval := 10 * time.Second
+	startTime := time.Now()
+
 	fmt.Fprintf(os.Stderr, "\n=== Waiting for CAPI controller manager ===\n")
 	fmt.Fprintf(os.Stderr, "Namespace: capi-system\n")
 	fmt.Fprintf(os.Stderr, "Deployment: capi-controller-manager\n")
-	fmt.Fprintf(os.Stderr, "Timeout: 10m\n")
-	fmt.Fprintf(os.Stderr, "Running: kubectl wait deployment/capi-controller-manager --for condition=Available\n\n")
+	fmt.Fprintf(os.Stderr, "Timeout: %v | Poll interval: %v\n\n", timeout, pollInterval)
 	os.Stderr.Sync() // Force immediate output
 
-	// Wait for CAPI controller manager deployment to be available
-	// kubectl -n capi-system wait deployment/capi-controller-manager --for condition=Available --timeout=10m
-	output, err := RunCommandWithStreaming(t, "kubectl", "--context", context, "-n", "capi-system",
-		"wait", "deployment/capi-controller-manager",
-		"--for", "condition=Available",
-		"--timeout=10m")
+	iteration := 0
+	for {
+		elapsed := time.Since(startTime)
+		remaining := timeout - elapsed
 
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "\n❌ CAPI controller manager deployment is not available: %v\n\n", err)
+		if elapsed > timeout {
+			fmt.Fprintf(os.Stderr, "\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
+			os.Stderr.Sync() // Force immediate output
+			t.Errorf("Timeout waiting for CAPI controller manager to be available")
+			return
+		}
+
+		iteration++
+
+		fmt.Fprintf(os.Stderr, "[%d] Checking deployment status...\n", iteration)
 		os.Stderr.Sync() // Force immediate output
-		t.Errorf("CAPI controller manager deployment is not available: %v\nOutput: %s", err, output)
-		return
-	}
 
-	fmt.Fprintf(os.Stderr, "\n✅ CAPI controller manager deployment is available\n\n")
-	os.Stderr.Sync() // Force immediate output
-	t.Log("CAPI controller manager deployment is available")
+		output, err := RunCommand(t, "kubectl", "--context", context, "-n", "capi-system",
+			"get", "deployment", "capi-controller-manager",
+			"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}")
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[%d] ⚠️  Status check failed: %v\n", iteration, err)
+			os.Stderr.Sync() // Force immediate output
+		} else {
+			status := strings.TrimSpace(output)
+			fmt.Fprintf(os.Stderr, "[%d] 📊 Deployment Available status: %s\n", iteration, status)
+			os.Stderr.Sync() // Force immediate output
+
+			if status == "True" {
+				fmt.Fprintf(os.Stderr, "\n✅ CAPI controller manager is available! (took %v)\n\n", elapsed.Round(time.Second))
+				os.Stderr.Sync() // Force immediate output
+				t.Log("CAPI controller manager deployment is available")
+				return
+			}
+		}
+
+		ReportProgress(t, os.Stderr, iteration, elapsed, remaining, timeout)
+		os.Stderr.Sync() // Force immediate output
+
+		time.Sleep(pollInterval)
+	}
 }
 
 // TestKindCluster_CAPZControllerReady waits for CAPZ controller to be ready
@@ -210,30 +238,58 @@ func TestKindCluster_CAPZControllerReady(t *testing.T) {
 	config := NewTestConfig()
 	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
 
+	timeout := 10 * time.Minute
+	pollInterval := 10 * time.Second
+	startTime := time.Now()
+
 	fmt.Fprintf(os.Stderr, "\n=== Waiting for CAPZ controller manager ===\n")
 	fmt.Fprintf(os.Stderr, "Namespace: capz-system\n")
 	fmt.Fprintf(os.Stderr, "Deployment: capz-controller-manager\n")
-	fmt.Fprintf(os.Stderr, "Timeout: 10m\n")
-	fmt.Fprintf(os.Stderr, "Running: kubectl wait deployment/capz-controller-manager --for condition=Available\n\n")
+	fmt.Fprintf(os.Stderr, "Timeout: %v | Poll interval: %v\n\n", timeout, pollInterval)
 	os.Stderr.Sync() // Force immediate output
 
-	// Wait for CAPZ controller manager deployment to be available
-	// kubectl -n capz-system wait deployment/capz-controller-manager --for condition=Available --timeout=10m
-	output, err := RunCommandWithStreaming(t, "kubectl", "--context", context, "-n", "capz-system",
-		"wait", "deployment/capz-controller-manager",
-		"--for", "condition=Available",
-		"--timeout=10m")
+	iteration := 0
+	for {
+		elapsed := time.Since(startTime)
+		remaining := timeout - elapsed
 
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "\n❌ CAPZ controller manager deployment is not available: %v\n\n", err)
+		if elapsed > timeout {
+			fmt.Fprintf(os.Stderr, "\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
+			os.Stderr.Sync() // Force immediate output
+			t.Errorf("Timeout waiting for CAPZ controller manager to be available")
+			return
+		}
+
+		iteration++
+
+		fmt.Fprintf(os.Stderr, "[%d] Checking deployment status...\n", iteration)
 		os.Stderr.Sync() // Force immediate output
-		t.Errorf("CAPZ controller manager deployment is not available: %v\nOutput: %s", err, output)
-		return
-	}
 
-	fmt.Fprintf(os.Stderr, "\n✅ CAPZ controller manager deployment is available\n\n")
-	os.Stderr.Sync() // Force immediate output
-	t.Log("CAPZ controller manager deployment is available")
+		output, err := RunCommand(t, "kubectl", "--context", context, "-n", "capz-system",
+			"get", "deployment", "capz-controller-manager",
+			"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}")
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[%d] ⚠️  Status check failed: %v\n", iteration, err)
+			os.Stderr.Sync() // Force immediate output
+		} else {
+			status := strings.TrimSpace(output)
+			fmt.Fprintf(os.Stderr, "[%d] 📊 Deployment Available status: %s\n", iteration, status)
+			os.Stderr.Sync() // Force immediate output
+
+			if status == "True" {
+				fmt.Fprintf(os.Stderr, "\n✅ CAPZ controller manager is available! (took %v)\n\n", elapsed.Round(time.Second))
+				os.Stderr.Sync() // Force immediate output
+				t.Log("CAPZ controller manager deployment is available")
+				return
+			}
+		}
+
+		ReportProgress(t, os.Stderr, iteration, elapsed, remaining, timeout)
+		os.Stderr.Sync() // Force immediate output
+
+		time.Sleep(pollInterval)
+	}
 }
 
 // TestKindCluster_ASOControllerReady waits for Azure Service Operator controller to be ready
@@ -244,28 +300,56 @@ func TestKindCluster_ASOControllerReady(t *testing.T) {
 	config := NewTestConfig()
 	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
 
+	timeout := 10 * time.Minute
+	pollInterval := 10 * time.Second
+	startTime := time.Now()
+
 	fmt.Fprintf(os.Stderr, "\n=== Waiting for Azure Service Operator controller manager ===\n")
 	fmt.Fprintf(os.Stderr, "Namespace: capz-system\n")
 	fmt.Fprintf(os.Stderr, "Deployment: azureserviceoperator-controller-manager\n")
-	fmt.Fprintf(os.Stderr, "Timeout: 10m\n")
-	fmt.Fprintf(os.Stderr, "Running: kubectl wait deployment/azureserviceoperator-controller-manager --for condition=Available\n\n")
+	fmt.Fprintf(os.Stderr, "Timeout: %v | Poll interval: %v\n\n", timeout, pollInterval)
 	os.Stderr.Sync() // Force immediate output
 
-	// Wait for ASO controller manager deployment to be available
-	// kubectl -n capz-system wait deployment/azureserviceoperator-controller-manager --for condition=Available --timeout=10m
-	output, err := RunCommandWithStreaming(t, "kubectl", "--context", context, "-n", "capz-system",
-		"wait", "deployment/azureserviceoperator-controller-manager",
-		"--for", "condition=Available",
-		"--timeout=10m")
+	iteration := 0
+	for {
+		elapsed := time.Since(startTime)
+		remaining := timeout - elapsed
 
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "\n❌ Azure Service Operator controller manager deployment is not available: %v\n\n", err)
+		if elapsed > timeout {
+			fmt.Fprintf(os.Stderr, "\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
+			os.Stderr.Sync() // Force immediate output
+			t.Errorf("Timeout waiting for Azure Service Operator controller manager to be available")
+			return
+		}
+
+		iteration++
+
+		fmt.Fprintf(os.Stderr, "[%d] Checking deployment status...\n", iteration)
 		os.Stderr.Sync() // Force immediate output
-		t.Errorf("Azure Service Operator controller manager deployment is not available: %v\nOutput: %s", err, output)
-		return
-	}
 
-	fmt.Fprintf(os.Stderr, "\n✅ Azure Service Operator controller manager deployment is available\n\n")
-	os.Stderr.Sync() // Force immediate output
-	t.Log("Azure Service Operator controller manager deployment is available")
+		output, err := RunCommand(t, "kubectl", "--context", context, "-n", "capz-system",
+			"get", "deployment", "azureserviceoperator-controller-manager",
+			"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}")
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[%d] ⚠️  Status check failed: %v\n", iteration, err)
+			os.Stderr.Sync() // Force immediate output
+		} else {
+			status := strings.TrimSpace(output)
+			fmt.Fprintf(os.Stderr, "[%d] 📊 Deployment Available status: %s\n", iteration, status)
+			os.Stderr.Sync() // Force immediate output
+
+			if status == "True" {
+				fmt.Fprintf(os.Stderr, "\n✅ Azure Service Operator controller manager is available! (took %v)\n\n", elapsed.Round(time.Second))
+				os.Stderr.Sync() // Force immediate output
+				t.Log("Azure Service Operator controller manager deployment is available")
+				return
+			}
+		}
+
+		ReportProgress(t, os.Stderr, iteration, elapsed, remaining, timeout)
+		os.Stderr.Sync() // Force immediate output
+
+		time.Sleep(pollInterval)
+	}
 }
