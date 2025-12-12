@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+const (
+	// DefaultDeploymentTimeout is the default timeout for control plane deployment
+	DefaultDeploymentTimeout = 45 * time.Minute
+)
+
 var (
 	defaultRepoDir     string
 	defaultRepoDirOnce sync.Once
@@ -85,13 +90,18 @@ func NewTestConfig() *TestConfig {
 }
 
 // parseDeploymentTimeout parses the DEPLOYMENT_TIMEOUT environment variable.
-// Returns the parsed duration or defaults to 45 minutes.
+// Returns the parsed duration or defaults to DefaultDeploymentTimeout.
+// Logs a warning if the provided value is invalid.
 func parseDeploymentTimeout() time.Duration {
-	timeoutStr := GetEnvOrDefault("DEPLOYMENT_TIMEOUT", "45m")
+	timeoutStr := os.Getenv("DEPLOYMENT_TIMEOUT")
+	if timeoutStr == "" {
+		return DefaultDeploymentTimeout
+	}
+
 	timeout, err := time.ParseDuration(timeoutStr)
 	if err != nil {
-		// If parsing fails, use default
-		return 45 * time.Minute
+		fmt.Fprintf(os.Stderr, "Warning: invalid DEPLOYMENT_TIMEOUT '%s', using default %v\n", timeoutStr, DefaultDeploymentTimeout)
+		return DefaultDeploymentTimeout
 	}
 	return timeout
 }

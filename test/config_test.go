@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGetDefaultRepoDir_EnvVariable(t *testing.T) {
@@ -75,4 +76,76 @@ func TestGetDefaultRepoDir_PathFormat(t *testing.T) {
 	}
 
 	t.Logf("Path format validated: %s", config.RepoDir)
+}
+
+func TestParseDeploymentTimeout_Default(t *testing.T) {
+	// Ensure DEPLOYMENT_TIMEOUT is not set
+	originalValue := os.Getenv("DEPLOYMENT_TIMEOUT")
+	os.Unsetenv("DEPLOYMENT_TIMEOUT")
+	defer func() {
+		if originalValue != "" {
+			os.Setenv("DEPLOYMENT_TIMEOUT", originalValue)
+		}
+	}()
+
+	timeout := parseDeploymentTimeout()
+	if timeout != DefaultDeploymentTimeout {
+		t.Errorf("Expected default timeout %v, got %v", DefaultDeploymentTimeout, timeout)
+	}
+	t.Logf("Default timeout: %v", timeout)
+}
+
+func TestParseDeploymentTimeout_ValidDuration(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected time.Duration
+	}{
+		{"30m", 30 * time.Minute},
+		{"1h", 1 * time.Hour},
+		{"90m", 90 * time.Minute},
+		{"2h30m", 2*time.Hour + 30*time.Minute},
+	}
+
+	originalValue := os.Getenv("DEPLOYMENT_TIMEOUT")
+	defer func() {
+		if originalValue != "" {
+			os.Setenv("DEPLOYMENT_TIMEOUT", originalValue)
+		} else {
+			os.Unsetenv("DEPLOYMENT_TIMEOUT")
+		}
+	}()
+
+	for _, tc := range testCases {
+		t.Run(tc.input, func(t *testing.T) {
+			os.Setenv("DEPLOYMENT_TIMEOUT", tc.input)
+			timeout := parseDeploymentTimeout()
+			if timeout != tc.expected {
+				t.Errorf("For input '%s', expected %v, got %v", tc.input, tc.expected, timeout)
+			}
+		})
+	}
+}
+
+func TestParseDeploymentTimeout_InvalidDuration(t *testing.T) {
+	originalValue := os.Getenv("DEPLOYMENT_TIMEOUT")
+	defer func() {
+		if originalValue != "" {
+			os.Setenv("DEPLOYMENT_TIMEOUT", originalValue)
+		} else {
+			os.Unsetenv("DEPLOYMENT_TIMEOUT")
+		}
+	}()
+
+	// Note: "-1h" is valid Go duration syntax (negative), so not included
+	// Empty string is handled separately (returns default without warning)
+	invalidValues := []string{"invalid", "abc", "45", "1x"}
+	for _, val := range invalidValues {
+		t.Run(val, func(t *testing.T) {
+			os.Setenv("DEPLOYMENT_TIMEOUT", val)
+			timeout := parseDeploymentTimeout()
+			if timeout != DefaultDeploymentTimeout {
+				t.Errorf("For invalid input '%s', expected default %v, got %v", val, DefaultDeploymentTimeout, timeout)
+			}
+		})
+	}
 }
