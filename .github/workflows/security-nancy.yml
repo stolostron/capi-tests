@@ -108,8 +108,7 @@ Check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actio
 </details>
 
 **Action Required**: Update vulnerable dependencies to patched versions.
-COMMENT_EOF
-        else
+COMMENT_EOF        else
           echo "Creating new issue..."
 
           cat > issue_body.md << ISSUE_EOF
@@ -260,7 +259,6 @@ Both scanners complement each other - fix vulnerabilities found by either scanne
 
 *🤖 This issue was automatically created by the [nancy security workflow](${{ github.server_url }}/${{ github.repository }}/actions/workflows/security-nancy.yml)*
 ISSUE_EOF
-
           # Create issue with security labels
           gh issue create \
             --title "🚨 [nancy] Vulnerable dependencies detected on ${{ github.ref_name }}" \

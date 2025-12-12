@@ -154,8 +154,7 @@ $(cat trivy-results.txt 2>/dev/null | head -200 || echo "See workflow logs for f
 **Action Required**: Vulnerabilities persist. Please prioritize CRITICAL and HIGH severity issues.
 
 **Security Tab**: Check the [Security tab](${{ github.server_url }}/${{ github.repository }}/security/code-scanning) for detailed SARIF results.
-COMMENT_EOF
-        else
+COMMENT_EOF        else
           echo "Creating new issue..."
 
           cat > issue_body.md << ISSUE_EOF
@@ -296,7 +295,6 @@ docker run --rm -v $(pwd):/scan aquasec/trivy fs /scan
 
 *🤖 This issue was automatically created by the [Trivy security workflow](${{ github.server_url }}/${{ github.repository }}/actions/workflows/security-trivy.yml)*
 ISSUE_EOF
-
           # Create issue with security labels
           gh issue create \
             --title "🚨 [Trivy] $TOTAL vulnerabilities detected on ${{ github.ref_name }}" \

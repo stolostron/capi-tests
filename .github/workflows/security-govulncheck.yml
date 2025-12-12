@@ -96,8 +96,7 @@ $(cat govulncheck-output.txt 2>/dev/null | head -100 || echo "See workflow logs 
 
 
 **Action Required**: The vulnerabilities listed in this issue are still present. Please prioritize remediation.
-COMMENT_EOF
-          gh issue comment $EXISTING_ISSUE --body-file comment_body.md
+COMMENT_EOF          gh issue comment $EXISTING_ISSUE --body-file comment_body.md
         else
           echo "Creating new issue..."
 
@@ -182,7 +181,6 @@ make test-all
 
 *🤖 This issue was automatically created by the [govulncheck security workflow](${{ github.server_url }}/${{ github.repository }}/actions/workflows/security-govulncheck.yml)*
 ISSUE_EOF
-
           # Create issue with security labels
           gh issue create \
             --title "🚨 [govulncheck] Vulnerabilities detected on ${{ github.ref_name }}" \
