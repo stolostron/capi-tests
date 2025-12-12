@@ -13,6 +13,7 @@ on:
 permissions:
   contents: read
   security-events: write
+  issues: write
 
 jobs:
   nancy:
@@ -76,7 +77,7 @@ jobs:
         retention-days: 30
 
     - name: Create GitHub issue on vulnerability
-      if: failure() && github.event_name != 'pull_request'
+      if: steps.nancy-scan.outcome == 'failure' && github.event_name != 'pull_request'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SERVER_URL: ${{ github.server_url }}
@@ -86,10 +87,8 @@ jobs:
         SHA: ${{ github.sha }}
         EVENT_NAME: ${{ github.event_name }}
       run: |
-        WORKFLOW_NAME="nancy Dependency Scan"
-
-        # Search for existing open issues with security label
-        EXISTING_ISSUE=$(gh issue list --state open --label "security" --label "nancy" --search "[$WORKFLOW_NAME]" --json number,title --jq ".[0].number" 2>/dev/null || echo "")
+        # Search for existing open issues with security labels (one issue per scanner type)
+        EXISTING_ISSUE=$(gh issue list --state open --label "security" --label "nancy" --json number --jq ".[0].number" 2>/dev/null || echo "")
 
         if [ -n "$EXISTING_ISSUE" ]; then
           echo "Existing issue found: #$EXISTING_ISSUE"
