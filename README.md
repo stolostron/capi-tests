@@ -79,7 +79,7 @@ Tests are configured via environment variables:
 
 ### Test Behavior
 
-- `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `30m`). Use Go duration format: `1h`, `45m`, `90m`, etc.
+- `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `45m`). Use Go duration format: `1h`, `45m`, `90m`, etc.
 - `TEST_VERBOSITY` - Test output verbosity (default: `-v` for verbose). Set to empty string for quiet output: `TEST_VERBOSITY= make test`
 
 ## Getting Started

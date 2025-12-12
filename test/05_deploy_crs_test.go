@@ -253,8 +253,8 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	config := NewTestConfig()
 	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
 
-	// Wait for control plane to be ready (with timeout)
-	timeout := 30 * time.Minute
+	// Wait for control plane to be ready (with configurable timeout)
+	timeout := config.DeploymentTimeout
 	pollInterval := 30 * time.Second
 	startTime := time.Now()
 
@@ -279,8 +279,9 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 		// Print current check status
 		PrintToTTY("[%d] Checking control plane status...\n", iteration)
 
+		// ARO uses AROControlPlane, not kubeadmcontrolplane
 		output, err := RunCommand(t, "kubectl", "--context", context, "get",
-			"kubeadmcontrolplane", "-A", "-o", "jsonpath={.items[0].status.ready}")
+			"arocontrolplane", "-A", "-o", "jsonpath={.items[0].status.ready}")
 
 		// Print the result of the check
 		if err != nil {

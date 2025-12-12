@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 )
 
 var (
@@ -50,6 +51,9 @@ type TestConfig struct {
 	ClusterctlBinPath string
 	ScriptsPath       string
 	GenScriptPath     string
+
+	// Timeouts
+	DeploymentTimeout time.Duration
 }
 
 // NewTestConfig creates a new test configuration with defaults
@@ -74,7 +78,22 @@ func NewTestConfig() *TestConfig {
 		ClusterctlBinPath: GetEnvOrDefault("CLUSTERCTL_BIN", "./bin/clusterctl"),
 		ScriptsPath:       GetEnvOrDefault("SCRIPTS_PATH", "./scripts"),
 		GenScriptPath:     GetEnvOrDefault("GEN_SCRIPT_PATH", "./doc/aro-hcp-scripts/aro-hcp-gen.sh"),
+
+		// Timeouts
+		DeploymentTimeout: parseDeploymentTimeout(),
 	}
+}
+
+// parseDeploymentTimeout parses the DEPLOYMENT_TIMEOUT environment variable.
+// Returns the parsed duration or defaults to 45 minutes.
+func parseDeploymentTimeout() time.Duration {
+	timeoutStr := GetEnvOrDefault("DEPLOYMENT_TIMEOUT", "45m")
+	timeout, err := time.ParseDuration(timeoutStr)
+	if err != nil {
+		// If parsing fails, use default
+		return 45 * time.Minute
+	}
+	return timeout
 }
 
 // GetOutputDirName returns the output directory name for generated infrastructure files

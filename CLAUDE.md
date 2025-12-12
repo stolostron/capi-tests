@@ -173,7 +173,7 @@ See `docs/INTEGRATION.md` for detailed integration patterns.
 - `USER` - User identifier (default: current user)
 
 ### Test Behavior
-- `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `30m`, format: Go duration like `1h`, `45m`)
+- `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `45m`, format: Go duration like `1h`, `45m`)
 
 ## Key Architecture Decisions
 
