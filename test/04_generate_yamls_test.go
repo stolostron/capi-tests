@@ -68,6 +68,7 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 		return
 	}
 
+	PrintToTTY("Output directory created: %s\n", outputDir)
 	t.Logf("Output directory created: %s", outputDir)
 
 	// Log paths of all generated files
@@ -81,14 +82,18 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 		if FileExists(filePath) {
 			info, err := os.Stat(filePath)
 			if err != nil {
+				PrintToTTY("  ⚠️  Generated file: %s (unable to stat: %v)\n", filePath, err)
 				t.Logf("Generated file: %s (unable to stat: %v)", filePath, err)
 			} else {
+				PrintToTTY("  ✅ Generated file: %s (%d bytes)\n", filePath, info.Size())
 				t.Logf("Generated file: %s (size: %d bytes)", filePath, info.Size())
 			}
 		} else {
+			PrintToTTY("  ❌ Expected generated file not found: %s\n", filePath)
 			t.Errorf("Expected generated file not found: %s", filePath)
 		}
 	}
+	PrintToTTY("\n")
 }
 
 // TestInfrastructure_VerifyCredentialsYAML verifies credentials.yaml exists and is valid
