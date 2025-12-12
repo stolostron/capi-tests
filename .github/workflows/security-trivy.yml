@@ -153,9 +153,8 @@ $(cat trivy-results.txt 2>/dev/null | head -200 || echo "See workflow logs for f
 
 **Action Required**: Vulnerabilities persist. Please prioritize CRITICAL and HIGH severity issues.
 
-            **Security Tab**: Check the [Security tab](${{ github.server_url }}/${{ github.repository }}/security/code-scanning) for detailed SARIF results.
+**Security Tab**: Check the [Security tab](${{ github.server_url }}/${{ github.repository }}/security/code-scanning) for detailed SARIF results.
 COMMENT_EOF
-          gh issue comment $EXISTING_ISSUE --body-file comment_body.md
         else
           echo "Creating new issue..."
 

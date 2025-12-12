@@ -96,7 +96,6 @@ $(cat govulncheck-output.txt 2>/dev/null | head -100 || echo "See workflow logs 
 
 
 **Action Required**: The vulnerabilities listed in this issue are still present. Please prioritize remediation.
-
 COMMENT_EOF
           gh issue comment $EXISTING_ISSUE --body-file comment_body.md
         else
