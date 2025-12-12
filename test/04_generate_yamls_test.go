@@ -48,6 +48,8 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	}
 
 	// Run the generation script
+	PrintToTTY("\n=== Generating infrastructure resources ===\n")
+	PrintToTTY("Running infrastructure generation script: %s %s\n", genScriptPath, config.GetOutputDirName())
 	t.Log("Running infrastructure generation script...")
 	output, err := RunCommand(t, "bash", genScriptPath, config.GetOutputDirName())
 	if err != nil {
@@ -57,6 +59,7 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	}
 
 	// Don't log full output as it may contain Azure resource IDs and other sensitive information
+	PrintToTTY("✅ Infrastructure generation completed successfully\n")
 	t.Log("Infrastructure generation completed successfully")
 
 	// Verify generated files exist
