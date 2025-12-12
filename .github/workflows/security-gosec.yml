@@ -88,10 +88,8 @@ jobs:
         REF_NAME: ${{ github.ref_name }}
         SHA: ${{ github.sha }}
       run: |
-        WORKFLOW_NAME="gosec Security Scan"
-
-        # Search for existing open issues with security label
-        EXISTING_ISSUE=$(gh issue list --state open --label "security" --label "gosec" --search "[$WORKFLOW_NAME]" --json number,title --jq ".[0].number" 2>/dev/null || echo "")
+        # Search for existing open issues with security labels (one issue per scanner type)
+        EXISTING_ISSUE=$(gh issue list --state open --label "security" --label "gosec" --json number --jq ".[0].number" 2>/dev/null || echo "")
 
         if [ -n "$EXISTING_ISSUE" ]; then
           echo "Existing issue found: #$EXISTING_ISSUE"

@@ -119,10 +119,8 @@ jobs:
         REF_NAME: ${{ github.ref_name }}
         SHA: ${{ github.sha }}
       run: |
-        WORKFLOW_NAME="Trivy Security Scan"
-
-        # Search for existing open issues with security label
-        EXISTING_ISSUE=$(gh issue list --state open --label "security" --label "trivy" --search "[$WORKFLOW_NAME]" --json number,title --jq ".[0].number" 2>/dev/null || echo "")
+        # Search for existing open issues with security labels (one issue per scanner type)
+        EXISTING_ISSUE=$(gh issue list --state open --label "security" --label "trivy" --json number --jq ".[0].number" 2>/dev/null || echo "")
 
         # Count vulnerabilities by severity
         CRITICAL=$(grep -o "CRITICAL" trivy-results.txt 2>/dev/null | wc -l || echo "0")
