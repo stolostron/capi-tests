@@ -36,11 +36,33 @@ jobs:
       run: go list -json -deps ./... > go.list
 
     - name: Run nancy dependency scanner
-      uses: sonatype-nexus-community/nancy-github-action@main
-      with:
-        nancyCommand: sleuth --loud
-      continue-on-error: true
       id: nancy-scan
+      run: |
+        # Install nancy
+        go install github.com/sonatype-nexus-community/nancy@latest
+
+        # Run nancy and capture output
+        set +e
+        nancy sleuth --loud < go.list 2>&1 | tee nancy-output.txt
+        NANCY_EXIT_CODE=$?
+        set -e
+
+        # Check for OSS Index API errors (401 Unauthorized, 403 Forbidden, 5xx errors)
+        if grep -qE "\[401 Unauthorized\]|\[403 Forbidden\]|\[5[0-9][0-9]" nancy-output.txt; then
+          echo "OSS_INDEX_ERROR=true" >> $GITHUB_ENV
+          echo "NANCY_RESULT=api_error" >> $GITHUB_ENV
+          echo "::warning::Sonatype OSS Index API error detected. This is likely a temporary service issue."
+        elif [ "$NANCY_EXIT_CODE" -eq 0 ]; then
+          echo "OSS_INDEX_ERROR=false" >> $GITHUB_ENV
+          echo "NANCY_RESULT=success" >> $GITHUB_ENV
+        else
+          echo "OSS_INDEX_ERROR=false" >> $GITHUB_ENV
+          echo "NANCY_RESULT=vulnerabilities" >> $GITHUB_ENV
+        fi
+
+        # Store exit code for later steps
+        echo "NANCY_EXIT_CODE=$NANCY_EXIT_CODE" >> $GITHUB_ENV
+      continue-on-error: true
 
     - name: Generate summary
       if: always()
@@ -50,11 +72,25 @@ jobs:
         echo "Scanning Go dependencies for known vulnerabilities using Sonatype OSS Index." >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
 
-        # Check nancy scan result
-        if [ "${{ steps.nancy-scan.outcome }}" = "success" ]; then
+        if [ "$NANCY_RESULT" = "success" ]; then
           echo "## ✅ No vulnerable dependencies found!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "All Go dependencies passed nancy security checks." >> $GITHUB_STEP_SUMMARY
+        elif [ "$NANCY_RESULT" = "api_error" ]; then
+          echo "## ⚠️ OSS Index API Error" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Nancy could not complete the scan due to a Sonatype OSS Index API error." >> $GITHUB_STEP_SUMMARY
+          echo "This is typically a temporary service issue and not related to your dependencies." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### What to do" >> $GITHUB_STEP_SUMMARY
+          echo "- Wait and re-run the workflow later" >> $GITHUB_STEP_SUMMARY
+          echo "- Check [OSS Index status](https://ossindex.sonatype.org/)" >> $GITHUB_STEP_SUMMARY
+          echo "- govulncheck provides alternative vulnerability scanning" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Error Details" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          cat nancy-output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No output captured"
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         else
           echo "## ❌ Vulnerable dependencies detected!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -68,16 +104,18 @@ jobs:
           echo "5. Re-run this workflow to verify fixes" >> $GITHUB_STEP_SUMMARY
         fi
 
-    - name: Upload dependency list
+    - name: Upload scan results
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: nancy-dependency-list
-        path: go.list
+        name: nancy-scan-results
+        path: |
+          go.list
+          nancy-output.txt
         retention-days: 30
 
     - name: Create GitHub issue on vulnerability
-      if: steps.nancy-scan.outcome == 'failure' && github.event_name != 'pull_request'
+      if: env.NANCY_RESULT == 'vulnerabilities' && github.event_name != 'pull_request'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SERVER_URL: ${{ github.server_url }}
@@ -280,5 +318,14 @@ jobs:
         fi
 
     - name: Fail if vulnerabilities found
-      if: steps.nancy-scan.outcome == 'failure'
-      run: exit 1
+      if: env.NANCY_RESULT == 'vulnerabilities'
+      run: |
+        echo "::error::Nancy detected vulnerable Go dependencies. Review the scan results above."
+        exit 1
+
+    - name: Warn on API error (non-blocking)
+      if: env.NANCY_RESULT == 'api_error'
+      run: |
+        echo "::warning::Nancy scan could not complete due to OSS Index API error."
+        echo "This is a temporary external service issue - the workflow will not fail."
+        echo "Other security scanners (govulncheck, Trivy, gosec) continue to provide coverage."
