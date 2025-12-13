@@ -1,18 +1,14 @@
-# make _cluster Test Analysis
+# Phase 3: Cluster
 
-This directory contains detailed analysis of all tests executed by `make _cluster`.
-
----
-
-## Test Execution
-
-```bash
-make _cluster
-```
-
-Runs: `go test -v ./test -run TestKindCluster -timeout 30m`
+**Make target:** `make _cluster`
+**Test file:** `test/03_cluster_test.go`
+**Timeout:** 30 minutes
 
 ---
+
+## Purpose
+
+Deploy a Kind cluster with CAPI, CAPZ, and ASO controllers, then verify all controllers are ready.
 
 ## Test Summary
 
