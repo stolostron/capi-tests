@@ -110,8 +110,9 @@ func TestCheckDependencies_AzureCLILogin_IsLoggedIn(t *testing.T) {
 }
 
 // TestCheckDependencies_AzureEnvironment validates required Azure environment variables.
-// This test uses t.Fatalf() to stop execution immediately if validation fails,
-// preventing wasted time in later phases that would fail with cryptic errors.
+// If environment variables are not set, it attempts to auto-extract them from Azure CLI
+// (since TestCheckDependencies_AzureCLILogin_IsLoggedIn already verified login).
+// This provides seamless UX for users who are logged in with Azure CLI.
 func TestCheckDependencies_AzureEnvironment(t *testing.T) {
 	// Skip in CI environments where Azure env vars may not be set
 	if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
@@ -119,50 +120,87 @@ func TestCheckDependencies_AzureEnvironment(t *testing.T) {
 		return
 	}
 
-	// Track if any required variables are missing
+	// Track if any required variables are missing after auto-extraction attempt
 	var missingVars []string
 
-	// Check AZURE_TENANT_ID
+	// Check AZURE_TENANT_ID - try to auto-extract if not set
 	t.Run("AZURE_TENANT_ID", func(t *testing.T) {
-		if os.Getenv("AZURE_TENANT_ID") == "" {
-			missingVars = append(missingVars, "AZURE_TENANT_ID")
-			t.Errorf("Required environment variable AZURE_TENANT_ID is not set.\n\n" +
-				"To fix this, run:\n" +
-				"  export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)\n\n" +
-				"Or add it to your shell profile for persistence.")
-		} else {
-			t.Log("AZURE_TENANT_ID is set")
+		if os.Getenv("AZURE_TENANT_ID") != "" {
+			t.Log("AZURE_TENANT_ID is set via environment variable")
+			return
 		}
+
+		// Try to extract from Azure CLI
+		output, err := RunCommandQuiet(t, "az", "account", "show", "--query", "tenantId", "-o", "tsv")
+		if err != nil {
+			missingVars = append(missingVars, "AZURE_TENANT_ID")
+			t.Errorf("AZURE_TENANT_ID is not set and could not be extracted from Azure CLI.\n\n"+
+				"To fix this, run:\n"+
+				"  export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)\n\n"+
+				"Error: %v", err)
+			return
+		}
+
+		tenantID := strings.TrimSpace(output)
+		if tenantID == "" {
+			missingVars = append(missingVars, "AZURE_TENANT_ID")
+			t.Errorf("AZURE_TENANT_ID is not set and Azure CLI returned empty tenant ID.\n\n" +
+				"To fix this, run:\n" +
+				"  export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)")
+			return
+		}
+
+		// Auto-set the environment variable for subsequent tests
+		os.Setenv("AZURE_TENANT_ID", tenantID)
+		t.Logf("AZURE_TENANT_ID auto-extracted from Azure CLI: %s...%s", tenantID[:8], tenantID[len(tenantID)-4:])
 	})
 
-	// Check AZURE_SUBSCRIPTION_ID or AZURE_SUBSCRIPTION_NAME
+	// Check AZURE_SUBSCRIPTION_ID or AZURE_SUBSCRIPTION_NAME - try to auto-extract if not set
 	t.Run("AZURE_SUBSCRIPTION", func(t *testing.T) {
 		subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
 		subscriptionName := os.Getenv("AZURE_SUBSCRIPTION_NAME")
 
-		if subscriptionID == "" && subscriptionName == "" {
+		if subscriptionID != "" {
+			t.Log("AZURE_SUBSCRIPTION_ID is set via environment variable")
+			return
+		}
+		if subscriptionName != "" {
+			t.Log("AZURE_SUBSCRIPTION_NAME is set via environment variable")
+			return
+		}
+
+		// Try to extract subscription ID from Azure CLI
+		output, err := RunCommandQuiet(t, "az", "account", "show", "--query", "id", "-o", "tsv")
+		if err != nil {
 			missingVars = append(missingVars, "AZURE_SUBSCRIPTION_ID or AZURE_SUBSCRIPTION_NAME")
-			t.Errorf("Neither AZURE_SUBSCRIPTION_ID nor AZURE_SUBSCRIPTION_NAME is set.\n\n" +
+			t.Errorf("Neither AZURE_SUBSCRIPTION_ID nor AZURE_SUBSCRIPTION_NAME is set, "+
+				"and could not be extracted from Azure CLI.\n\n"+
+				"To fix this, run one of:\n"+
+				"  export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)\n"+
+				"  export AZURE_SUBSCRIPTION_NAME=$(az account show --query name -o tsv)\n\n"+
+				"Error: %v", err)
+			return
+		}
+
+		subID := strings.TrimSpace(output)
+		if subID == "" {
+			missingVars = append(missingVars, "AZURE_SUBSCRIPTION_ID or AZURE_SUBSCRIPTION_NAME")
+			t.Errorf("Neither AZURE_SUBSCRIPTION_ID nor AZURE_SUBSCRIPTION_NAME is set, " +
+				"and Azure CLI returned empty subscription ID.\n\n" +
 				"To fix this, run one of:\n" +
 				"  export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)\n" +
-				"  export AZURE_SUBSCRIPTION_NAME=$(az account show --query name -o tsv)\n\n" +
-				"Or add it to your shell profile for persistence.")
-		} else {
-			if subscriptionID != "" {
-				t.Log("AZURE_SUBSCRIPTION_ID is set")
-			}
-			if subscriptionName != "" {
-				t.Log("AZURE_SUBSCRIPTION_NAME is set")
-			}
+				"  export AZURE_SUBSCRIPTION_NAME=$(az account show --query name -o tsv)")
+			return
 		}
+
+		// Auto-set the environment variable for subsequent tests
+		os.Setenv("AZURE_SUBSCRIPTION_ID", subID)
+		t.Logf("AZURE_SUBSCRIPTION_ID auto-extracted from Azure CLI: %s...%s", subID[:8], subID[len(subID)-4:])
 	})
 
 	// If any required variables are missing, fail the overall test
-	// This uses t.Cleanup to run after subtests complete
 	t.Cleanup(func() {
 		if len(missingVars) > 0 {
-			// Note: We can't use t.Fatalf() in Cleanup, but the subtests already failed
-			// The test framework will report failures from the subtests
 			PrintToTTY("\n❌ Azure environment validation failed!\n")
 			PrintToTTY("Missing: %v\n", missingVars)
 			PrintToTTY("Run 'make test-all' only after setting required environment variables.\n\n")
