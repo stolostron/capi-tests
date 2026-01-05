@@ -492,3 +492,79 @@ nested:
 		})
 	}
 }
+
+func TestFormatAROControlPlaneConditions(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		contains []string // Substrings that should be in the output
+	}{
+		{
+			name:     "empty input",
+			input:    "",
+			contains: []string{"(no conditions available)"},
+		},
+		{
+			name:     "whitespace only",
+			input:    "   \n\t  ",
+			contains: []string{"(no conditions available)"},
+		},
+		{
+			name:     "single condition - True status",
+			input:    `[{"type":"Ready","status":"True"}]`,
+			contains: []string{"✅", "Ready:", "True"},
+		},
+		{
+			name:     "single condition - False status with reason",
+			input:    `[{"type":"Ready","status":"False","reason":"Reconciling"}]`,
+			contains: []string{"🔄", "Ready:", "False", "(Reconciling)"},
+		},
+		{
+			name: "multiple conditions - mixed status",
+			input: `[
+				{"type":"Ready","status":"False","reason":"Reconciling"},
+				{"type":"ResourceGroupReady","status":"True"},
+				{"type":"VNetReady","status":"True"},
+				{"type":"HcpClusterReady","status":"False","reason":"Provisioning"}
+			]`,
+			contains: []string{
+				"Ready:", "False",
+				"ResourceGroupReady:", "True", "✅",
+				"VNetReady:", "True",
+				"HcpClusterReady:", "False", "(Provisioning)",
+			},
+		},
+		{
+			name:     "full status object with conditions",
+			input:    `{"conditions":[{"type":"Ready","status":"True"},{"type":"VNetReady","status":"True"}],"ready":true}`,
+			contains: []string{"Ready:", "VNetReady:", "✅"},
+		},
+		{
+			name:     "empty conditions array",
+			input:    `[]`,
+			contains: []string{"(no conditions available)"},
+		},
+		{
+			name:     "invalid JSON",
+			input:    `not valid json`,
+			contains: []string{"(failed to parse conditions:"},
+		},
+		{
+			name:     "condition with unknown status",
+			input:    `[{"type":"SomeCondition","status":"Unknown"}]`,
+			contains: []string{"⏳", "SomeCondition:", "Unknown"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := FormatAROControlPlaneConditions(tt.input)
+
+			for _, substr := range tt.contains {
+				if !strings.Contains(result, substr) {
+					t.Errorf("FormatAROControlPlaneConditions() result = %q, expected to contain %q", result, substr)
+				}
+			}
+		})
+	}
+}

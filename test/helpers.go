@@ -1,6 +1,7 @@
 package test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -34,6 +35,26 @@ func RunCommand(t *testing.T, name string, args ...string) (string, error) {
 
 	// Also log to test output
 	t.Logf("Executing command: %s", cmdStr)
+
+	cmd := exec.Command(name, args...)
+	output, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(output)), err
+}
+
+// RunCommandQuiet executes a shell command without printing it to TTY.
+// Use this for repeated commands in loops where printing would clutter the output.
+// The command is still logged to test output for debugging purposes.
+func RunCommandQuiet(t *testing.T, name string, args ...string) (string, error) {
+	t.Helper()
+
+	// Build command string for logging
+	cmdStr := name
+	if len(args) > 0 {
+		cmdStr = fmt.Sprintf("%s %s", name, strings.Join(args, " "))
+	}
+
+	// Only log to test output (not TTY)
+	t.Logf("Executing command (quiet): %s", cmdStr)
 
 	cmd := exec.Command(name, args...)
 	output, err := cmd.CombinedOutput()
@@ -372,6 +393,65 @@ func ExtractClusterNameFromYAML(filePath string) (string, error) {
 	}
 
 	return "", fmt.Errorf("no Cluster resource found in %s", filePath)
+}
+
+// AROControlPlaneCondition represents a condition from the AROControlPlane status
+type AROControlPlaneCondition struct {
+	Type    string `json:"type"`
+	Status  string `json:"status"`
+	Reason  string `json:"reason,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+// FormatAROControlPlaneConditions formats AROControlPlane conditions for display.
+// It parses the JSON output from kubectl and returns a formatted string showing
+// the status of each condition with visual indicators.
+func FormatAROControlPlaneConditions(jsonData string) string {
+	if strings.TrimSpace(jsonData) == "" {
+		return "  (no conditions available)"
+	}
+
+	// Parse the JSON - it could be a full status object or just conditions array
+	var conditions []AROControlPlaneCondition
+
+	// Try parsing as conditions array first
+	if err := json.Unmarshal([]byte(jsonData), &conditions); err != nil {
+		// Try parsing as status object with conditions field
+		var status struct {
+			Conditions []AROControlPlaneCondition `json:"conditions"`
+		}
+		if err := json.Unmarshal([]byte(jsonData), &status); err != nil {
+			return fmt.Sprintf("  (failed to parse conditions: %v)", err)
+		}
+		conditions = status.Conditions
+	}
+
+	if len(conditions) == 0 {
+		return "  (no conditions available)"
+	}
+
+	var result strings.Builder
+	for _, cond := range conditions {
+		// Determine the icon based on status
+		icon := "⏳" // pending/unknown
+		if cond.Status == "True" {
+			icon = "✅"
+		} else if cond.Status == "False" {
+			icon = "🔄"
+		}
+
+		// Format the condition line
+		result.WriteString(fmt.Sprintf("  %s %s: %s", icon, cond.Type, cond.Status))
+
+		// Add reason if available and status is not True
+		if cond.Status != "True" && cond.Reason != "" {
+			result.WriteString(fmt.Sprintf(" (%s)", cond.Reason))
+		}
+
+		result.WriteString("\n")
+	}
+
+	return result.String()
 }
 
 // ValidateYAMLFile validates that a file contains valid YAML.

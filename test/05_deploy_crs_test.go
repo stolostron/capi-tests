@@ -299,6 +299,14 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 			}
 		}
 
+		// Fetch and display AROControlPlane conditions for better visibility
+		conditionsOutput, condErr := RunCommandQuiet(t, "kubectl", "--context", context, "get",
+			"arocontrolplane", "-A", "-o", "jsonpath={.items[0].status.conditions}")
+		if condErr == nil && strings.TrimSpace(conditionsOutput) != "" {
+			PrintToTTY("[%d] 📋 AROControlPlane conditions:\n", iteration)
+			PrintToTTY("%s", FormatAROControlPlaneConditions(conditionsOutput))
+		}
+
 		// Report progress using helper function
 		ReportProgress(t, iteration, elapsed, remaining, timeout)
 
