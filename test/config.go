@@ -110,3 +110,28 @@ func parseDeploymentTimeout() time.Duration {
 func (c *TestConfig) GetOutputDirName() string {
 	return fmt.Sprintf("%s-%s", c.WorkloadClusterName, c.Environment)
 }
+
+// GetProvisionedClusterName returns the actual cluster name from the generated aro.yaml file.
+// This is the name defined in the Cluster resource's metadata.name field, which may differ
+// from WorkloadClusterName (the local configuration). Use this when interacting with
+// the provisioned cluster via kubectl commands.
+//
+// Returns the extracted cluster name or WorkloadClusterName as fallback if aro.yaml
+// doesn't exist yet (e.g., before YAML generation phase).
+func (c *TestConfig) GetProvisionedClusterName() string {
+	aroYAMLPath := fmt.Sprintf("%s/%s/aro.yaml", c.RepoDir, c.GetOutputDirName())
+
+	name, err := ExtractClusterNameFromYAML(aroYAMLPath)
+	if err != nil {
+		// Fall back to WorkloadClusterName if aro.yaml doesn't exist or can't be parsed
+		// This allows earlier phases (before YAML generation) to still work
+		return c.WorkloadClusterName
+	}
+
+	return name
+}
+
+// GetAROYAMLPath returns the path to the generated aro.yaml file
+func (c *TestConfig) GetAROYAMLPath() string {
+	return fmt.Sprintf("%s/%s/aro.yaml", c.RepoDir, c.GetOutputDirName())
+}

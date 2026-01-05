@@ -113,6 +113,211 @@ func TestIsKubectlApplySuccess(t *testing.T) {
 	}
 }
 
+func TestExtractClusterNameFromYAML(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir := t.TempDir()
+
+	tests := []struct {
+		name        string
+		setupFile   func(t *testing.T) string // Returns file path
+		expected    string
+		expectError bool
+		errorMsg    string // Substring to match in error message
+	}{
+		{
+			name: "valid cluster resource",
+			setupFile: func(t *testing.T) string {
+				path := filepath.Join(tmpDir, "valid-cluster.yaml")
+				content := []byte(`---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: mveber-stage
+  namespace: default
+`)
+				if err := os.WriteFile(path, content, 0644); err != nil {
+					t.Fatalf("Failed to create test file: %v", err)
+				}
+				return path
+			},
+			expected:    "mveber-stage",
+			expectError: false,
+		},
+		{
+			name: "multi-document YAML with Cluster resource",
+			setupFile: func(t *testing.T) string {
+				path := filepath.Join(tmpDir, "multi-doc.yaml")
+				content := []byte(`---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: some-secret
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: my-cluster
+  namespace: default
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: AzureCluster
+metadata:
+  name: my-cluster
+`)
+				if err := os.WriteFile(path, content, 0644); err != nil {
+					t.Fatalf("Failed to create test file: %v", err)
+				}
+				return path
+			},
+			expected:    "my-cluster",
+			expectError: false,
+		},
+		{
+			name: "no Cluster resource in file",
+			setupFile: func(t *testing.T) string {
+				path := filepath.Join(tmpDir, "no-cluster.yaml")
+				content := []byte(`---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-config
+`)
+				if err := os.WriteFile(path, content, 0644); err != nil {
+					t.Fatalf("Failed to create test file: %v", err)
+				}
+				return path
+			},
+			expected:    "",
+			expectError: true,
+			errorMsg:    "no Cluster resource found",
+		},
+		{
+			name: "wrong apiVersion for Cluster",
+			setupFile: func(t *testing.T) string {
+				path := filepath.Join(tmpDir, "wrong-api.yaml")
+				content := []byte(`---
+apiVersion: v1
+kind: Cluster
+metadata:
+  name: wrong-cluster
+`)
+				if err := os.WriteFile(path, content, 0644); err != nil {
+					t.Fatalf("Failed to create test file: %v", err)
+				}
+				return path
+			},
+			expected:    "",
+			expectError: true,
+			errorMsg:    "no Cluster resource found",
+		},
+		{
+			name: "Cluster with v1beta1 apiVersion",
+			setupFile: func(t *testing.T) string {
+				path := filepath.Join(tmpDir, "v1beta1-cluster.yaml")
+				content := []byte(`---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: old-cluster
+  namespace: default
+`)
+				if err := os.WriteFile(path, content, 0644); err != nil {
+					t.Fatalf("Failed to create test file: %v", err)
+				}
+				return path
+			},
+			expected:    "old-cluster",
+			expectError: false,
+		},
+		{
+			name: "empty file",
+			setupFile: func(t *testing.T) string {
+				path := filepath.Join(tmpDir, "empty.yaml")
+				if err := os.WriteFile(path, []byte{}, 0644); err != nil {
+					t.Fatalf("Failed to create test file: %v", err)
+				}
+				return path
+			},
+			expected:    "",
+			expectError: true,
+			errorMsg:    "no Cluster resource found",
+		},
+		{
+			name: "non-existent file",
+			setupFile: func(t *testing.T) string {
+				return filepath.Join(tmpDir, "does-not-exist.yaml")
+			},
+			expected:    "",
+			expectError: true,
+			errorMsg:    "file not accessible",
+		},
+		{
+			name: "Cluster without metadata.name",
+			setupFile: func(t *testing.T) string {
+				path := filepath.Join(tmpDir, "no-name.yaml")
+				content := []byte(`---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  namespace: default
+`)
+				if err := os.WriteFile(path, content, 0644); err != nil {
+					t.Fatalf("Failed to create test file: %v", err)
+				}
+				return path
+			},
+			expected:    "",
+			expectError: true,
+			errorMsg:    "no Cluster resource found",
+		},
+		{
+			name: "Cluster with empty metadata.name",
+			setupFile: func(t *testing.T) string {
+				path := filepath.Join(tmpDir, "empty-name.yaml")
+				content := []byte(`---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: ""
+  namespace: default
+`)
+				if err := os.WriteFile(path, content, 0644); err != nil {
+					t.Fatalf("Failed to create test file: %v", err)
+				}
+				return path
+			},
+			expected:    "",
+			expectError: true,
+			errorMsg:    "no Cluster resource found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filePath := tt.setupFile(t)
+			result, err := ExtractClusterNameFromYAML(filePath)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("ExtractClusterNameFromYAML(%q) expected error containing %q, got nil", filePath, tt.errorMsg)
+					return
+				}
+				if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("ExtractClusterNameFromYAML(%q) error = %q, expected to contain %q", filePath, err.Error(), tt.errorMsg)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("ExtractClusterNameFromYAML(%q) unexpected error: %v", filePath, err)
+					return
+				}
+				if result != tt.expected {
+					t.Errorf("ExtractClusterNameFromYAML(%q) = %q, expected %q", filePath, result, tt.expected)
+				}
+			}
+		})
+	}
+}
+
 func TestValidateYAMLFile(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir := t.TempDir()

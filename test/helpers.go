@@ -302,6 +302,78 @@ func IsKubectlApplySuccess(output string) bool {
 	return false
 }
 
+// ExtractClusterNameFromYAML extracts the cluster name from a multi-document YAML file.
+// It looks for a document with kind: Cluster (cluster.x-k8s.io/v1beta2) and returns
+// its metadata.name field. This is used to get the actual provisioned cluster name
+// from the generated aro.yaml file, which may differ from WORKLOAD_CLUSTER_NAME.
+//
+// Example YAML:
+//
+//	---
+//	apiVersion: cluster.x-k8s.io/v1beta2
+//	kind: Cluster
+//	metadata:
+//	  name: mveber-stage
+//	  namespace: default
+//
+// Returns the cluster name or an error if not found.
+func ExtractClusterNameFromYAML(filePath string) (string, error) {
+	// Check if file exists
+	if _, err := os.Stat(filePath); err != nil {
+		return "", fmt.Errorf("file not accessible: %w", err)
+	}
+
+	// Read file contents
+	// #nosec G304 - filePath comes from test configuration
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Split by document separator and parse each document
+	docs := strings.Split(string(data), "---")
+	for _, doc := range docs {
+		doc = strings.TrimSpace(doc)
+		if doc == "" {
+			continue
+		}
+
+		// Parse the YAML document
+		var content map[string]interface{}
+		if err := yaml.Unmarshal([]byte(doc), &content); err != nil {
+			// Skip documents that don't parse as objects
+			continue
+		}
+
+		// Check if this is a Cluster resource
+		kind, ok := content["kind"].(string)
+		if !ok || kind != "Cluster" {
+			continue
+		}
+
+		// Verify it's the CAPI Cluster type (cluster.x-k8s.io)
+		apiVersion, ok := content["apiVersion"].(string)
+		if !ok || !strings.HasPrefix(apiVersion, "cluster.x-k8s.io/") {
+			continue
+		}
+
+		// Extract metadata.name
+		metadata, ok := content["metadata"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, ok := metadata["name"].(string)
+		if !ok || name == "" {
+			continue
+		}
+
+		return name, nil
+	}
+
+	return "", fmt.Errorf("no Cluster resource found in %s", filePath)
+}
+
 // ValidateYAMLFile validates that a file contains valid YAML.
 // Returns an error if the file is empty, unreadable, or contains invalid YAML syntax.
 // This is more robust than just checking file size, as it verifies YAML structure.

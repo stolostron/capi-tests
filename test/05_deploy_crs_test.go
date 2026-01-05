@@ -212,13 +212,15 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 	SetEnvVar(t, "KUBECONFIG", fmt.Sprintf("%s/.kube/config", os.Getenv("HOME")))
 
 	// First, check if cluster resource exists
+	// Use the provisioned cluster name from aro.yaml, not WORKLOAD_CLUSTER_NAME
+	provisionedClusterName := config.GetProvisionedClusterName()
 	PrintToTTY("\n=== Monitoring cluster deployment ===\n")
-	PrintToTTY("Cluster: %s\n", config.WorkloadClusterName)
+	PrintToTTY("Cluster: %s\n", provisionedClusterName)
 	PrintToTTY("Context: %s\n", context)
 	PrintToTTY("\nChecking if cluster resource exists...\n")
-	t.Logf("Checking for cluster resource: %s", config.WorkloadClusterName)
+	t.Logf("Checking for cluster resource: %s", provisionedClusterName)
 
-	output, err := RunCommand(t, "kubectl", "--context", context, "get", "cluster", config.WorkloadClusterName)
+	output, err := RunCommand(t, "kubectl", "--context", context, "get", "cluster", provisionedClusterName)
 	if err != nil {
 		PrintToTTY("⚠️  Cluster resource not found (may not be deployed yet)\n\n")
 		t.Skipf("Cluster resource not found (may not be deployed yet): %v", err)
@@ -229,11 +231,11 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 
 	// Use clusterctl to describe the cluster
 	PrintToTTY("\n📊 Fetching cluster status with clusterctl...\n")
-	PrintToTTY("Running: %s describe cluster %s --show-conditions=all\n", clusterctlPath, config.WorkloadClusterName)
+	PrintToTTY("Running: %s describe cluster %s --show-conditions=all\n", clusterctlPath, provisionedClusterName)
 	PrintToTTY("This may take a few moments...\n")
 	t.Logf("Monitoring cluster deployment status using clusterctl...")
 
-	output, err = RunCommand(t, clusterctlPath, "describe", "cluster", config.WorkloadClusterName, "--show-conditions=all")
+	output, err = RunCommand(t, clusterctlPath, "describe", "cluster", provisionedClusterName, "--show-conditions=all")
 	if err != nil {
 		PrintToTTY("\n⚠️  clusterctl describe failed (cluster may still be initializing)\n")
 		PrintToTTY("Error: %v\n\n", err)
@@ -310,14 +312,17 @@ func TestDeployment_CheckClusterConditions(t *testing.T) {
 	config := NewTestConfig()
 	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
 
+	// Use the provisioned cluster name from aro.yaml
+	provisionedClusterName := config.GetProvisionedClusterName()
+
 	PrintToTTY("\n=== Checking cluster conditions ===\n")
-	PrintToTTY("Cluster: %s\n\n", config.WorkloadClusterName)
+	PrintToTTY("Cluster: %s\n\n", provisionedClusterName)
 	t.Log("Checking cluster conditions...")
 
 	// Check cluster status
 	PrintToTTY("Fetching cluster status...\n")
 
-	output, err := RunCommand(t, "kubectl", "--context", context, "get", "cluster", config.WorkloadClusterName, "-o", "yaml")
+	output, err := RunCommand(t, "kubectl", "--context", context, "get", "cluster", provisionedClusterName, "-o", "yaml")
 	if err != nil {
 		PrintToTTY("❌ Failed to get cluster status: %v\n\n", err)
 		t.Errorf("Failed to get cluster status: %v", err)
@@ -338,7 +343,7 @@ func TestDeployment_CheckClusterConditions(t *testing.T) {
 	// Check for infrastructure ready condition
 	PrintToTTY("Checking InfrastructureReady condition...\n")
 
-	output, err = RunCommand(t, "kubectl", "--context", context, "get", "cluster", config.WorkloadClusterName,
+	output, err = RunCommand(t, "kubectl", "--context", context, "get", "cluster", provisionedClusterName,
 		"-o", "jsonpath={.status.conditions[?(@.type=='InfrastructureReady')].status}")
 
 	if err == nil && strings.TrimSpace(output) != "" {
@@ -349,7 +354,7 @@ func TestDeployment_CheckClusterConditions(t *testing.T) {
 	// Check for control plane ready condition
 	PrintToTTY("Checking ControlPlaneReady condition...\n")
 
-	output, err = RunCommand(t, "kubectl", "--context", context, "get", "cluster", config.WorkloadClusterName,
+	output, err = RunCommand(t, "kubectl", "--context", context, "get", "cluster", provisionedClusterName,
 		"-o", "jsonpath={.status.conditions[?(@.type=='ControlPlaneReady')].status}")
 
 	if err == nil && strings.TrimSpace(output) != "" {
