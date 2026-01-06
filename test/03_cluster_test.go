@@ -259,6 +259,100 @@ func TestKindCluster_CAPZControllerReady(t *testing.T) {
 	}
 }
 
+// TestKindCluster_ASOCredentialsConfigured validates that the ASO controller has Azure credentials configured.
+// This test runs BEFORE waiting for ASO to become available, providing fast failure and clear error messages
+// if credentials are missing (instead of waiting 10 minutes for timeout).
+func TestKindCluster_ASOCredentialsConfigured(t *testing.T) {
+	PrintTestHeader(t, "TestKindCluster_ASOCredentialsConfigured",
+		"Validate Azure credentials are configured in aso-controller-settings secret")
+
+	config := NewTestConfig()
+	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
+
+	PrintToTTY("\n=== Validating ASO credentials configuration ===\n")
+	PrintToTTY("Namespace: capz-system\n")
+	PrintToTTY("Secret: aso-controller-settings\n\n")
+
+	// Check if secret exists
+	PrintToTTY("Checking if aso-controller-settings secret exists...\n")
+	_, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", "capz-system",
+		"get", "secret", "aso-controller-settings")
+	if err != nil {
+		PrintToTTY("❌ Secret 'aso-controller-settings' not found in capz-system namespace\n")
+		PrintToTTY("\nThe deployment script did not create the ASO credentials secret.\n")
+		PrintToTTY("Please check that the cluster-api-installer deployment completed successfully.\n\n")
+		t.Fatalf("aso-controller-settings secret not found: %v", err)
+		return
+	}
+	PrintToTTY("✅ Secret exists\n\n")
+
+	// Required credential fields to validate
+	requiredFields := []string{
+		"AZURE_TENANT_ID",
+		"AZURE_SUBSCRIPTION_ID",
+	}
+
+	// At least one of these auth methods must be configured
+	authFields := []string{
+		"AZURE_CLIENT_ID",
+		"AZURE_CLIENT_SECRET",
+	}
+
+	PrintToTTY("Checking required credential fields...\n")
+	var missingFields []string
+
+	for _, field := range requiredFields {
+		output, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", "capz-system",
+			"get", "secret", "aso-controller-settings",
+			"-o", fmt.Sprintf("jsonpath={.data.%s}", field))
+
+		if err != nil || strings.TrimSpace(output) == "" {
+			missingFields = append(missingFields, field)
+			PrintToTTY("  ❌ %s: MISSING or EMPTY\n", field)
+		} else {
+			PrintToTTY("  ✅ %s: configured\n", field)
+		}
+	}
+
+	// Check authentication method
+	PrintToTTY("\nChecking authentication configuration...\n")
+	authConfigured := false
+	for _, field := range authFields {
+		output, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", "capz-system",
+			"get", "secret", "aso-controller-settings",
+			"-o", fmt.Sprintf("jsonpath={.data.%s}", field))
+
+		if err == nil && strings.TrimSpace(output) != "" {
+			authConfigured = true
+			PrintToTTY("  ✅ %s: configured\n", field)
+		} else {
+			PrintToTTY("  ⚪ %s: not set\n", field)
+		}
+	}
+
+	if !authConfigured {
+		missingFields = append(missingFields, "AZURE_CLIENT_ID or AZURE_CLIENT_SECRET")
+	}
+
+	// Report results
+	if len(missingFields) > 0 {
+		PrintToTTY("\n❌ ASO credentials validation FAILED\n")
+		PrintToTTY("Missing fields: %v\n\n", missingFields)
+		PrintToTTY("The deployment script did not populate Azure credentials.\n")
+		PrintToTTY("Please ensure:\n")
+		PrintToTTY("  1. Azure CLI is logged in: az login\n")
+		PrintToTTY("  2. Environment variables are set:\n")
+		PrintToTTY("     export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)\n")
+		PrintToTTY("     export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)\n")
+		PrintToTTY("  3. Re-run the deployment script\n\n")
+		t.Fatalf("ASO credentials not configured: missing %v", missingFields)
+		return
+	}
+
+	PrintToTTY("\n✅ ASO credentials validation PASSED\n\n")
+	t.Log("ASO credentials are properly configured")
+}
+
 // TestKindCluster_ASOControllerReady waits for Azure Service Operator controller to be ready
 func TestKindCluster_ASOControllerReady(t *testing.T) {
 	PrintTestHeader(t, "TestKindCluster_ASOControllerReady",
