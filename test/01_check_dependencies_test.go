@@ -241,6 +241,47 @@ func TestCheckDependencies_Kind_IsAvailable(t *testing.T) {
 	t.Logf("Kind version: %s", output)
 }
 
+// TestCheckDependencies_Clusterctl_IsAvailable checks if clusterctl is available.
+// clusterctl is used in later test phases for cluster monitoring and kubeconfig retrieval.
+// If not found in system PATH, it will be expected from cluster-api-installer's bin directory.
+func TestCheckDependencies_Clusterctl_IsAvailable(t *testing.T) {
+	if CommandExists("clusterctl") {
+		output, err := RunCommand(t, "clusterctl", "version")
+		if err != nil {
+			t.Logf("clusterctl found but version check failed: %v", err)
+			return
+		}
+		t.Logf("clusterctl version: %s", strings.TrimSpace(output))
+		return
+	}
+
+	// clusterctl not in PATH - warn user but don't fail
+	// It may be provided by cluster-api-installer's bin directory
+	var installInstructions string
+	switch runtime.GOOS {
+	case "darwin":
+		installInstructions = "To install clusterctl on macOS:\n" +
+			"  brew install clusterctl\n\n" +
+			"Or manually:\n" +
+			"  curl -L https://github.com/kubernetes-sigs/cluster-api/releases/latest/download/clusterctl-darwin-arm64 -o /usr/local/bin/clusterctl\n" +
+			"  chmod +x /usr/local/bin/clusterctl"
+	case "linux":
+		installInstructions = "To install clusterctl on Linux:\n" +
+			"  curl -L https://github.com/kubernetes-sigs/cluster-api/releases/latest/download/clusterctl-linux-amd64 -o /usr/local/bin/clusterctl\n" +
+			"  chmod +x /usr/local/bin/clusterctl"
+	default:
+		installInstructions = "To install clusterctl:\n" +
+			"  See https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl"
+	}
+
+	t.Logf("clusterctl not found in system PATH.\n\n"+
+		"clusterctl is required for cluster monitoring (TestDeployment_MonitorCluster) and\n"+
+		"kubeconfig retrieval (TestVerification_GetKubeconfig).\n\n"+
+		"It will be looked for in cluster-api-installer's bin directory during test execution.\n"+
+		"If not available there either, those tests will be skipped.\n\n"+
+		"%s", installInstructions)
+}
+
 // TestCheckDependencies_DockerCredentialHelper checks that any Docker credential helpers
 // configured in the Docker config file (credsStore or credHelpers) are available in PATH.
 // Only runs on macOS, where missing credential helpers are a common issue with Docker Desktop alternatives.
