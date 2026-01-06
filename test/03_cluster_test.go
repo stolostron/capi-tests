@@ -313,3 +313,99 @@ func TestKindCluster_ASOControllerReady(t *testing.T) {
 		time.Sleep(pollInterval)
 	}
 }
+
+// TestKindCluster_WebhooksReady waits for all admission webhooks to be responsive
+func TestKindCluster_WebhooksReady(t *testing.T) {
+	PrintTestHeader(t, "TestKindCluster_WebhooksReady",
+		"Wait for CAPI/CAPZ/ASO webhooks to accept connections (timeout: 5m)")
+
+	config := NewTestConfig()
+	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
+
+	// Define webhooks to check
+	type webhookInfo struct {
+		name      string
+		namespace string
+		service   string
+	}
+
+	webhooks := []webhookInfo{
+		{"CAPI", "capi-system", "capi-webhook-service"},
+		{"CAPZ", "capz-system", "capz-webhook-service"},
+		{"ASO", "capz-system", "azureserviceoperator-webhook-service"},
+	}
+
+	timeout := 5 * time.Minute
+	pollInterval := 5 * time.Second
+
+	PrintToTTY("\n=== Checking webhook readiness ===\n")
+	PrintToTTY("Webhooks to verify: %d\n", len(webhooks))
+	PrintToTTY("Timeout per webhook: %v | Poll interval: %v\n\n", timeout, pollInterval)
+
+	for _, wh := range webhooks {
+		startTime := time.Now()
+		iteration := 0
+
+		PrintToTTY("\n--- Checking %s webhook ---\n", wh.name)
+		PrintToTTY("Service: %s.%s.svc:443\n", wh.service, wh.namespace)
+
+		for {
+			elapsed := time.Since(startTime)
+			remaining := timeout - elapsed
+
+			if elapsed > timeout {
+				PrintToTTY("\n❌ Timeout waiting for %s webhook after %v\n", wh.name, elapsed.Round(time.Second))
+				t.Errorf("Timeout waiting for %s webhook to be responsive", wh.name)
+				break
+			}
+
+			iteration++
+
+			// First check if endpoint exists and has addresses
+			endpointOutput, err := RunCommandQuiet(t, "kubectl", "--context", context,
+				"get", "endpoints", wh.service, "-n", wh.namespace,
+				"-o", "jsonpath={.subsets[0].addresses[0].ip}")
+
+			if err != nil || strings.TrimSpace(endpointOutput) == "" {
+				PrintToTTY("[%d] ⏳ Waiting for %s endpoint to have addresses...\n", iteration, wh.name)
+				time.Sleep(pollInterval)
+				continue
+			}
+
+			PrintToTTY("[%d] 📊 %s endpoint IP: %s\n", iteration, wh.name, strings.TrimSpace(endpointOutput))
+
+			// Test actual HTTPS connectivity using a temporary pod
+			// We use --rm and --restart=Never to create an ephemeral pod that cleans up after itself
+			// The curl command tests if the webhook server is accepting HTTPS connections
+			curlURL := fmt.Sprintf("https://%s.%s.svc:443/", wh.service, wh.namespace)
+
+			// Use a unique pod name to avoid conflicts
+			podName := fmt.Sprintf("webhook-test-%d", time.Now().UnixNano())
+
+			output, err := RunCommandQuiet(t, "kubectl", "--context", context,
+				"run", podName, "--rm", "-i", "--restart=Never",
+				"--image=curlimages/curl:latest", "--",
+				"curl", "-k", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+				"--connect-timeout", "3", "--max-time", "5", curlURL)
+
+			if err == nil {
+				httpCode := strings.TrimSpace(output)
+				// Any HTTP response (even 400, 404, 405) means the webhook server is listening
+				// 000 means connection failed
+				if httpCode != "" && httpCode != "000" {
+					PrintToTTY("[%d] ✅ %s webhook is responsive (HTTP %s) - took %v\n",
+						iteration, wh.name, httpCode, elapsed.Round(time.Second))
+					t.Logf("%s webhook is responsive (HTTP %s)", wh.name, httpCode)
+					break
+				}
+			}
+
+			PrintToTTY("[%d] ⏳ %s webhook not ready yet (connection failed), retrying...\n", iteration, wh.name)
+			ReportProgress(t, iteration, elapsed, remaining, timeout)
+			time.Sleep(pollInterval)
+		}
+	}
+
+	PrintToTTY("\n=== Webhook readiness check complete ===\n\n")
+	t.Log("All webhook readiness checks completed")
+}
