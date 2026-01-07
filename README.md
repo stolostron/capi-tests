@@ -54,6 +54,33 @@ Target usage of this test suite will be:
 - Access to Azure subscription for ARO deployment
 - Authenticated via `az login`
 
+### Azure CLI with Python Virtual Environment
+
+If your system Python is incompatible with Azure CLI (e.g., Fedora 43 with Python 3.14), you can run Azure CLI from a virtual environment:
+
+1. **Install a compatible Python version and create venv:**
+   ```bash
+   # Fedora
+   sudo dnf install python3.12
+   python3.12 -m venv ~/.az-venv
+   ~/.az-venv/bin/pip install azure-cli
+
+   # Ubuntu/Debian
+   sudo apt install python3.12 python3.12-venv
+   python3.12 -m venv ~/.az-venv
+   ~/.az-venv/bin/pip install azure-cli
+   ```
+
+2. **Configure tests to use the venv:**
+   ```bash
+   export AZ_COMMAND="$HOME/.az-venv/bin/az"
+   ```
+
+3. **Run tests as usual:**
+   ```bash
+   make test
+   ```
+
 ## Configuration
 
 Tests are configured via environment variables:
