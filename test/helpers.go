@@ -608,6 +608,180 @@ func ValidateDomainPrefix(user, environment string) error {
 	return nil
 }
 
+// DefaultHealthCheckTimeout is the default timeout for cluster health checks
+const DefaultHealthCheckTimeout = 2 * time.Minute
+
+// DefaultApplyMaxRetries is the default maximum number of retries for kubectl apply
+const DefaultApplyMaxRetries = 5
+
+// DefaultApplyRetryDelay is the initial delay between kubectl apply retries
+const DefaultApplyRetryDelay = 10 * time.Second
+
+// WaitForClusterHealthy checks if the Kind cluster API server is responsive.
+// It performs a simple kubectl get nodes command to verify connectivity.
+// This function retries with exponential backoff until the cluster responds or timeout is reached.
+//
+// Use this before applying CRs after a long controller startup period, as the API server
+// may become temporarily unresponsive due to resource exhaustion or network issues.
+func WaitForClusterHealthy(t *testing.T, kubeContext string, timeout time.Duration) error {
+	t.Helper()
+
+	if timeout == 0 {
+		timeout = DefaultHealthCheckTimeout
+	}
+
+	startTime := time.Now()
+	attempt := 0
+	baseDelay := 5 * time.Second
+
+	PrintToTTY("\n=== Checking cluster health ===\n")
+	PrintToTTY("Context: %s | Timeout: %v\n", kubeContext, timeout)
+	t.Logf("Checking cluster health (context: %s, timeout: %v)", kubeContext, timeout)
+
+	for {
+		attempt++
+		elapsed := time.Since(startTime)
+
+		if elapsed > timeout {
+			PrintToTTY("❌ Cluster health check timed out after %v\n\n", elapsed.Round(time.Second))
+			return fmt.Errorf("cluster health check timed out after %v", elapsed.Round(time.Second))
+		}
+
+		// Try a simple kubectl command to check API server responsiveness
+		PrintToTTY("[%d] Checking API server responsiveness...\n", attempt)
+
+		_, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "get", "nodes", "--request-timeout=10s")
+		if err == nil {
+			PrintToTTY("✅ Cluster is healthy and responding\n\n")
+			t.Log("Cluster is healthy and responding")
+			return nil
+		}
+
+		// Calculate next delay with exponential backoff (capped at 30 seconds)
+		delay := baseDelay * time.Duration(attempt)
+		if delay > 30*time.Second {
+			delay = 30 * time.Second
+		}
+
+		remaining := timeout - elapsed
+		if delay > remaining {
+			delay = remaining
+		}
+
+		PrintToTTY("[%d] ⚠️  API server not responding: %v\n", attempt, err)
+		PrintToTTY("[%d] ⏳ Retrying in %v (elapsed: %v, remaining: %v)\n", attempt, delay.Round(time.Second), elapsed.Round(time.Second), remaining.Round(time.Second))
+		t.Logf("Cluster health check failed (attempt %d): %v, retrying in %v", attempt, err, delay.Round(time.Second))
+
+		time.Sleep(delay)
+	}
+}
+
+// ApplyWithRetry applies a YAML file using kubectl with retry logic and exponential backoff.
+// This is useful when the API server may be temporarily unresponsive after long controller
+// startup periods.
+//
+// Parameters:
+//   - t: testing context
+//   - kubeContext: kubectl context to use
+//   - yamlPath: path to the YAML file to apply
+//   - maxRetries: maximum number of retry attempts (use 0 for default of 5)
+//
+// Returns nil on success, or an error if all retries are exhausted.
+func ApplyWithRetry(t *testing.T, kubeContext, yamlPath string, maxRetries int) error {
+	t.Helper()
+
+	if maxRetries <= 0 {
+		maxRetries = DefaultApplyMaxRetries
+	}
+
+	baseDelay := DefaultApplyRetryDelay
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		PrintToTTY("[%d/%d] Applying %s...\n", attempt, maxRetries, yamlPath)
+		t.Logf("Applying %s (attempt %d/%d)", yamlPath, attempt, maxRetries)
+
+		output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "apply", "-f", yamlPath)
+
+		// Check if apply was successful
+		if err == nil || IsKubectlApplySuccess(output) {
+			PrintToTTY("✅ Successfully applied %s\n", yamlPath)
+			t.Logf("Successfully applied %s", yamlPath)
+			return nil
+		}
+
+		// Determine if error is retryable
+		if !isRetryableKubectlError(output, err) {
+			PrintToTTY("❌ Non-retryable error applying %s: %v\n", yamlPath, err)
+			t.Logf("Non-retryable error applying %s: %v\nOutput: %s", yamlPath, err, output)
+			return fmt.Errorf("failed to apply %s: %w\nOutput: %s", yamlPath, err, output)
+		}
+
+		// Don't sleep after last attempt
+		if attempt < maxRetries {
+			// Exponential backoff: 10s, 20s, 40s, 60s (capped)
+			delay := baseDelay * time.Duration(attempt)
+			if delay > 60*time.Second {
+				delay = 60 * time.Second
+			}
+
+			PrintToTTY("[%d/%d] ⚠️  Retryable error: %v\n", attempt, maxRetries, err)
+			PrintToTTY("[%d/%d] ⏳ Waiting %v before retry...\n", attempt, maxRetries, delay.Round(time.Second))
+			t.Logf("Apply failed (attempt %d/%d): %v, retrying in %v", attempt, maxRetries, err, delay.Round(time.Second))
+
+			time.Sleep(delay)
+		} else {
+			PrintToTTY("❌ Failed to apply %s after %d attempts: %v\n", yamlPath, maxRetries, err)
+			t.Logf("Failed to apply %s after %d attempts: %v\nOutput: %s", yamlPath, maxRetries, err, output)
+			return fmt.Errorf("failed to apply %s after %d attempts: %w\nOutput: %s", yamlPath, maxRetries, err, output)
+		}
+	}
+
+	// This should never be reached, but just in case
+	return fmt.Errorf("failed to apply %s: exhausted all retries", yamlPath)
+}
+
+// isRetryableKubectlError determines if a kubectl error is retryable.
+// Returns true for transient errors like connection issues, timeouts, and server unavailability.
+func isRetryableKubectlError(output string, err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Combine error message and output for checking
+	combined := strings.ToLower(output + " " + err.Error())
+
+	// Retryable error patterns (transient issues)
+	retryablePatterns := []string{
+		"connection refused",
+		"was refused",
+		"connection reset",
+		"connection lost",
+		"client connection lost",
+		"tls handshake timeout",
+		"i/o timeout",
+		"net/http",
+		"context deadline exceeded",
+		"server unavailable",
+		"service unavailable",
+		"gateway timeout",
+		"too many requests",
+		"internal server error",
+		"http2",
+		"dial tcp",
+		"no such host",
+		"temporary failure",
+		"connection timed out",
+	}
+
+	for _, pattern := range retryablePatterns {
+		if strings.Contains(combined, pattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // ValidateYAMLFile validates that a file contains valid YAML.
 // Returns an error if the file is empty, unreadable, or contains invalid YAML syntax.
 // This is more robust than just checking file size, as it verifies YAML structure.

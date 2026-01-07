@@ -1,10 +1,12 @@
 package test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestIsKubectlApplySuccess(t *testing.T) {
@@ -723,5 +725,177 @@ func TestValidateDomainPrefix_MaxLength(t *testing.T) {
 	err = ValidateDomainPrefix("12345678901", "abcd")
 	if err == nil {
 		t.Error("ValidateDomainPrefix at 16 chars should fail, got nil")
+	}
+}
+
+func TestIsRetryableKubectlError(t *testing.T) {
+	tests := []struct {
+		name     string
+		output   string
+		err      error
+		expected bool
+	}{
+		// Retryable errors - connection issues (from issue #265)
+		{
+			name:     "http2 client connection lost",
+			output:   `error when retrieving current configuration: Get "https://127.0.0.1:51396/api/v1/namespaces/default/secrets/cluster-identity-secret": http2: client connection lost`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: true,
+		},
+		{
+			name:     "TLS handshake timeout",
+			output:   `error when retrieving current configuration: Get "https://127.0.0.1:51396/api/v1/namespaces/default/secrets/aso-credential": net/http: TLS handshake timeout`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: true,
+		},
+		{
+			name:     "connection refused",
+			output:   `The connection to the server localhost:8443 was refused - did you specify the right host or port?`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: true,
+		},
+		{
+			name:     "connection reset by peer",
+			output:   `connection reset by peer`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: true,
+		},
+		{
+			name:     "i/o timeout",
+			output:   `dial tcp 127.0.0.1:51396: i/o timeout`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: true,
+		},
+		{
+			name:     "context deadline exceeded",
+			output:   `context deadline exceeded`,
+			err:      fmt.Errorf("context deadline exceeded"),
+			expected: true,
+		},
+		{
+			name:     "server unavailable",
+			output:   `Error from server: Service Unavailable`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: true,
+		},
+		{
+			name:     "gateway timeout",
+			output:   `Error from server: gateway timeout`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: true,
+		},
+		{
+			name:     "too many requests",
+			output:   `Error from server: too many requests`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: true,
+		},
+		{
+			name:     "internal server error",
+			output:   `Error from server: internal server error`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: true,
+		},
+		{
+			name:     "dial tcp error",
+			output:   `dial tcp: lookup kubernetes.default.svc.cluster.local: no such host`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: true,
+		},
+		{
+			name:     "temporary failure in name resolution",
+			output:   `temporary failure in name resolution`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: true,
+		},
+		{
+			name:     "connection timed out",
+			output:   `dial tcp 10.96.0.1:443: connection timed out`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: true,
+		},
+
+		// Non-retryable errors - resource/validation issues
+		{
+			name:     "resource not found",
+			output:   `Error from server (NotFound): secrets "my-secret" not found`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: false,
+		},
+		{
+			name:     "invalid YAML",
+			output:   `error: error parsing yaml: error converting YAML to JSON`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: false,
+		},
+		{
+			name:     "forbidden - no permission",
+			output:   `Error from server (Forbidden): secrets is forbidden: User "system:anonymous" cannot create resource`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: false,
+		},
+		{
+			name:     "already exists",
+			output:   `Error from server (AlreadyExists): secrets "my-secret" already exists`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: false,
+		},
+		{
+			name:     "validation failed",
+			output:   `The Secret "my-secret" is invalid: metadata.name: Invalid value`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: false,
+		},
+		{
+			name:     "generic error without patterns",
+			output:   `something went wrong`,
+			err:      fmt.Errorf("exit status 1"),
+			expected: false,
+		},
+
+		// Edge cases
+		{
+			name:     "nil error",
+			output:   `some output`,
+			err:      nil,
+			expected: false,
+		},
+		{
+			name:     "empty output with error",
+			output:   ``,
+			err:      fmt.Errorf("connection refused"),
+			expected: true, // Error message itself contains retryable pattern
+		},
+		{
+			name:     "case insensitive - CONNECTION REFUSED",
+			output:   `CONNECTION REFUSED`,
+			err:      fmt.Errorf("error"),
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isRetryableKubectlError(tt.output, tt.err)
+			if result != tt.expected {
+				t.Errorf("isRetryableKubectlError(%q, %v) = %v, expected %v",
+					tt.output, tt.err, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestRetryConstants(t *testing.T) {
+	// Verify retry constants have sensible values
+	if DefaultHealthCheckTimeout < 30*time.Second {
+		t.Errorf("DefaultHealthCheckTimeout = %v, expected at least 30s", DefaultHealthCheckTimeout)
+	}
+
+	if DefaultApplyMaxRetries < 3 {
+		t.Errorf("DefaultApplyMaxRetries = %d, expected at least 3", DefaultApplyMaxRetries)
+	}
+
+	if DefaultApplyRetryDelay < 5*time.Second {
+		t.Errorf("DefaultApplyRetryDelay = %v, expected at least 5s", DefaultApplyRetryDelay)
 	}
 }

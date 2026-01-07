@@ -32,18 +32,15 @@ func TestDeployment_ApplyResources(t *testing.T) {
 	// Set kubectl context to Kind cluster
 	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
 
-	originalDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current directory: %v", err)
-	}
-	defer os.Chdir(originalDir)
-
-	if err := os.Chdir(outputDir); err != nil {
-		t.Fatalf("Failed to change to output directory: %v", err)
+	// Verify cluster is healthy before applying resources
+	// This addresses connection issues after long controller startup periods (issue #265)
+	if err := WaitForClusterHealthy(t, context, DefaultHealthCheckTimeout); err != nil {
+		t.Fatalf("Cluster health check failed: %v", err)
 	}
 
 	for _, file := range expectedFiles {
-		if !FileExists(file) {
+		filePath := filepath.Join(outputDir, file)
+		if !FileExists(filePath) {
 			PrintToTTY("❌ Cannot apply missing file: %s\n", file)
 			t.Errorf("Cannot apply missing file: %s", file)
 			continue
@@ -52,19 +49,12 @@ func TestDeployment_ApplyResources(t *testing.T) {
 		PrintToTTY("Applying resource file: %s...\n", file)
 		t.Logf("Applying resource file: %s", file)
 
-		output, err := RunCommand(t, "kubectl", "--context", context, "apply", "-f", file)
-		// kubectl apply may return non-zero exit codes even for successful operations
-		// (e.g., when resources are "unchanged"). Check output content for actual errors.
-		if err != nil && !IsKubectlApplySuccess(output) {
-			// On error, show output for debugging (may contain sensitive info, but needed for troubleshooting)
+		// Use ApplyWithRetry to handle transient connection issues
+		if err := ApplyWithRetry(t, context, filePath, DefaultApplyMaxRetries); err != nil {
 			PrintToTTY("❌ Failed to apply %s: %v\n", file, err)
-			t.Errorf("Failed to apply %s: %v\nOutput: %s", file, err, output)
+			t.Errorf("Failed to apply %s: %v", file, err)
 			continue
 		}
-
-		// Don't log full kubectl output as it may contain Azure subscription IDs and resource details
-		PrintToTTY("✅ Successfully applied %s\n", file)
-		t.Logf("Successfully applied %s", file)
 	}
 
 	PrintToTTY("\n=== Resource application complete ===\n\n")
@@ -93,16 +83,21 @@ func TestDeployment_ApplyCredentialsYAML(t *testing.T) {
 	}
 
 	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
-	output, err := RunCommand(t, "kubectl", "--context", context, "apply", "-f", filePath)
 
-	if err != nil && !IsKubectlApplySuccess(output) {
+	// Verify cluster is healthy before applying resources
+	// This addresses connection issues after long controller startup periods (issue #265)
+	if err := WaitForClusterHealthy(t, context, DefaultHealthCheckTimeout); err != nil {
+		t.Fatalf("Cluster health check failed: %v", err)
+	}
+
+	// Use ApplyWithRetry to handle transient connection issues
+	if err := ApplyWithRetry(t, context, filePath, DefaultApplyMaxRetries); err != nil {
 		PrintToTTY("❌ Failed to apply %s: %v\n\n", file, err)
-		t.Errorf("Failed to apply %s: %v\nOutput: %s", file, err, output)
+		t.Errorf("Failed to apply %s: %v", file, err)
 		return
 	}
 
 	PrintToTTY("✅ Successfully applied %s\n\n", file)
-	t.Logf("Successfully applied %s", file)
 }
 
 // TestDeployment_ApplyInfrastructureSecretsYAML tests applying is.yaml to the cluster
@@ -128,16 +123,21 @@ func TestDeployment_ApplyInfrastructureSecretsYAML(t *testing.T) {
 	}
 
 	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
-	output, err := RunCommand(t, "kubectl", "--context", context, "apply", "-f", filePath)
 
-	if err != nil && !IsKubectlApplySuccess(output) {
+	// Verify cluster is healthy before applying resources
+	// This addresses connection issues after long controller startup periods (issue #265)
+	if err := WaitForClusterHealthy(t, context, DefaultHealthCheckTimeout); err != nil {
+		t.Fatalf("Cluster health check failed: %v", err)
+	}
+
+	// Use ApplyWithRetry to handle transient connection issues
+	if err := ApplyWithRetry(t, context, filePath, DefaultApplyMaxRetries); err != nil {
 		PrintToTTY("❌ Failed to apply %s: %v\n\n", file, err)
-		t.Errorf("Failed to apply %s: %v\nOutput: %s", file, err, output)
+		t.Errorf("Failed to apply %s: %v", file, err)
 		return
 	}
 
 	PrintToTTY("✅ Successfully applied %s\n\n", file)
-	t.Logf("Successfully applied %s", file)
 }
 
 // TestDeployment_ApplyAROClusterYAML tests applying aro.yaml to the cluster
@@ -163,16 +163,21 @@ func TestDeployment_ApplyAROClusterYAML(t *testing.T) {
 	}
 
 	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
-	output, err := RunCommand(t, "kubectl", "--context", context, "apply", "-f", filePath)
 
-	if err != nil && !IsKubectlApplySuccess(output) {
+	// Verify cluster is healthy before applying resources
+	// This addresses connection issues after long controller startup periods (issue #265)
+	if err := WaitForClusterHealthy(t, context, DefaultHealthCheckTimeout); err != nil {
+		t.Fatalf("Cluster health check failed: %v", err)
+	}
+
+	// Use ApplyWithRetry to handle transient connection issues
+	if err := ApplyWithRetry(t, context, filePath, DefaultApplyMaxRetries); err != nil {
 		PrintToTTY("❌ Failed to apply %s: %v\n\n", file, err)
-		t.Errorf("Failed to apply %s: %v\nOutput: %s", file, err, output)
+		t.Errorf("Failed to apply %s: %v", file, err)
 		return
 	}
 
 	PrintToTTY("✅ Successfully applied %s\n\n", file)
-	t.Logf("Successfully applied %s", file)
 }
 
 // TestDeployment_MonitorCluster tests monitoring the ARO cluster deployment
