@@ -406,6 +406,39 @@ Create a git worktree for implementing a GitHub issue in an isolated directory.
 - Work on multiple issues in parallel
 - Don't interrupt long-running tests or builds
 
+#### `/close-worktree`
+Clean up a git worktree after the associated PR has been merged.
+
+**Use when**: After your PR is merged and you want to clean up the worktree
+
+**What it does**:
+- Finds the worktree for the given issue number
+- **Verifies PR was merged** before proceeding (safety check)
+- Warns about uncommitted changes or unpushed commits
+- Removes the worktree directory
+- Deletes the branch (if merged)
+- Prunes stale worktree references
+
+**Example**: `/close-worktree 263`
+
+**Safety checks**:
+- PR merged? → Prevents closing before work is accepted
+- Uncommitted changes? → Prevents losing local edits
+- Unpushed commits? → Warns about commits not on remote
+
+**Complete worktree workflow**:
+```bash
+# Instance 1: Prepare
+/prepare-worktree 263
+
+# Instance 2: Implement (new terminal)
+cd ../CAPZTests-issue-263-... && claude
+/implement-issue 263
+
+# Instance 1: Cleanup (after PR merged)
+/close-worktree 263
+```
+
 ### Using Slash Commands
 
 Simply type the command in Claude Code:
