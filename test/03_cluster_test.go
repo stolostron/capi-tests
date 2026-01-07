@@ -30,6 +30,17 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 	if !clusterExists {
 		PrintToTTY("Kind cluster '%s' not found - will deploy new cluster\n", config.ManagementClusterName)
 
+		// Ensure Azure credentials are available for the deployment script
+		// The script needs AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID to configure ASO
+		PrintToTTY("\n=== Ensuring Azure credentials are available ===\n")
+		if err := EnsureAzureCredentialsSet(t); err != nil {
+			PrintToTTY("❌ Failed to ensure Azure credentials: %v\n", err)
+			PrintToTTY("Please ensure you are logged into Azure CLI: az login\n\n")
+			t.Fatalf("Azure credentials required for deployment: %v", err)
+			return
+		}
+		PrintToTTY("✅ Azure credentials available\n")
+
 		// Deploy Kind cluster using the script
 		scriptPath := filepath.Join(config.RepoDir, "scripts", "deploy-charts-kind-capz.sh")
 		if !FileExists(scriptPath) {

@@ -454,6 +454,50 @@ func FormatAROControlPlaneConditions(jsonData string) string {
 	return result.String()
 }
 
+// EnsureAzureCredentialsSet ensures Azure credentials are available as environment variables.
+// If AZURE_TENANT_ID or AZURE_SUBSCRIPTION_ID are not set, it auto-extracts them from
+// the Azure CLI. This is critical for the deployment script which needs these env vars
+// to configure the ASO controller credentials in the Kind cluster.
+//
+// Returns an error if credentials cannot be obtained (Azure CLI not logged in or failed).
+func EnsureAzureCredentialsSet(t *testing.T) error {
+	t.Helper()
+
+	// Check and set AZURE_TENANT_ID
+	if os.Getenv("AZURE_TENANT_ID") == "" {
+		output, err := RunCommandQuiet(t, "az", "account", "show", "--query", "tenantId", "-o", "tsv")
+		if err != nil {
+			return fmt.Errorf("AZURE_TENANT_ID not set and could not extract from Azure CLI: %w", err)
+		}
+		tenantID := strings.TrimSpace(output)
+		if tenantID == "" {
+			return fmt.Errorf("AZURE_TENANT_ID not set and Azure CLI returned empty tenant ID")
+		}
+		if err := os.Setenv("AZURE_TENANT_ID", tenantID); err != nil {
+			return fmt.Errorf("failed to set AZURE_TENANT_ID: %w", err)
+		}
+		t.Logf("AZURE_TENANT_ID auto-extracted from Azure CLI")
+	}
+
+	// Check and set AZURE_SUBSCRIPTION_ID (if neither ID nor NAME is set)
+	if os.Getenv("AZURE_SUBSCRIPTION_ID") == "" && os.Getenv("AZURE_SUBSCRIPTION_NAME") == "" {
+		output, err := RunCommandQuiet(t, "az", "account", "show", "--query", "id", "-o", "tsv")
+		if err != nil {
+			return fmt.Errorf("AZURE_SUBSCRIPTION_ID not set and could not extract from Azure CLI: %w", err)
+		}
+		subID := strings.TrimSpace(output)
+		if subID == "" {
+			return fmt.Errorf("AZURE_SUBSCRIPTION_ID not set and Azure CLI returned empty subscription ID")
+		}
+		if err := os.Setenv("AZURE_SUBSCRIPTION_ID", subID); err != nil {
+			return fmt.Errorf("failed to set AZURE_SUBSCRIPTION_ID: %w", err)
+		}
+		t.Logf("AZURE_SUBSCRIPTION_ID auto-extracted from Azure CLI")
+	}
+
+	return nil
+}
+
 // ValidateYAMLFile validates that a file contains valid YAML.
 // Returns an error if the file is empty, unreadable, or contains invalid YAML syntax.
 // This is more robust than just checking file size, as it verifies YAML structure.
