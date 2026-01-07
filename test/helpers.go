@@ -498,6 +498,46 @@ func EnsureAzureCredentialsSet(t *testing.T) error {
 	return nil
 }
 
+// PatchASOCredentialsSecret patches the aso-controller-settings secret with Azure credentials.
+// The cluster-api-installer helm chart creates this secret with empty values, so we need to
+// patch it with actual credentials after deployment.
+//
+// This function:
+// 1. Gets AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID from environment (or extracts from Azure CLI)
+// 2. Patches the secret in the capz-system namespace
+//
+// Returns an error if credentials cannot be obtained or patching fails.
+func PatchASOCredentialsSecret(t *testing.T, kubeContext string) error {
+	t.Helper()
+
+	// Ensure credentials are available
+	if err := EnsureAzureCredentialsSet(t); err != nil {
+		return fmt.Errorf("failed to ensure Azure credentials: %w", err)
+	}
+
+	tenantID := os.Getenv("AZURE_TENANT_ID")
+	subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
+
+	if tenantID == "" || subscriptionID == "" {
+		return fmt.Errorf("AZURE_TENANT_ID or AZURE_SUBSCRIPTION_ID is empty after extraction")
+	}
+
+	// Patch the secret with actual values
+	// The secret uses stringData, so we need to patch the data field with base64-encoded values
+	patchJSON := fmt.Sprintf(`{"stringData":{"AZURE_TENANT_ID":"%s","AZURE_SUBSCRIPTION_ID":"%s"}}`,
+		tenantID, subscriptionID)
+
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+		"-n", "capz-system", "patch", "secret", "aso-controller-settings",
+		"--type=merge", "-p", patchJSON)
+	if err != nil {
+		return fmt.Errorf("failed to patch aso-controller-settings secret: %w\nOutput: %s", err, output)
+	}
+
+	t.Log("Patched aso-controller-settings secret with Azure credentials")
+	return nil
+}
+
 // ValidateYAMLFile validates that a file contains valid YAML.
 // Returns an error if the file is empty, unreadable, or contains invalid YAML syntax.
 // This is more robust than just checking file size, as it verifies YAML structure.

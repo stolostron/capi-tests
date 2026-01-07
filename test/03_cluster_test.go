@@ -86,6 +86,17 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 		// Don't log full script output as it may contain sensitive Azure configuration
 		PrintToTTY("\n✅ Kind cluster deployment script completed successfully\n\n")
 		t.Log("Kind cluster deployment script completed successfully")
+
+		// Patch the ASO credentials secret with actual Azure credentials
+		// The helm chart creates the secret with empty values, so we need to populate it
+		PrintToTTY("=== Patching ASO credentials secret ===\n")
+		context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
+		if err := PatchASOCredentialsSecret(t, context); err != nil {
+			PrintToTTY("❌ Failed to patch ASO credentials: %v\n", err)
+			t.Errorf("Failed to patch ASO credentials secret: %v", err)
+			return
+		}
+		PrintToTTY("✅ ASO credentials secret patched successfully\n\n")
 	} else {
 		PrintToTTY("✅ Kind cluster '%s' already exists\n\n", config.ManagementClusterName)
 		t.Logf("Kind cluster '%s' already exists", config.ManagementClusterName)
