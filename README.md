@@ -220,7 +220,9 @@ The JUnit XML files can be:
 The `results/` directory is excluded from git (via `.gitignore`) and can be cleaned up with:
 
 ```bash
-make clean  # Interactive cleanup - prompts for confirmation before deleting each resource
+make clean      # Interactive cleanup - prompts for confirmation before deleting each resource
+make clean-all  # Non-interactive - deletes ALL resources without prompting
+FORCE=1 make clean  # Same as clean-all
 ```
 
 The `make clean` command will interactively ask you to confirm deletion of:
@@ -230,6 +232,10 @@ The `make clean` command will interactively ask you to confirm deletion of:
 - Results directory
 
 This allows you to selectively clean up resources while preserving anything you want to keep.
+
+For automated workflows (CI/CD, scripts) or quick full resets, use:
+- `make clean-all` - deletes all resources without prompting
+- `FORCE=1 make clean` - equivalent to `make clean-all`
 
 ## Integration with cluster-api-installer
 

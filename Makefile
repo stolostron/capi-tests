@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _cluster _generate-yamls _deploy-crds _verify test-all clean help
+.PHONY: test _check-dep _setup _cluster _generate-yamls _deploy-crds _verify test-all clean clean-all help
 
 # Default values
 DEPLOYMENT_ENV ?= stage
@@ -240,79 +240,124 @@ test-all: ## Run all test phases sequentially
 	@echo "All test results saved to: $(RESULTS_DIR)"
 	@echo "Latest results copied to: $(LATEST_RESULTS_DIR)/"
 
-clean: ## Clean up test resources (interactive)
-	@echo "========================================"
-	@echo "=== Interactive Cleanup ==="
-	@echo "========================================"
-	@echo ""
-	@echo "This will guide you through cleaning up test resources."
-	@echo "You can choose what to delete."
-	@echo ""
-	@# Check if management cluster exists
-	@if kind get clusters 2>/dev/null | grep -q "^$(MANAGEMENT_CLUSTER_NAME)$$"; then \
-		echo "Management cluster '$(MANAGEMENT_CLUSTER_NAME)' exists."; \
-		read -p "Delete management cluster '$(MANAGEMENT_CLUSTER_NAME)'? [y/N] " -n 1 -r; \
+clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
+	@if [ "$(FORCE)" = "1" ]; then \
+		$(MAKE) --no-print-directory clean-all; \
+	else \
+		echo "========================================"; \
+		echo "=== Interactive Cleanup ==="; \
+		echo "========================================"; \
 		echo ""; \
-		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-			echo "Deleting management cluster..."; \
-			kind delete cluster --name $(MANAGEMENT_CLUSTER_NAME) || echo "Failed to delete cluster"; \
+		echo "This will guide you through cleaning up test resources."; \
+		echo "You can choose what to delete."; \
+		echo "Tip: Use 'make clean-all' or 'FORCE=1 make clean' to skip prompts."; \
+		echo ""; \
+		if kind get clusters 2>/dev/null | grep -q "^$(MANAGEMENT_CLUSTER_NAME)$$"; then \
+			echo "Management cluster '$(MANAGEMENT_CLUSTER_NAME)' exists."; \
+			read -p "Delete management cluster '$(MANAGEMENT_CLUSTER_NAME)'? [y/N] " -n 1 -r; \
+			echo ""; \
+			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+				echo "Deleting management cluster..."; \
+				kind delete cluster --name $(MANAGEMENT_CLUSTER_NAME) || echo "Failed to delete cluster"; \
+			else \
+				echo "Skipped management cluster deletion."; \
+			fi; \
 		else \
-			echo "Skipped management cluster deletion."; \
+			echo "Management cluster '$(MANAGEMENT_CLUSTER_NAME)' not found (already clean)."; \
 		fi; \
+		echo ""; \
+		if [ -d "/tmp/cluster-api-installer-aro" ]; then \
+			echo "Directory /tmp/cluster-api-installer-aro exists."; \
+			read -p "Delete /tmp/cluster-api-installer-aro? [y/N] " -n 1 -r; \
+			echo ""; \
+			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+				echo "Deleting directory..."; \
+				rm -rf /tmp/cluster-api-installer-aro || echo "Failed to delete directory"; \
+			else \
+				echo "Skipped directory deletion."; \
+			fi; \
+		else \
+			echo "Directory /tmp/cluster-api-installer-aro not found (already clean)."; \
+		fi; \
+		echo ""; \
+		if ls /tmp/*-kubeconfig.yaml 1> /dev/null 2>&1; then \
+			echo "Kubeconfig files found in /tmp:"; \
+			ls -1 /tmp/*-kubeconfig.yaml; \
+			read -p "Delete kubeconfig files? [y/N] " -n 1 -r; \
+			echo ""; \
+			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+				echo "Deleting kubeconfig files..."; \
+				rm -f /tmp/*-kubeconfig.yaml || echo "Failed to delete kubeconfig files"; \
+			else \
+				echo "Skipped kubeconfig files deletion."; \
+			fi; \
+		else \
+			echo "No kubeconfig files found in /tmp (already clean)."; \
+		fi; \
+		echo ""; \
+		if [ -d "results" ]; then \
+			echo "Results directory exists."; \
+			echo "Contents:"; \
+			du -sh results/* 2>/dev/null || echo "  (empty)"; \
+			read -p "Delete results directory? [y/N] " -n 1 -r; \
+			echo ""; \
+			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+				echo "Deleting results directory..."; \
+				rm -rf results || echo "Failed to delete results directory"; \
+			else \
+				echo "Skipped results directory deletion."; \
+			fi; \
+		else \
+			echo "Results directory not found (already clean)."; \
+		fi; \
+		echo ""; \
+		echo "======================================="; \
+		echo "=== Cleanup Complete ==="; \
+		echo "======================================="; \
+	fi
+
+clean-all: ## Clean up ALL test resources without prompting
+	@echo "========================================"
+	@echo "=== Non-Interactive Cleanup ==="
+	@echo "========================================"
+	@echo ""
+	@echo "Deleting all test resources without prompts..."
+	@echo ""
+	@# Delete management cluster
+	@if kind get clusters 2>/dev/null | grep -q "^$(MANAGEMENT_CLUSTER_NAME)$$"; then \
+		echo "Deleting management cluster '$(MANAGEMENT_CLUSTER_NAME)'..."; \
+		kind delete cluster --name $(MANAGEMENT_CLUSTER_NAME) || echo "Failed to delete cluster"; \
 	else \
 		echo "Management cluster '$(MANAGEMENT_CLUSTER_NAME)' not found (already clean)."; \
 	fi
 	@echo ""
-	@# Check if cluster-api-installer directory exists
+	@# Delete cluster-api-installer directory
 	@if [ -d "/tmp/cluster-api-installer-aro" ]; then \
-		echo "Directory /tmp/cluster-api-installer-aro exists."; \
-		read -p "Delete /tmp/cluster-api-installer-aro? [y/N] " -n 1 -r; \
-		echo ""; \
-		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-			echo "Deleting directory..."; \
-			rm -rf /tmp/cluster-api-installer-aro || echo "Failed to delete directory"; \
-		else \
-			echo "Skipped directory deletion."; \
-		fi; \
+		echo "Deleting /tmp/cluster-api-installer-aro..."; \
+		rm -rf /tmp/cluster-api-installer-aro || echo "Failed to delete directory"; \
 	else \
 		echo "Directory /tmp/cluster-api-installer-aro not found (already clean)."; \
 	fi
 	@echo ""
-	@# Check if kubeconfig files exist
+	@# Delete kubeconfig files
 	@if ls /tmp/*-kubeconfig.yaml 1> /dev/null 2>&1; then \
-		echo "Kubeconfig files found in /tmp:"; \
+		echo "Deleting kubeconfig files:"; \
 		ls -1 /tmp/*-kubeconfig.yaml; \
-		read -p "Delete kubeconfig files? [y/N] " -n 1 -r; \
-		echo ""; \
-		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-			echo "Deleting kubeconfig files..."; \
-			rm -f /tmp/*-kubeconfig.yaml || echo "Failed to delete kubeconfig files"; \
-		else \
-			echo "Skipped kubeconfig files deletion."; \
-		fi; \
+		rm -f /tmp/*-kubeconfig.yaml || echo "Failed to delete kubeconfig files"; \
 	else \
 		echo "No kubeconfig files found in /tmp (already clean)."; \
 	fi
 	@echo ""
-	@# Check if results directory exists
+	@# Delete results directory
 	@if [ -d "results" ]; then \
-		echo "Results directory exists."; \
-		echo "Contents:"; \
-		du -sh results/* 2>/dev/null || echo "  (empty)"; \
-		read -p "Delete results directory? [y/N] " -n 1 -r; \
-		echo ""; \
-		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-			echo "Deleting results directory..."; \
-			rm -rf results || echo "Failed to delete results directory"; \
-		else \
-			echo "Skipped results directory deletion."; \
-		fi; \
+		echo "Deleting results directory..."; \
+		rm -rf results || echo "Failed to delete results directory"; \
 	else \
 		echo "Results directory not found (already clean)."; \
 	fi
 	@echo ""
 	@echo "======================================="
-	@echo "=== Cleanup Complete ==="
+	@echo "=== All Resources Cleaned ==="
 	@echo "======================================="
 
 setup-submodule: ## Add cluster-api-installer as a git submodule

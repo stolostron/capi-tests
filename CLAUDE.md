@@ -109,15 +109,24 @@ make update-submodule
 
 # Clean up test resources (interactive - prompts before deleting each resource)
 make clean
+
+# Clean up ALL test resources without prompting (non-interactive)
+make clean-all
+# OR use the FORCE variable:
+FORCE=1 make clean
 ```
 
-The `make clean` command is interactive and will prompt you to confirm deletion of:
+The `make clean` command is interactive by default and will prompt you to confirm deletion of:
 - Kind cluster
 - Cluster-api-installer repository clone
 - Kubeconfig files
 - Results directory
 
 This prevents accidental deletion and allows selective cleanup.
+
+For non-interactive cleanup (useful for CI/CD, scripted workflows, or quick resets):
+- Use `make clean-all` to delete all resources without prompts
+- Or use `FORCE=1 make clean` to skip all confirmation prompts
 
 ### Code Quality
 
