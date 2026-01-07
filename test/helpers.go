@@ -586,22 +586,22 @@ func PatchASOCredentialsSecret(t *testing.T, kubeContext string) error {
 const MaxDomainPrefixLength = 15
 
 // GetDomainPrefix returns the domain prefix that will be used for the ARO cluster.
-// The domain prefix is derived from USER and DEPLOYMENT_ENV environment variables
-// in the format "${USER}-${DEPLOYMENT_ENV}".
+// The domain prefix is derived from CAPZ_USER and DEPLOYMENT_ENV environment variables
+// in the format "${CAPZ_USER}-${DEPLOYMENT_ENV}".
 func GetDomainPrefix(user, environment string) string {
 	return fmt.Sprintf("%s-%s", user, environment)
 }
 
 // ValidateDomainPrefix checks if the domain prefix length is within the allowed limit.
 // Returns an error with a descriptive message if the prefix exceeds MaxDomainPrefixLength (15 chars).
-// The domain prefix is derived from USER and DEPLOYMENT_ENV in the format "${USER}-${DEPLOYMENT_ENV}".
+// The domain prefix is derived from CAPZ_USER and DEPLOYMENT_ENV in the format "${CAPZ_USER}-${DEPLOYMENT_ENV}".
 func ValidateDomainPrefix(user, environment string) error {
 	prefix := GetDomainPrefix(user, environment)
 	if len(prefix) > MaxDomainPrefixLength {
 		return fmt.Errorf(
 			"domain prefix '%s' (%d chars) exceeds maximum length of %d characters\n"+
-				"  USER='%s' (%d chars) + '-' + DEPLOYMENT_ENV='%s' (%d chars) = %d chars\n"+
-				"  Suggestion: Use shorter values for USER or DEPLOYMENT_ENV environment variables",
+				"  CAPZ_USER='%s' (%d chars) + '-' + DEPLOYMENT_ENV='%s' (%d chars) = %d chars\n"+
+				"  Suggestion: Use shorter values for CAPZ_USER or DEPLOYMENT_ENV environment variables",
 			prefix, len(prefix), MaxDomainPrefixLength,
 			user, len(user), environment, len(environment), len(prefix))
 	}
