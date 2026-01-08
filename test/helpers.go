@@ -233,49 +233,6 @@ func GetEnvOrDefault(key, defaultValue string) string {
 	return defaultValue
 }
 
-// GetAzCommand returns the az CLI command path.
-// Returns AZ_COMMAND env var if set, otherwise "az".
-// This allows using az CLI from a Python virtual environment with
-// a compatible Python version (e.g., when system Python 3.14 is incompatible).
-func GetAzCommand() string {
-	return GetEnvOrDefault("AZ_COMMAND", "az")
-}
-
-// AzCommandExists checks if the configured az CLI is available.
-// Uses AZ_COMMAND env var if set, otherwise checks for 'az' in PATH.
-func AzCommandExists() bool {
-	azCmd := GetAzCommand()
-	// If it's an absolute path, check if file exists and is executable
-	if strings.HasPrefix(azCmd, "/") {
-		info, err := os.Stat(azCmd)
-		if err != nil {
-			return false
-		}
-		// Check if it's executable (has any execute bit set)
-		return info.Mode().Perm()&0111 != 0
-	}
-	// Otherwise use PATH lookup
-	_, err := exec.LookPath(azCmd)
-	return err == nil
-}
-
-// RunAzCommand executes an az CLI command using the configured az command path.
-// Uses AZ_COMMAND env var if set, otherwise uses system 'az'.
-// This allows running az from a Python venv with compatible Python version.
-func RunAzCommand(t *testing.T, args ...string) (string, error) {
-	t.Helper()
-	azCmd := GetAzCommand()
-	return RunCommand(t, azCmd, args...)
-}
-
-// RunAzCommandQuiet executes an az CLI command without TTY output.
-// Uses AZ_COMMAND env var if set, otherwise uses system 'az'.
-func RunAzCommandQuiet(t *testing.T, args ...string) (string, error) {
-	t.Helper()
-	azCmd := GetAzCommand()
-	return RunCommandQuiet(t, azCmd, args...)
-}
-
 // PrintTestHeader prints a clear test identification header to both terminal and test log.
 // This helps users understand which test is running and what it does.
 func PrintTestHeader(t *testing.T, testName, description string) {
@@ -508,7 +465,7 @@ func EnsureAzureCredentialsSet(t *testing.T) error {
 
 	// Check and set AZURE_TENANT_ID
 	if os.Getenv("AZURE_TENANT_ID") == "" {
-		output, err := RunAzCommandQuiet(t, "account", "show", "--query", "tenantId", "-o", "tsv")
+		output, err := RunCommandQuiet(t, "az", "account", "show", "--query", "tenantId", "-o", "tsv")
 		if err != nil {
 			return fmt.Errorf("AZURE_TENANT_ID not set and could not extract from Azure CLI: %w", err)
 		}
@@ -524,7 +481,7 @@ func EnsureAzureCredentialsSet(t *testing.T) error {
 
 	// Check and set AZURE_SUBSCRIPTION_ID (if neither ID nor NAME is set)
 	if os.Getenv("AZURE_SUBSCRIPTION_ID") == "" && os.Getenv("AZURE_SUBSCRIPTION_NAME") == "" {
-		output, err := RunAzCommandQuiet(t, "account", "show", "--query", "id", "-o", "tsv")
+		output, err := RunCommandQuiet(t, "az", "account", "show", "--query", "id", "-o", "tsv")
 		if err != nil {
 			return fmt.Errorf("AZURE_SUBSCRIPTION_ID not set and could not extract from Azure CLI: %w", err)
 		}

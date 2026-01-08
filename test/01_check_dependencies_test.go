@@ -11,10 +11,10 @@ import (
 
 // TestCheckDependencies_ToolAvailable verifies all required tools are installed
 func TestCheckDependencies_ToolAvailable(t *testing.T) {
-	// Note: "az" is checked separately via AzCommandExists() to support custom az paths
 	requiredTools := []string{
 		"docker",
 		"kind",
+		"az",
 		"oc",
 		"helm",
 		"git",
@@ -36,20 +36,6 @@ func TestCheckDependencies_ToolAvailable(t *testing.T) {
 			}
 		})
 	}
-
-	// Check az CLI separately to support AZ_COMMAND env var for venv usage
-	t.Run("az", func(t *testing.T) {
-		if !AzCommandExists() {
-			t.Errorf("Azure CLI is not available. Either 'az' must be in PATH or AZ_COMMAND env var must be set to a valid az executable")
-		} else {
-			azCmd := GetAzCommand()
-			if azCmd != "az" {
-				t.Logf("Using custom az command: %s", azCmd)
-			} else {
-				t.Logf("Tool 'az' is available")
-			}
-		}
-	})
 }
 
 // TestCheckDependencies_DockerDaemonRunning verifies the Docker daemon is running and accessible.
@@ -113,7 +99,7 @@ func TestCheckDependencies_AzureCLILogin_IsLoggedIn(t *testing.T) {
 		return
 	}
 
-	_, err := RunAzCommand(t, "account", "show")
+	_, err := RunCommand(t, "az", "account", "show")
 	if err != nil {
 		t.Errorf("Azure CLI not logged in. Please run 'az login': %v", err)
 		return
@@ -145,7 +131,7 @@ func TestCheckDependencies_AzureEnvironment(t *testing.T) {
 		}
 
 		// Try to extract from Azure CLI
-		output, err := RunAzCommandQuiet(t, "account", "show", "--query", "tenantId", "-o", "tsv")
+		output, err := RunCommandQuiet(t, "az", "account", "show", "--query", "tenantId", "-o", "tsv")
 		if err != nil {
 			missingVars = append(missingVars, "AZURE_TENANT_ID")
 			t.Errorf("AZURE_TENANT_ID is not set and could not be extracted from Azure CLI.\n\n"+
@@ -184,7 +170,7 @@ func TestCheckDependencies_AzureEnvironment(t *testing.T) {
 		}
 
 		// Try to extract subscription ID from Azure CLI
-		output, err := RunAzCommandQuiet(t, "account", "show", "--query", "id", "-o", "tsv")
+		output, err := RunCommandQuiet(t, "az", "account", "show", "--query", "id", "-o", "tsv")
 		if err != nil {
 			missingVars = append(missingVars, "AZURE_SUBSCRIPTION_ID or AZURE_SUBSCRIPTION_NAME")
 			t.Errorf("Neither AZURE_SUBSCRIPTION_ID nor AZURE_SUBSCRIPTION_NAME is set, "+
