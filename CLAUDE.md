@@ -179,13 +179,6 @@ These environment variables are validated in the Check Dependencies phase. If mi
   export AZURE_SUBSCRIPTION_NAME=$(az account show --query name -o tsv)
   ```
 
-### Azure CLI Configuration
-- `AZ_COMMAND` - Custom path to az CLI executable or wrapper script
-  - Default: `az` (uses system PATH)
-  - Use when system Python is incompatible with Azure CLI (e.g., Fedora 43 with Python 3.14)
-  - Example: `export AZ_COMMAND="$HOME/.az-venv/bin/az"`
-  - See README.md for venv setup instructions
-
 ### Repository Configuration
 - `ARO_REPO_URL` - cluster-api-installer URL (default: RadekCap/cluster-api-installer)
 - `ARO_REPO_BRANCH` - Branch to use (default: `ARO-ASO`)
