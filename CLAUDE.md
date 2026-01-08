@@ -46,6 +46,8 @@ Never hardcode values - always use `GetEnvOrDefault()` for new configuration.
 - `SetEnvVar(t, key, value)` - Set env var with automatic cleanup
 - `FileExists(path)` / `DirExists(path)` - Path validation
 - `GetEnvOrDefault(key, default)` - Config value resolution
+- `ValidateDomainPrefix(user, env)` - Validate domain prefix length (max 15 chars)
+- `ValidateRFC1123Name(name, varName)` - Validate RFC 1123 subdomain naming compliance
 
 Always use these helpers instead of reimplementing functionality.
 
@@ -194,6 +196,13 @@ These environment variables are validated in the Check Dependencies phase. If mi
 - `REGION` - Azure region (default: `uksouth`)
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`)
 - `CAPZ_USER` - User identifier for domain prefix (default: `rcap`). Must be short enough that `${CAPZ_USER}-${DEPLOYMENT_ENV}` does not exceed 15 characters.
+
+**RFC 1123 Naming Compliance**: The following variables must be RFC 1123 compliant (lowercase alphanumeric and hyphens only, must start/end with alphanumeric):
+- `CAPZ_USER`
+- `CS_CLUSTER_NAME`
+- `DEPLOYMENT_ENV`
+
+This is validated during Check Dependencies (phase 1) to prevent late deployment failures.
 
 ### Test Behavior
 - `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `45m`, format: Go duration like `1h`, `45m`)

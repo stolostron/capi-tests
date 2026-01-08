@@ -367,3 +367,62 @@ func TestCheckDependencies_DockerCredentialHelper(t *testing.T) {
 		})
 	}
 }
+
+// TestCheckDependencies_NamingCompliance validates that CAPZ_USER, CS_CLUSTER_NAME,
+// and DEPLOYMENT_ENV are RFC 1123 compliant. This prevents late deployment failures
+// where generated Kubernetes resource names contain invalid characters (e.g., uppercase).
+//
+// The RFC 1123 subdomain naming rules require:
+// - Only lowercase alphanumeric characters and hyphens
+// - Must start and end with an alphanumeric character
+//
+// Failing early in prerequisites saves significant time compared to waiting for
+// deployment to fail in phase 5 (CR deployment).
+func TestCheckDependencies_NamingCompliance(t *testing.T) {
+	config := NewTestConfig()
+
+	// Track validation failures
+	var validationErrors []string
+
+	// Validate CAPZ_USER
+	t.Run("CAPZ_USER", func(t *testing.T) {
+		if err := ValidateRFC1123Name(config.User, "CAPZ_USER"); err != nil {
+			validationErrors = append(validationErrors, err.Error())
+			t.Error(err)
+		} else {
+			t.Logf("CAPZ_USER '%s' is RFC 1123 compliant", config.User)
+		}
+	})
+
+	// Validate DEPLOYMENT_ENV
+	t.Run("DEPLOYMENT_ENV", func(t *testing.T) {
+		if err := ValidateRFC1123Name(config.Environment, "DEPLOYMENT_ENV"); err != nil {
+			validationErrors = append(validationErrors, err.Error())
+			t.Error(err)
+		} else {
+			t.Logf("DEPLOYMENT_ENV '%s' is RFC 1123 compliant", config.Environment)
+		}
+	})
+
+	// Validate CS_CLUSTER_NAME
+	t.Run("CS_CLUSTER_NAME", func(t *testing.T) {
+		if err := ValidateRFC1123Name(config.ClusterNamePrefix, "CS_CLUSTER_NAME"); err != nil {
+			validationErrors = append(validationErrors, err.Error())
+			t.Error(err)
+		} else {
+			t.Logf("CS_CLUSTER_NAME '%s' is RFC 1123 compliant", config.ClusterNamePrefix)
+		}
+	})
+
+	// Print summary on cleanup
+	t.Cleanup(func() {
+		if len(validationErrors) > 0 {
+			PrintToTTY("\n❌ RFC 1123 naming compliance validation failed!\n")
+			PrintToTTY("Deployment will fail with 'Invalid value' errors during CR deployment (phase 5).\n")
+			PrintToTTY("Fix the following before continuing:\n\n")
+			for _, err := range validationErrors {
+				PrintToTTY("%s\n\n", err)
+			}
+		}
+	})
+}

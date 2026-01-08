@@ -75,7 +75,35 @@ Tests are configured via environment variables:
 - `REGION` - Azure region (default: `uksouth`)
 - `AZURE_SUBSCRIPTION_NAME` - Azure subscription ID
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`)
-- `USER` - User identifier
+- `CAPZ_USER` - User identifier for domain prefix (default: `rcap`)
+
+#### Naming Requirements (RFC 1123)
+
+The following variables must be **RFC 1123 compliant** to avoid deployment failures:
+- `CAPZ_USER`
+- `CS_CLUSTER_NAME`
+- `DEPLOYMENT_ENV`
+
+**RFC 1123 naming rules:**
+- Only lowercase alphanumeric characters and hyphens (`a-z`, `0-9`, `-`)
+- Must start and end with an alphanumeric character
+- No uppercase letters, underscores, dots, or spaces
+
+**Example valid values:**
+```bash
+export CAPZ_USER=rcap        # Valid
+export DEPLOYMENT_ENV=stage  # Valid
+export CS_CLUSTER_NAME=rcap-stage  # Valid
+```
+
+**Example invalid values:**
+```bash
+export CAPZ_USER=RCap        # Invalid - contains uppercase
+export DEPLOYMENT_ENV=Stage_1  # Invalid - contains uppercase and underscore
+export CS_CLUSTER_NAME=-my-cluster  # Invalid - starts with hyphen
+```
+
+The test suite validates naming compliance during the Check Dependencies phase (phase 1), preventing late failures during CR deployment (phase 5).
 
 ### Test Behavior
 

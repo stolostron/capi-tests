@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -563,6 +564,74 @@ func ValidateDomainPrefix(user, environment string) error {
 			user, len(user), environment, len(environment), len(prefix))
 	}
 	return nil
+}
+
+// RFC1123NameRegex is a regex for RFC 1123 subdomain name validation.
+// Names must consist of lowercase alphanumeric characters or '-', and must start
+// and end with an alphanumeric character.
+var RFC1123NameRegex = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+
+// ValidateRFC1123Name validates that a name complies with RFC 1123 subdomain naming.
+// RFC 1123 subdomain names must:
+// - Consist of lowercase alphanumeric characters or '-'
+// - Start and end with an alphanumeric character
+// - Not be empty
+//
+// This is used to validate environment variables like CAPZ_USER, CS_CLUSTER_NAME,
+// and DEPLOYMENT_ENV before deployment, preventing late failures in CR deployment.
+//
+// Parameters:
+//   - name: the value to validate
+//   - varName: the environment variable name (for error messages)
+//
+// Returns nil if valid, or an error with remediation suggestion if invalid.
+func ValidateRFC1123Name(name, varName string) error {
+	if name == "" {
+		return fmt.Errorf("%s is empty: must be a non-empty RFC 1123 compliant name", varName)
+	}
+
+	if RFC1123NameRegex.MatchString(name) {
+		return nil
+	}
+
+	// Build detailed error message with specific issues
+	var issues []string
+
+	// Check for uppercase letters
+	if strings.ToLower(name) != name {
+		issues = append(issues, "contains uppercase letters")
+	}
+
+	// Check for invalid characters (not alphanumeric or hyphen)
+	invalidChars := regexp.MustCompile(`[^a-z0-9-]`)
+	if invalidChars.MatchString(strings.ToLower(name)) {
+		issues = append(issues, "contains invalid characters (only lowercase a-z, 0-9, and '-' are allowed)")
+	}
+
+	// Check if starts with non-alphanumeric
+	if len(name) > 0 && !regexp.MustCompile(`^[a-z0-9]`).MatchString(strings.ToLower(name)) {
+		issues = append(issues, "must start with a lowercase alphanumeric character")
+	}
+
+	// Check if ends with non-alphanumeric
+	if len(name) > 0 && !regexp.MustCompile(`[a-z0-9]$`).MatchString(strings.ToLower(name)) {
+		issues = append(issues, "must end with a lowercase alphanumeric character")
+	}
+
+	// Generate suggested fix (lowercase, replace invalid chars)
+	suggested := strings.ToLower(name)
+	suggested = regexp.MustCompile(`[^a-z0-9-]`).ReplaceAllString(suggested, "-")
+	suggested = strings.Trim(suggested, "-")
+	if suggested == "" {
+		suggested = "valid-name"
+	}
+
+	return fmt.Errorf(
+		"%s '%s' is not RFC 1123 compliant:\n"+
+			"  Issues: %s\n"+
+			"  RFC 1123 requires: lowercase alphanumeric characters or '-', must start and end with alphanumeric\n"+
+			"  Suggested fix: export %s=%s",
+		varName, name, strings.Join(issues, "; "), varName, suggested)
 }
 
 // DefaultHealthCheckTimeout is the default timeout for cluster health checks

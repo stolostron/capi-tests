@@ -728,6 +728,193 @@ func TestValidateDomainPrefix_MaxLength(t *testing.T) {
 	}
 }
 
+func TestValidateRFC1123Name(t *testing.T) {
+	tests := []struct {
+		name        string
+		value       string
+		varName     string
+		expectError bool
+		errorMsgs   []string // Substrings to check in error message
+	}{
+		// Valid cases - RFC 1123 compliant names
+		{
+			name:        "simple lowercase name",
+			value:       "rcap",
+			varName:     "CAPZ_USER",
+			expectError: false,
+		},
+		{
+			name:        "name with hyphen",
+			value:       "my-cluster",
+			varName:     "CS_CLUSTER_NAME",
+			expectError: false,
+		},
+		{
+			name:        "name with numbers",
+			value:       "cluster123",
+			varName:     "CS_CLUSTER_NAME",
+			expectError: false,
+		},
+		{
+			name:        "single character",
+			value:       "a",
+			varName:     "CAPZ_USER",
+			expectError: false,
+		},
+		{
+			name:        "single digit",
+			value:       "1",
+			varName:     "DEPLOYMENT_ENV",
+			expectError: false,
+		},
+		{
+			name:        "complex valid name",
+			value:       "my-test-cluster-123",
+			varName:     "CS_CLUSTER_NAME",
+			expectError: false,
+		},
+		{
+			name:        "starts with number",
+			value:       "123-cluster",
+			varName:     "CS_CLUSTER_NAME",
+			expectError: false,
+		},
+
+		// Invalid cases - RFC 1123 non-compliant names
+		{
+			name:        "contains uppercase - issue #288 case",
+			value:       "rcapXYZ",
+			varName:     "CAPZ_USER",
+			expectError: true,
+			errorMsgs:   []string{"not RFC 1123 compliant", "contains uppercase letters", "Suggested fix", "rcapxyz"},
+		},
+		{
+			name:        "all uppercase",
+			value:       "PRODUCTION",
+			varName:     "DEPLOYMENT_ENV",
+			expectError: true,
+			errorMsgs:   []string{"contains uppercase letters", "production"},
+		},
+		{
+			name:        "mixed case",
+			value:       "MyCluster",
+			varName:     "CS_CLUSTER_NAME",
+			expectError: true,
+			errorMsgs:   []string{"contains uppercase letters", "mycluster"},
+		},
+		{
+			name:        "starts with hyphen",
+			value:       "-invalid",
+			varName:     "CAPZ_USER",
+			expectError: true,
+			errorMsgs:   []string{"must start with a lowercase alphanumeric character"},
+		},
+		{
+			name:        "ends with hyphen",
+			value:       "invalid-",
+			varName:     "CAPZ_USER",
+			expectError: true,
+			errorMsgs:   []string{"must end with a lowercase alphanumeric character"},
+		},
+		{
+			name:        "contains underscore",
+			value:       "my_cluster",
+			varName:     "CS_CLUSTER_NAME",
+			expectError: true,
+			errorMsgs:   []string{"contains invalid characters"},
+		},
+		{
+			name:        "contains space",
+			value:       "my cluster",
+			varName:     "CS_CLUSTER_NAME",
+			expectError: true,
+			errorMsgs:   []string{"contains invalid characters"},
+		},
+		{
+			name:        "contains dot",
+			value:       "my.cluster",
+			varName:     "CS_CLUSTER_NAME",
+			expectError: true,
+			errorMsgs:   []string{"contains invalid characters"},
+		},
+		{
+			name:        "empty string",
+			value:       "",
+			varName:     "CAPZ_USER",
+			expectError: true,
+			errorMsgs:   []string{"is empty", "non-empty RFC 1123 compliant"},
+		},
+		{
+			name:        "only hyphens",
+			value:       "---",
+			varName:     "DEPLOYMENT_ENV",
+			expectError: true,
+			errorMsgs:   []string{"must start with a lowercase alphanumeric character", "must end with a lowercase alphanumeric character"},
+		},
+		{
+			name:        "special characters",
+			value:       "test@cluster!",
+			varName:     "CS_CLUSTER_NAME",
+			expectError: true,
+			errorMsgs:   []string{"contains invalid characters"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRFC1123Name(tt.value, tt.varName)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("ValidateRFC1123Name(%q, %q) expected error, got nil", tt.value, tt.varName)
+					return
+				}
+				// Check error message contains expected substrings
+				for _, msg := range tt.errorMsgs {
+					if !strings.Contains(err.Error(), msg) {
+						t.Errorf("ValidateRFC1123Name(%q, %q) error = %q, expected to contain %q",
+							tt.value, tt.varName, err.Error(), msg)
+					}
+				}
+			} else {
+				if err != nil {
+					t.Errorf("ValidateRFC1123Name(%q, %q) unexpected error: %v", tt.value, tt.varName, err)
+				}
+			}
+		})
+	}
+}
+
+func TestRFC1123NameRegex(t *testing.T) {
+	// Test the regex directly to ensure it matches the expected pattern
+	validNames := []string{
+		"a", "z", "0", "9",
+		"ab", "a1", "1a", "12",
+		"abc", "a-b", "a1b", "1a2",
+		"my-cluster", "cluster-123", "a-b-c-d",
+		"rcap-stage", "dev", "prod",
+	}
+
+	invalidNames := []string{
+		"", "-", "A", "Z",
+		"-a", "a-", "-ab", "ab-",
+		"A-b", "a-B", "ABC",
+		"a_b", "a.b", "a b", "a@b",
+	}
+
+	for _, name := range validNames {
+		if !RFC1123NameRegex.MatchString(name) {
+			t.Errorf("RFC1123NameRegex should match %q but didn't", name)
+		}
+	}
+
+	for _, name := range invalidNames {
+		if RFC1123NameRegex.MatchString(name) {
+			t.Errorf("RFC1123NameRegex should not match %q but did", name)
+		}
+	}
+}
+
 func TestIsRetryableKubectlError(t *testing.T) {
 	tests := []struct {
 		name     string
