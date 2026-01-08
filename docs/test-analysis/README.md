@@ -46,7 +46,7 @@ make test-all
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           PHASE 1: CHECK DEPENDENCIES                        │
-│  Tools: docker, kind, az (AZ_COMMAND), oc, helm, git, kubectl, go, clusterctl│
+│  Tools: docker, kind, az, oc, helm, git, kubectl, go, clusterctl            │
 │  Daemon: Docker daemon running check                                         │
 │  Auth: Azure CLI login, auto-extract tenant/subscription IDs                │
 │  Creds: Docker credential helper check (macOS)                              │

@@ -16,7 +16,7 @@ Verify all required tools are installed and properly configured before running t
 
 | # | Test | Purpose |
 |---|------|---------|
-| 1 | [01-ToolAvailable](01-ToolAvailable.md) | Check all required CLI tools are in PATH (including az via AZ_COMMAND) |
+| 1 | [01-ToolAvailable](01-ToolAvailable.md) | Check all required CLI tools are in PATH |
 | 2 | [02-DockerDaemonRunning](02-DockerDaemonRunning.md) | Verify Docker daemon is running and accessible |
 | 3 | [03-AzureCLILogin](03-AzureCLILogin.md) | Verify Azure CLI is logged in |
 | 4 | [04-AzureEnvironment](04-AzureEnvironment.md) | Validate and auto-extract Azure environment variables |
@@ -38,8 +38,7 @@ Verify all required tools are installed and properly configured before running t
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  Test 1: ToolAvailable                                           │
-│  └── Check: docker, kind, oc, helm, git, kubectl, go            │
-│  └── Check: az (via AZ_COMMAND env var or system PATH)          │
+│  └── Check: docker, kind, az, oc, helm, git, kubectl, go        │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -102,7 +101,7 @@ Verify all required tools are installed and properly configured before running t
 |------|---------|-------------|
 | `docker` | Container runtime | `podman` |
 | `kind` | Kubernetes in Docker | - |
-| `az` | Azure CLI (supports AZ_COMMAND env var) | - |
+| `az` | Azure CLI | - |
 | `oc` | OpenShift CLI | - |
 | `helm` | Kubernetes package manager | - |
 | `git` | Version control | - |
