@@ -728,6 +728,163 @@ func TestValidateDomainPrefix_MaxLength(t *testing.T) {
 	}
 }
 
+func TestGetExternalAuthID(t *testing.T) {
+	tests := []struct {
+		name              string
+		clusterNamePrefix string
+		expected          string
+	}{
+		{
+			name:              "short prefix",
+			clusterNamePrefix: "rcap-stage",
+			expected:          "rcap-stage-ea",
+		},
+		{
+			name:              "exactly 12 chars prefix",
+			clusterNamePrefix: "123456789012",
+			expected:          "123456789012-ea",
+		},
+		{
+			name:              "long prefix",
+			clusterNamePrefix: "rcapxyz-stage",
+			expected:          "rcapxyz-stage-ea",
+		},
+		{
+			name:              "empty prefix",
+			clusterNamePrefix: "",
+			expected:          "-ea",
+		},
+		{
+			name:              "single char prefix",
+			clusterNamePrefix: "a",
+			expected:          "a-ea",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetExternalAuthID(tt.clusterNamePrefix)
+			if result != tt.expected {
+				t.Errorf("GetExternalAuthID(%q) = %q, expected %q",
+					tt.clusterNamePrefix, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestValidateExternalAuthID(t *testing.T) {
+	tests := []struct {
+		name              string
+		clusterNamePrefix string
+		expectError       bool
+		errorMsgs         []string // Substrings to check in error message
+	}{
+		// Valid cases (ExternalAuth ID ≤15 chars, so prefix ≤12 chars)
+		{
+			name:              "exactly 12 chars prefix - max valid",
+			clusterNamePrefix: "123456789012",
+			expectError:       false, // "123456789012-ea" = 15 chars
+		},
+		{
+			name:              "short prefix - 10 chars",
+			clusterNamePrefix: "rcap-stage",
+			expectError:       false, // "rcap-stage-ea" = 13 chars
+		},
+		{
+			name:              "single char prefix",
+			clusterNamePrefix: "a",
+			expectError:       false, // "a-ea" = 4 chars
+		},
+		{
+			name:              "11 chars prefix",
+			clusterNamePrefix: "12345678901",
+			expectError:       false, // "12345678901-ea" = 14 chars
+		},
+
+		// Invalid cases (ExternalAuth ID >15 chars, so prefix >12 chars)
+		{
+			name:              "13 chars prefix - just over limit",
+			clusterNamePrefix: "1234567890123",
+			expectError:       true, // "1234567890123-ea" = 16 chars
+			errorMsgs:         []string{"exceeds maximum length", "16 chars", "15"},
+		},
+		{
+			name:              "original failing case - rcapxyz-stage",
+			clusterNamePrefix: "rcapxyz-stage",
+			expectError:       true, // "rcapxyz-stage-ea" = 16 chars
+			errorMsgs:         []string{"exceeds maximum length", "16 chars", "rcapxyz-stage-ea", "Suggestion"},
+		},
+		{
+			name:              "very long prefix",
+			clusterNamePrefix: "verylongclustername",
+			expectError:       true, // "verylongclustername-ea" = 22 chars
+			errorMsgs:         []string{"exceeds maximum length", "22 chars", "CS_CLUSTER_NAME must be", "12"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateExternalAuthID(tt.clusterNamePrefix)
+
+			if tt.expectError {
+				if err == nil {
+					externalAuthID := GetExternalAuthID(tt.clusterNamePrefix)
+					t.Errorf("ValidateExternalAuthID(%q) expected error for ExternalAuth ID %q (%d chars), got nil",
+						tt.clusterNamePrefix, externalAuthID, len(externalAuthID))
+					return
+				}
+				// Check error message contains expected substrings
+				for _, msg := range tt.errorMsgs {
+					if !strings.Contains(err.Error(), msg) {
+						t.Errorf("ValidateExternalAuthID(%q) error = %q, expected to contain %q",
+							tt.clusterNamePrefix, err.Error(), msg)
+					}
+				}
+			} else {
+				if err != nil {
+					t.Errorf("ValidateExternalAuthID(%q) unexpected error: %v",
+						tt.clusterNamePrefix, err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateExternalAuthID_Constants(t *testing.T) {
+	// Verify the constants are correctly defined
+	if MaxExternalAuthIDLength != 15 {
+		t.Errorf("MaxExternalAuthIDLength = %d, expected 15", MaxExternalAuthIDLength)
+	}
+
+	if ExternalAuthIDSuffix != "-ea" {
+		t.Errorf("ExternalAuthIDSuffix = %q, expected \"-ea\"", ExternalAuthIDSuffix)
+	}
+
+	if MaxClusterNamePrefixLength != 12 {
+		t.Errorf("MaxClusterNamePrefixLength = %d, expected 12 (15 - 3)", MaxClusterNamePrefixLength)
+	}
+
+	// Verify the relationship: MaxClusterNamePrefixLength + len(suffix) == MaxExternalAuthIDLength
+	if MaxClusterNamePrefixLength+len(ExternalAuthIDSuffix) != MaxExternalAuthIDLength {
+		t.Errorf("MaxClusterNamePrefixLength (%d) + len(ExternalAuthIDSuffix) (%d) != MaxExternalAuthIDLength (%d)",
+			MaxClusterNamePrefixLength, len(ExternalAuthIDSuffix), MaxExternalAuthIDLength)
+	}
+
+	// Test boundary: exactly at the limit should pass
+	// Prefix of 12 chars + "-ea" (3 chars) = 15 chars
+	err := ValidateExternalAuthID("123456789012")
+	if err != nil {
+		t.Errorf("ValidateExternalAuthID with 12 char prefix should pass, got error: %v", err)
+	}
+
+	// Test boundary: one char over should fail
+	// Prefix of 13 chars + "-ea" (3 chars) = 16 chars
+	err = ValidateExternalAuthID("1234567890123")
+	if err == nil {
+		t.Error("ValidateExternalAuthID with 13 char prefix should fail, got nil")
+	}
+}
+
 func TestIsRetryableKubectlError(t *testing.T) {
 	tests := []struct {
 		name     string

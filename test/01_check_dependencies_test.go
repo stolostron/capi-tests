@@ -282,6 +282,41 @@ func TestCheckDependencies_Clusterctl_IsAvailable(t *testing.T) {
 		"%s", installInstructions)
 }
 
+// TestCheckDependencies_NamingConstraints validates that cluster naming configuration
+// is within Azure/ARO limits. This catches configuration errors early (in phase 1)
+// rather than waiting for deployment failures during CR reconciliation.
+func TestCheckDependencies_NamingConstraints(t *testing.T) {
+	// Skip in CI environments where these env vars may not be configured
+	if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
+		t.Skip("Skipping naming constraints validation in CI environment")
+		return
+	}
+
+	config := NewTestConfig()
+
+	// Validate domain prefix: ${CAPZ_USER}-${DEPLOYMENT_ENV} ≤ 15 chars
+	t.Run("DomainPrefix", func(t *testing.T) {
+		if err := ValidateDomainPrefix(config.User, config.Environment); err != nil {
+			t.Errorf("Domain prefix validation failed:\n%v", err)
+		} else {
+			prefix := GetDomainPrefix(config.User, config.Environment)
+			t.Logf("Domain prefix '%s' (%d chars) is valid (max: %d)",
+				prefix, len(prefix), MaxDomainPrefixLength)
+		}
+	})
+
+	// Validate ExternalAuth ID: ${CS_CLUSTER_NAME}-ea ≤ 15 chars
+	t.Run("ExternalAuthID", func(t *testing.T) {
+		if err := ValidateExternalAuthID(config.ClusterNamePrefix); err != nil {
+			t.Errorf("ExternalAuth ID validation failed:\n%v", err)
+		} else {
+			externalAuthID := GetExternalAuthID(config.ClusterNamePrefix)
+			t.Logf("ExternalAuth ID '%s' (%d chars) is valid (max: %d)",
+				externalAuthID, len(externalAuthID), MaxExternalAuthIDLength)
+		}
+	})
+}
+
 // TestCheckDependencies_DockerCredentialHelper checks that any Docker credential helpers
 // configured in the Docker config file (credsStore or credHelpers) are available in PATH.
 // Only runs on macOS, where missing credential helpers are a common issue with Docker Desktop alternatives.

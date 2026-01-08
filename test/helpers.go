@@ -542,6 +542,19 @@ func PatchASOCredentialsSecret(t *testing.T, kubeContext string) error {
 // Azure/ARO enforces this limit on the AROControlPlane spec.domainPrefix field.
 const MaxDomainPrefixLength = 15
 
+// MaxExternalAuthIDLength is the maximum allowed length for ExternalAuth resource ID.
+// Azure enforces this limit on the ExternalAuth resource name.
+const MaxExternalAuthIDLength = 15
+
+// ExternalAuthIDSuffix is the suffix appended to CS_CLUSTER_NAME to form the ExternalAuth ID.
+// The ExternalAuth resource name is constructed as ${CS_CLUSTER_NAME}-ea.
+const ExternalAuthIDSuffix = "-ea"
+
+// MaxClusterNamePrefixLength is the maximum allowed length for CS_CLUSTER_NAME,
+// calculated as MaxExternalAuthIDLength minus the length of ExternalAuthIDSuffix.
+// This ensures the resulting ExternalAuth ID (${CS_CLUSTER_NAME}-ea) stays within limits.
+const MaxClusterNamePrefixLength = MaxExternalAuthIDLength - len(ExternalAuthIDSuffix) // 12
+
 // GetDomainPrefix returns the domain prefix that will be used for the ARO cluster.
 // The domain prefix is derived from CAPZ_USER and DEPLOYMENT_ENV environment variables
 // in the format "${CAPZ_USER}-${DEPLOYMENT_ENV}".
@@ -561,6 +574,41 @@ func ValidateDomainPrefix(user, environment string) error {
 				"  Suggestion: Use shorter values for CAPZ_USER or DEPLOYMENT_ENV environment variables",
 			prefix, len(prefix), MaxDomainPrefixLength,
 			user, len(user), environment, len(environment), len(prefix))
+	}
+	return nil
+}
+
+// GetExternalAuthID returns the ExternalAuth resource ID that will be created for the ARO cluster.
+// The ExternalAuth ID is derived from CS_CLUSTER_NAME (clusterNamePrefix) with the suffix "-ea".
+func GetExternalAuthID(clusterNamePrefix string) string {
+	return clusterNamePrefix + ExternalAuthIDSuffix
+}
+
+// ValidateExternalAuthID checks if the ExternalAuth ID length is within the allowed limit.
+// Returns an error with a descriptive message if the ID exceeds MaxExternalAuthIDLength (15 chars).
+// The ExternalAuth ID is constructed as ${CS_CLUSTER_NAME}-ea.
+//
+// This validation catches deployment failures early in prerequisites, rather than waiting
+// for the CR reconciliation phase where the error "ExternalAuth id '...' is X characters long -
+// its length exceeds the maximum length allowed of 15 characters" would occur.
+func ValidateExternalAuthID(clusterNamePrefix string) error {
+	externalAuthID := GetExternalAuthID(clusterNamePrefix)
+	if len(externalAuthID) > MaxExternalAuthIDLength {
+		// Calculate a suggested shorter name
+		suggestedName := clusterNamePrefix
+		if len(clusterNamePrefix) > MaxClusterNamePrefixLength {
+			suggestedName = clusterNamePrefix[:MaxClusterNamePrefixLength]
+		}
+
+		return fmt.Errorf(
+			"ExternalAuth ID '%s' (%d chars) exceeds maximum length of %d characters\n"+
+				"  CS_CLUSTER_NAME='%s' (%d chars) + '-ea' (3 chars) = %d chars\n"+
+				"  CS_CLUSTER_NAME must be ≤%d characters to allow for the '-ea' suffix\n"+
+				"  Suggestion: export CS_CLUSTER_NAME=%s",
+			externalAuthID, len(externalAuthID), MaxExternalAuthIDLength,
+			clusterNamePrefix, len(clusterNamePrefix), len(externalAuthID),
+			MaxClusterNamePrefixLength,
+			suggestedName)
 	}
 	return nil
 }
