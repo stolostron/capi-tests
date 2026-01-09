@@ -1350,7 +1350,7 @@ func TestFormatComponentVersions(t *testing.T) {
 			versions: []ComponentVersion{
 				{Name: "CAPZ", Version: "v1.19.0", Image: "mcr.microsoft.com/capz:v1.19.0"},
 			},
-			checks: []string{"CAPZ", "v1.19.0", "TESTED COMPONENT VERSIONS"},
+			checks: []string{"CAPZ", "v1.19.0", "COMPONENT VERSIONS"},
 		},
 		{
 			name: "multiple components",
@@ -1370,26 +1370,48 @@ func TestFormatComponentVersions(t *testing.T) {
 		{
 			name:     "empty versions",
 			versions: []ComponentVersion{},
-			checks:   []string{"TESTED COMPONENT VERSIONS"},
+			checks:   []string{"COMPONENT VERSIONS"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := FormatComponentVersions(tt.versions)
+			result := FormatComponentVersions(tt.versions, nil)
 
 			for _, check := range tt.checks {
 				if !strings.Contains(result, check) {
 					t.Errorf("FormatComponentVersions() output should contain %q, got:\n%s", check, result)
 				}
 			}
-
-			// Verify box drawing characters are present
-			if !strings.Contains(result, "╔") || !strings.Contains(result, "╚") {
-				t.Errorf("FormatComponentVersions() should use box drawing characters, got:\n%s", result)
-			}
 		})
 	}
+
+	// Test with full config
+	t.Run("with config", func(t *testing.T) {
+		versions := []ComponentVersion{
+			{Name: "CAPZ", Version: "v1.19.0", Image: "mcr.microsoft.com/capz:v1.19.0"},
+		}
+		config := &TestConfig{
+			ManagementClusterName: "test-mgmt",
+			WorkloadClusterName:   "test-workload",
+			Region:                "eastus",
+			ClusterNamePrefix:     "test-prefix",
+			OpenShiftVersion:      "4.21",
+		}
+		result := FormatComponentVersions(versions, config)
+		checks := []string{
+			"test-mgmt",
+			"test-workload",
+			"eastus",
+			"test-prefix-resgroup",
+			"4.21",
+		}
+		for _, check := range checks {
+			if !strings.Contains(result, check) {
+				t.Errorf("FormatComponentVersions() should contain %q, got:\n%s", check, result)
+			}
+		}
+	})
 }
 
 func TestComponentVersionStruct(t *testing.T) {
