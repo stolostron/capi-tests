@@ -71,14 +71,18 @@ if ! command -v xmllint &> /dev/null; then
 fi
 
 # Phase names mapping (filename prefix to display name)
-declare -A PHASE_NAMES=(
-    ["junit-check-dep"]="Check Dependencies"
-    ["junit-setup"]="Repository Setup"
-    ["junit-cluster"]="Cluster Deployment"
-    ["junit-generate-yamls"]="YAML Generation"
-    ["junit-deploy-crs"]="CR Deployment"
-    ["junit-verify"]="Cluster Verification"
-)
+# Using a function instead of associative array for bash 3.2 compatibility (macOS)
+get_phase_name() {
+    case "$1" in
+        "junit-check-dep") echo "Check Dependencies" ;;
+        "junit-setup") echo "Repository Setup" ;;
+        "junit-cluster") echo "Cluster Deployment" ;;
+        "junit-generate-yamls") echo "YAML Generation" ;;
+        "junit-deploy-crs") echo "CR Deployment" ;;
+        "junit-verify") echo "Cluster Verification" ;;
+        *) echo "$1" ;;
+    esac
+}
 
 # Phase order for consistent output
 PHASE_ORDER=(
@@ -126,7 +130,8 @@ parse_junit_file() {
     local file="$1"
     local phase_key="$2"
     local use_colors="${3:-true}"
-    local phase_name="${PHASE_NAMES[$phase_key]:-$phase_key}"
+    local phase_name
+    phase_name=$(get_phase_name "$phase_key")
 
     if [[ ! -f "$file" ]]; then
         return
