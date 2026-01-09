@@ -206,6 +206,7 @@ These environment variables are validated in the Check Dependencies phase. If mi
 - `REGION` - Azure region (default: `uksouth`)
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`)
 - `CAPZ_USER` - User identifier for domain prefix (default: `rcap`). Must be short enough that `${CAPZ_USER}-${DEPLOYMENT_ENV}` does not exceed 15 characters.
+- `TEST_NAMESPACE` - Kubernetes namespace for testing resources (default: `capz_tests`). All resource checks will be scoped to this namespace instead of using `-A` (all namespaces).
 
 **RFC 1123 Naming Compliance**: The following variables must be RFC 1123 compliant (lowercase alphanumeric and hyphens only, must start/end with alphanumeric):
 - `CAPZ_USER`

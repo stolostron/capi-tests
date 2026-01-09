@@ -864,13 +864,14 @@ func isRetryableKubectlError(output string, err error) bool {
 // Parameters:
 //   - t: testing context
 //   - kubeContext: kubectl context to use (e.g., "kind-capz-tests-stage")
+//   - namespace: namespace where the Cluster resource is located
 //   - clusterName: name of the Cluster resource to check
 //
 // Returns the phase string or an error if the cluster is not found or the phase cannot be retrieved.
-func GetClusterPhase(t *testing.T, kubeContext, clusterName string) (string, error) {
+func GetClusterPhase(t *testing.T, kubeContext, namespace, clusterName string) (string, error) {
 	t.Helper()
 
-	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "get", "cluster",
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "get", "cluster",
 		clusterName, "-o", "jsonpath={.status.phase}")
 	if err != nil {
 		return "", fmt.Errorf("failed to get cluster phase: %w", err)
@@ -895,10 +896,10 @@ const ClusterPhaseFailed = "Failed"
 
 // IsClusterReady checks if a cluster is in the Provisioned phase.
 // Returns true if the cluster is ready, false otherwise.
-func IsClusterReady(t *testing.T, kubeContext, clusterName string) bool {
+func IsClusterReady(t *testing.T, kubeContext, namespace, clusterName string) bool {
 	t.Helper()
 
-	phase, err := GetClusterPhase(t, kubeContext, clusterName)
+	phase, err := GetClusterPhase(t, kubeContext, namespace, clusterName)
 	if err != nil {
 		return false
 	}
@@ -919,11 +920,12 @@ const DefaultClusterReadyPollInterval = 30 * time.Second
 // Parameters:
 //   - t: testing context
 //   - kubeContext: kubectl context to use (e.g., "kind-capz-tests-stage")
+//   - namespace: namespace where the Cluster resource is located
 //   - clusterName: name of the Cluster resource to check
 //   - timeout: maximum time to wait for the cluster to become ready (use 0 for default of 60m)
 //
 // Returns nil if the cluster becomes ready, or an error if the timeout is reached or the cluster fails.
-func WaitForClusterReady(t *testing.T, kubeContext, clusterName string, timeout time.Duration) error {
+func WaitForClusterReady(t *testing.T, kubeContext, namespace, clusterName string, timeout time.Duration) error {
 	t.Helper()
 
 	if timeout == 0 {
@@ -934,8 +936,8 @@ func WaitForClusterReady(t *testing.T, kubeContext, clusterName string, timeout 
 	startTime := time.Now()
 
 	PrintToTTY("\n=== Waiting for cluster to be ready ===\n")
-	PrintToTTY("Cluster: %s | Timeout: %v | Poll interval: %v\n\n", clusterName, timeout, pollInterval)
-	t.Logf("Waiting for cluster '%s' to be ready (timeout: %v)...", clusterName, timeout)
+	PrintToTTY("Cluster: %s | Namespace: %s | Timeout: %v | Poll interval: %v\n\n", clusterName, namespace, timeout, pollInterval)
+	t.Logf("Waiting for cluster '%s' in namespace '%s' to be ready (timeout: %v)...", clusterName, namespace, timeout)
 
 	iteration := 0
 	for {
@@ -951,7 +953,7 @@ func WaitForClusterReady(t *testing.T, kubeContext, clusterName string, timeout 
 
 		PrintToTTY("[%d] Checking cluster phase...\n", iteration)
 
-		phase, err := GetClusterPhase(t, kubeContext, clusterName)
+		phase, err := GetClusterPhase(t, kubeContext, namespace, clusterName)
 		if err != nil {
 			PrintToTTY("[%d] ⚠️  Failed to get cluster phase: %v\n", iteration, err)
 			t.Logf("Failed to get cluster phase (iteration %d): %v", iteration, err)

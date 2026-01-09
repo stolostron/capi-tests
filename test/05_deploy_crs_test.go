@@ -221,11 +221,12 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 	provisionedClusterName := config.GetProvisionedClusterName()
 	PrintToTTY("\n=== Monitoring cluster deployment ===\n")
 	PrintToTTY("Cluster: %s\n", provisionedClusterName)
+	PrintToTTY("Namespace: %s\n", config.TestNamespace)
 	PrintToTTY("Context: %s\n", context)
 	PrintToTTY("\nChecking if cluster resource exists...\n")
-	t.Logf("Checking for cluster resource: %s", provisionedClusterName)
+	t.Logf("Checking for cluster resource: %s (namespace: %s)", provisionedClusterName, config.TestNamespace)
 
-	output, err := RunCommand(t, "kubectl", "--context", context, "get", "cluster", provisionedClusterName)
+	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.TestNamespace, "get", "cluster", provisionedClusterName)
 	if err != nil {
 		PrintToTTY("⚠️  Cluster resource not found (may not be deployed yet)\n\n")
 		t.Skipf("Cluster resource not found (may not be deployed yet): %v", err)
@@ -236,11 +237,11 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 
 	// Use clusterctl to describe the cluster
 	PrintToTTY("\n📊 Fetching cluster status with clusterctl...\n")
-	PrintToTTY("Running: %s describe cluster %s --show-conditions=all\n", clusterctlPath, provisionedClusterName)
+	PrintToTTY("Running: %s describe cluster %s -n %s --show-conditions=all\n", clusterctlPath, provisionedClusterName, config.TestNamespace)
 	PrintToTTY("This may take a few moments...\n")
 	t.Logf("Monitoring cluster deployment status using clusterctl...")
 
-	output, err = RunCommand(t, clusterctlPath, "describe", "cluster", provisionedClusterName, "--show-conditions=all")
+	output, err = RunCommand(t, clusterctlPath, "describe", "cluster", provisionedClusterName, "-n", config.TestNamespace, "--show-conditions=all")
 	if err != nil {
 		PrintToTTY("\n⚠️  clusterctl describe failed (cluster may still be initializing)\n")
 		PrintToTTY("Error: %v\n\n", err)
@@ -267,8 +268,9 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 
 	// Print to stderr for immediate visibility (unbuffered)
 	PrintToTTY("\n=== Waiting for control plane to be ready ===\n")
+	PrintToTTY("Namespace: %s\n", config.TestNamespace)
 	PrintToTTY("Timeout: %v | Poll interval: %v\n\n", timeout, pollInterval)
-	t.Logf("Waiting for control plane to be ready (timeout: %v)...", timeout)
+	t.Logf("Waiting for control plane to be ready (namespace: %s, timeout: %v)...", config.TestNamespace, timeout)
 
 	iteration := 0
 	for {
@@ -287,8 +289,9 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 		PrintToTTY("[%d] Checking control plane status...\n", iteration)
 
 		// ARO uses AROControlPlane, not kubeadmcontrolplane
+		// Use configurable namespace to check control plane status
 		output, err := RunCommand(t, "kubectl", "--context", context, "get",
-			"arocontrolplane", "-A", "-o", "jsonpath={.items[0].status.ready}")
+			"arocontrolplane", "-n", config.TestNamespace, "-o", "jsonpath={.items[0].status.ready}")
 
 		// Print the result of the check
 		if err != nil {
@@ -306,7 +309,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 
 		// Fetch and display AROControlPlane conditions for better visibility
 		conditionsOutput, condErr := RunCommandQuiet(t, "kubectl", "--context", context, "get",
-			"arocontrolplane", "-A", "-o", "jsonpath={.items[0].status.conditions}")
+			"arocontrolplane", "-n", config.TestNamespace, "-o", "jsonpath={.items[0].status.conditions}")
 		if condErr == nil && strings.TrimSpace(conditionsOutput) != "" {
 			PrintToTTY("[%d] 📋 AROControlPlane conditions:\n", iteration)
 			PrintToTTY("%s", FormatAROControlPlaneConditions(conditionsOutput))
@@ -329,13 +332,14 @@ func TestDeployment_CheckClusterConditions(t *testing.T) {
 	provisionedClusterName := config.GetProvisionedClusterName()
 
 	PrintToTTY("\n=== Checking cluster conditions ===\n")
-	PrintToTTY("Cluster: %s\n\n", provisionedClusterName)
-	t.Log("Checking cluster conditions...")
+	PrintToTTY("Cluster: %s\n", provisionedClusterName)
+	PrintToTTY("Namespace: %s\n\n", config.TestNamespace)
+	t.Logf("Checking cluster conditions (namespace: %s)...", config.TestNamespace)
 
 	// Check cluster status
 	PrintToTTY("Fetching cluster status...\n")
 
-	output, err := RunCommand(t, "kubectl", "--context", context, "get", "cluster", provisionedClusterName, "-o", "yaml")
+	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.TestNamespace, "get", "cluster", provisionedClusterName, "-o", "yaml")
 	if err != nil {
 		PrintToTTY("❌ Failed to get cluster status: %v\n\n", err)
 		t.Errorf("Failed to get cluster status: %v", err)
@@ -356,7 +360,7 @@ func TestDeployment_CheckClusterConditions(t *testing.T) {
 	// Check for infrastructure ready condition
 	PrintToTTY("Checking InfrastructureReady condition...\n")
 
-	output, err = RunCommand(t, "kubectl", "--context", context, "get", "cluster", provisionedClusterName,
+	output, err = RunCommand(t, "kubectl", "--context", context, "-n", config.TestNamespace, "get", "cluster", provisionedClusterName,
 		"-o", "jsonpath={.status.conditions[?(@.type=='InfrastructureReady')].status}")
 
 	if err == nil && strings.TrimSpace(output) != "" {
@@ -367,7 +371,7 @@ func TestDeployment_CheckClusterConditions(t *testing.T) {
 	// Check for control plane ready condition
 	PrintToTTY("Checking ControlPlaneReady condition...\n")
 
-	output, err = RunCommand(t, "kubectl", "--context", context, "get", "cluster", provisionedClusterName,
+	output, err = RunCommand(t, "kubectl", "--context", context, "-n", config.TestNamespace, "get", "cluster", provisionedClusterName,
 		"-o", "jsonpath={.status.conditions[?(@.type=='ControlPlaneReady')].status}")
 
 	if err == nil && strings.TrimSpace(output) != "" {

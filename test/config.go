@@ -65,6 +65,7 @@ type TestConfig struct {
 	AzureSubscription     string
 	Environment           string
 	User                  string
+	TestNamespace         string // Namespace for testing resources (default: "default")
 
 	// Paths
 	ClusterctlBinPath string
@@ -93,6 +94,7 @@ func NewTestConfig() *TestConfig {
 		AzureSubscription:     os.Getenv("AZURE_SUBSCRIPTION_NAME"),
 		Environment:           GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv),
 		User:                  GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser),
+		TestNamespace:         GetEnvOrDefault("TEST_NAMESPACE", "capz_tests"),
 
 		// Paths
 		ClusterctlBinPath: GetEnvOrDefault("CLUSTERCTL_BIN", "./bin/clusterctl"),

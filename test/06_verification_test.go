@@ -29,7 +29,7 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 	// Check cluster phase before attempting kubeconfig retrieval (fixes #275)
 	// When a cluster is still provisioning, ASO creates the kubeconfig secret with an empty
 	// value, which causes confusing "Secret value is empty" errors.
-	clusterPhase, err := GetClusterPhase(t, context, provisionedClusterName)
+	clusterPhase, err := GetClusterPhase(t, context, config.TestNamespace, provisionedClusterName)
 	if err != nil {
 		t.Skipf("Cannot determine cluster phase: %v (cluster resource may not exist yet)", err)
 	}
@@ -42,13 +42,13 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 	// Kubeconfig output path - use helper for consistency
 	kubeconfigPath := getKubeconfigPath(config)
 
-	t.Logf("Retrieving kubeconfig for cluster '%s'", provisionedClusterName)
+	t.Logf("Retrieving kubeconfig for cluster '%s' (namespace: %s)", provisionedClusterName, config.TestNamespace)
 
 	// Method 1: Using kubectl to get secret
 	secretName := fmt.Sprintf("%s-kubeconfig", provisionedClusterName)
 
-	t.Logf("Attempting Method 1: kubectl --context %s get secret %s -o jsonpath={.data.value}", context, secretName)
-	output, err := RunCommand(t, "kubectl", "--context", context, "get", "secret",
+	t.Logf("Attempting Method 1: kubectl --context %s -n %s get secret %s -o jsonpath={.data.value}", context, config.TestNamespace, secretName)
+	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.TestNamespace, "get", "secret",
 		secretName, "-o", "jsonpath={.data.value}")
 
 	if err != nil {
@@ -61,9 +61,9 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 		}
 
 		if FileExists(clusterctlPath) || CommandExists("clusterctl") {
-			t.Logf("Attempting Method 2: %s get kubeconfig %s", clusterctlPath, provisionedClusterName)
+			t.Logf("Attempting Method 2: %s get kubeconfig %s -n %s", clusterctlPath, provisionedClusterName, config.TestNamespace)
 
-			output, err = RunCommand(t, clusterctlPath, "get", "kubeconfig", provisionedClusterName)
+			output, err = RunCommand(t, clusterctlPath, "get", "kubeconfig", provisionedClusterName, "-n", config.TestNamespace)
 			if err != nil {
 				t.Errorf("Both kubeconfig retrieval methods failed: %v", err)
 				return
