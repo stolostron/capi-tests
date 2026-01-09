@@ -9,6 +9,14 @@ import (
 	"testing"
 )
 
+// getKubeconfigPath returns the path where the workload cluster kubeconfig is stored.
+// This is calculated deterministically from the config, allowing tests to find the
+// kubeconfig without relying on environment variables that may be cleaned up.
+func getKubeconfigPath(config *TestConfig) string {
+	provisionedClusterName := config.GetProvisionedClusterName()
+	return filepath.Join(os.TempDir(), fmt.Sprintf("%s-kubeconfig.yaml", provisionedClusterName))
+}
+
 // TestVerification_RetrieveKubeconfig tests retrieving the cluster kubeconfig
 func TestVerification_RetrieveKubeconfig(t *testing.T) {
 
@@ -18,8 +26,8 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 	// Use the provisioned cluster name from aro.yaml
 	provisionedClusterName := config.GetProvisionedClusterName()
 
-	// Kubeconfig output path
-	kubeconfigPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-kubeconfig.yaml", provisionedClusterName))
+	// Kubeconfig output path - use helper for consistency
+	kubeconfigPath := getKubeconfigPath(config)
 
 	t.Logf("Retrieving kubeconfig for cluster '%s'", provisionedClusterName)
 
@@ -93,13 +101,11 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 // TestVerification_ClusterNodes verifies cluster nodes are available
 func TestVerification_ClusterNodes(t *testing.T) {
 
-	kubeconfigPath := os.Getenv("ARO_CLUSTER_KUBECONFIG")
-	if kubeconfigPath == "" {
-		t.Skip("Kubeconfig not available, run TestVerification_RetrieveKubeconfig first")
-	}
+	config := NewTestConfig()
+	kubeconfigPath := getKubeconfigPath(config)
 
 	if !FileExists(kubeconfigPath) {
-		t.Skipf("Kubeconfig file not found at %s", kubeconfigPath)
+		t.Skipf("Kubeconfig not available at %s, run TestVerification_RetrieveKubeconfig first", kubeconfigPath)
 	}
 
 	t.Log("Checking cluster nodes...")
@@ -127,13 +133,11 @@ func TestVerification_ClusterNodes(t *testing.T) {
 // TestVerification_ClusterVersion verifies the OpenShift cluster version
 func TestVerification_ClusterVersion(t *testing.T) {
 
-	kubeconfigPath := os.Getenv("ARO_CLUSTER_KUBECONFIG")
-	if kubeconfigPath == "" {
-		t.Skip("Kubeconfig not available, run TestVerification_RetrieveKubeconfig first")
-	}
+	config := NewTestConfig()
+	kubeconfigPath := getKubeconfigPath(config)
 
 	if !FileExists(kubeconfigPath) {
-		t.Skipf("Kubeconfig file not found at %s", kubeconfigPath)
+		t.Skipf("Kubeconfig not available at %s, run TestVerification_RetrieveKubeconfig first", kubeconfigPath)
 	}
 
 	t.Log("Checking OpenShift cluster version...")
@@ -152,13 +156,11 @@ func TestVerification_ClusterVersion(t *testing.T) {
 // TestVerification_ClusterOperators checks cluster operators status
 func TestVerification_ClusterOperators(t *testing.T) {
 
-	kubeconfigPath := os.Getenv("ARO_CLUSTER_KUBECONFIG")
-	if kubeconfigPath == "" {
-		t.Skip("Kubeconfig not available, run TestVerification_RetrieveKubeconfig first")
-	}
+	config := NewTestConfig()
+	kubeconfigPath := getKubeconfigPath(config)
 
 	if !FileExists(kubeconfigPath) {
-		t.Skipf("Kubeconfig file not found at %s", kubeconfigPath)
+		t.Skipf("Kubeconfig not available at %s, run TestVerification_RetrieveKubeconfig first", kubeconfigPath)
 	}
 
 	t.Log("Checking cluster operators...")
@@ -177,13 +179,11 @@ func TestVerification_ClusterOperators(t *testing.T) {
 // TestVerification_ClusterHealth performs basic health checks
 func TestVerification_ClusterHealth(t *testing.T) {
 
-	kubeconfigPath := os.Getenv("ARO_CLUSTER_KUBECONFIG")
-	if kubeconfigPath == "" {
-		t.Skip("Kubeconfig not available, run TestVerification_RetrieveKubeconfig first")
-	}
+	config := NewTestConfig()
+	kubeconfigPath := getKubeconfigPath(config)
 
 	if !FileExists(kubeconfigPath) {
-		t.Skipf("Kubeconfig file not found at %s", kubeconfigPath)
+		t.Skipf("Kubeconfig not available at %s, run TestVerification_RetrieveKubeconfig first", kubeconfigPath)
 	}
 
 	SetEnvVar(t, "KUBECONFIG", kubeconfigPath)
