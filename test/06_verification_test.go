@@ -26,6 +26,19 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 	// Use the provisioned cluster name from aro.yaml
 	provisionedClusterName := config.GetProvisionedClusterName()
 
+	// Check cluster phase before attempting kubeconfig retrieval (fixes #275)
+	// When a cluster is still provisioning, ASO creates the kubeconfig secret with an empty
+	// value, which causes confusing "Secret value is empty" errors.
+	clusterPhase, err := GetClusterPhase(t, context, provisionedClusterName)
+	if err != nil {
+		t.Skipf("Cannot determine cluster phase: %v (cluster resource may not exist yet)", err)
+	}
+
+	if clusterPhase != ClusterPhaseProvisioned {
+		t.Skipf("Cluster is not ready (current phase: %s), skipping kubeconfig retrieval. "+
+			"Wait for cluster provisioning to complete or run TestDeployment_WaitForControlPlane first.", clusterPhase)
+	}
+
 	// Kubeconfig output path - use helper for consistency
 	kubeconfigPath := getKubeconfigPath(config)
 

@@ -1243,3 +1243,35 @@ func TestRetryConstants(t *testing.T) {
 		t.Errorf("DefaultApplyRetryDelay = %v, expected at least 5s", DefaultApplyRetryDelay)
 	}
 }
+
+func TestClusterPhaseConstants(t *testing.T) {
+	// Verify cluster phase constants are correctly defined
+	if ClusterPhaseProvisioned != "Provisioned" {
+		t.Errorf("ClusterPhaseProvisioned = %q, expected \"Provisioned\"", ClusterPhaseProvisioned)
+	}
+
+	if ClusterPhaseProvisioning != "Provisioning" {
+		t.Errorf("ClusterPhaseProvisioning = %q, expected \"Provisioning\"", ClusterPhaseProvisioning)
+	}
+
+	if ClusterPhaseFailed != "Failed" {
+		t.Errorf("ClusterPhaseFailed = %q, expected \"Failed\"", ClusterPhaseFailed)
+	}
+}
+
+func TestClusterReadyConstants(t *testing.T) {
+	// Verify cluster ready timeout constants have sensible values
+	if DefaultClusterReadyTimeout < 30*time.Minute {
+		t.Errorf("DefaultClusterReadyTimeout = %v, expected at least 30m", DefaultClusterReadyTimeout)
+	}
+
+	if DefaultClusterReadyPollInterval < 10*time.Second {
+		t.Errorf("DefaultClusterReadyPollInterval = %v, expected at least 10s", DefaultClusterReadyPollInterval)
+	}
+
+	// Verify poll interval is less than timeout
+	if DefaultClusterReadyPollInterval >= DefaultClusterReadyTimeout {
+		t.Errorf("DefaultClusterReadyPollInterval (%v) should be less than DefaultClusterReadyTimeout (%v)",
+			DefaultClusterReadyPollInterval, DefaultClusterReadyTimeout)
+	}
+}

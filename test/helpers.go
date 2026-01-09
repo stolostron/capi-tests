@@ -856,6 +856,127 @@ func isRetryableKubectlError(output string, err error) bool {
 	return false
 }
 
+// GetClusterPhase retrieves the current phase of a CAPI Cluster resource.
+// Returns the phase string (e.g., "Provisioning", "Provisioned", "Failed") or an error.
+// This is useful for checking if a cluster is ready before attempting operations that
+// require the cluster to be fully provisioned (like retrieving kubeconfig).
+//
+// Parameters:
+//   - t: testing context
+//   - kubeContext: kubectl context to use (e.g., "kind-capz-tests-stage")
+//   - clusterName: name of the Cluster resource to check
+//
+// Returns the phase string or an error if the cluster is not found or the phase cannot be retrieved.
+func GetClusterPhase(t *testing.T, kubeContext, clusterName string) (string, error) {
+	t.Helper()
+
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "get", "cluster",
+		clusterName, "-o", "jsonpath={.status.phase}")
+	if err != nil {
+		return "", fmt.Errorf("failed to get cluster phase: %w", err)
+	}
+
+	phase := strings.TrimSpace(output)
+	if phase == "" {
+		return "", fmt.Errorf("cluster phase is empty (cluster may not have status yet)")
+	}
+
+	return phase, nil
+}
+
+// ClusterPhaseProvisioned is the phase value indicating a cluster is fully provisioned and ready.
+const ClusterPhaseProvisioned = "Provisioned"
+
+// ClusterPhaseProvisioning is the phase value indicating a cluster is still being provisioned.
+const ClusterPhaseProvisioning = "Provisioning"
+
+// ClusterPhaseFailed is the phase value indicating a cluster provisioning has failed.
+const ClusterPhaseFailed = "Failed"
+
+// IsClusterReady checks if a cluster is in the Provisioned phase.
+// Returns true if the cluster is ready, false otherwise.
+func IsClusterReady(t *testing.T, kubeContext, clusterName string) bool {
+	t.Helper()
+
+	phase, err := GetClusterPhase(t, kubeContext, clusterName)
+	if err != nil {
+		return false
+	}
+
+	return phase == ClusterPhaseProvisioned
+}
+
+// DefaultClusterReadyTimeout is the default timeout for waiting for a cluster to become ready.
+const DefaultClusterReadyTimeout = 60 * time.Minute
+
+// DefaultClusterReadyPollInterval is the default interval between cluster ready checks.
+const DefaultClusterReadyPollInterval = 30 * time.Second
+
+// WaitForClusterReady waits for a cluster to reach the Provisioned phase.
+// This is useful when you need to wait for a cluster to be fully provisioned before
+// performing operations that require the cluster to be ready (like retrieving kubeconfig).
+//
+// Parameters:
+//   - t: testing context
+//   - kubeContext: kubectl context to use (e.g., "kind-capz-tests-stage")
+//   - clusterName: name of the Cluster resource to check
+//   - timeout: maximum time to wait for the cluster to become ready (use 0 for default of 60m)
+//
+// Returns nil if the cluster becomes ready, or an error if the timeout is reached or the cluster fails.
+func WaitForClusterReady(t *testing.T, kubeContext, clusterName string, timeout time.Duration) error {
+	t.Helper()
+
+	if timeout == 0 {
+		timeout = DefaultClusterReadyTimeout
+	}
+
+	pollInterval := DefaultClusterReadyPollInterval
+	startTime := time.Now()
+
+	PrintToTTY("\n=== Waiting for cluster to be ready ===\n")
+	PrintToTTY("Cluster: %s | Timeout: %v | Poll interval: %v\n\n", clusterName, timeout, pollInterval)
+	t.Logf("Waiting for cluster '%s' to be ready (timeout: %v)...", clusterName, timeout)
+
+	iteration := 0
+	for {
+		elapsed := time.Since(startTime)
+		remaining := timeout - elapsed
+
+		if elapsed > timeout {
+			PrintToTTY("\n❌ Timeout waiting for cluster to be ready after %v\n\n", elapsed.Round(time.Second))
+			return fmt.Errorf("timeout waiting for cluster '%s' to be ready after %v", clusterName, elapsed.Round(time.Second))
+		}
+
+		iteration++
+
+		PrintToTTY("[%d] Checking cluster phase...\n", iteration)
+
+		phase, err := GetClusterPhase(t, kubeContext, clusterName)
+		if err != nil {
+			PrintToTTY("[%d] ⚠️  Failed to get cluster phase: %v\n", iteration, err)
+			t.Logf("Failed to get cluster phase (iteration %d): %v", iteration, err)
+		} else {
+			PrintToTTY("[%d] 📊 Cluster phase: %s\n", iteration, phase)
+			t.Logf("Cluster phase (iteration %d): %s", iteration, phase)
+
+			switch phase {
+			case ClusterPhaseProvisioned:
+				PrintToTTY("\n✅ Cluster is ready! (took %v)\n\n", elapsed.Round(time.Second))
+				t.Logf("Cluster '%s' is ready (took %v)", clusterName, elapsed.Round(time.Second))
+				return nil
+			case ClusterPhaseFailed:
+				PrintToTTY("\n❌ Cluster provisioning failed!\n\n")
+				return fmt.Errorf("cluster '%s' provisioning failed", clusterName)
+			}
+		}
+
+		// Report progress
+		ReportProgress(t, iteration, elapsed, remaining, timeout)
+
+		time.Sleep(pollInterval)
+	}
+}
+
 // ValidateYAMLFile validates that a file contains valid YAML.
 // Returns an error if the file is empty, unreadable, or contains invalid YAML syntax.
 // This is more robust than just checking file size, as it verifies YAML structure.
