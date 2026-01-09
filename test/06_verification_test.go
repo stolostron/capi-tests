@@ -238,7 +238,7 @@ func TestVerification_TestedVersionsSummary(t *testing.T) {
 	versions := GetComponentVersions(t, context)
 
 	// Format and display the version summary
-	summary := FormatComponentVersions(versions)
+	summary := FormatComponentVersions(versions, config)
 	PrintToTTY("%s", summary)
 	t.Log(summary)
 

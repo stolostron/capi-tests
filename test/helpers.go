@@ -1069,22 +1069,35 @@ func GetComponentVersions(t *testing.T, kubeContext string) []ComponentVersion {
 
 // FormatComponentVersions formats a slice of ComponentVersion for display.
 // Returns a formatted string suitable for logging.
-func FormatComponentVersions(versions []ComponentVersion) string {
+// Pass nil for config to omit cluster and Azure settings.
+func FormatComponentVersions(versions []ComponentVersion, config *TestConfig) string {
 	var result strings.Builder
-	result.WriteString("\n╔════════════════════════════════════════════════════════════════════════════════╗\n")
-	result.WriteString("║                      TESTED COMPONENT VERSIONS                                 ║\n")
-	result.WriteString("╠════════════════════════════════════════════════════════════════════════════════╣\n")
+	result.WriteString("\n=== TESTED CONFIGURATION ===\n")
 
-	for _, v := range versions {
-		// Truncate image if too long for display
-		displayImage := v.Image
-		if len(displayImage) > 60 {
-			displayImage = displayImage[:57] + "..."
+	if config != nil {
+		// Local cluster settings
+		result.WriteString("\nLocal (Kind) Cluster:\n")
+		result.WriteString(fmt.Sprintf("  Management Cluster: %s\n", config.ManagementClusterName))
+		result.WriteString(fmt.Sprintf("  Workload Cluster:   %s\n", config.WorkloadClusterName))
+
+		// Azure settings
+		result.WriteString("\nAzure Settings:\n")
+		result.WriteString(fmt.Sprintf("  Region:             %s\n", config.Region))
+		if config.AzureSubscription != "" {
+			result.WriteString(fmt.Sprintf("  Subscription:       %s\n", config.AzureSubscription))
 		}
-		result.WriteString(fmt.Sprintf("║ %-38s │ %-15s ║\n", v.Name, v.Version))
+		result.WriteString(fmt.Sprintf("  Resource Group:     %s-resgroup\n", config.ClusterNamePrefix))
+		result.WriteString(fmt.Sprintf("  OpenShift Version:  %s\n", config.OpenShiftVersion))
 	}
 
-	result.WriteString("╚════════════════════════════════════════════════════════════════════════════════╝\n")
+	// Component versions
+	result.WriteString("\n=== COMPONENT VERSIONS ===\n\n")
+
+	for _, v := range versions {
+		result.WriteString(fmt.Sprintf("%s: %s\n", v.Name, v.Version))
+		result.WriteString(fmt.Sprintf("  Image: %s\n", v.Image))
+	}
+
 	return result.String()
 }
 
