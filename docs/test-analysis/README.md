@@ -30,14 +30,14 @@ make test-all
 
 | Phase | Make Target | Test File | Tests | Timeout | Description |
 |-------|-------------|-----------|-------|---------|-------------|
-| 1 | [_check-dep](01-check-dependencies/00-Overview.md) | `01_check_dependencies_test.go` | 9 | 2m | Verify tools and authentication |
+| 1 | [_check-dep](01-check-dependencies/00-Overview.md) | `01_check_dependencies_test.go` | 12 | 2m | Verify tools, authentication, and naming |
 | 2 | [_setup](02-setup/00-Overview.md) | `02_setup_test.go` | 3 | 2m | Clone repository, verify scripts |
 | 3 | [_cluster](03-cluster/00-Overview.md) | `03_cluster_test.go` | 7 | 30m | Deploy Kind cluster with controllers |
 | 4 | [_generate-yamls](04-generate-yamls/00-Overview.md) | `04_generate_yamls_test.go` | 4 | 20m | Generate YAML manifests |
 | 5 | [_deploy-crs](05-deploy-crs/00-Overview.md) | `05_deploy_crs_test.go` | 7 | 40m | Apply CRs, wait for deployment |
-| 6 | [_verify](06-verification/00-Overview.md) | `06_verification_test.go` | 5 | 20m | Validate workload cluster |
+| 6 | [_verify](06-verification/00-Overview.md) | `06_verification_test.go` | 7 | 20m | Validate workload cluster |
 
-**Total: 35 tests across 6 phases**
+**Total: 40 tests across 6 phases**
 
 ---
 
@@ -46,9 +46,10 @@ make test-all
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           PHASE 1: CHECK DEPENDENCIES                        │
-│  Tools: docker, kind, az, oc, helm, git, kubectl, go, clusterctl            │
+│  Tools: docker, kind, az, oc, helm, git, kubectl, go, clusterctl, python3  │
 │  Daemon: Docker daemon running check                                         │
-│  Auth: Azure CLI login, auto-extract tenant/subscription IDs                │
+│  Auth: Azure authentication (service principal or CLI)                      │
+│  Naming: RFC 1123 compliance, domain prefix length validation              │
 │  Creds: Docker credential helper check (macOS)                              │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
@@ -92,6 +93,7 @@ make test-all
 │  Nodes: kubectl get nodes                                                    │
 │  Operators: oc get clusteroperators                                          │
 │  Health: kubectl get pods -A (check for non-running)                        │
+│  Summary: Display component versions and save controller logs               │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -124,6 +126,7 @@ make _verify         # Phase 6
 | `DEPLOYMENT_TIMEOUT` | `45m` | Control plane wait timeout |
 | `DEPLOYMENT_ENV` | `stage` | Environment identifier |
 | `REGION` | `uksouth` | Azure region |
+| `CAPZ_USER` | `rcap` | User identifier (RFC 1123 compliant) |
 
 ---
 
@@ -142,7 +145,10 @@ docs/test-analysis/
 │   ├── 06-Helm.md
 │   ├── 07-Kind.md
 │   ├── 08-Clusterctl.md
-│   └── 09-DockerCredentialHelper.md
+│   ├── 09-DockerCredentialHelper.md
+│   ├── 10-PythonVersion.md
+│   ├── 11-NamingConstraints.md
+│   └── 12-NamingCompliance.md
 ├── 02-setup/
 │   ├── 00-Overview.md
 │   ├── 01-CloneRepository.md
@@ -178,5 +184,7 @@ docs/test-analysis/
     ├── 02-ClusterNodes.md
     ├── 03-ClusterVersion.md
     ├── 04-ClusterOperators.md
-    └── 05-ClusterHealth.md
+    ├── 05-ClusterHealth.md
+    ├── 06-TestedVersionsSummary.md
+    └── 07-ControllerLogSummary.md
 ```
