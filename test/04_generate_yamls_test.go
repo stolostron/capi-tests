@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// infrastructureGenerationSucceeded tracks whether TestInfrastructure_GenerateResources completed successfully.
+// When false, dependent verification tests will skip to avoid confusing cascading failures.
+var infrastructureGenerationSucceeded bool
+
 // TestInfrastructure_GenerateResources tests generating ARO infrastructure resources
 func TestInfrastructure_GenerateResources(t *testing.T) {
 
@@ -104,10 +108,19 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 		}
 	}
 	PrintToTTY("\n")
+
+	// Mark generation as successful only if no errors occurred
+	if !t.Failed() {
+		infrastructureGenerationSucceeded = true
+	}
 }
 
 // TestInfrastructure_VerifyCredentialsYAML verifies credentials.yaml exists and is valid
 func TestInfrastructure_VerifyCredentialsYAML(t *testing.T) {
+	if !infrastructureGenerationSucceeded {
+		t.Skip("Skipping: TestInfrastructure_GenerateResources did not succeed")
+	}
+
 	t.Log("Verifying credentials.yaml")
 
 	config := NewTestConfig()
@@ -139,6 +152,10 @@ func TestInfrastructure_VerifyCredentialsYAML(t *testing.T) {
 
 // TestInfrastructure_VerifyInfrastructureSecretsYAML verifies is.yaml exists and is valid
 func TestInfrastructure_VerifyInfrastructureSecretsYAML(t *testing.T) {
+	if !infrastructureGenerationSucceeded {
+		t.Skip("Skipping: TestInfrastructure_GenerateResources did not succeed")
+	}
+
 	t.Log("Verifying is.yaml (infrastructure secrets)")
 
 	config := NewTestConfig()
@@ -170,6 +187,10 @@ func TestInfrastructure_VerifyInfrastructureSecretsYAML(t *testing.T) {
 
 // TestInfrastructure_VerifyAROClusterYAML verifies aro.yaml exists and is valid
 func TestInfrastructure_VerifyAROClusterYAML(t *testing.T) {
+	if !infrastructureGenerationSucceeded {
+		t.Skip("Skipping: TestInfrastructure_GenerateResources did not succeed")
+	}
+
 	t.Log("Verifying aro.yaml (ARO cluster configuration)")
 
 	config := NewTestConfig()
