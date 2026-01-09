@@ -1338,7 +1338,7 @@ func SaveControllerLogs(t *testing.T, kubeContext, namespace, deploymentName, co
 	}
 
 	// Create output directory if it doesn't exist
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, 0750); err != nil {
 		return "", fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -1347,7 +1347,7 @@ func SaveControllerLogs(t *testing.T, kubeContext, namespace, deploymentName, co
 	logFilePath := fmt.Sprintf("%s/%s", outputDir, filename)
 
 	// Write logs to file
-	if err := os.WriteFile(logFilePath, []byte(logs), 0644); err != nil {
+	if err := os.WriteFile(logFilePath, []byte(logs), 0600); err != nil {
 		return "", fmt.Errorf("failed to write log file: %w", err)
 	}
 
@@ -1510,7 +1510,7 @@ func GetResultsDir() string {
 	// Create a new results directory with current timestamp
 	timestamp := time.Now().Format("20060102_150405")
 	newDir := fmt.Sprintf("results/%s", timestamp)
-	if err := os.MkdirAll(newDir, 0755); err != nil {
+	if err := os.MkdirAll(newDir, 0750); err != nil {
 		// Fall back to /tmp if we can't create the directory
 		return os.TempDir()
 	}
