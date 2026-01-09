@@ -253,15 +253,14 @@ test-all: ## Run all test phases sequentially
 	@echo "=== All Test Phases Completed Successfully ==="
 	@echo "======================================="
 	@echo ""
-	@# Generate test results summary
+	@# Generate test results summary from LATEST_RESULTS_DIR which contains all phases
+	@# Each phase copies its results to LATEST_RESULTS_DIR, so the summary aggregates all
 	@if [ -x scripts/generate-summary.sh ]; then \
 		echo ""; \
-		./scripts/generate-summary.sh $(RESULTS_DIR); \
-		cp -f $(RESULTS_DIR)/summary.txt $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
+		./scripts/generate-summary.sh $(LATEST_RESULTS_DIR); \
 	fi
 	@echo ""
-	@echo "All test results saved to: $(RESULTS_DIR)"
-	@echo "Latest results copied to: $(LATEST_RESULTS_DIR)/"
+	@echo "All test results saved to: $(LATEST_RESULTS_DIR)/"
 
 clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 	@if [ "$(FORCE)" = "1" ]; then \
