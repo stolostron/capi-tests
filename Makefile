@@ -1,10 +1,12 @@
 .PHONY: test _check-dep _setup _cluster _generate-yamls _deploy-crds _verify test-all clean clean-all clean-azure help summary
 
 # Default values
+# Extract CAPZ_USER default from Go config to maintain single source of truth
+CAPZ_USER_DEFAULT := $(shell grep 'DefaultCAPZUser = ' test/config.go | grep -o '"[^"]*"' | tr -d '"')
+CAPZ_USER ?= $(CAPZ_USER_DEFAULT)
 DEPLOYMENT_ENV ?= stage
 REGION ?= uksouth
 MANAGEMENT_CLUSTER_NAME ?= capz-tests-stage
-CAPZ_USER ?= rcap
 CS_CLUSTER_NAME ?= $(CAPZ_USER)-$(DEPLOYMENT_ENV)
 AZURE_RESOURCE_GROUP ?= $(CS_CLUSTER_NAME)-resgroup
 
