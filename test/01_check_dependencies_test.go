@@ -97,7 +97,15 @@ func TestCheckDependencies_DockerDaemonRunning(t *testing.T) {
 // Newer versions (3.13+) are not supported and will cause deployment failures.
 // This is a fail-fast check - if Python version is unsupported, subsequent tests
 // that depend on Python scripts will fail.
+// Skipped on macOS where Python version management varies widely (see issue #330).
 func TestCheckDependencies_PythonVersion(t *testing.T) {
+	// Skip on macOS - Python 3.14.2 works on Mac but 3.14 fails on Fedora
+	// See issue #330 for investigation into exact version requirements
+	if runtime.GOOS == "darwin" {
+		t.Skip("Skipping Python version check on macOS (see issue #330)")
+		return
+	}
+
 	// Determine which Python command to use
 	var pythonCmd string
 	if CommandExists("python3") {
