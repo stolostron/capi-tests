@@ -556,6 +556,59 @@ func TestFormatAROControlPlaneConditions(t *testing.T) {
 			input:    `[{"type":"SomeCondition","status":"Unknown"}]`,
 			contains: []string{"⏳", "SomeCondition:", "Unknown"},
 		},
+		{
+			name: "waiting condition - requires machine pool",
+			input: `[{
+				"type":"ExternalAuthReady",
+				"status":"False",
+				"reason":"ReconciliationFailed",
+				"message":"external authentication requires at least one ready machine pool. Object will be requeued after 30ns"
+			}]`,
+			contains: []string{"⏳", "ExternalAuthReady:", "False", "(Waiting for machine pool)"},
+		},
+		{
+			name: "waiting condition - will be requeued",
+			input: `[{
+				"type":"SomeCondition",
+				"status":"False",
+				"reason":"SomeReason",
+				"message":"Resource is not ready. Will be requeued shortly."
+			}]`,
+			contains: []string{"⏳", "SomeCondition:", "False", "(Waiting (will retry))"},
+		},
+		{
+			name: "waiting condition - not found",
+			input: `[{
+				"type":"DependencyReady",
+				"status":"False",
+				"reason":"ReconciliationFailed",
+				"message":"Required resource not found in namespace"
+			}]`,
+			contains: []string{"⏳", "DependencyReady:", "False", "(Waiting for resource creation)"},
+		},
+		{
+			name: "actual failure - no waiting pattern",
+			input: `[{
+				"type":"SomeCondition",
+				"status":"False",
+				"reason":"ActualError",
+				"message":"Something went wrong unexpectedly"
+			}]`,
+			contains: []string{"🔄", "SomeCondition:", "False", "(ActualError)"},
+		},
+		{
+			name: "mixed conditions - some waiting some not",
+			input: `[
+				{"type":"Ready","status":"False","reason":"Reconciling"},
+				{"type":"ExternalAuthReady","status":"False","reason":"ReconciliationFailed","message":"requires at least one ready machine pool"},
+				{"type":"HcpClusterReady","status":"True"}
+			]`,
+			contains: []string{
+				"🔄", "Ready:", "(Reconciling)",
+				"⏳", "ExternalAuthReady:", "(Waiting for machine pool)",
+				"✅", "HcpClusterReady:",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -566,6 +619,103 @@ func TestFormatAROControlPlaneConditions(t *testing.T) {
 				if !strings.Contains(result, substr) {
 					t.Errorf("FormatAROControlPlaneConditions() result = %q, expected to contain %q", result, substr)
 				}
+			}
+		})
+	}
+}
+
+func TestIsWaitingCondition(t *testing.T) {
+	tests := []struct {
+		name            string
+		condition       AROControlPlaneCondition
+		expectedWaiting bool
+		expectedDesc    string
+	}{
+		{
+			name: "True status - never waiting",
+			condition: AROControlPlaneCondition{
+				Type:    "Ready",
+				Status:  "True",
+				Message: "requires at least one ready machine pool",
+			},
+			expectedWaiting: false,
+			expectedDesc:    "",
+		},
+		{
+			name: "False with machine pool message",
+			condition: AROControlPlaneCondition{
+				Type:    "ExternalAuthReady",
+				Status:  "False",
+				Reason:  "ReconciliationFailed",
+				Message: "external authentication requires at least one ready machine pool",
+			},
+			expectedWaiting: true,
+			expectedDesc:    "Waiting for machine pool",
+		},
+		{
+			name: "False with requeue message",
+			condition: AROControlPlaneCondition{
+				Type:    "SomeCondition",
+				Status:  "False",
+				Reason:  "SomeReason",
+				Message: "Object will be requeued after 30s",
+			},
+			expectedWaiting: true,
+			expectedDesc:    "Waiting (will retry)",
+		},
+		{
+			name: "False with not found message",
+			condition: AROControlPlaneCondition{
+				Type:    "ResourceReady",
+				Status:  "False",
+				Reason:  "Error",
+				Message: "Dependency not found in namespace",
+			},
+			expectedWaiting: true,
+			expectedDesc:    "Waiting for resource creation",
+		},
+		{
+			name: "False without waiting pattern",
+			condition: AROControlPlaneCondition{
+				Type:    "Ready",
+				Status:  "False",
+				Reason:  "Error",
+				Message: "Unexpected error occurred",
+			},
+			expectedWaiting: false,
+			expectedDesc:    "",
+		},
+		{
+			name: "False with empty message",
+			condition: AROControlPlaneCondition{
+				Type:   "Ready",
+				Status: "False",
+				Reason: "Error",
+			},
+			expectedWaiting: false,
+			expectedDesc:    "",
+		},
+		{
+			name: "Case insensitive matching",
+			condition: AROControlPlaneCondition{
+				Type:    "SomeCondition",
+				Status:  "False",
+				Reason:  "Error",
+				Message: "WAITING FOR something to happen",
+			},
+			expectedWaiting: true,
+			expectedDesc:    "Waiting for dependency",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isWaiting, desc := isWaitingCondition(tt.condition)
+			if isWaiting != tt.expectedWaiting {
+				t.Errorf("isWaitingCondition() waiting = %v, expected %v", isWaiting, tt.expectedWaiting)
+			}
+			if desc != tt.expectedDesc {
+				t.Errorf("isWaitingCondition() desc = %q, expected %q", desc, tt.expectedDesc)
 			}
 		})
 	}

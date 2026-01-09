@@ -404,6 +404,45 @@ type AROControlPlaneCondition struct {
 	Message string `json:"message,omitempty"`
 }
 
+// WaitingPattern defines a pattern to detect waiting states that may appear as failures.
+type WaitingPattern struct {
+	Pattern     string // Substring to match in the message
+	Description string // User-friendly description of what is being waited for
+}
+
+// waitingPatterns defines known patterns where ReconciliationFailed or similar reasons
+// actually indicate a waiting/pending state rather than an actual failure.
+// These patterns are matched against the condition's Message field.
+var waitingPatterns = []WaitingPattern{
+	{Pattern: "requires at least one ready machine pool", Description: "Waiting for machine pool"},
+	{Pattern: "waiting for", Description: "Waiting for dependency"},
+	{Pattern: "will be requeued", Description: "Waiting (will retry)"},
+	{Pattern: "not found", Description: "Waiting for resource creation"},
+	{Pattern: "is not ready", Description: "Waiting for dependency"},
+	{Pattern: "not yet available", Description: "Waiting for availability"},
+	{Pattern: "still being created", Description: "Waiting for creation"},
+	{Pattern: "still provisioning", Description: "Waiting for provisioning"},
+}
+
+// isWaitingCondition checks if a condition with False status and a failure-like reason
+// is actually just waiting for something. Returns true and a description if it's a waiting state.
+func isWaitingCondition(cond AROControlPlaneCondition) (bool, string) {
+	// Only check conditions that appear to be failures
+	if cond.Status != "False" {
+		return false, ""
+	}
+
+	// Check if the message contains any known waiting patterns
+	messageLower := strings.ToLower(cond.Message)
+	for _, wp := range waitingPatterns {
+		if strings.Contains(messageLower, strings.ToLower(wp.Pattern)) {
+			return true, wp.Description
+		}
+	}
+
+	return false, ""
+}
+
 // FormatAROControlPlaneConditions formats AROControlPlane conditions for display.
 // It parses the JSON output from kubectl and returns a formatted string showing
 // the status of each condition with visual indicators.
@@ -433,20 +472,34 @@ func FormatAROControlPlaneConditions(jsonData string) string {
 
 	var result strings.Builder
 	for _, cond := range conditions {
-		// Determine the icon based on status
+		// Check if this is a waiting condition disguised as a failure
+		isWaiting, waitingDesc := isWaitingCondition(cond)
+
+		// Determine the icon based on status and waiting detection
 		icon := "⏳" // pending/unknown
-		if cond.Status == "True" {
+		switch cond.Status {
+		case "True":
 			icon = "✅"
-		} else if cond.Status == "False" {
-			icon = "🔄"
+		case "False":
+			if isWaiting {
+				icon = "⏳" // waiting state, not a failure
+			} else {
+				icon = "🔄" // in-progress/retry
+			}
 		}
 
 		// Format the condition line
 		result.WriteString(fmt.Sprintf("  %s %s: %s", icon, cond.Type, cond.Status))
 
-		// Add reason if available and status is not True
-		if cond.Status != "True" && cond.Reason != "" {
-			result.WriteString(fmt.Sprintf(" (%s)", cond.Reason))
+		// Add context based on whether it's a waiting condition or regular status
+		if cond.Status != "True" {
+			if isWaiting {
+				// Show user-friendly waiting description instead of misleading "ReconciliationFailed"
+				result.WriteString(fmt.Sprintf(" (%s)", waitingDesc))
+			} else if cond.Reason != "" {
+				// Show the original reason for non-waiting conditions
+				result.WriteString(fmt.Sprintf(" (%s)", cond.Reason))
+			}
 		}
 
 		result.WriteString("\n")
