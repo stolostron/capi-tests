@@ -11,6 +11,11 @@ const (
 	// DefaultDeploymentTimeout is the default timeout for control plane deployment
 	DefaultDeploymentTimeout = 45 * time.Minute
 
+	// DefaultASOControllerTimeout is the default timeout for ASO controller manager to become ready.
+	// ASO may take longer than other controllers due to its CRD initialization sequence:
+	// scanning existing CRDs, applying missing ones, and restarting to pick up new CRDs.
+	DefaultASOControllerTimeout = 10 * time.Minute
+
 	// DefaultCAPZUser is the default user identifier for CAPZ resources.
 	// Used in ClusterNamePrefix (for resource group naming) and User field.
 	// Extracted to a constant to ensure consistency across all usages.
@@ -67,7 +72,8 @@ type TestConfig struct {
 	GenScriptPath     string
 
 	// Timeouts
-	DeploymentTimeout time.Duration
+	DeploymentTimeout    time.Duration
+	ASOControllerTimeout time.Duration
 }
 
 // NewTestConfig creates a new test configuration with defaults
@@ -94,7 +100,8 @@ func NewTestConfig() *TestConfig {
 		GenScriptPath:     GetEnvOrDefault("GEN_SCRIPT_PATH", "./doc/aro-hcp-scripts/aro-hcp-gen.sh"),
 
 		// Timeouts
-		DeploymentTimeout: parseDeploymentTimeout(),
+		DeploymentTimeout:    parseDeploymentTimeout(),
+		ASOControllerTimeout: parseASOControllerTimeout(),
 	}
 }
 
@@ -111,6 +118,23 @@ func parseDeploymentTimeout() time.Duration {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: invalid DEPLOYMENT_TIMEOUT '%s', using default %v\n", timeoutStr, DefaultDeploymentTimeout)
 		return DefaultDeploymentTimeout
+	}
+	return timeout
+}
+
+// parseASOControllerTimeout parses the ASO_CONTROLLER_TIMEOUT environment variable.
+// Returns the parsed duration or defaults to DefaultASOControllerTimeout.
+// Logs a warning if the provided value is invalid.
+func parseASOControllerTimeout() time.Duration {
+	timeoutStr := os.Getenv("ASO_CONTROLLER_TIMEOUT")
+	if timeoutStr == "" {
+		return DefaultASOControllerTimeout
+	}
+
+	timeout, err := time.ParseDuration(timeoutStr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: invalid ASO_CONTROLLER_TIMEOUT '%s', using default %v\n", timeoutStr, DefaultASOControllerTimeout)
+		return DefaultASOControllerTimeout
 	}
 	return timeout
 }

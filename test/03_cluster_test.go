@@ -381,15 +381,19 @@ func TestKindCluster_ASOCredentialsConfigured(t *testing.T) {
 	t.Log("ASO credentials are properly configured")
 }
 
-// TestKindCluster_ASOControllerReady waits for Azure Service Operator controller to be ready
+// TestKindCluster_ASOControllerReady waits for Azure Service Operator controller to be ready.
+// The timeout is configurable via the ASO_CONTROLLER_TIMEOUT environment variable (default: 10m).
+// ASO may require a longer timeout due to its CRD initialization sequence which can involve
+// multiple pod restarts.
 func TestKindCluster_ASOControllerReady(t *testing.T) {
-	PrintTestHeader(t, "TestKindCluster_ASOControllerReady",
-		"Wait for Azure Service Operator controller manager to become available (timeout: 10m)")
-
 	config := NewTestConfig()
+
+	PrintTestHeader(t, "TestKindCluster_ASOControllerReady",
+		fmt.Sprintf("Wait for Azure Service Operator controller manager to become available (timeout: %v)", config.ASOControllerTimeout))
+
 	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
 
-	timeout := 10 * time.Minute
+	timeout := config.ASOControllerTimeout
 	pollInterval := 10 * time.Second
 	startTime := time.Now()
 
