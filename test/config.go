@@ -19,7 +19,7 @@ const (
 	// DefaultCAPZUser is the default user identifier for CAPZ resources.
 	// Used in ClusterNamePrefix (for resource group naming) and User field.
 	// Extracted to a constant to ensure consistency across all usages.
-	DefaultCAPZUser = "rcap"
+	DefaultCAPZUser = "rcapc"
 
 	// DefaultDeploymentEnv is the default deployment environment identifier.
 	// Used in ClusterNamePrefix and Environment field.
@@ -94,7 +94,7 @@ func NewTestConfig() *TestConfig {
 		AzureSubscription:     os.Getenv("AZURE_SUBSCRIPTION_NAME"),
 		Environment:           GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv),
 		User:                  GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser),
-		TestNamespace:         GetEnvOrDefault("TEST_NAMESPACE", "capz_tests"),
+		TestNamespace:         GetEnvOrDefault("TEST_NAMESPACE", "capztest"),
 
 		// Paths
 		ClusterctlBinPath: GetEnvOrDefault("CLUSTERCTL_BIN", "./bin/clusterctl"),

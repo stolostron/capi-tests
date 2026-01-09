@@ -552,6 +552,16 @@ func TestCheckDependencies_NamingCompliance(t *testing.T) {
 		}
 	})
 
+	// Validate TEST_NAMESPACE
+	t.Run("TEST_NAMESPACE", func(t *testing.T) {
+		if err := ValidateRFC1123Name(config.TestNamespace, "TEST_NAMESPACE"); err != nil {
+			validationErrors = append(validationErrors, err.Error())
+			t.Error(err)
+		} else {
+			t.Logf("TEST_NAMESPACE '%s' is RFC 1123 compliant", config.TestNamespace)
+		}
+	})
+
 	// Print summary on cleanup
 	t.Cleanup(func() {
 		if len(validationErrors) > 0 {
