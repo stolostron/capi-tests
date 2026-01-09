@@ -1432,3 +1432,203 @@ func TestComponentVersionStruct(t *testing.T) {
 		t.Errorf("ComponentVersion.Image = %q, expected %q", cv.Image, "test.io/image:v1.0.0")
 	}
 }
+
+func TestParseControllerLogs(t *testing.T) {
+	tests := []struct {
+		name             string
+		logs             string
+		expectedErrors   int
+		expectedWarnings int
+	}{
+		{
+			name: "no errors or warnings",
+			logs: `info msg="Starting controller"
+info msg="Controller started successfully"`,
+			expectedErrors:   0,
+			expectedWarnings: 0,
+		},
+		{
+			name: "logrus style error",
+			logs: `level=info msg="Starting controller"
+level=error msg="Failed to connect"
+level=info msg="Retrying..."`,
+			expectedErrors:   1,
+			expectedWarnings: 0,
+		},
+		{
+			name: "JSON style error",
+			logs: `{"level":"info","msg":"Starting controller"}
+{"level":"error","msg":"Failed to connect"}
+{"level":"info","msg":"Retrying..."}`,
+			expectedErrors:   1,
+			expectedWarnings: 0,
+		},
+		{
+			name: "logrus style warning",
+			logs: `level=info msg="Starting controller"
+level=warn msg="Deprecated feature used"
+level=info msg="Continuing..."`,
+			expectedErrors:   0,
+			expectedWarnings: 1,
+		},
+		{
+			name: "JSON style warning",
+			logs: `{"level":"info","msg":"Starting"}
+{"level":"warn","msg":"Deprecated feature used"}`,
+			expectedErrors:   0,
+			expectedWarnings: 1,
+		},
+		{
+			name: "mixed errors and warnings",
+			logs: `level=info msg="Starting"
+level=error msg="Error 1"
+level=warn msg="Warning 1"
+level=error msg="Error 2"
+level=warn msg="Warning 2"
+level=info msg="Done"`,
+			expectedErrors:   2,
+			expectedWarnings: 2,
+		},
+		{
+			name: "error: prefix",
+			logs: `info: Starting controller
+error: Failed to connect
+info: Retrying`,
+			expectedErrors:   1,
+			expectedWarnings: 0,
+		},
+		{
+			name: "warning: prefix",
+			logs: `info: Starting controller
+warning: Deprecated feature
+info: Continuing`,
+			expectedErrors:   0,
+			expectedWarnings: 1,
+		},
+		{
+			name:             "empty logs",
+			logs:             "",
+			expectedErrors:   0,
+			expectedWarnings: 0,
+		},
+		{
+			name: "error=nil should not count as error",
+			logs: `level=info msg="Completed" error=nil
+level=info msg="Result" error=nil`,
+			expectedErrors:   0,
+			expectedWarnings: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors, warnings := ParseControllerLogs(tt.logs)
+			if len(errors) != tt.expectedErrors {
+				t.Errorf("errors count = %d, expected %d\nErrors: %v", len(errors), tt.expectedErrors, errors)
+			}
+			if len(warnings) != tt.expectedWarnings {
+				t.Errorf("warnings count = %d, expected %d\nWarnings: %v", len(warnings), tt.expectedWarnings, warnings)
+			}
+		})
+	}
+}
+
+func TestControllerLogSummaryStruct(t *testing.T) {
+	summary := ControllerLogSummary{
+		Name:       "CAPZ",
+		Namespace:  "capz-system",
+		Deployment: "capz-controller-manager",
+		ErrorCount: 5,
+		WarnCount:  10,
+		Errors:     []string{"error 1", "error 2"},
+		Warnings:   []string{"warning 1"},
+		LogFile:    "/tmp/capz.log",
+	}
+
+	if summary.Name != "CAPZ" {
+		t.Errorf("Name = %q, expected %q", summary.Name, "CAPZ")
+	}
+	if summary.ErrorCount != 5 {
+		t.Errorf("ErrorCount = %d, expected %d", summary.ErrorCount, 5)
+	}
+	if len(summary.Errors) != 2 {
+		t.Errorf("Errors length = %d, expected %d", len(summary.Errors), 2)
+	}
+}
+
+func TestFormatControllerLogSummaries(t *testing.T) {
+	summaries := []ControllerLogSummary{
+		{
+			Name:       "CAPI",
+			ErrorCount: 0,
+			WarnCount:  0,
+		},
+		{
+			Name:       "CAPZ",
+			ErrorCount: 2,
+			WarnCount:  5,
+			Errors:     []string{"error line 1", "error line 2"},
+		},
+		{
+			Name:       "ASO",
+			ErrorCount: 0,
+			WarnCount:  3,
+		},
+	}
+
+	output := FormatControllerLogSummaries(summaries)
+
+	// Check header present
+	if !strings.Contains(output, "CONTROLLER LOG SUMMARY") {
+		t.Error("Output should contain 'CONTROLLER LOG SUMMARY' header")
+	}
+
+	// Check each controller is listed
+	if !strings.Contains(output, "CAPI") {
+		t.Error("Output should contain CAPI controller")
+	}
+	if !strings.Contains(output, "CAPZ") {
+		t.Error("Output should contain CAPZ controller")
+	}
+	if !strings.Contains(output, "ASO") {
+		t.Error("Output should contain ASO controller")
+	}
+
+	// Check totals
+	if !strings.Contains(output, "2 errors") {
+		t.Error("Output should show 2 errors total")
+	}
+	if !strings.Contains(output, "8 warnings") {
+		t.Error("Output should show 8 warnings total")
+	}
+}
+
+func TestFormatControllerLogSummaries_NoIssues(t *testing.T) {
+	summaries := []ControllerLogSummary{
+		{Name: "CAPI", ErrorCount: 0, WarnCount: 0},
+		{Name: "CAPZ", ErrorCount: 0, WarnCount: 0},
+	}
+
+	output := FormatControllerLogSummaries(summaries)
+
+	if !strings.Contains(output, "0 errors") {
+		t.Error("Output should show 0 errors")
+	}
+	if !strings.Contains(output, "without errors or warnings") {
+		t.Error("Output should indicate no issues found")
+	}
+}
+
+func TestGetResultsDir(t *testing.T) {
+	// This is a basic test - the function should always return a valid path
+	dir := GetResultsDir()
+
+	if dir == "" {
+		t.Error("GetResultsDir should not return empty string")
+	}
+
+	// Should be a valid path format
+	if !filepath.IsAbs(dir) && !strings.HasPrefix(dir, "results/") {
+		t.Errorf("GetResultsDir returned unexpected path format: %s", dir)
+	}
+}

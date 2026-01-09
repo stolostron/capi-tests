@@ -1210,3 +1210,310 @@ func DeleteDeploymentState() error {
 	}
 	return nil
 }
+
+// ControllerLogSummary holds summarized log information for a controller.
+type ControllerLogSummary struct {
+	Name       string   // Controller name (e.g., "CAPZ", "ASO", "CAPI")
+	Namespace  string   // Namespace where the controller runs
+	Deployment string   // Deployment name
+	ErrorCount int      // Number of error log lines
+	WarnCount  int      // Number of warning log lines
+	Errors     []string // Sample error messages (limited)
+	Warnings   []string // Sample warning messages (limited)
+	LogFile    string   // Path to saved complete log file
+}
+
+// MaxSampleMessages is the maximum number of error/warning messages to keep in summary.
+const MaxSampleMessages = 10
+
+// GetControllerLogs retrieves logs from a controller deployment.
+// Returns the log output or an error if the logs cannot be retrieved.
+func GetControllerLogs(t *testing.T, kubeContext, namespace, deploymentName string, tailLines int) (string, error) {
+	t.Helper()
+
+	if tailLines <= 0 {
+		tailLines = 1000 // Default to last 1000 lines
+	}
+
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+		"-n", namespace, "logs",
+		fmt.Sprintf("deployment/%s", deploymentName),
+		"--all-containers=true",
+		fmt.Sprintf("--tail=%d", tailLines))
+	if err != nil {
+		return "", fmt.Errorf("failed to get logs for %s: %w", deploymentName, err)
+	}
+
+	return output, nil
+}
+
+// ParseControllerLogs parses log output and counts errors and warnings.
+// It looks for common patterns in controller logs to identify issues.
+func ParseControllerLogs(logs string) (errors []string, warnings []string) {
+	lines := strings.Split(logs, "\n")
+
+	for _, line := range lines {
+		lowerLine := strings.ToLower(line)
+
+		// Skip empty lines
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		// Check for error patterns
+		// Common patterns: "level=error", "ERROR", '"level":"error"', "error:"
+		if strings.Contains(lowerLine, "level=error") ||
+			strings.Contains(lowerLine, `"level":"error"`) ||
+			strings.Contains(lowerLine, "\"level\": \"error\"") ||
+			(strings.Contains(lowerLine, " error ") && !strings.Contains(lowerLine, "error=nil")) ||
+			strings.Contains(lowerLine, "error:") {
+			if len(errors) < MaxSampleMessages*2 { // Keep more samples initially, trim later
+				errors = append(errors, line)
+			}
+			continue
+		}
+
+		// Check for warning patterns
+		// Common patterns: "level=warn", "WARN", '"level":"warn"', "warning:"
+		if strings.Contains(lowerLine, "level=warn") ||
+			strings.Contains(lowerLine, `"level":"warn"`) ||
+			strings.Contains(lowerLine, "\"level\": \"warn\"") ||
+			strings.Contains(lowerLine, " warn ") ||
+			strings.Contains(lowerLine, "warning:") {
+			if len(warnings) < MaxSampleMessages*2 { // Keep more samples initially, trim later
+				warnings = append(warnings, line)
+			}
+		}
+	}
+
+	return errors, warnings
+}
+
+// SummarizeControllerLogs retrieves and summarizes logs from a controller.
+// It returns a ControllerLogSummary with counts and sample messages.
+func SummarizeControllerLogs(t *testing.T, kubeContext, namespace, deploymentName, controllerName string) ControllerLogSummary {
+	t.Helper()
+
+	summary := ControllerLogSummary{
+		Name:       controllerName,
+		Namespace:  namespace,
+		Deployment: deploymentName,
+	}
+
+	logs, err := GetControllerLogs(t, kubeContext, namespace, deploymentName, 5000)
+	if err != nil {
+		t.Logf("Warning: Could not retrieve logs for %s: %v", controllerName, err)
+		return summary
+	}
+
+	errors, warnings := ParseControllerLogs(logs)
+	summary.ErrorCount = len(errors)
+	summary.WarnCount = len(warnings)
+
+	// Keep only MaxSampleMessages samples
+	if len(errors) > MaxSampleMessages {
+		summary.Errors = errors[:MaxSampleMessages]
+	} else {
+		summary.Errors = errors
+	}
+
+	if len(warnings) > MaxSampleMessages {
+		summary.Warnings = warnings[:MaxSampleMessages]
+	} else {
+		summary.Warnings = warnings
+	}
+
+	return summary
+}
+
+// SaveControllerLogs saves the complete logs from a controller to a file.
+// Returns the path to the saved log file or an error.
+func SaveControllerLogs(t *testing.T, kubeContext, namespace, deploymentName, controllerName, outputDir string) (string, error) {
+	t.Helper()
+
+	// Get full logs (larger tail for complete history)
+	logs, err := GetControllerLogs(t, kubeContext, namespace, deploymentName, 10000)
+	if err != nil {
+		return "", err
+	}
+
+	// Create output directory if it doesn't exist
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	// Generate filename with timestamp
+	filename := fmt.Sprintf("%s-%s.log", strings.ToLower(controllerName), time.Now().Format("20060102_150405"))
+	logFilePath := fmt.Sprintf("%s/%s", outputDir, filename)
+
+	// Write logs to file
+	if err := os.WriteFile(logFilePath, []byte(logs), 0644); err != nil {
+		return "", fmt.Errorf("failed to write log file: %w", err)
+	}
+
+	return logFilePath, nil
+}
+
+// GetAllControllerLogSummaries retrieves log summaries for all key controllers.
+// Returns a slice of ControllerLogSummary for CAPI, CAPZ, and ASO controllers.
+func GetAllControllerLogSummaries(t *testing.T, kubeContext string) []ControllerLogSummary {
+	t.Helper()
+
+	// Define controllers to check (same as in GetComponentVersions)
+	controllers := []struct {
+		name       string
+		namespace  string
+		deployment string
+	}{
+		{"CAPI", "capi-system", "capi-controller-manager"},
+		{"CAPZ", "capz-system", "capz-controller-manager"},
+		{"ASO", "capz-system", "azureserviceoperator-controller-manager"},
+	}
+
+	var summaries []ControllerLogSummary
+
+	for _, ctrl := range controllers {
+		summary := SummarizeControllerLogs(t, kubeContext, ctrl.namespace, ctrl.deployment, ctrl.name)
+		summaries = append(summaries, summary)
+	}
+
+	return summaries
+}
+
+// FormatControllerLogSummaries formats controller log summaries for display.
+// Returns a human-readable summary string.
+func FormatControllerLogSummaries(summaries []ControllerLogSummary) string {
+	var result strings.Builder
+
+	result.WriteString("\n=== CONTROLLER LOG SUMMARY ===\n\n")
+
+	totalErrors := 0
+	totalWarnings := 0
+
+	for _, s := range summaries {
+		totalErrors += s.ErrorCount
+		totalWarnings += s.WarnCount
+
+		// Status indicator
+		icon := "✅"
+		if s.ErrorCount > 0 {
+			icon = "❌"
+		} else if s.WarnCount > 0 {
+			icon = "⚠️"
+		}
+
+		result.WriteString(fmt.Sprintf("%s %s Controller:\n", icon, s.Name))
+		result.WriteString(fmt.Sprintf("   Errors: %d | Warnings: %d\n", s.ErrorCount, s.WarnCount))
+
+		if s.LogFile != "" {
+			result.WriteString(fmt.Sprintf("   Log file: %s\n", s.LogFile))
+		}
+
+		// Show sample error messages
+		if len(s.Errors) > 0 {
+			result.WriteString("   Sample errors:\n")
+			for i, err := range s.Errors {
+				if i >= 3 { // Show only first 3 in summary
+					result.WriteString(fmt.Sprintf("   ... and %d more errors\n", len(s.Errors)-3))
+					break
+				}
+				// Truncate long lines
+				errLine := err
+				if len(errLine) > 200 {
+					errLine = errLine[:200] + "..."
+				}
+				result.WriteString(fmt.Sprintf("     - %s\n", errLine))
+			}
+		}
+
+		result.WriteString("\n")
+	}
+
+	// Overall summary
+	result.WriteString("─────────────────────────────\n")
+	result.WriteString(fmt.Sprintf("Total: %d errors, %d warnings across all controllers\n", totalErrors, totalWarnings))
+
+	if totalErrors > 0 {
+		result.WriteString("⚠️  Review controller logs for details on errors.\n")
+	} else if totalWarnings > 0 {
+		result.WriteString("ℹ️  Some warnings found but no errors.\n")
+	} else {
+		result.WriteString("✅ All controllers running without errors or warnings.\n")
+	}
+
+	return result.String()
+}
+
+// SaveAllControllerLogs saves complete logs for all controllers to the specified directory.
+// Updates the ControllerLogSummary slice with the saved log file paths.
+func SaveAllControllerLogs(t *testing.T, kubeContext, outputDir string, summaries []ControllerLogSummary) []ControllerLogSummary {
+	t.Helper()
+
+	// Define controllers (same list as in GetAllControllerLogSummaries)
+	controllers := []struct {
+		name       string
+		namespace  string
+		deployment string
+	}{
+		{"CAPI", "capi-system", "capi-controller-manager"},
+		{"CAPZ", "capz-system", "capz-controller-manager"},
+		{"ASO", "capz-system", "azureserviceoperator-controller-manager"},
+	}
+
+	// Create a map for quick lookup
+	controllerMap := make(map[string]struct{ namespace, deployment string })
+	for _, c := range controllers {
+		controllerMap[c.name] = struct{ namespace, deployment string }{c.namespace, c.deployment}
+	}
+
+	// Update summaries with log file paths
+	for i := range summaries {
+		if ctrl, ok := controllerMap[summaries[i].Name]; ok {
+			logFile, err := SaveControllerLogs(t, kubeContext, ctrl.namespace, ctrl.deployment, summaries[i].Name, outputDir)
+			if err != nil {
+				t.Logf("Warning: Failed to save logs for %s: %v", summaries[i].Name, err)
+			} else {
+				summaries[i].LogFile = logFile
+			}
+		}
+	}
+
+	return summaries
+}
+
+// GetResultsDir returns the appropriate results directory for saving logs.
+// It looks for the latest results directory, or creates one if needed.
+func GetResultsDir() string {
+	// Check for latest results directory first
+	latestDir := "results/latest"
+	if DirExists(latestDir) {
+		return latestDir
+	}
+
+	// Look for any timestamped results directory
+	entries, err := os.ReadDir("results")
+	if err == nil && len(entries) > 0 {
+		// Find the most recent directory
+		var latestTimestamp string
+		for _, e := range entries {
+			if e.IsDir() && e.Name() != "latest" {
+				if e.Name() > latestTimestamp {
+					latestTimestamp = e.Name()
+				}
+			}
+		}
+		if latestTimestamp != "" {
+			return fmt.Sprintf("results/%s", latestTimestamp)
+		}
+	}
+
+	// Create a new results directory with current timestamp
+	timestamp := time.Now().Format("20060102_150405")
+	newDir := fmt.Sprintf("results/%s", timestamp)
+	if err := os.MkdirAll(newDir, 0755); err != nil {
+		// Fall back to /tmp if we can't create the directory
+		return os.TempDir()
+	}
+
+	return newDir
+}

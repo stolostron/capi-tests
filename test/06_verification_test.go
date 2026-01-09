@@ -265,3 +265,72 @@ func TestVerification_TestedVersionsSummary(t *testing.T) {
 		t.Logf("Successfully retrieved version information for %d/%d components", foundCount, len(versions))
 	}
 }
+
+// TestVerification_ControllerLogSummary summarizes and saves logs from all controllers.
+// This test checks CAPI, CAPZ, and ASO controller logs for errors and warnings,
+// provides a summary, and saves the complete logs to the results directory.
+func TestVerification_ControllerLogSummary(t *testing.T) {
+
+	config := NewTestConfig()
+	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
+
+	PrintTestHeader(t, "TestVerification_ControllerLogSummary",
+		"Summarize and save controller logs (CAPI, CAPZ, ASO)")
+
+	// Get log summaries for all controllers
+	summaries := GetAllControllerLogSummaries(t, context)
+
+	// Get the results directory for saving logs
+	resultsDir := GetResultsDir()
+	t.Logf("Saving controller logs to: %s", resultsDir)
+
+	// Save complete logs and update summaries with file paths
+	summaries = SaveAllControllerLogs(t, context, resultsDir, summaries)
+
+	// Format and display the summary
+	summaryStr := FormatControllerLogSummaries(summaries)
+	PrintToTTY("%s", summaryStr)
+	t.Log(summaryStr)
+
+	// Also copy logs to the latest results directory for easy access
+	latestDir := "results/latest"
+	if resultsDir != latestDir && DirExists(latestDir) {
+		for _, s := range summaries {
+			if s.LogFile != "" {
+				// Extract filename from path
+				parts := strings.Split(s.LogFile, "/")
+				filename := parts[len(parts)-1]
+				destPath := filepath.Join(latestDir, filename)
+
+				// Read source file and write to destination
+				if data, err := os.ReadFile(s.LogFile); err == nil {
+					if err := os.WriteFile(destPath, data, 0644); err != nil {
+						t.Logf("Warning: Failed to copy log file to latest: %v", err)
+					}
+				}
+			}
+		}
+		t.Logf("Controller logs copied to: %s", latestDir)
+	}
+
+	// Count total errors and warnings
+	totalErrors := 0
+	totalWarnings := 0
+	for _, s := range summaries {
+		totalErrors += s.ErrorCount
+		totalWarnings += s.WarnCount
+		t.Logf("Controller %s: %d errors, %d warnings (log: %s)",
+			s.Name, s.ErrorCount, s.WarnCount, s.LogFile)
+	}
+
+	// Log summary to test output
+	if totalErrors > 0 {
+		t.Logf("Warning: Found %d errors across all controllers. Review logs for details.", totalErrors)
+	} else if totalWarnings > 0 {
+		t.Logf("Found %d warnings (no errors) across all controllers.", totalWarnings)
+	} else {
+		t.Log("All controllers running without errors or warnings.")
+	}
+
+	t.Logf("Controller logs saved to: %s", resultsDir)
+}
