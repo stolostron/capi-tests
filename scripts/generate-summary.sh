@@ -21,7 +21,7 @@
 #   - Overall totals across all phases
 #   - Links to controller logs (CAPI, CAPZ, ASO) if available
 
-set -euo pipefail
+set -eo pipefail
 
 # Colors for terminal output (disabled if not a terminal or NO_COLOR is set)
 if [[ -t 1 ]] && [[ -z "${NO_COLOR:-}" ]]; then
