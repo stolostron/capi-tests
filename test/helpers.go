@@ -1722,8 +1722,17 @@ func SaveAllControllerLogs(t *testing.T, kubeContext, outputDir string, summarie
 }
 
 // GetResultsDir returns the appropriate results directory for saving logs.
-// It looks for the latest results directory, or creates one if needed.
+// It checks TEST_RESULTS_DIR env var first (set by Makefile), then falls back
+// to looking for the latest results directory, or creates one if needed.
 func GetResultsDir() string {
+	// Check for environment variable set by Makefile
+	if envDir := os.Getenv("TEST_RESULTS_DIR"); envDir != "" {
+		// Ensure directory exists
+		if err := os.MkdirAll(envDir, 0750); err == nil {
+			return envDir
+		}
+	}
+
 	// Check for latest results directory first
 	latestDir := "results/latest"
 	if DirExists(latestDir) {

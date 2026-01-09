@@ -186,9 +186,10 @@ _verify: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-verify.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestVerification -timeout $(VERIFY_TIMEOUT) || EXIT_CODE=$$?; \
+	TEST_RESULTS_DIR=$(RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-verify.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestVerification -timeout $(VERIFY_TIMEOUT) || EXIT_CODE=$$?; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
+	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	echo ""; \
 	echo "Test results saved to: $(RESULTS_DIR)/junit-verify.xml"; \
 	echo "Latest results copied to: $(LATEST_RESULTS_DIR)/"; \
