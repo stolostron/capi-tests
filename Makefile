@@ -37,7 +37,7 @@ TEST_VERBOSITY ?= -v
 # Individual phase timeouts (format: Go duration like 30m, 1h, etc.)
 CLUSTER_TIMEOUT ?= 30m
 GENERATE_YAMLS_TIMEOUT ?= 20m
-DEPLOY_CRS_TIMEOUT ?= 40m
+DEPLOY_CRS_TIMEOUT ?= 60m
 VERIFY_TIMEOUT ?= 20m
 
 # Results directory configuration
