@@ -173,6 +173,59 @@ TEST_VERBOSITY=-v make test
 
 **Note**: All test targets automatically generate JUnit XML reports in a timestamped `results/` directory. The path to the results directory is displayed when tests run.
 
+### All Make Targets
+
+Run `make help` to see all available targets. Here's the complete reference:
+
+#### Test Targets
+
+| Target | Description |
+|--------|-------------|
+| `make test` | Run check dependencies tests only (fast, no Azure resources) |
+| `make test-all` | Run all test phases sequentially |
+| `make summary` | Generate test results summary from latest results |
+
+#### Internal Test Phases
+
+These targets are called by `make test-all` but can be run individually for debugging:
+
+| Target | Description |
+|--------|-------------|
+| `make _check-dep` | Check software prerequisites needed for a proper test run |
+| `make _setup` | Setup and prepare input repositories with helm charts and CRDs |
+| `make _cluster` | Prepare cluster for testing and operators |
+| `make _generate-yamls` | Generate script for resource creation (yaml) |
+| `make _deploy-crs` | Deploy CRs and verify deployment |
+| `make _verify` | Verify deployed cluster |
+
+#### Cleanup Targets
+
+| Target | Description |
+|--------|-------------|
+| `make clean` | Interactive cleanup - prompts before deleting each resource |
+| `make clean-all` | Delete ALL resources without prompting (local + Azure) |
+| `FORCE=1 make clean` | Same as `make clean-all` |
+| `make clean-azure` | Delete only Azure resource group (interactive) |
+
+#### Setup and Prerequisites
+
+| Target | Description |
+|--------|-------------|
+| `make check-prereq` | Check if required tools are installed |
+| `make setup-submodule` | Add cluster-api-installer as a git submodule |
+| `make update-submodule` | Update cluster-api-installer submodule |
+| `make install-gotestsum` | Install gotestsum for test summaries |
+| `make check-gotestsum` | Check if gotestsum is installed, install if missing |
+| `make fix-docker-config` | Fix Docker credential helper configuration issues |
+
+#### Development Targets
+
+| Target | Description |
+|--------|-------------|
+| `make fmt` | Format Go code |
+| `make lint` | Run linters |
+| `make deps` | Download Go dependencies |
+
 #### Using Go Test Directly
 
 ```bash
