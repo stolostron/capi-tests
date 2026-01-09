@@ -1,9 +1,12 @@
-.PHONY: test _check-dep _setup _cluster _generate-yamls _deploy-crds _verify test-all clean clean-all help
+.PHONY: test _check-dep _setup _cluster _generate-yamls _deploy-crds _verify test-all clean clean-all clean-azure help
 
 # Default values
 DEPLOYMENT_ENV ?= stage
 REGION ?= uksouth
 MANAGEMENT_CLUSTER_NAME ?= capz-tests-stage
+CAPZ_USER ?= rcap
+CS_CLUSTER_NAME ?= $(CAPZ_USER)-$(DEPLOYMENT_ENV)
+AZURE_RESOURCE_GROUP ?= $(CS_CLUSTER_NAME)-resgroup
 
 # Test configuration
 GOTESTSUM_FORMAT ?= testname
@@ -311,17 +314,45 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 			echo "Results directory not found (already clean)."; \
 		fi; \
 		echo ""; \
+		echo "--- Azure Resources ---"; \
+		echo "Target resource group: $(AZURE_RESOURCE_GROUP)"; \
+		echo ""; \
+		if ! command -v az >/dev/null 2>&1; then \
+			echo "⚠️  Azure CLI (az) not available - skipping Azure cleanup"; \
+		elif ! az account show >/dev/null 2>&1; then \
+			echo "⚠️  Not logged in to Azure - skipping Azure cleanup"; \
+			echo "   Run 'az login' to authenticate"; \
+		elif az group show --name $(AZURE_RESOURCE_GROUP) >/dev/null 2>&1; then \
+			echo "Resource group '$(AZURE_RESOURCE_GROUP)' exists."; \
+			echo "⚠️  Warning: This will delete ALL resources in the resource group!"; \
+			echo ""; \
+			read -p "Delete Azure resource group '$(AZURE_RESOURCE_GROUP)'? [y/N] " -n 1 -r; \
+			echo ""; \
+			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+				echo "Deleting Azure resource group (this may take several minutes)..."; \
+				az group delete --name $(AZURE_RESOURCE_GROUP) --yes --no-wait && \
+				echo "✅ Resource group deletion initiated (running in background)"; \
+			else \
+				echo "Skipped Azure resource group deletion."; \
+			fi; \
+		else \
+			echo "Azure resource group '$(AZURE_RESOURCE_GROUP)' not found (already clean)."; \
+		fi; \
+		echo ""; \
 		echo "======================================="; \
 		echo "=== Cleanup Complete ==="; \
 		echo "======================================="; \
 	fi
 
-clean-all: ## Clean up ALL test resources without prompting
+clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 	@echo "========================================"
 	@echo "=== Non-Interactive Cleanup ==="
 	@echo "========================================"
 	@echo ""
 	@echo "Deleting all test resources without prompts..."
+	@echo ""
+	@# Delete Azure resource group first (before local resources)
+	@$(MAKE) --no-print-directory _clean-azure-force
 	@echo ""
 	@# Delete management cluster
 	@if kind get clusters 2>/dev/null | grep -q "^$(MANAGEMENT_CLUSTER_NAME)$$"; then \
@@ -359,6 +390,58 @@ clean-all: ## Clean up ALL test resources without prompting
 	@echo "======================================="
 	@echo "=== All Resources Cleaned ==="
 	@echo "======================================="
+
+clean-azure: ## Delete Azure resource group created by deployment (interactive)
+	@echo "=== Azure Resource Cleanup ==="
+	@echo ""
+	@echo "Target resource group: $(AZURE_RESOURCE_GROUP)"
+	@echo ""
+	@# Check if Azure CLI is available
+	@if ! command -v az >/dev/null 2>&1; then \
+		echo "❌ Error: Azure CLI (az) is not installed or not in PATH"; \
+		echo "   Install from: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli"; \
+		exit 1; \
+	fi
+	@# Check if logged in to Azure
+	@if ! az account show >/dev/null 2>&1; then \
+		echo "❌ Error: Not logged in to Azure CLI"; \
+		echo "   Run 'az login' to authenticate"; \
+		exit 1; \
+	fi
+	@# Check if resource group exists
+	@if az group show --name $(AZURE_RESOURCE_GROUP) >/dev/null 2>&1; then \
+		echo "Resource group '$(AZURE_RESOURCE_GROUP)' exists."; \
+		echo "⚠️  Warning: This will delete ALL resources in the resource group!"; \
+		echo ""; \
+		read -p "Delete Azure resource group '$(AZURE_RESOURCE_GROUP)'? [y/N] " -n 1 -r; \
+		echo ""; \
+		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+			echo "Deleting Azure resource group '$(AZURE_RESOURCE_GROUP)' (this may take several minutes)..."; \
+			az group delete --name $(AZURE_RESOURCE_GROUP) --yes --no-wait && \
+			echo "✅ Resource group deletion initiated (running in background)"; \
+			echo "   Use 'az group show --name $(AZURE_RESOURCE_GROUP)' to check status"; \
+		else \
+			echo "Skipped Azure resource group deletion."; \
+		fi; \
+	else \
+		echo "Resource group '$(AZURE_RESOURCE_GROUP)' not found (already clean or never created)."; \
+	fi
+
+# Internal target: force delete Azure resource group without prompting
+.PHONY: _clean-azure-force
+_clean-azure-force:
+	@# Check if Azure CLI is available
+	@if ! command -v az >/dev/null 2>&1; then \
+		echo "⚠️  Azure CLI (az) not available - skipping Azure cleanup"; \
+	elif ! az account show >/dev/null 2>&1; then \
+		echo "⚠️  Not logged in to Azure - skipping Azure cleanup"; \
+	elif az group show --name $(AZURE_RESOURCE_GROUP) >/dev/null 2>&1; then \
+		echo "Deleting Azure resource group '$(AZURE_RESOURCE_GROUP)' (running in background)..."; \
+		az group delete --name $(AZURE_RESOURCE_GROUP) --yes --no-wait && \
+		echo "✅ Resource group deletion initiated"; \
+	else \
+		echo "Azure resource group '$(AZURE_RESOURCE_GROUP)' not found (already clean)."; \
+	fi
 
 setup-submodule: ## Add cluster-api-installer as a git submodule
 	git submodule add -b ARO-ASO https://github.com/RadekCap/cluster-api-installer.git vendor/cluster-api-installer || true

@@ -224,6 +224,7 @@ The `results/` directory is excluded from git (via `.gitignore`) and can be clea
 make clean      # Interactive cleanup - prompts for confirmation before deleting each resource
 make clean-all  # Non-interactive - deletes ALL resources without prompting
 FORCE=1 make clean  # Same as clean-all
+make clean-azure  # Delete only Azure resource group (interactive)
 ```
 
 The `make clean` command will interactively ask you to confirm deletion of:
@@ -231,12 +232,19 @@ The `make clean` command will interactively ask you to confirm deletion of:
 - Cluster-api-installer repository clone in `/tmp`
 - Kubeconfig files in `/tmp`
 - Results directory
+- **Azure resource group** (`${CS_CLUSTER_NAME}-resgroup`, e.g., `rcap-stage-resgroup`)
 
 This allows you to selectively clean up resources while preserving anything you want to keep.
 
 For automated workflows (CI/CD, scripts) or quick full resets, use:
-- `make clean-all` - deletes all resources without prompting
+- `make clean-all` - deletes all resources without prompting (includes Azure resource group)
 - `FORCE=1 make clean` - equivalent to `make clean-all`
+
+**Azure Resource Cleanup**: The cleanup commands now include Azure resource group deletion:
+- Uses `--no-wait` for non-blocking deletion (deletion continues in background)
+- Gracefully skips if Azure CLI is not installed or not logged in
+- Checks if resource group exists before attempting deletion
+- The resource group name is derived from `${CAPZ_USER}-${DEPLOYMENT_ENV}-resgroup` (default: `rcap-stage-resgroup`)
 
 ## Integration with cluster-api-installer
 

@@ -116,6 +116,9 @@ make clean
 make clean-all
 # OR use the FORCE variable:
 FORCE=1 make clean
+
+# Clean up only Azure resource group (interactive)
+make clean-azure
 ```
 
 The `make clean` command is interactive by default and will prompt you to confirm deletion of:
@@ -123,12 +126,19 @@ The `make clean` command is interactive by default and will prompt you to confir
 - Cluster-api-installer repository clone
 - Kubeconfig files
 - Results directory
+- Azure resource group (`${CS_CLUSTER_NAME}-resgroup`)
 
 This prevents accidental deletion and allows selective cleanup.
 
 For non-interactive cleanup (useful for CI/CD, scripted workflows, or quick resets):
-- Use `make clean-all` to delete all resources without prompts
+- Use `make clean-all` to delete all resources without prompts (includes Azure resources)
 - Or use `FORCE=1 make clean` to skip all confirmation prompts
+
+**Azure Resource Cleanup Notes**:
+- The resource group name is derived from `${CAPZ_USER}-${DEPLOYMENT_ENV}-resgroup` (default: `rcap-stage-resgroup`)
+- Uses `az group delete --yes --no-wait` for non-blocking deletion
+- Gracefully skips Azure cleanup if Azure CLI is not installed or not authenticated
+- Checks if the resource group exists before attempting deletion
 
 ### Code Quality
 
