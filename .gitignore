@@ -20,3 +20,6 @@ vendor/
 *.log
 *.out
 results/
+
+# Deployment state (written by tests, read by cleanup)
+.deployment-state.json

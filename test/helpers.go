@@ -1138,3 +1138,75 @@ func ValidateYAMLFile(filePath string) error {
 
 	return nil
 }
+
+// DeploymentState holds information about the deployed test resources.
+// This is written to a state file during deployment and read during cleanup
+// to ensure the cleanup targets the correct Azure resources.
+type DeploymentState struct {
+	ResourceGroup         string `json:"resource_group"`
+	ManagementClusterName string `json:"management_cluster_name"`
+	WorkloadClusterName   string `json:"workload_cluster_name"`
+	ClusterNamePrefix     string `json:"cluster_name_prefix"`
+	Region                string `json:"region"`
+	User                  string `json:"user"`
+	Environment           string `json:"environment"`
+}
+
+// DeploymentStateFile is the path to the deployment state file.
+// This file is written during test deployment and read during cleanup.
+const DeploymentStateFile = ".deployment-state.json"
+
+// WriteDeploymentState writes the current deployment configuration to a state file.
+// This allows cleanup commands to know which Azure resources were actually created,
+// regardless of current environment variables or config defaults.
+func WriteDeploymentState(config *TestConfig) error {
+	state := DeploymentState{
+		ResourceGroup:         fmt.Sprintf("%s-resgroup", config.ClusterNamePrefix),
+		ManagementClusterName: config.ManagementClusterName,
+		WorkloadClusterName:   config.WorkloadClusterName,
+		ClusterNamePrefix:     config.ClusterNamePrefix,
+		Region:                config.Region,
+		User:                  config.User,
+		Environment:           config.Environment,
+	}
+
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal deployment state: %w", err)
+	}
+
+	if err := os.WriteFile(DeploymentStateFile, data, 0600); err != nil {
+		return fmt.Errorf("failed to write deployment state file: %w", err)
+	}
+
+	return nil
+}
+
+// ReadDeploymentState reads the deployment state from the state file.
+// Returns nil if the file doesn't exist (no deployment has been recorded).
+func ReadDeploymentState() (*DeploymentState, error) {
+	data, err := os.ReadFile(DeploymentStateFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil // No state file, return nil without error
+		}
+		return nil, fmt.Errorf("failed to read deployment state file: %w", err)
+	}
+
+	var state DeploymentState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, fmt.Errorf("failed to parse deployment state file: %w", err)
+	}
+
+	return &state, nil
+}
+
+// DeleteDeploymentState removes the deployment state file.
+// Called after successful cleanup to indicate no active deployment.
+func DeleteDeploymentState() error {
+	err := os.Remove(DeploymentStateFile)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to delete deployment state file: %w", err)
+	}
+	return nil
+}

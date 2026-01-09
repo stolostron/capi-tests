@@ -120,6 +120,14 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 	PrintToTTY("✅ Kind cluster is ready\n\n")
 	t.Logf("Kind cluster nodes:\n%s", output)
 	t.Log("Kind cluster is ready")
+
+	// Write deployment state file for cleanup to know what was actually deployed
+	if err := WriteDeploymentState(config); err != nil {
+		t.Logf("Warning: failed to write deployment state file: %v", err)
+	} else {
+		PrintToTTY("📝 Deployment state saved to %s\n", DeploymentStateFile)
+		t.Logf("Deployment state saved to %s", DeploymentStateFile)
+	}
 }
 
 // TestKindCluster_CAPINamespacesExists verifies CAPI namespaces are installed
