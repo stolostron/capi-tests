@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _cluster _generate-yamls _deploy-crds _verify test-all clean clean-all clean-azure help summary
+.PHONY: test _check-dep _setup _cluster _generate-yamls _deploy-crds _verify test-all _test-all-impl clean clean-all clean-azure help summary
 
 # Default values
 # Extract CAPZ_USER default from Go config to maintain single source of truth
@@ -47,6 +47,9 @@ VERIFY_TIMEOUT ?= 20m
 TIMESTAMP := $(shell date +%Y%m%d_%H%M%S)
 RESULTS_DIR := results/$(TIMESTAMP)
 LATEST_RESULTS_DIR := results/latest
+
+# Terminal output capture file
+TERMINAL_OUTPUT_FILE := terminal-output.log
 
 # Determine Go binary installation path
 # Prefer GOBIN if set, otherwise use GOPATH/bin, with fallback to $HOME/go/bin
@@ -203,11 +206,21 @@ _verify: check-gotestsum
 
 test-all: ## Run all test phases sequentially
 	@mkdir -p $(RESULTS_DIR)
+	@# Run the actual test execution with output captured to terminal and file
+	@$(MAKE) --no-print-directory _test-all-impl 2>&1 | tee $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE); \
+	EXIT_CODE=$${PIPESTATUS[0]}; \
+	cp -f $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE) $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
+	exit $$EXIT_CODE
+
+# Internal target for test-all implementation (called with tee to capture output)
+.PHONY: _test-all-impl
+_test-all-impl:
 	@echo "========================================"
 	@echo "=== Running Full Test Suite ==="
 	@echo "========================================"
 	@echo ""
 	@echo "All test results will be saved to: $(RESULTS_DIR)"
+	@echo "Terminal output captured to: $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE)"
 	@echo ""
 	@$(MAKE) --no-print-directory _check-dep || ( \
 		echo ""; \

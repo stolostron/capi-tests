@@ -20,6 +20,7 @@
 #   - Per-phase totals
 #   - Overall totals across all phases
 #   - Links to controller logs (CAPI, CAPZ, ASO) if available
+#   - Link to terminal output log (complete test run output) if available
 
 set -eo pipefail
 
@@ -274,6 +275,41 @@ list_controller_logs() {
     fi
 }
 
+# Function to list terminal output file if available
+# Arguments: $1 = use_colors (true/false)
+list_terminal_output() {
+    local use_colors="${1:-true}"
+
+    # Set colors based on use_colors flag
+    local c_green c_nc
+    if [[ "$use_colors" == "true" ]]; then
+        c_green="${GREEN}"
+        c_nc="${NC}"
+    else
+        c_green=""
+        c_nc=""
+    fi
+
+    # Terminal output file (created by make test-all)
+    local terminal_output="$RESULTS_DIR/terminal-output.log"
+
+    # Only print section if terminal output file exists
+    if [[ -f "$terminal_output" ]]; then
+        local file_size
+        file_size=$(du -h "$terminal_output" | cut -f1)
+
+        echo ""
+        echo "========================================"
+        echo "         TERMINAL OUTPUT"
+        echo "========================================"
+        echo ""
+        echo "Complete terminal output from the test run is available:"
+        echo ""
+        printf "${c_green}  Terminal log${c_nc}: %s (%s)\n" "$terminal_output" "$file_size"
+        echo ""
+    fi
+}
+
 # Function to generate and print the complete summary
 # Arguments: $1 = use_colors (true/false)
 generate_summary() {
@@ -342,6 +378,9 @@ generate_summary() {
 
     # List controller logs if available
     list_controller_logs "$use_colors"
+
+    # List terminal output file if available
+    list_terminal_output "$use_colors"
 
     if [[ $TOTAL_FAILED -eq 0 ]]; then
         printf "${c_green}All tests passed!${c_nc}\n"
