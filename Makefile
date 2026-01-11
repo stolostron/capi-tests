@@ -206,9 +206,17 @@ _verify: check-gotestsum
 
 test-all: ## Run all test phases sequentially
 	@mkdir -p $(RESULTS_DIR)
+	@mkdir -p $(LATEST_RESULTS_DIR)
 	@# Run the actual test execution with output captured to terminal and file
-	@$(MAKE) --no-print-directory _test-all-impl 2>&1 | tee $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE); \
-	EXIT_CODE=$${PIPESTATUS[0]}; \
+	@# Use 'script' to create a pseudo-TTY so gotestsum outputs verbose test logs
+	@# (gotestsum hides verbose output when it detects stdout is not a TTY)
+	@if command -v script >/dev/null 2>&1; then \
+		script -q /dev/null bash -c '$(MAKE) --no-print-directory _test-all-impl' 2>&1 | tee $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE); \
+		EXIT_CODE=$${PIPESTATUS[0]}; \
+	else \
+		$(MAKE) --no-print-directory _test-all-impl 2>&1 | tee $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE); \
+		EXIT_CODE=$${PIPESTATUS[0]}; \
+	fi; \
 	cp -f $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE) $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	exit $$EXIT_CODE
 
@@ -269,6 +277,9 @@ _test-all-impl:
 	@echo "=== All Test Phases Completed Successfully ==="
 	@echo "======================================="
 	@echo ""
+	@# Copy terminal output to latest before generating summary so the path is displayed
+	@# The parent test-all target will copy the final complete version after this completes
+	@cp -f $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE) $(LATEST_RESULTS_DIR)/ 2>/dev/null || true
 	@# Generate test results summary from LATEST_RESULTS_DIR which contains all phases
 	@# Each phase copies its results to LATEST_RESULTS_DIR, so the summary aggregates all
 	@if [ -x scripts/generate-summary.sh ]; then \
