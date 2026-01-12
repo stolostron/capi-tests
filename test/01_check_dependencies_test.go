@@ -92,20 +92,11 @@ func TestCheckDependencies_DockerDaemonRunning(t *testing.T) {
 	}
 }
 
-// TestCheckDependencies_PythonVersion validates Python version is supported.
-// Python 3.12 is required for the cluster-api-installer scripts.
-// Newer versions (3.13+) are not supported and will cause deployment failures.
-// This is a fail-fast check - if Python version is unsupported, subsequent tests
-// that depend on Python scripts will fail.
-// Skipped on macOS where Python version management varies widely (see issue #330).
+// TestCheckDependencies_PythonVersion validates Python version compatibility.
+// Python 3.14.0 has known incompatibilities with az cli and will fail fast.
+// Python 3.14.2 is the tested and recommended version.
+// Other versions will show a warning but allow tests to continue.
 func TestCheckDependencies_PythonVersion(t *testing.T) {
-	// Skip on macOS - Python 3.14.2 works on Mac but 3.14 fails on Fedora
-	// See issue #330 for investigation into exact version requirements
-	if runtime.GOOS == "darwin" {
-		t.Skip("Skipping Python version check on macOS (see issue #330)")
-		return
-	}
-
 	// Determine which Python command to use
 	var pythonCmd string
 	if CommandExists("python3") {
@@ -114,12 +105,12 @@ func TestCheckDependencies_PythonVersion(t *testing.T) {
 		pythonCmd = "python"
 	} else {
 		t.Fatalf("Python is not installed or not in PATH.\n\n" +
-			"Python 3.12 is required for the cluster-api-installer scripts.\n" +
-			"Please install Python 3.12 and ensure it's in your PATH.\n\n" +
+			"Python is required for the cluster-api-installer scripts.\n" +
+			"Tested version: Python 3.14.2\n\n" +
 			"Installation options:\n" +
-			"  - Using pyenv: pyenv install 3.12 && pyenv global 3.12\n" +
-			"  - Using dnf (Fedora): sudo dnf install python3.12\n" +
-			"  - Using apt (Ubuntu/Debian): sudo apt install python3.12")
+			"  - Using pyenv: pyenv install 3.14.2 && pyenv global 3.14.2\n" +
+			"  - Using dnf (Fedora): sudo dnf install python3\n" +
+			"  - Using apt (Ubuntu/Debian): sudo apt install python3")
 		return
 	}
 
@@ -148,8 +139,8 @@ func TestCheckDependencies_PythonVersion(t *testing.T) {
 		return
 	}
 
-	// Parse major and minor version
-	var major, minor int
+	// Parse major, minor, and patch version
+	var major, minor, patch int
 	_, err = Sscanf(versionParts[0], "%d", &major)
 	if err != nil {
 		t.Fatalf("Could not parse Python major version from: %s", versionParts[0])
@@ -160,41 +151,37 @@ func TestCheckDependencies_PythonVersion(t *testing.T) {
 		t.Fatalf("Could not parse Python minor version from: %s", versionParts[1])
 		return
 	}
+	// Parse patch version if present (default to 0)
+	if len(versionParts) >= 3 {
+		_, err = Sscanf(versionParts[2], "%d", &patch)
+		if err != nil {
+			// Non-fatal: treat as patch 0 if parsing fails
+			patch = 0
+		}
+	}
 
-	// Validate version: must be Python 3.12.x
-	// Python 2.x is not supported
-	if major < 3 {
-		t.Fatalf("Python 2.x is not supported.\n\n"+
+	// Python 3.14.0 is known to have incompatibilities with az cli
+	if major == 3 && minor == 14 && patch == 0 {
+		t.Fatalf("Python 3.14.0 has known incompatibilities with az cli.\n\n"+
 			"Detected: %s\n"+
-			"Required: Python 3.12.x\n\n"+
-			"Please install Python 3.12 and ensure it's in your PATH.",
+			"Recommended: Python 3.14.2\n\n"+
+			"To switch to Python 3.14.2:\n"+
+			"  - Using pyenv: pyenv install 3.14.2 && pyenv global 3.14.2\n"+
+			"  - Update your system Python to a newer patch version",
 			versionStr)
 		return
 	}
 
-	// Python 3.13+ is not supported
-	if major == 3 && minor > 12 {
-		t.Fatalf("Python %d.%d is not supported.\n\n"+
-			"Detected: %s\n"+
-			"Required: Python 3.12.x\n\n"+
-			"Python 3.13+ causes failures with cluster-api-installer scripts.\n\n"+
-			"To switch to Python 3.12:\n"+
-			"  - Using pyenv: pyenv install 3.12 && pyenv global 3.12\n"+
-			"  - Using alternatives (Fedora): sudo alternatives --set python3 /usr/bin/python3.12\n"+
-			"  - Using update-alternatives (Debian/Ubuntu): sudo update-alternatives --set python3 /usr/bin/python3.12",
-			major, minor, versionStr)
+	// Python 3.14.2 is the tested version - pass without warning
+	if major == 3 && minor == 14 && patch == 2 {
+		t.Logf("Python %d.%d.%d is the tested version", major, minor, patch)
 		return
 	}
 
-	// Python < 3.12 - warn but don't fail (may work)
-	if major == 3 && minor < 12 {
-		t.Logf("Warning: Python 3.%d detected. Python 3.12.x is recommended.\n"+
-			"Some features may not work correctly with older versions.", minor)
-		return
-	}
-
-	// Python 3.12.x - perfect
-	t.Logf("Python version %d.%d is supported", major, minor)
+	// All other versions - warn but allow to continue
+	t.Logf("Warning: Python %d.%d.%d detected.\n"+
+		"This version has not been tested. Tested version: Python 3.14.2\n"+
+		"If you encounter issues, consider switching to Python 3.14.2.", major, minor, patch)
 }
 
 // Sscanf is a simple helper to parse a single integer from a string
