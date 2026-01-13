@@ -1,0 +1,14 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/RadekCap/CAPZTests/blob/main/README.md
+    about: Check the documentation before opening an issue
+  - name: Test Suite Details
+    url: https://github.com/RadekCap/CAPZTests/blob/main/test/README.md
+    about: Detailed test suite documentation
+  - name: cluster-api-installer
+    url: https://github.com/RadekCap/cluster-api-installer
+    about: Issues with the ARO-CAPZ deployment itself (not the test suite)
+  - name: Security Vulnerabilities
+    url: https://github.com/RadekCap/CAPZTests/blob/main/SECURITY.md
+    about: Report security issues privately (do not open public issues)

@@ -368,12 +368,20 @@ The test suite integrates with GitHub Actions for continuous testing:
 
 ## Contributing
 
-Contributions are welcome! Please ensure:
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
 
-1. All tests pass before submitting PRs
-2. New functionality includes appropriate tests
-3. Documentation is updated to reflect changes
+- Development setup and prerequisites
+- Running tests locally
+- Branch naming and commit conventions
+- Pull request process
+
+Quick start:
+```bash
+make check-prereq  # Verify prerequisites
+make test          # Run fast tests
+make fmt           # Format code
+```
 
 ## License
 
-[License information to be added]
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.

@@ -512,3 +512,11 @@ Commands will prompt for any required information and guide you through the task
 - `test/README.md` - Detailed test suite documentation
 - `docs/INTEGRATION.md` - Integration patterns with cluster-api-installer
 - `TEST_COVERAGE.md` - Test coverage analysis and metrics
+
+### Community Health Files
+
+- `CONTRIBUTING.md` - Contribution guidelines and development workflow
+- `SECURITY.md` - Security policy and vulnerability reporting
+- `LICENSE` - Apache License 2.0
+- `.github/ISSUE_TEMPLATE/` - Issue templates for bugs and features
+- `.github/PULL_REQUEST_TEMPLATE.md` - PR template with checklists
