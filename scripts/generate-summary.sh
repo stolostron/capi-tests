@@ -81,6 +81,7 @@ get_phase_name() {
         "junit-generate-yamls") echo "YAML Generation" ;;
         "junit-deploy-crs") echo "CR Deployment" ;;
         "junit-verify") echo "Cluster Verification" ;;
+        "junit-delete") echo "Cluster Deletion" ;;
         *) echo "$1" ;;
     esac
 }
@@ -93,6 +94,7 @@ PHASE_ORDER=(
     "junit-generate-yamls"
     "junit-deploy-crs"
     "junit-verify"
+    "junit-delete"
 )
 
 # Global counters (will be modified by functions)

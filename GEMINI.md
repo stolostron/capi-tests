@@ -86,6 +86,7 @@ make _cluster        # Cluster deployment
 make _generate-yamls # YAML generation
 make _deploy-crs     # CR deployment
 make _verify         # Cluster verification
+make _delete         # Cluster deletion
 
 # Run specific test function
 go test -v ./test -run TestCheckDependencies_ToolAvailable

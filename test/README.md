@@ -41,6 +41,11 @@ This test suite validates each step of the ARO deployment process as documented 
    - Checks OpenShift version and operators
    - Performs health checks
 
+7. **`07_deletion_test.go`** - Cluster deletion
+   - Deletes workload cluster from management cluster
+   - Waits for cluster deletion to complete
+   - Verifies Azure resources are cleaned up
+
 ### Helper Files
 
 - **`config.go`** - Test configuration management
