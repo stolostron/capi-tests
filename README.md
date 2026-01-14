@@ -197,6 +197,7 @@ These targets are called by `make test-all` but can be run individually for debu
 | `make _generate-yamls` | Generate script for resource creation (yaml) |
 | `make _deploy-crs` | Deploy CRs and verify deployment |
 | `make _verify` | Verify deployed cluster |
+| `make _delete` | Delete workload cluster and verify cleanup |
 
 #### Cleanup Targets
 

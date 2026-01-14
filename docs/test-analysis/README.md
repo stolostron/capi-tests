@@ -21,7 +21,9 @@ make test-all
     │
     ├── 5. make _deploy-crs    CR Deployment
     │
-    └── 6. make _verify        Cluster Verification
+    ├── 6. make _verify        Cluster Verification
+    │
+    └── 7. make _delete        Cluster Deletion
 ```
 
 ---
@@ -36,8 +38,9 @@ make test-all
 | 4 | [_generate-yamls](04-generate-yamls/00-Overview.md) | `04_generate_yamls_test.go` | 4 | 20m | Generate YAML manifests |
 | 5 | [_deploy-crs](05-deploy-crs/00-Overview.md) | `05_deploy_crs_test.go` | 7 | 40m | Apply CRs, wait for deployment |
 | 6 | [_verify](06-verification/00-Overview.md) | `06_verification_test.go` | 7 | 20m | Validate workload cluster |
+| 7 | _delete | `07_deletion_test.go` | 6 | 60m | Delete workload cluster and verify cleanup |
 
-**Total: 40 tests across 6 phases**
+**Total: 46 tests across 7 phases**
 
 ---
 
@@ -95,6 +98,15 @@ make test-all
 │  Health: kubectl get pods -A (check for non-running)                        │
 │  Summary: Display component versions and save controller logs               │
 └─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            PHASE 7: DELETION                                 │
+│  Delete: kubectl delete cluster <cluster-name>                              │
+│  Wait: Monitor cluster resource until deleted                                │
+│  Verify: Check AROControlPlane, MachinePool deleted                         │
+│  Azure: Verify Azure resource group cleanup                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -114,6 +126,7 @@ make _cluster        # Phase 3
 make _generate-yamls # Phase 4
 make _deploy-crs     # Phase 5
 make _verify         # Phase 6
+make _delete         # Phase 7
 ```
 
 ### Key Environment Variables

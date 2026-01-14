@@ -294,6 +294,13 @@ _test-all-impl:
 		echo ""; \
 		exit 1 \
 	)
+	@$(MAKE) --no-print-directory _delete || ( \
+		echo ""; \
+		echo "❌ ERROR: Cluster deletion phase failed."; \
+		echo "   Previous stages completed successfully but cluster deletion encountered issues."; \
+		echo ""; \
+		exit 1 \
+	)
 	@echo ""
 	@echo "======================================="
 	@echo "=== All Test Phases Completed Successfully ==="
