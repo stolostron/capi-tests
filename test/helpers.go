@@ -1872,3 +1872,159 @@ func GetAzureAuthDescription(mode AzureAuthMode) string {
 		return "no authentication"
 	}
 }
+
+// DeletionResourceStatus holds the status of resources being deleted.
+type DeletionResourceStatus struct {
+	ClusterExists         bool
+	ClusterPhase          string
+	ClusterFinalizers     []string
+	AROControlPlaneCount  int
+	MachinePoolCount      int
+	AzureResourceGroup    string
+	AzureRGExists         bool
+	AzureRGProvisionState string
+}
+
+// GetDeletionResourceStatus retrieves the current status of all resources being deleted.
+// This provides a comprehensive view of the deletion progress.
+func GetDeletionResourceStatus(t *testing.T, kubeContext, namespace, clusterName, resourceGroup string) DeletionResourceStatus {
+	t.Helper()
+
+	status := DeletionResourceStatus{
+		AzureResourceGroup: resourceGroup,
+	}
+
+	// Check if cluster still exists and get its phase
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace,
+		"get", "cluster", clusterName, "-o", "jsonpath={.status.phase}", "--ignore-not-found")
+	if err == nil && strings.TrimSpace(output) != "" {
+		status.ClusterExists = true
+		status.ClusterPhase = strings.TrimSpace(output)
+	} else {
+		// Double check - try to get the cluster without jsonpath
+		checkOutput, checkErr := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace,
+			"get", "cluster", clusterName, "--ignore-not-found")
+		status.ClusterExists = checkErr == nil && strings.TrimSpace(checkOutput) != ""
+	}
+
+	// Get cluster finalizers if cluster exists
+	if status.ClusterExists {
+		finalizersOutput, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace,
+			"get", "cluster", clusterName, "-o", "jsonpath={.metadata.finalizers}")
+		if err == nil && strings.TrimSpace(finalizersOutput) != "" {
+			// Parse JSON array of finalizers
+			finalizers := strings.Trim(finalizersOutput, "[]\"")
+			if finalizers != "" {
+				status.ClusterFinalizers = strings.Split(finalizers, "\",\"")
+			}
+		}
+	}
+
+	// Count AROControlPlane resources
+	output, err = RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace,
+		"get", "arocontrolplane", "--ignore-not-found", "-o", "jsonpath={.items[*].metadata.name}")
+	if err == nil && strings.TrimSpace(output) != "" {
+		status.AROControlPlaneCount = len(strings.Fields(output))
+	}
+
+	// Count MachinePool resources
+	output, err = RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace,
+		"get", "machinepool", "--ignore-not-found", "-o", "jsonpath={.items[*].metadata.name}")
+	if err == nil && strings.TrimSpace(output) != "" {
+		status.MachinePoolCount = len(strings.Fields(output))
+	}
+
+	// Check Azure resource group status if az CLI is available
+	if CommandExists("az") && resourceGroup != "" {
+		output, err = RunCommandQuiet(t, "az", "group", "show", "--name", resourceGroup,
+			"--query", "properties.provisioningState", "-o", "tsv")
+		if err == nil && strings.TrimSpace(output) != "" {
+			status.AzureRGExists = true
+			status.AzureRGProvisionState = strings.TrimSpace(output)
+		}
+	}
+
+	return status
+}
+
+// FormatDeletionProgress formats the deletion status as a human-readable progress report.
+func FormatDeletionProgress(status DeletionResourceStatus) string {
+	var sb strings.Builder
+
+	sb.WriteString("┌─────────────────────────────────────────────────────────────┐\n")
+	sb.WriteString("│                    DELETION PROGRESS                        │\n")
+	sb.WriteString("├─────────────────────────────────────────────────────────────┤\n")
+
+	// Cluster status
+	if status.ClusterExists {
+		phase := status.ClusterPhase
+		if phase == "" {
+			phase = "unknown"
+		}
+		sb.WriteString(fmt.Sprintf("│ 🔄 Cluster:          %-39s │\n", fmt.Sprintf("Deleting (phase: %s)", phase)))
+	} else {
+		sb.WriteString("│ ✅ Cluster:          Deleted                                │\n")
+	}
+
+	// Finalizers
+	if len(status.ClusterFinalizers) > 0 {
+		sb.WriteString(fmt.Sprintf("│ 🔒 Finalizers:       %-39d │\n", len(status.ClusterFinalizers)))
+		for _, f := range status.ClusterFinalizers {
+			// Truncate long finalizer names
+			if len(f) > 35 {
+				f = f[:32] + "..."
+			}
+			sb.WriteString(fmt.Sprintf("│    - %-53s │\n", f))
+		}
+	}
+
+	// AROControlPlane
+	if status.AROControlPlaneCount > 0 {
+		sb.WriteString(fmt.Sprintf("│ 🔄 AROControlPlane:  %-39s │\n", fmt.Sprintf("%d remaining", status.AROControlPlaneCount)))
+	} else {
+		sb.WriteString("│ ✅ AROControlPlane:  Deleted                                │\n")
+	}
+
+	// MachinePool
+	if status.MachinePoolCount > 0 {
+		sb.WriteString(fmt.Sprintf("│ 🔄 MachinePool:      %-39s │\n", fmt.Sprintf("%d remaining", status.MachinePoolCount)))
+	} else {
+		sb.WriteString("│ ✅ MachinePool:      Deleted                                │\n")
+	}
+
+	// Azure resource group
+	if status.AzureResourceGroup != "" {
+		if status.AzureRGExists {
+			stateInfo := status.AzureRGProvisionState
+			if stateInfo == "" {
+				stateInfo = "exists"
+			}
+			sb.WriteString(fmt.Sprintf("│ 🔄 Azure RG:         %-39s │\n", fmt.Sprintf("%s (%s)", status.AzureResourceGroup, stateInfo)))
+		} else {
+			sb.WriteString(fmt.Sprintf("│ ✅ Azure RG:         %-39s │\n", "Deleted"))
+		}
+	}
+
+	sb.WriteString("└─────────────────────────────────────────────────────────────┘\n")
+
+	return sb.String()
+}
+
+// ReportDeletionProgress prints the current deletion status to TTY and test log.
+func ReportDeletionProgress(t *testing.T, iteration int, elapsed, remaining time.Duration, status DeletionResourceStatus) {
+	t.Helper()
+
+	percentage := 0
+	total := elapsed + remaining
+	if total > 0 {
+		percentage = int((float64(elapsed) / float64(total)) * 100)
+	}
+
+	PrintToTTY("\n[%d] ⏳ Elapsed: %v | Remaining: %v | Progress: %d%%\n",
+		iteration, elapsed.Round(time.Second), remaining.Round(time.Second), percentage)
+	PrintToTTY("%s", FormatDeletionProgress(status))
+
+	// Log summary for test output
+	t.Logf("Deletion progress: cluster=%v, arocp=%d, mp=%d, azureRG=%v",
+		status.ClusterExists, status.AROControlPlaneCount, status.MachinePoolCount, status.AzureRGExists)
+}

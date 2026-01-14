@@ -47,13 +47,17 @@ func TestDeletion_DeleteCluster(t *testing.T) {
 }
 
 // TestDeletion_WaitForClusterDeletion waits for the cluster to be fully deleted.
-// This monitors the cluster resource until it no longer exists.
+// This monitors the cluster resource until it no longer exists, showing detailed
+// progress information about all resources being deleted.
 func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 	config := NewTestConfig()
 	context := fmt.Sprintf("kind-%s", config.ManagementClusterName)
 
 	// Get the provisioned cluster name from aro.yaml
 	provisionedClusterName := config.GetProvisionedClusterName()
+
+	// Azure resource group name
+	resourceGroup := fmt.Sprintf("%s-resgroup", config.ClusterNamePrefix)
 
 	PrintTestHeader(t, "TestDeletion_WaitForClusterDeletion",
 		"Wait for cluster resource to be fully deleted")
@@ -64,7 +68,8 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 	startTime := time.Now()
 
 	PrintToTTY("⏳ Waiting for cluster '%s' to be deleted...\n", provisionedClusterName)
-	PrintToTTY("Namespace: %s | Timeout: %v | Poll interval: %v\n\n", config.TestNamespace, timeout, pollInterval)
+	PrintToTTY("Namespace: %s | Timeout: %v | Poll interval: %v\n", config.TestNamespace, timeout, pollInterval)
+	PrintToTTY("Azure Resource Group: %s\n\n", resourceGroup)
 	t.Logf("Waiting for cluster '%s' deletion (namespace: %s, timeout: %v)...", provisionedClusterName, config.TestNamespace, timeout)
 
 	iteration := 0
@@ -79,38 +84,22 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 		}
 
 		iteration++
-		PrintToTTY("[%d] Checking if cluster still exists...\n", iteration)
 
-		// Check if cluster still exists
-		output, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", config.TestNamespace,
-			"get", "cluster", provisionedClusterName, "--ignore-not-found")
-		if err != nil {
-			// Error could mean cluster is gone or there's an actual error
-			// Check if the error indicates the resource doesn't exist
-			if strings.Contains(strings.ToLower(err.Error()), "not found") {
-				PrintToTTY("\n✅ Cluster '%s' has been deleted (took %v)\n\n", provisionedClusterName, elapsed.Round(time.Second))
-				t.Logf("Cluster '%s' deleted successfully (took %v)", provisionedClusterName, elapsed.Round(time.Second))
-				return
-			}
-			// Log the error but continue waiting - it might be a transient issue
-			PrintToTTY("[%d] ⚠️  Error checking cluster status: %v\n", iteration, err)
-		}
+		// Get comprehensive deletion status
+		status := GetDeletionResourceStatus(t, context, config.TestNamespace, provisionedClusterName, resourceGroup)
 
-		// If output is empty, the cluster is gone
-		if strings.TrimSpace(output) == "" {
+		// Check if cluster is fully deleted
+		if !status.ClusterExists {
 			PrintToTTY("\n✅ Cluster '%s' has been deleted (took %v)\n\n", provisionedClusterName, elapsed.Round(time.Second))
 			t.Logf("Cluster '%s' deleted successfully (took %v)", provisionedClusterName, elapsed.Round(time.Second))
+
+			// Show final status
+			PrintToTTY("%s", FormatDeletionProgress(status))
 			return
 		}
 
-		// Cluster still exists, get its phase for progress reporting
-		phase, _ := GetClusterPhase(t, context, config.TestNamespace, provisionedClusterName)
-		if phase != "" {
-			PrintToTTY("[%d] 📊 Cluster phase: %s (still being deleted)\n", iteration, phase)
-		}
-
-		// Report progress
-		ReportProgress(t, iteration, elapsed, remaining, timeout)
+		// Report detailed deletion progress
+		ReportDeletionProgress(t, iteration, elapsed, remaining, status)
 
 		time.Sleep(pollInterval)
 	}
