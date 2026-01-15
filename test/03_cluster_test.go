@@ -41,21 +41,20 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 		}
 		PrintToTTY("✅ Azure credentials available\n")
 
-		// Deploy Kind cluster using the script
-		scriptPath := filepath.Join(config.RepoDir, "scripts", "deploy-charts.sh")
-		if !FileExists(scriptPath) {
-			PrintToTTY("❌ Deployment script not found: %s\n", scriptPath)
-			t.Errorf("Deployment script not found: %s", scriptPath)
+		// Step 1: Create Kind cluster using setup-kind-cluster.sh
+		setupScriptPath := filepath.Join(config.RepoDir, "scripts", "setup-kind-cluster.sh")
+		if !FileExists(setupScriptPath) {
+			PrintToTTY("❌ Kind setup script not found: %s\n", setupScriptPath)
+			t.Errorf("Kind setup script not found: %s", setupScriptPath)
 			return
 		}
 
-		PrintToTTY("\n=== Deploying Kind cluster '%s' ===\n", config.ManagementClusterName)
-		PrintToTTY("This will: create Kind cluster, install cert-manager, deploy CAPI/CAPZ/ASO controllers\n")
-		PrintToTTY("Expected duration: 5-10 minutes\n")
+		PrintToTTY("\n=== Creating Kind cluster '%s' ===\n", config.ManagementClusterName)
+		PrintToTTY("This will: create Kind cluster, install cert-manager\n")
 		PrintToTTY("Output streaming below...\n\n")
-		t.Logf("Deploying Kind cluster '%s' using script", config.ManagementClusterName)
+		t.Logf("Creating Kind cluster '%s' using setup script", config.ManagementClusterName)
 
-		// Set environment variable for the script (deploy-charts-kind-capz.sh expects KIND_CLUSTER_NAME)
+		// Set environment variable for the script
 		SetEnvVar(t, "KIND_CLUSTER_NAME", config.ManagementClusterName)
 
 		// Change to repository directory for script execution
@@ -69,16 +68,37 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 			t.Fatalf("Failed to change to repository directory: %v", err)
 		}
 
-		// Run the deployment script (this might take several minutes)
-		// Use streaming to show progress in real-time
-		t.Logf("Executing deployment script: %s", scriptPath)
-		t.Log("This will: create Kind cluster, install cert-manager, deploy CAPI/CAPZ/ASO controllers")
-		t.Log("Expected duration: 5-10 minutes")
-		t.Log("Output streaming below...")
-		output, err = RunCommandWithStreaming(t, "bash", scriptPath)
+		// Run the Kind setup script (pass cluster name as argument)
+		t.Logf("Executing Kind setup script: %s %s", setupScriptPath, config.ManagementClusterName)
+		output, err = RunCommandWithStreaming(t, "bash", setupScriptPath, config.ManagementClusterName)
 		if err != nil {
-			// On error, show output for debugging (may contain sensitive info, but needed for troubleshooting)
-			PrintToTTY("\n❌ Failed to deploy Kind cluster: %v\n", err)
+			PrintToTTY("\n❌ Failed to create Kind cluster: %v\n", err)
+			t.Errorf("Failed to create Kind cluster: %v\nOutput: %s", err, output)
+			return
+		}
+		PrintToTTY("✅ Kind cluster created successfully\n\n")
+
+		// Step 2: Deploy CAPI/CAPZ/ASO controllers using deploy-charts.sh
+		deployScriptPath := filepath.Join(config.RepoDir, "scripts", "deploy-charts.sh")
+		if !FileExists(deployScriptPath) {
+			PrintToTTY("❌ Deployment script not found: %s\n", deployScriptPath)
+			t.Errorf("Deployment script not found: %s", deployScriptPath)
+			return
+		}
+
+		PrintToTTY("=== Deploying CAPI/CAPZ/ASO controllers ===\n")
+		PrintToTTY("Expected duration: 3-5 minutes\n")
+		PrintToTTY("Output streaming below...\n\n")
+
+		// Set USE_KIND=true so deploy-charts.sh uses the correct Kind context
+		SetEnvVar(t, "USE_KIND", "true")
+
+		// Run the deployment script
+		t.Logf("Executing deployment script: %s", deployScriptPath)
+		t.Log("This will: deploy CAPI/CAPZ/ASO controllers to Kind cluster")
+		output, err = RunCommandWithStreaming(t, "bash", deployScriptPath)
+		if err != nil {
+			PrintToTTY("\n❌ Failed to deploy controllers: %v\n", err)
 
 			// Check for known Azure errors and provide remediation guidance
 			if azureErr := DetectAzureError(output); azureErr != nil {
@@ -86,7 +106,7 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 				t.Logf("Azure error detected: %s", azureErr.ErrorType)
 			}
 
-			t.Errorf("Failed to deploy Kind cluster: %v\nOutput: %s", err, output)
+			t.Errorf("Failed to deploy controllers: %v\nOutput: %s", err, output)
 			return
 		}
 
