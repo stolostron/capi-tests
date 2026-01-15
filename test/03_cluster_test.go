@@ -42,7 +42,7 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 		PrintToTTY("✅ Azure credentials available\n")
 
 		// Deploy Kind cluster using the script
-		scriptPath := filepath.Join(config.RepoDir, "scripts", "deploy-charts-kind-capz.sh")
+		scriptPath := filepath.Join(config.RepoDir, "scripts", "deploy-charts.sh")
 		if !FileExists(scriptPath) {
 			PrintToTTY("❌ Deployment script not found: %s\n", scriptPath)
 			t.Errorf("Deployment script not found: %s", scriptPath)
