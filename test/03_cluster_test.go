@@ -233,6 +233,21 @@ func TestKindCluster_CAPIControllerReady(t *testing.T) {
 			if status == "True" {
 				PrintToTTY("\n✅ CAPI controller manager is available! (took %v)\n\n", elapsed.Round(time.Second))
 				t.Log("CAPI controller manager deployment is available")
+
+				// Also check mce-capi-webhook-config when not in Kind/K8S mode
+				if os.Getenv("USE_KIND") != "true" && os.Getenv("USE_K8S") != "true" {
+					PrintToTTY("Checking mce-capi-webhook-config deployment...\n")
+					mceOutput, mceErr := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPINamespace,
+						"get", "deployment", "mce-capi-webhook-config",
+						"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}")
+					if mceErr != nil {
+						PrintToTTY("⚠️  MCE webhook config check failed: %v\n", mceErr)
+					} else if strings.TrimSpace(mceOutput) == "True" {
+						PrintToTTY("✅ MCE webhook config is available\n\n")
+					} else {
+						PrintToTTY("⚠️  MCE webhook config not yet available\n\n")
+					}
+				}
 				return
 			}
 		}
