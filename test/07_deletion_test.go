@@ -33,8 +33,9 @@ func TestDeletion_DeleteCluster(t *testing.T) {
 	t.Logf("Deleting cluster '%s' from namespace '%s'", provisionedClusterName, config.TestNamespace)
 
 	// Delete the cluster resource - this triggers cascading deletion of all related resources
+	// Use --wait=false to return immediately so the next test can monitor deletion progress
 	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.TestNamespace,
-		"delete", "cluster", provisionedClusterName)
+		"delete", "cluster", provisionedClusterName, "--wait=false")
 	if err != nil {
 		PrintToTTY("❌ Failed to delete cluster: %v\n", err)
 		PrintToTTY("Output: %s\n\n", output)
