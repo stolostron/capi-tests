@@ -65,7 +65,9 @@ type TestConfig struct {
 	AzureSubscription     string
 	Environment           string
 	User                  string
-	TestNamespace         string // Namespace for testing resources (default: "default")
+	TestNamespace   string // Namespace for testing resources (default: "default")
+	CAPINamespace   string // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
+	CAPZNamespace   string // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" when USE_K8S=true)
 
 	// Paths
 	ClusterctlBinPath string
@@ -94,7 +96,9 @@ func NewTestConfig() *TestConfig {
 		AzureSubscription:     os.Getenv("AZURE_SUBSCRIPTION_NAME"),
 		Environment:           GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv),
 		User:                  GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser),
-		TestNamespace:         GetEnvOrDefault("TEST_NAMESPACE", "default"),
+		TestNamespace: GetEnvOrDefault("TEST_NAMESPACE", "default"),
+		CAPINamespace: getControllerNamespace("CAPI_NAMESPACE", "capi-system"),
+		CAPZNamespace: getControllerNamespace("CAPZ_NAMESPACE", "capz-system"),
 
 		// Paths
 		ClusterctlBinPath: GetEnvOrDefault("CLUSTERCTL_BIN", "./bin/clusterctl"),
@@ -105,6 +109,23 @@ func NewTestConfig() *TestConfig {
 		DeploymentTimeout:    parseDeploymentTimeout(),
 		ASOControllerTimeout: parseASOControllerTimeout(),
 	}
+}
+
+// getControllerNamespace returns the namespace for a controller based on configuration.
+// If USE_K8S=true, returns "multicluster-engine" (K8S deployment mode).
+// Otherwise, checks the specific env var (e.g., CAPI_NAMESPACE) and falls back to defaultNS.
+func getControllerNamespace(envVar, defaultNS string) string {
+	// Check if USE_K8S mode is enabled - all controllers use multicluster-engine namespace
+	if os.Getenv("USE_K8S") == "true" {
+		return "multicluster-engine"
+	}
+
+	// Check for specific namespace override
+	if ns := os.Getenv(envVar); ns != "" {
+		return ns
+	}
+
+	return defaultNS
 }
 
 // parseDeploymentTimeout parses the DEPLOYMENT_TIMEOUT environment variable.

@@ -151,8 +151,8 @@ func TestKindCluster_CAPINamespacesExists(t *testing.T) {
 
 	// Check for CAPI namespaces
 	expectedNamespaces := []string{
-		"capi-system",
-		"capz-system",
+		config.CAPINamespace,
+		config.CAPZNamespace,
 	}
 
 	for _, ns := range expectedNamespaces {
@@ -199,7 +199,7 @@ func TestKindCluster_CAPIControllerReady(t *testing.T) {
 	startTime := time.Now()
 
 	PrintToTTY("\n=== Waiting for CAPI controller manager ===\n")
-	PrintToTTY("Namespace: capi-system\n")
+	PrintToTTY("Namespace: %s\n", config.CAPINamespace)
 	PrintToTTY("Deployment: capi-controller-manager\n")
 	PrintToTTY("Timeout: %v | Poll interval: %v\n\n", timeout, pollInterval)
 
@@ -218,7 +218,7 @@ func TestKindCluster_CAPIControllerReady(t *testing.T) {
 
 		PrintToTTY("[%d] Checking deployment status...\n", iteration)
 
-		output, err := RunCommand(t, "kubectl", "--context", context, "-n", "capi-system",
+		output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPINamespace,
 			"get", "deployment", "capi-controller-manager",
 			"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}")
 
@@ -254,7 +254,7 @@ func TestKindCluster_CAPZControllerReady(t *testing.T) {
 	startTime := time.Now()
 
 	PrintToTTY("\n=== Waiting for CAPZ controller manager ===\n")
-	PrintToTTY("Namespace: capz-system\n")
+	PrintToTTY("Namespace: %s\n", config.CAPZNamespace)
 	PrintToTTY("Deployment: capz-controller-manager\n")
 	PrintToTTY("Timeout: %v | Poll interval: %v\n\n", timeout, pollInterval)
 
@@ -273,7 +273,7 @@ func TestKindCluster_CAPZControllerReady(t *testing.T) {
 
 		PrintToTTY("[%d] Checking deployment status...\n", iteration)
 
-		output, err := RunCommand(t, "kubectl", "--context", context, "-n", "capz-system",
+		output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPZNamespace,
 			"get", "deployment", "capz-controller-manager",
 			"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}")
 
@@ -329,15 +329,15 @@ func TestKindCluster_ASOCredentialsConfigured(t *testing.T) {
 	}
 
 	PrintToTTY("\n=== Validating ASO credentials configuration ===\n")
-	PrintToTTY("Namespace: capz-system\n")
+	PrintToTTY("Namespace: %s\n", config.CAPZNamespace)
 	PrintToTTY("Secret: aso-controller-settings\n\n")
 
 	// Check if secret exists
 	PrintToTTY("Checking if aso-controller-settings secret exists...\n")
-	_, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", "capz-system",
+	_, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", config.CAPZNamespace,
 		"get", "secret", "aso-controller-settings")
 	if err != nil {
-		PrintToTTY("❌ Secret 'aso-controller-settings' not found in capz-system namespace\n")
+		PrintToTTY("❌ Secret 'aso-controller-settings' not found in %s namespace\n", config.CAPZNamespace)
 		PrintToTTY("\nThe deployment script did not create the ASO credentials secret.\n")
 		PrintToTTY("Please check that the cluster-api-installer deployment completed successfully.\n\n")
 		t.Fatalf("aso-controller-settings secret not found: %v", err)
@@ -357,7 +357,7 @@ func TestKindCluster_ASOCredentialsConfigured(t *testing.T) {
 	var missingFields []string
 
 	for _, field := range requiredFields {
-		output, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", "capz-system",
+		output, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", config.CAPZNamespace,
 			"get", "secret", "aso-controller-settings",
 			"-o", fmt.Sprintf("jsonpath={.data.%s}", field))
 
@@ -407,7 +407,7 @@ func TestKindCluster_ASOControllerReady(t *testing.T) {
 	startTime := time.Now()
 
 	PrintToTTY("\n=== Waiting for Azure Service Operator controller manager ===\n")
-	PrintToTTY("Namespace: capz-system\n")
+	PrintToTTY("Namespace: %s\n", config.CAPZNamespace)
 	PrintToTTY("Deployment: azureserviceoperator-controller-manager\n")
 	PrintToTTY("Timeout: %v | Poll interval: %v\n\n", timeout, pollInterval)
 
@@ -426,7 +426,7 @@ func TestKindCluster_ASOControllerReady(t *testing.T) {
 
 		PrintToTTY("[%d] Checking deployment status...\n", iteration)
 
-		output, err := RunCommand(t, "kubectl", "--context", context, "-n", "capz-system",
+		output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPZNamespace,
 			"get", "deployment", "azureserviceoperator-controller-manager",
 			"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}")
 
@@ -466,10 +466,10 @@ func TestKindCluster_WebhooksReady(t *testing.T) {
 	}
 
 	webhooks := []webhookInfo{
-		{"CAPI", "capi-system", "capi-webhook-service", 443},
-		{"CAPZ", "capz-system", "capz-webhook-service", 443},
-		{"ASO", "capz-system", "azureserviceoperator-webhook-service", 443},
-		{"MCE", "capi-system", "mce-capi-webhook-config-service", 9443},
+		{"CAPI", config.CAPINamespace, "capi-webhook-service", 443},
+		{"CAPZ", config.CAPZNamespace, "capz-webhook-service", 443},
+		{"ASO", config.CAPZNamespace, "azureserviceoperator-webhook-service", 443},
+		{"MCE", config.CAPINamespace, "mce-capi-webhook-config-service", 9443},
 	}
 
 	timeout := 5 * time.Minute

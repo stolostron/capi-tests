@@ -559,7 +559,7 @@ func EnsureAzureCredentialsSet(t *testing.T) error {
 // This function:
 // 1. Gets AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID from environment (or extracts from Azure CLI)
 // 2. Optionally includes AZURE_CLIENT_ID and AZURE_CLIENT_SECRET if both are set
-// 3. Patches the secret in the capz-system namespace
+// 3. Patches the secret in the controller namespace (capz-system or multicluster-engine)
 //
 // Service principal credentials (AZURE_CLIENT_ID/AZURE_CLIENT_SECRET) are optional for local
 // development but required for ASO to work in Kind clusters since Kind cannot use managed
@@ -605,8 +605,11 @@ func PatchASOCredentialsSecret(t *testing.T, kubeContext string) error {
 	}
 	patchJSON := fmt.Sprintf(`{"stringData":{%s}}`, strings.Join(pairs, ","))
 
+	// Get controller namespace from config
+	config := NewTestConfig()
+
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
-		"-n", "capz-system", "patch", "secret", "aso-controller-settings",
+		"-n", config.CAPZNamespace, "patch", "secret", "aso-controller-settings",
 		"--type=merge", "-p", patchJSON)
 	if err != nil {
 		return fmt.Errorf("failed to patch aso-controller-settings secret: %w\nOutput: %s", err, output)
@@ -1276,14 +1279,17 @@ func GetComponentVersions(t *testing.T, kubeContext string) []ComponentVersion {
 	t.Helper()
 
 	// Define components to check - these are the key components for ARO-CAPZ deployment
+	// Get namespace configuration
+	config := NewTestConfig()
+
 	components := []struct {
 		name       string
 		namespace  string
 		deployment string
 	}{
-		{"CAPZ (Cluster API Provider Azure)", "capz-system", "capz-controller-manager"},
-		{"ASO (Azure Service Operator)", "capz-system", "azureserviceoperator-controller-manager"},
-		{"CAPI (Cluster API)", "capi-system", "capi-controller-manager"},
+		{"CAPZ (Cluster API Provider Azure)", config.CAPZNamespace, "capz-controller-manager"},
+		{"ASO (Azure Service Operator)", config.CAPZNamespace, "azureserviceoperator-controller-manager"},
+		{"CAPI (Cluster API)", config.CAPINamespace, "capi-controller-manager"},
 	}
 
 	var versions []ComponentVersion
@@ -1600,14 +1606,17 @@ func GetAllControllerLogSummaries(t *testing.T, kubeContext string) []Controller
 	t.Helper()
 
 	// Define controllers to check (same as in GetComponentVersions)
+	// Get namespace configuration
+	config := NewTestConfig()
+
 	controllers := []struct {
 		name       string
 		namespace  string
 		deployment string
 	}{
-		{"CAPI", "capi-system", "capi-controller-manager"},
-		{"CAPZ", "capz-system", "capz-controller-manager"},
-		{"ASO", "capz-system", "azureserviceoperator-controller-manager"},
+		{"CAPI", config.CAPINamespace, "capi-controller-manager"},
+		{"CAPZ", config.CAPZNamespace, "capz-controller-manager"},
+		{"ASO", config.CAPZNamespace, "azureserviceoperator-controller-manager"},
 	}
 
 	var summaries []ControllerLogSummary
@@ -1690,14 +1699,17 @@ func SaveAllControllerLogs(t *testing.T, kubeContext, outputDir string, summarie
 	t.Helper()
 
 	// Define controllers (same list as in GetAllControllerLogSummaries)
+	// Get namespace configuration
+	config := NewTestConfig()
+
 	controllers := []struct {
 		name       string
 		namespace  string
 		deployment string
 	}{
-		{"CAPI", "capi-system", "capi-controller-manager"},
-		{"CAPZ", "capz-system", "capz-controller-manager"},
-		{"ASO", "capz-system", "azureserviceoperator-controller-manager"},
+		{"CAPI", config.CAPINamespace, "capi-controller-manager"},
+		{"CAPZ", config.CAPZNamespace, "capz-controller-manager"},
+		{"ASO", config.CAPZNamespace, "azureserviceoperator-controller-manager"},
 	}
 
 	// Create a map for quick lookup
