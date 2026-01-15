@@ -471,7 +471,11 @@ func TestKindCluster_WebhooksReady(t *testing.T) {
 		{"CAPI", config.CAPINamespace, "capi-webhook-service", 443},
 		{"CAPZ", config.CAPZNamespace, "capz-webhook-service", 443},
 		{"ASO", config.CAPZNamespace, "azureserviceoperator-webhook-service", 443},
-		{"MCE", config.CAPINamespace, "mce-capi-webhook-config-service", 9443},
+	}
+
+	// MCE webhook is only available in full MCE deployment, not in Kind/K8S mode
+	if os.Getenv("USE_KIND") != "true" && os.Getenv("USE_K8S") != "true" {
+		webhooks = append(webhooks, webhookInfo{"MCE", config.CAPINamespace, "mce-capi-webhook-config-service", 9443})
 	}
 
 	timeout := 5 * time.Minute
