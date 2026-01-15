@@ -41,21 +41,25 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 		}
 		PrintToTTY("✅ Azure credentials available\n")
 
-		// Step 1: Create Kind cluster using setup-kind-cluster.sh
-		setupScriptPath := filepath.Join(config.RepoDir, "scripts", "setup-kind-cluster.sh")
-		if !FileExists(setupScriptPath) {
-			PrintToTTY("❌ Kind setup script not found: %s\n", setupScriptPath)
-			t.Errorf("Kind setup script not found: %s", setupScriptPath)
+		// Deploy Kind cluster and CAPI/CAPZ/ASO controllers using deploy-charts.sh
+		// DO_INIT_KIND=true creates the Kind cluster and installs cert-manager
+		// DO_DEPLOY=true deploys the specified charts
+		deployScriptPath := filepath.Join(config.RepoDir, "scripts", "deploy-charts.sh")
+		if !FileExists(deployScriptPath) {
+			PrintToTTY("❌ Deployment script not found: %s\n", deployScriptPath)
+			t.Errorf("Deployment script not found: %s", deployScriptPath)
 			return
 		}
 
-		PrintToTTY("\n=== Creating Kind cluster '%s' ===\n", config.ManagementClusterName)
-		PrintToTTY("This will: create Kind cluster, install cert-manager\n")
+		PrintToTTY("\n=== Deploying Kind cluster '%s' with CAPI/CAPZ/ASO controllers ===\n", config.ManagementClusterName)
+		PrintToTTY("This will: create Kind cluster, install cert-manager, deploy controllers\n")
+		PrintToTTY("Expected duration: 5-10 minutes\n")
 		PrintToTTY("Output streaming below...\n\n")
-		t.Logf("Creating Kind cluster '%s' using setup script", config.ManagementClusterName)
 
-		// Set environment variable for the script
+		// Set environment variables for deploy-charts.sh
 		SetEnvVar(t, "KIND_CLUSTER_NAME", config.ManagementClusterName)
+		SetEnvVar(t, "DO_INIT_KIND", "true")
+		SetEnvVar(t, "DO_DEPLOY", "true")
 
 		// Change to repository directory for script execution
 		originalDir, err := os.Getwd()
@@ -67,35 +71,6 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 		if err := os.Chdir(config.RepoDir); err != nil {
 			t.Fatalf("Failed to change to repository directory: %v", err)
 		}
-
-		// Run the Kind setup script (pass cluster name as argument)
-		t.Logf("Executing Kind setup script: %s %s", setupScriptPath, config.ManagementClusterName)
-		output, err = RunCommandWithStreaming(t, "bash", setupScriptPath, config.ManagementClusterName)
-		if err != nil {
-			PrintToTTY("\n❌ Failed to create Kind cluster: %v\n", err)
-			t.Errorf("Failed to create Kind cluster: %v\nOutput: %s", err, output)
-			return
-		}
-		PrintToTTY("✅ Kind cluster created successfully\n\n")
-
-		// Step 2: Deploy CAPI/CAPZ/ASO controllers using deploy-charts.sh
-		deployScriptPath := filepath.Join(config.RepoDir, "scripts", "deploy-charts.sh")
-		if !FileExists(deployScriptPath) {
-			PrintToTTY("❌ Deployment script not found: %s\n", deployScriptPath)
-			t.Errorf("Deployment script not found: %s", deployScriptPath)
-			return
-		}
-
-		PrintToTTY("=== Deploying CAPI/CAPZ/ASO controllers ===\n")
-		PrintToTTY("Expected duration: 3-5 minutes\n")
-		PrintToTTY("Output streaming below...\n\n")
-
-		// Set environment variables for deploy-charts.sh:
-		// - DO_INIT_KIND=true: Initialize Kind cluster context
-		// - DO_DEPLOY=true: Enable deployment mode
-		// Pass chart names as arguments: cluster-api and cluster-api-provider-azure
-		SetEnvVar(t, "DO_INIT_KIND", "true")
-		SetEnvVar(t, "DO_DEPLOY", "true")
 
 		// Run the deployment script with chart arguments
 		t.Logf("Executing deployment script: %s cluster-api cluster-api-provider-azure", deployScriptPath)
