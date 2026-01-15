@@ -90,13 +90,14 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 		PrintToTTY("Expected duration: 3-5 minutes\n")
 		PrintToTTY("Output streaming below...\n\n")
 
-		// Set USE_KIND=true so deploy-charts.sh uses the correct Kind context
-		SetEnvVar(t, "USE_KIND", "true")
+		// Set DO_DEPLOY=true to enable deployment mode
+		// Pass chart names as arguments: cluster-api and cluster-api-provider-azure
+		SetEnvVar(t, "DO_DEPLOY", "true")
 
-		// Run the deployment script
-		t.Logf("Executing deployment script: %s", deployScriptPath)
+		// Run the deployment script with chart arguments
+		t.Logf("Executing deployment script: %s cluster-api cluster-api-provider-azure", deployScriptPath)
 		t.Log("This will: deploy CAPI/CAPZ/ASO controllers to Kind cluster")
-		output, err = RunCommandWithStreaming(t, "bash", deployScriptPath)
+		output, err = RunCommandWithStreaming(t, "bash", deployScriptPath, "cluster-api", "cluster-api-provider-azure")
 		if err != nil {
 			PrintToTTY("\n❌ Failed to deploy controllers: %v\n", err)
 
