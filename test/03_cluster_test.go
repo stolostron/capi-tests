@@ -90,8 +90,11 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 		PrintToTTY("Expected duration: 3-5 minutes\n")
 		PrintToTTY("Output streaming below...\n\n")
 
-		// Set DO_DEPLOY=true to enable deployment mode
+		// Set environment variables for deploy-charts.sh:
+		// - USE_KIND=true: Use the Kind cluster context (kind-$KIND_CLUSTER_NAME)
+		// - DO_DEPLOY=true: Enable deployment mode
 		// Pass chart names as arguments: cluster-api and cluster-api-provider-azure
+		SetEnvVar(t, "USE_KIND", "true")
 		SetEnvVar(t, "DO_DEPLOY", "true")
 
 		// Run the deployment script with chart arguments
