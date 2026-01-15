@@ -57,6 +57,9 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 		PrintToTTY("Output streaming below...\n\n")
 
 		// Set environment variables for deploy-charts.sh
+		// USE_KIND or USE_K8S should be set externally by the user
+		// DO_INIT_KIND=true: Create Kind cluster (when USE_KIND=true)
+		// DO_DEPLOY=true: Deploy the charts
 		SetEnvVar(t, "KIND_CLUSTER_NAME", config.ManagementClusterName)
 		SetEnvVar(t, "DO_INIT_KIND", "true")
 		SetEnvVar(t, "DO_DEPLOY", "true")
