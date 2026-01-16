@@ -23,3 +23,9 @@ results/
 
 # Deployment state (written by tests, read by cleanup)
 .deployment-state.json
+
+# Credentials (never commit)
+credentials.json
+
+# Local Claude instructions (not committed)
+CLAUDE.local.md
