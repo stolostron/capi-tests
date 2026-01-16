@@ -27,5 +27,6 @@ results/
 # Credentials (never commit)
 credentials.json
 
-# Local Claude instructions (not committed)
+# Local Claude instructions and commands (not committed)
 CLAUDE.local.md
+.claude/commands/sync-jira.md
