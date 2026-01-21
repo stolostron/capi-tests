@@ -21,6 +21,9 @@ func TestSetup_CloneRepository(t *testing.T) {
 			return
 		}
 
+		// Register the existing repository for tracking in test output
+		RegisterClonedRepository(config.RepoURL, config.RepoBranch, config.RepoDir)
+
 		t.Log("Using existing repository")
 		return
 	}
@@ -33,6 +36,9 @@ func TestSetup_CloneRepository(t *testing.T) {
 		t.Errorf("Failed to clone repository: %v\nOutput: %s", err, output)
 		return
 	}
+
+	// Register the cloned repository for tracking in test output
+	RegisterClonedRepository(config.RepoURL, config.RepoBranch, config.RepoDir)
 
 	t.Logf("Repository cloned successfully to %s", config.RepoDir)
 }

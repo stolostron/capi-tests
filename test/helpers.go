@@ -14,6 +14,60 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ClonedRepository represents information about a cloned git repository.
+type ClonedRepository struct {
+	URL    string // Repository URL (e.g., "https://github.com/RadekCap/cluster-api-installer")
+	Branch string // Branch that was cloned (e.g., "ARO-ASO")
+	Path   string // Local path where the repository was cloned
+}
+
+// clonedRepos stores information about all repositories cloned during tests.
+// Access is protected by clonedReposMutex for thread safety.
+var (
+	clonedRepos      []ClonedRepository
+	clonedReposMutex sync.Mutex
+)
+
+// RegisterClonedRepository records a cloned repository for tracking.
+// This information is displayed in the final test output to show which
+// repository versions were used during test execution.
+func RegisterClonedRepository(url, branch, path string) {
+	clonedReposMutex.Lock()
+	defer clonedReposMutex.Unlock()
+
+	// Check if already registered (avoid duplicates)
+	for _, repo := range clonedRepos {
+		if repo.URL == url && repo.Branch == branch {
+			return
+		}
+	}
+
+	clonedRepos = append(clonedRepos, ClonedRepository{
+		URL:    url,
+		Branch: branch,
+		Path:   path,
+	})
+}
+
+// GetClonedRepositories returns a copy of all registered cloned repositories.
+func GetClonedRepositories() []ClonedRepository {
+	clonedReposMutex.Lock()
+	defer clonedReposMutex.Unlock()
+
+	// Return a copy to avoid race conditions
+	result := make([]ClonedRepository, len(clonedRepos))
+	copy(result, clonedRepos)
+	return result
+}
+
+// ClearClonedRepositories clears the list of cloned repositories.
+// This is mainly useful for testing.
+func ClearClonedRepositories() {
+	clonedReposMutex.Lock()
+	defer clonedReposMutex.Unlock()
+	clonedRepos = nil
+}
+
 // CommandExists checks if a command is available in the system PATH
 func CommandExists(cmd string) bool {
 	_, err := exec.LookPath(cmd)
@@ -1336,6 +1390,16 @@ func FormatComponentVersions(versions []ComponentVersion, config *TestConfig) st
 		}
 		result.WriteString(fmt.Sprintf("  Resource Group:     %s-resgroup\n", config.ClusterNamePrefix))
 		result.WriteString(fmt.Sprintf("  OpenShift Version:  %s\n", config.OpenShiftVersion))
+	}
+
+	// Used repositories
+	repos := GetClonedRepositories()
+	if len(repos) > 0 {
+		result.WriteString("\n=== USED REPOSITORIES ===\n\n")
+		for _, repo := range repos {
+			result.WriteString(fmt.Sprintf("- %s\n", repo.URL))
+			result.WriteString(fmt.Sprintf("  Branch: %s\n", repo.Branch))
+		}
 	}
 
 	// Component versions

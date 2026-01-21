@@ -2210,3 +2210,76 @@ func TestAzureAuthModeConstants(t *testing.T) {
 		t.Errorf("AzureAuthModeNone = %q, expected 'none'", AzureAuthModeNone)
 	}
 }
+
+// TestClonedRepositoryTracking tests the cloned repository tracking functionality.
+func TestClonedRepositoryTracking(t *testing.T) {
+	// Clear any existing repos first
+	ClearClonedRepositories()
+
+	// Initially should be empty
+	repos := GetClonedRepositories()
+	if len(repos) != 0 {
+		t.Errorf("Expected 0 repos after clear, got %d", len(repos))
+	}
+
+	// Register a repository
+	RegisterClonedRepository("https://github.com/test/repo1", "main", "/tmp/repo1")
+	repos = GetClonedRepositories()
+	if len(repos) != 1 {
+		t.Fatalf("Expected 1 repo, got %d", len(repos))
+	}
+	if repos[0].URL != "https://github.com/test/repo1" {
+		t.Errorf("Expected URL 'https://github.com/test/repo1', got %q", repos[0].URL)
+	}
+	if repos[0].Branch != "main" {
+		t.Errorf("Expected branch 'main', got %q", repos[0].Branch)
+	}
+
+	// Register same repo again - should not create duplicate
+	RegisterClonedRepository("https://github.com/test/repo1", "main", "/tmp/repo1")
+	repos = GetClonedRepositories()
+	if len(repos) != 1 {
+		t.Errorf("Expected 1 repo (no duplicate), got %d", len(repos))
+	}
+
+	// Register a different repo
+	RegisterClonedRepository("https://github.com/test/repo2", "dev", "/tmp/repo2")
+	repos = GetClonedRepositories()
+	if len(repos) != 2 {
+		t.Errorf("Expected 2 repos, got %d", len(repos))
+	}
+
+	// Clear and verify
+	ClearClonedRepositories()
+	repos = GetClonedRepositories()
+	if len(repos) != 0 {
+		t.Errorf("Expected 0 repos after clear, got %d", len(repos))
+	}
+}
+
+// TestFormatComponentVersions_WithRepositories tests that FormatComponentVersions includes repository info.
+func TestFormatComponentVersions_WithRepositories(t *testing.T) {
+	// Clear and set up test repositories
+	ClearClonedRepositories()
+	RegisterClonedRepository("https://github.com/RadekCap/cluster-api-installer", "ARO-ASO", "/tmp/capi")
+
+	versions := []ComponentVersion{
+		{Name: "CAPZ", Version: "v1.19.0", Image: "mcr.microsoft.com/capz:v1.19.0"},
+	}
+
+	result := FormatComponentVersions(versions, nil)
+
+	// Check for repository section
+	if !strings.Contains(result, "USED REPOSITORIES") {
+		t.Error("Output should contain USED REPOSITORIES section")
+	}
+	if !strings.Contains(result, "https://github.com/RadekCap/cluster-api-installer") {
+		t.Error("Output should contain repository URL")
+	}
+	if !strings.Contains(result, "Branch: ARO-ASO") {
+		t.Error("Output should contain branch name")
+	}
+
+	// Clean up
+	ClearClonedRepositories()
+}
