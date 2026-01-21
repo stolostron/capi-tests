@@ -2,17 +2,24 @@
 # cleanup-azure-resources.sh - Clean up Azure resources created during ARO-CAPZ testing
 #
 # This script finds and deletes Azure resources that match the naming patterns used
-# during testing. These resources may not be tied to the resource group and can
-# survive resource group deletion.
+# during testing. It cleans up:
+#   - Azure Resource Group (optional, via --resource-group)
+#   - ARM resources (via Azure Resource Graph)
+#   - Azure AD Applications (App Registrations)
+#   - Service Principals
+#
+# These resources may not be tied to the resource group and can survive resource
+# group deletion.
 #
 # Usage:
 #   ./scripts/cleanup-azure-resources.sh [OPTIONS]
 #
 # Options:
-#   --prefix PREFIX    Resource name prefix to search for (default: from CAPZ_USER env var or 'rcap')
-#   --dry-run          Show what would be deleted without actually deleting
-#   --force            Skip confirmation prompts
-#   --help             Show this help message
+#   --prefix PREFIX        Resource name prefix to search for (default: from CAPZ_USER env var or 'rcap')
+#   --resource-group RG    Also delete this Azure resource group
+#   --dry-run              Show what would be deleted without actually deleting
+#   --force                Skip confirmation prompts
+#   --help                 Show this help message
 #
 # Environment variables:
 #   CAPZ_USER          Default prefix for resource names (e.g., 'rcap')
@@ -21,12 +28,14 @@
 # Examples:
 #   ./scripts/cleanup-azure-resources.sh --dry-run
 #   ./scripts/cleanup-azure-resources.sh --prefix rcapd --force
+#   ./scripts/cleanup-azure-resources.sh --resource-group myapp-resgroup --prefix myapp
 #   CAPZ_USER=myuser ./scripts/cleanup-azure-resources.sh
 
 set -euo pipefail
 
 # Default values
 PREFIX="${CAPZ_USER:-rcap}"
+RESOURCE_GROUP=""
 DRY_RUN=false
 FORCE=false
 
@@ -45,7 +54,7 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Show usage
 usage() {
-    head -30 "$0" | grep '^#' | sed 's/^# \?//'
+    head -35 "$0" | grep '^#' | sed 's/^# \?//'
     exit 0
 }
 
@@ -54,6 +63,10 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         --prefix)
             PREFIX="$2"
+            shift 2
+            ;;
+        --resource-group)
+            RESOURCE_GROUP="$2"
             shift 2
             ;;
         --dry-run)
@@ -73,6 +86,13 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Validate prefix to prevent OData filter injection
+# Must be lowercase alphanumeric with optional hyphens, starting with alphanumeric
+if [[ ! "$PREFIX" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+    print_error "Invalid prefix '${PREFIX}': must be lowercase alphanumeric with hyphens, starting with alphanumeric"
+    exit 1
+fi
 
 # Check prerequisites
 check_prerequisites() {
@@ -100,11 +120,53 @@ check_prerequisites() {
     print_success "Prerequisites check passed"
 }
 
+# Delete Azure resource group
+delete_resource_group() {
+    local rg_name="$1"
+
+    # Check if resource group exists
+    if ! az group show --name "$rg_name" >/dev/null 2>&1; then
+        print_info "Resource group '${rg_name}' not found (already deleted or doesn't exist)"
+        return 0
+    fi
+
+    echo ""
+    print_warning "Found resource group '${rg_name}'"
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_warning "[DRY-RUN] Would delete resource group '${rg_name}'"
+        return 0
+    fi
+
+    # Confirm deletion unless --force is specified
+    if [[ "$FORCE" != "true" ]]; then
+        echo ""
+        echo "⚠️  Warning: This will delete ALL resources in the resource group!"
+        read -p "Delete Azure resource group '${rg_name}'? [y/N] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_info "Resource group deletion cancelled"
+            return 0
+        fi
+    fi
+
+    echo ""
+    print_info "Deleting resource group '${rg_name}' (running in background)..."
+
+    if az group delete --name "$rg_name" --yes --no-wait 2>/dev/null; then
+        print_success "Resource group deletion initiated"
+        print_warning "Note: Resource group deletion runs asynchronously and may take several minutes."
+    else
+        print_error "Failed to delete resource group '${rg_name}'"
+        return 1
+    fi
+}
+
 # Find resources matching the pattern
 find_resources() {
     local prefix="$1"
 
-    print_info "Searching for Azure resources with prefix '${prefix}'..."
+    print_info "Searching for Azure resources with prefix '${prefix}'..." >&2
 
     # Query Azure Resource Graph for resources matching the pattern
     # We search for:
@@ -115,7 +177,49 @@ find_resources() {
     # The pattern is: prefix followed by optional suffix (e.g., rcapa, rcapb, rcap-stage, etc.)
     local query="Resources | where name contains '${prefix}' | project id, name, type, resourceGroup, subscriptionId | order by type asc, name asc"
 
-    az graph query -q "$query" -o json 2>/dev/null
+    local resources_json
+    resources_json=$(az graph query -q "$query" -o json 2>/dev/null)
+    if [[ $? -ne 0 ]]; then
+        print_error "Failed to search for ARM resources with prefix '${prefix}'" >&2
+        echo '{"data": []}'
+        return
+    fi
+    echo "$resources_json"
+}
+
+# Find Azure AD Applications matching the prefix
+find_ad_applications() {
+    local prefix="$1"
+
+    print_info "Searching for Azure AD Applications with prefix '${prefix}'..." >&2
+
+    # Use az ad app list with OData filter for displayName starting with prefix
+    # Note: The filter is case-insensitive
+    local apps_json
+    apps_json=$(az ad app list --filter "startswith(displayName, '${prefix}')" --query "[].{appId: appId, displayName: displayName}" -o json 2>/dev/null)
+    if [[ $? -ne 0 ]]; then
+        print_error "Failed to list Azure AD Applications with prefix '${prefix}'" >&2
+        echo "[]"
+        return
+    fi
+    echo "$apps_json"
+}
+
+# Find Service Principals matching the prefix
+find_service_principals() {
+    local prefix="$1"
+
+    print_info "Searching for Service Principals with prefix '${prefix}'..." >&2
+
+    # Use az ad sp list with OData filter for displayName starting with prefix
+    local sps_json
+    sps_json=$(az ad sp list --filter "startswith(displayName, '${prefix}')" --query "[].{appId: appId, displayName: displayName, id: id}" -o json 2>/dev/null)
+    if [[ $? -ne 0 ]]; then
+        print_error "Failed to list Service Principals with prefix '${prefix}'" >&2
+        echo "[]"
+        return
+    fi
+    echo "$sps_json"
 }
 
 # Parse and display resources
@@ -235,6 +339,204 @@ delete_resources() {
     fi
 }
 
+# Display Azure AD Applications
+display_ad_applications() {
+    local apps_json="$1"
+    local count
+
+    # Handle empty or invalid JSON
+    if [[ -z "$apps_json" ]] || [[ "$apps_json" == "[]" ]] || ! echo "$apps_json" | jq -e '.' >/dev/null 2>&1; then
+        print_info "No Azure AD Applications found matching prefix '${PREFIX}'"
+        return 1
+    fi
+
+    count=$(echo "$apps_json" | jq -r 'length // 0')
+
+    if [[ "$count" -eq 0 ]]; then
+        print_info "No Azure AD Applications found matching prefix '${PREFIX}'"
+        return 1
+    fi
+
+    echo ""
+    print_warning "Found ${count} Azure AD Application(s) matching prefix '${PREFIX}':"
+    echo ""
+
+    # Print table header
+    printf "%-50s | %-40s\n" "DISPLAY NAME" "APP ID"
+    printf "%s\n" "$(printf '%.0s-' {1..95})"
+
+    # Print each application
+    echo "$apps_json" | jq -r '.[] | "\(.displayName)|\(.appId)"' | while IFS='|' read -r name appId; do
+        name_display="${name:0:50}"
+        printf "%-50s | %-40s\n" "$name_display" "$appId"
+    done
+
+    echo ""
+    return 0
+}
+
+# Delete Azure AD Applications
+delete_ad_applications() {
+    local apps_json="$1"
+    local count
+    local deleted=0
+    local failed=0
+
+    count=$(echo "$apps_json" | jq -r 'length')
+
+    if [[ "$count" -eq 0 ]]; then
+        return 0
+    fi
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_warning "[DRY-RUN] Would delete ${count} Azure AD Application(s)"
+        return 0
+    fi
+
+    # Confirm deletion unless --force is specified
+    if [[ "$FORCE" != "true" ]]; then
+        echo ""
+        read -p "Delete all ${count} Azure AD Application(s)? [y/N] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_info "Azure AD Application deletion cancelled"
+            return 0
+        fi
+    fi
+
+    echo ""
+    print_info "Deleting Azure AD Applications..."
+    print_info "(Note: Deleting an App also deletes its associated Service Principal)"
+    echo ""
+
+    # Delete each application by appId
+    # Use process substitution to avoid subshell (preserves counter variables)
+    while IFS= read -r appId; do
+        if [[ -z "$appId" ]]; then
+            continue
+        fi
+
+        local app_name
+        app_name=$(echo "$apps_json" | jq -r --arg id "$appId" '.[] | select(.appId == $id) | .displayName')
+
+        echo -n "  Deleting: ${app_name} (${appId})... "
+
+        # Attempt deletion
+        if az ad app delete --id "$appId" 2>/dev/null; then
+            echo "DELETED"
+            ((deleted++))
+        else
+            echo "FAILED"
+            ((failed++))
+        fi
+    done < <(echo "$apps_json" | jq -r '.[].appId')
+
+    echo ""
+    print_info "Azure AD Application deletion summary:"
+    echo "  - Deleted: ${deleted}"
+    echo "  - Failed: ${failed}"
+}
+
+# Display Service Principals
+display_service_principals() {
+    local sps_json="$1"
+    local count
+
+    # Handle empty or invalid JSON
+    if [[ -z "$sps_json" ]] || [[ "$sps_json" == "[]" ]] || ! echo "$sps_json" | jq -e '.' >/dev/null 2>&1; then
+        print_info "No Service Principals found matching prefix '${PREFIX}'"
+        return 1
+    fi
+
+    count=$(echo "$sps_json" | jq -r 'length // 0')
+
+    if [[ "$count" -eq 0 ]]; then
+        print_info "No Service Principals found matching prefix '${PREFIX}'"
+        return 1
+    fi
+
+    echo ""
+    print_warning "Found ${count} Service Principal(s) matching prefix '${PREFIX}':"
+    echo ""
+
+    # Print table header
+    printf "%-50s | %-40s\n" "DISPLAY NAME" "APP ID"
+    printf "%s\n" "$(printf '%.0s-' {1..95})"
+
+    # Print each service principal
+    echo "$sps_json" | jq -r '.[] | "\(.displayName)|\(.appId)"' | while IFS='|' read -r name appId; do
+        name_display="${name:0:50}"
+        printf "%-50s | %-40s\n" "$name_display" "$appId"
+    done
+
+    echo ""
+    return 0
+}
+
+# Delete Service Principals
+delete_service_principals() {
+    local sps_json="$1"
+    local count
+    local deleted=0
+    local failed=0
+
+    count=$(echo "$sps_json" | jq -r 'length')
+
+    if [[ "$count" -eq 0 ]]; then
+        return 0
+    fi
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_warning "[DRY-RUN] Would delete ${count} Service Principal(s)"
+        return 0
+    fi
+
+    # Confirm deletion unless --force is specified
+    if [[ "$FORCE" != "true" ]]; then
+        echo ""
+        read -p "Delete all ${count} Service Principal(s)? [y/N] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_info "Service Principal deletion cancelled"
+            return 0
+        fi
+    fi
+
+    echo ""
+    print_info "Deleting Service Principals..."
+    print_info "(Note: Some may already be deleted if their App was deleted above)"
+    echo ""
+
+    local skipped=0
+
+    # Delete each service principal by id (object id)
+    # Use process substitution to avoid subshell (preserves counter variables)
+    while IFS= read -r spId; do
+        if [[ -z "$spId" ]]; then
+            continue
+        fi
+
+        local sp_name
+        sp_name=$(echo "$sps_json" | jq -r --arg id "$spId" '.[] | select(.id == $id) | .displayName')
+
+        echo -n "  Deleting: ${sp_name}... "
+
+        # Attempt deletion (may fail if already deleted with its App)
+        if az ad sp delete --id "$spId" 2>/dev/null; then
+            echo "DELETED"
+            ((deleted++))
+        else
+            echo "SKIPPED (already deleted)"
+            ((skipped++))
+        fi
+    done < <(echo "$sps_json" | jq -r '.[].id')
+
+    echo ""
+    print_info "Service Principal deletion summary:"
+    echo "  - Deleted: ${deleted}"
+    echo "  - Skipped (already deleted): ${skipped}"
+}
+
 # Main function
 main() {
     echo "========================================"
@@ -242,6 +544,9 @@ main() {
     echo "========================================"
     echo ""
     print_info "Resource prefix: ${PREFIX}"
+    if [[ -n "$RESOURCE_GROUP" ]]; then
+        print_info "Resource group: ${RESOURCE_GROUP}"
+    fi
     if [[ "$DRY_RUN" == "true" ]]; then
         print_warning "DRY-RUN mode enabled - no resources will be deleted"
     fi
@@ -250,18 +555,49 @@ main() {
     check_prerequisites
     echo ""
 
-    # Find resources
+    local found_any=false
+
+    # Delete resource group if specified (do this first)
+    if [[ -n "$RESOURCE_GROUP" ]]; then
+        if az group show --name "$RESOURCE_GROUP" >/dev/null 2>&1; then
+            found_any=true
+        fi
+        delete_resource_group "$RESOURCE_GROUP"
+    fi
+
+    # Find and cleanup ARM resources
     local resources_json
     resources_json=$(find_resources "$PREFIX")
 
     # Display found resources
-    if ! display_resources "$resources_json"; then
-        print_success "No cleanup needed"
-        exit 0
+    if display_resources "$resources_json"; then
+        found_any=true
+        delete_resources "$resources_json"
     fi
 
-    # Delete resources
-    delete_resources "$resources_json"
+    # Find and cleanup Azure AD Applications
+    echo ""
+    local apps_json
+    apps_json=$(find_ad_applications "$PREFIX")
+
+    if display_ad_applications "$apps_json"; then
+        found_any=true
+        delete_ad_applications "$apps_json"
+    fi
+
+    # Find and cleanup Service Principals
+    echo ""
+    local sps_json
+    sps_json=$(find_service_principals "$PREFIX")
+
+    if display_service_principals "$sps_json"; then
+        found_any=true
+        delete_service_principals "$sps_json"
+    fi
+
+    if [[ "$found_any" == "false" ]]; then
+        print_success "No cleanup needed"
+    fi
 
     echo ""
     echo "========================================"

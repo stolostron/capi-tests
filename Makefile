@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _cluster _generate-yamls _deploy-crds _verify _delete test-all _test-all-impl clean clean-all clean-azure clean-azure-resources help summary
+.PHONY: test _check-dep _setup _cluster _generate-yamls _deploy-crds _verify _delete test-all _test-all-impl clean clean-all clean-azure help summary
 
 # Default values
 # Extract CAPZ_USER default from Go config to maintain single source of truth
@@ -434,7 +434,7 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 				./scripts/cleanup-azure-resources.sh --prefix "$(CAPZ_USER)" || echo "Orphaned resources cleanup encountered an error"; \
 			else \
 				echo "Skipped orphaned resources cleanup."; \
-				echo "Tip: Run 'make clean-azure-resources' to clean orphaned resources separately."; \
+				echo "Tip: Run 'make clean-azure' to clean all Azure resources (including orphaned)."; \
 			fi; \
 		fi; \
 		echo ""; \
@@ -460,11 +460,8 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 	fi
 	@echo "Deleting all test resources without prompts..."
 	@echo ""
-	@# Delete Azure resource group first (before local resources)
+	@# Delete all Azure resources (resource group + orphaned resources + AD apps + SPs)
 	@$(MAKE) --no-print-directory _clean-azure-force
-	@echo ""
-	@# Delete orphaned Azure resources (not tied to resource group)
-	@$(MAKE) --no-print-directory _clean-azure-resources-force
 	@echo ""
 	@# Delete management cluster
 	@if kind get clusters 2>/dev/null | grep -q "^$(CLEANUP_MANAGEMENT_CLUSTER)$$"; then \
@@ -508,77 +505,21 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 	@echo "=== All Resources Cleaned ==="
 	@echo "======================================="
 
-clean-azure: ## Delete Azure resource group created by deployment (interactive)
-	@echo "=== Azure Resource Cleanup ==="
-	@echo ""
+clean-azure: ## Delete all Azure resources (resource group, orphaned resources, AD apps, service principals)
 	@if [ -f "$(DEPLOYMENT_STATE_FILE)" ]; then \
 		echo "📝 Using deployment state from $(DEPLOYMENT_STATE_FILE)"; \
-	fi
-	@echo "Target resource group: $(CLEANUP_RESOURCE_GROUP)"
-	@echo ""
-	@# Check if Azure CLI is available
-	@if ! command -v az >/dev/null 2>&1; then \
-		echo "❌ Error: Azure CLI (az) is not installed or not in PATH"; \
-		echo "   Install from: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli"; \
-		exit 1; \
-	fi
-	@# Check if logged in to Azure
-	@if ! az account show >/dev/null 2>&1; then \
-		echo "❌ Error: Not logged in to Azure CLI"; \
-		echo "   Run 'az login' to authenticate"; \
-		exit 1; \
-	fi
-	@# Check if resource group exists
-	@if az group show --name $(CLEANUP_RESOURCE_GROUP) >/dev/null 2>&1; then \
-		echo "Resource group '$(CLEANUP_RESOURCE_GROUP)' exists."; \
-		echo "⚠️  Warning: This will delete ALL resources in the resource group!"; \
 		echo ""; \
-		read -p "Delete Azure resource group '$(CLEANUP_RESOURCE_GROUP)'? [y/N] " -n 1 -r; \
-		echo ""; \
-		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-			echo "Deleting Azure resource group '$(CLEANUP_RESOURCE_GROUP)' (this may take several minutes)..."; \
-			az group delete --name $(CLEANUP_RESOURCE_GROUP) --yes --no-wait && \
-			echo "✅ Resource group deletion initiated (running in background)"; \
-			echo "   Use 'az group show --name $(CLEANUP_RESOURCE_GROUP)' to check status"; \
-		else \
-			echo "Skipped Azure resource group deletion."; \
-		fi; \
+	fi
+	@if [ "$(FORCE)" = "1" ]; then \
+		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CAPZ_USER)" --force; \
 	else \
-		echo "Resource group '$(CLEANUP_RESOURCE_GROUP)' not found (already clean or never created)."; \
+		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CAPZ_USER)"; \
 	fi
 
-# Internal target: force delete Azure resource group without prompting
+# Internal target: force delete all Azure resources without prompting
 .PHONY: _clean-azure-force
 _clean-azure-force:
-	@# Check if Azure CLI is available
-	@if ! command -v az >/dev/null 2>&1; then \
-		echo "⚠️  Azure CLI (az) not available - skipping Azure cleanup"; \
-	elif ! az account show >/dev/null 2>&1; then \
-		echo "⚠️  Not logged in to Azure - skipping Azure cleanup"; \
-	elif az group show --name $(CLEANUP_RESOURCE_GROUP) >/dev/null 2>&1; then \
-		echo "Deleting Azure resource group '$(CLEANUP_RESOURCE_GROUP)' (running in background)..."; \
-		az group delete --name $(CLEANUP_RESOURCE_GROUP) --yes --no-wait && \
-		echo "✅ Resource group deletion initiated"; \
-	else \
-		echo "Azure resource group '$(CLEANUP_RESOURCE_GROUP)' not found (already clean)."; \
-	fi
-
-clean-azure-resources: ## Delete Azure resources matching naming pattern (orphaned resources not in resource group)
-	@echo "=== Azure Orphaned Resources Cleanup ==="
-	@echo ""
-	@echo "This will find and delete Azure resources matching the test naming pattern."
-	@echo "These resources may not be in the resource group and can survive RG deletion."
-	@echo ""
-	@if [ "$(FORCE)" = "1" ]; then \
-		./scripts/cleanup-azure-resources.sh --prefix "$(CAPZ_USER)" --force; \
-	else \
-		./scripts/cleanup-azure-resources.sh --prefix "$(CAPZ_USER)"; \
-	fi
-
-# Internal target: force delete orphaned Azure resources without prompting
-.PHONY: _clean-azure-resources-force
-_clean-azure-resources-force:
-	@./scripts/cleanup-azure-resources.sh --prefix "$(CAPZ_USER)" --force 2>/dev/null || true
+	@./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CAPZ_USER)" --force 2>/dev/null || true
 
 setup-submodule: ## Add cluster-api-installer as a git submodule
 	git submodule add -b ARO-ASO https://github.com/RadekCap/cluster-api-installer.git vendor/cluster-api-installer || true

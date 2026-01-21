@@ -120,7 +120,7 @@ make clean-all
 # OR use the FORCE variable:
 FORCE=1 make clean
 
-# Clean up only Azure resource group (interactive)
+# Clean up all Azure resources (resource group + orphaned resources)
 make clean-azure
 ```
 
@@ -138,29 +138,32 @@ For non-interactive cleanup (useful for CI/CD, scripted workflows, or quick rese
 - Use `make clean-all` to delete all resources without prompts (includes Azure resources and orphaned resources)
 - Or use `FORCE=1 make clean` to skip all confirmation prompts
 
-**Azure Resource Cleanup Notes**:
+**Azure Resource Cleanup (`make clean-azure`)**:
+
+The unified `make clean-azure` command cleans up all Azure resources in one operation:
+- Azure Resource Group (`${CS_CLUSTER_NAME}-resgroup`)
+- Orphaned ARM resources (Managed Identities, VNets, NSGs, DNS Zones)
+- Azure AD Applications (App Registrations)
+- Service Principals
+
+```bash
+# Interactive cleanup of all Azure resources
+make clean-azure
+
+# Non-interactive cleanup
+FORCE=1 make clean-azure
+
+# Dry-run to see what would be deleted
+./scripts/cleanup-azure-resources.sh --resource-group myapp-resgroup --prefix myapp --dry-run
+
+# Clean with custom prefix
+CAPZ_USER=myprefix make clean-azure
+```
+
+Notes:
 - The resource group name is derived from `${CAPZ_USER}-${DEPLOYMENT_ENV}-resgroup` (default: `rcap-stage-resgroup`)
 - Uses `az group delete --yes --no-wait` for non-blocking deletion
 - Gracefully skips Azure cleanup if Azure CLI is not installed or not authenticated
-- Checks if the resource group exists before attempting deletion
-
-**Orphaned Azure Resources**:
-Some Azure resources created during testing are not tied to the resource group and may survive its deletion. These include:
-- Managed Identities (control-plane and data-plane components)
-- Virtual Networks and Network Security Groups
-- DNS Zones
-
-Use `make clean-azure-resources` to find and delete these orphaned resources:
-```bash
-# Interactive cleanup of orphaned resources
-make clean-azure-resources
-
-# Non-interactive cleanup
-FORCE=1 make clean-azure-resources
-
-# Dry-run to see what would be deleted
-./scripts/cleanup-azure-resources.sh --dry-run --prefix rcapd
-```
 
 ### Code Quality
 
