@@ -8,6 +8,10 @@ This is a Go-based test suite for validating Azure Red Hat OpenShift (ARO) deplo
 
 **Important**: This is NOT a multi-cloud CAPI testing framework. It is specifically for ARO-CAPZ on Azure only.
 
+## Core Principles
+
+- **Code Reviews**: When asked to perform a code review, NEVER implement changes directly. First, suggest any changes and ask for explicit permission from the user before proceeding with implementation.
+
 ## Test Architecture
 
 ### Test Execution Model
