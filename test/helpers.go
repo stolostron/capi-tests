@@ -1377,13 +1377,13 @@ func FormatComponentVersions(versions []ComponentVersion, config *TestConfig) st
 	result.WriteString("\n=== TESTED CONFIGURATION ===\n")
 
 	if config != nil {
-		// Local cluster settings
-		result.WriteString("\nLocal (Kind) Cluster:\n")
+		// Local Kind cluster (management cluster)
+		result.WriteString("\nLocal Kind Cluster:\n")
 		result.WriteString(fmt.Sprintf("  Management Cluster: %s\n", config.ManagementClusterName))
-		result.WriteString(fmt.Sprintf("  Workload Cluster:   %s\n", config.WorkloadClusterName))
 
-		// Azure settings
-		result.WriteString("\nAzure Settings:\n")
+		// Azure ARO cluster (workload cluster)
+		result.WriteString("\nAzure ARO Cluster:\n")
+		result.WriteString(fmt.Sprintf("  Workload Cluster:   %s\n", config.WorkloadClusterName))
 		result.WriteString(fmt.Sprintf("  Region:             %s\n", config.Region))
 		if config.AzureSubscription != "" {
 			result.WriteString(fmt.Sprintf("  Subscription:       %s\n", config.AzureSubscription))
