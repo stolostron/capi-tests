@@ -80,7 +80,24 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 
 		if elapsed > timeout {
 			PrintToTTY("\n❌ Timeout waiting for cluster deletion after %v\n\n", elapsed.Round(time.Second))
-			t.Errorf("Timeout waiting for cluster '%s' to be deleted", provisionedClusterName)
+			t.Errorf("Timeout waiting for cluster '%s' to be deleted after %v.\n\n"+
+				"Troubleshooting steps:\n"+
+				"  1. Check cluster status: kubectl --context %s -n %s get cluster %s -o yaml\n"+
+				"  2. Check for stuck finalizers: kubectl --context %s -n %s get cluster %s -o jsonpath='{.metadata.finalizers}'\n"+
+				"  3. Check remaining CAPI resources: kubectl --context %s -n %s get arocontrolplane,machinepool\n"+
+				"  4. Check Azure resource group: az group show --name %s 2>/dev/null\n\n"+
+				"Common causes:\n"+
+				"  - Azure resource deletion taking longer than expected\n"+
+				"  - Finalizers blocking resource deletion\n"+
+				"  - Azure resource stuck in 'Deleting' state\n\n"+
+				"To increase timeout: export DEPLOYMENT_TIMEOUT=60m\n"+
+				"To manually clean up:\n"+
+				"  make clean-azure  # Removes Azure resources",
+				provisionedClusterName, elapsed.Round(time.Second),
+				context, config.TestNamespace, provisionedClusterName,
+				context, config.TestNamespace, provisionedClusterName,
+				context, config.TestNamespace,
+				resourceGroup)
 			return
 		}
 

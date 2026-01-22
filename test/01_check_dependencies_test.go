@@ -31,7 +31,8 @@ func TestCheckDependencies_ToolAvailable(t *testing.T) {
 					t.Logf("%s not found, but podman is available", tool)
 					return
 				}
-				t.Errorf("Required tool '%s' is not installed or not in PATH", tool)
+				t.Errorf("Required tool '%s' is not installed or not in PATH.\n\n%s",
+					tool, getToolInstallInstructions(tool))
 			} else {
 				t.Logf("Tool '%s' is available", tool)
 			}
@@ -348,7 +349,13 @@ func TestCheckDependencies_AzureEnvironment(t *testing.T) {
 func TestCheckDependencies_OpenShiftCLI_IsAvailable(t *testing.T) {
 	output, err := RunCommand(t, "oc", "version", "--client")
 	if err != nil {
-		t.Errorf("OpenShift CLI check failed: %v", err)
+		t.Errorf("OpenShift CLI version check failed: %v\n\n"+
+			"The 'oc' command was found but failed to run.\n\n"+
+			"Possible causes:\n"+
+			"  - Corrupted installation\n"+
+			"  - Missing dependencies\n"+
+			"  - Binary not compatible with your OS/architecture\n\n"+
+			"%s", err, getToolInstallInstructions("oc"))
 		return
 	}
 
@@ -359,7 +366,13 @@ func TestCheckDependencies_OpenShiftCLI_IsAvailable(t *testing.T) {
 func TestCheckDependencies_Helm_IsAvailable(t *testing.T) {
 	output, err := RunCommand(t, "helm", "version", "--short")
 	if err != nil {
-		t.Errorf("Helm version check failed: %v", err)
+		t.Errorf("Helm version check failed: %v\n\n"+
+			"The 'helm' command was found but failed to run.\n\n"+
+			"Possible causes:\n"+
+			"  - Corrupted installation\n"+
+			"  - Missing dependencies\n"+
+			"  - Binary not compatible with your OS/architecture\n\n"+
+			"%s", err, getToolInstallInstructions("helm"))
 		return
 	}
 
@@ -370,7 +383,13 @@ func TestCheckDependencies_Helm_IsAvailable(t *testing.T) {
 func TestCheckDependencies_Kind_IsAvailable(t *testing.T) {
 	output, err := RunCommand(t, "kind", "version")
 	if err != nil {
-		t.Errorf("Kind version check failed: %v", err)
+		t.Errorf("Kind version check failed: %v\n\n"+
+			"The 'kind' command was found but failed to run.\n\n"+
+			"Possible causes:\n"+
+			"  - Corrupted installation\n"+
+			"  - Missing dependencies\n"+
+			"  - Binary not compatible with your OS/architecture\n\n"+
+			"%s", err, getToolInstallInstructions("kind"))
 		return
 	}
 
@@ -758,4 +777,46 @@ func TestCheckDependencies_ComprehensiveValidation(t *testing.T) {
 	} else {
 		t.Log("All configuration validations passed")
 	}
+}
+
+// getToolInstallInstructions returns platform-specific installation instructions for a tool.
+func getToolInstallInstructions(tool string) string {
+	instructions := map[string]string{
+		"docker": "Install Docker:\n" +
+			"  macOS: brew install --cask docker  # or install Docker Desktop/Rancher Desktop\n" +
+			"  Linux: sudo apt install docker.io  # or follow https://docs.docker.com/engine/install/\n" +
+			"  Alternative: podman can be used instead of docker",
+		"kind": "Install Kind (Kubernetes in Docker):\n" +
+			"  macOS: brew install kind\n" +
+			"  Linux: go install sigs.k8s.io/kind@latest\n" +
+			"  All: https://kind.sigs.k8s.io/docs/user/quick-start/#installation",
+		"az": "Install Azure CLI:\n" +
+			"  macOS: brew install azure-cli\n" +
+			"  Linux: curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash\n" +
+			"  All: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
+		"oc": "Install OpenShift CLI:\n" +
+			"  macOS: brew install openshift-cli\n" +
+			"  All: https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/\n" +
+			"  Download: oc client for your platform from the link above",
+		"helm": "Install Helm:\n" +
+			"  macOS: brew install helm\n" +
+			"  Linux: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash\n" +
+			"  All: https://helm.sh/docs/intro/install/",
+		"git": "Install Git:\n" +
+			"  macOS: brew install git  # or xcode-select --install\n" +
+			"  Linux: sudo apt install git  # or sudo dnf install git",
+		"kubectl": "Install kubectl:\n" +
+			"  macOS: brew install kubectl\n" +
+			"  Linux: curl -LO https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl\n" +
+			"  All: https://kubernetes.io/docs/tasks/tools/",
+		"go": "Install Go:\n" +
+			"  macOS: brew install go\n" +
+			"  Linux: Download from https://go.dev/dl/ and extract to /usr/local\n" +
+			"  All: https://go.dev/doc/install",
+	}
+
+	if inst, ok := instructions[tool]; ok {
+		return inst
+	}
+	return fmt.Sprintf("Please install '%s' and ensure it is in your PATH.", tool)
 }

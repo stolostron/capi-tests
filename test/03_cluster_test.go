@@ -212,7 +212,21 @@ func TestKindCluster_CAPIControllerReady(t *testing.T) {
 
 		if elapsed > timeout {
 			PrintToTTY("\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
-			t.Errorf("Timeout waiting for CAPI controller manager to be available")
+			t.Errorf("Timeout waiting for CAPI controller manager to be available after %v.\n\n"+
+				"Troubleshooting steps:\n"+
+				"  1. Check pod status: kubectl --context %s -n %s get pods\n"+
+				"  2. Check pod logs: kubectl --context %s -n %s logs -l cluster.x-k8s.io/provider=cluster-api --tail=50\n"+
+				"  3. Check pod events: kubectl --context %s -n %s describe deployment capi-controller-manager\n"+
+				"  4. Verify Kind cluster is healthy: kind get clusters && kubectl --context %s get nodes\n\n"+
+				"Common causes:\n"+
+				"  - Image pull issues (check network connectivity)\n"+
+				"  - Insufficient resources on Kind node\n"+
+				"  - cert-manager not ready (controllers depend on it for webhooks)",
+				elapsed.Round(time.Second),
+				context, config.CAPINamespace,
+				context, config.CAPINamespace,
+				context, config.CAPINamespace,
+				context)
 			return
 		}
 
@@ -282,7 +296,21 @@ func TestKindCluster_CAPZControllerReady(t *testing.T) {
 
 		if elapsed > timeout {
 			PrintToTTY("\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
-			t.Errorf("Timeout waiting for CAPZ controller manager to be available")
+			t.Errorf("Timeout waiting for CAPZ controller manager to be available after %v.\n\n"+
+				"Troubleshooting steps:\n"+
+				"  1. Check pod status: kubectl --context %s -n %s get pods\n"+
+				"  2. Check pod logs: kubectl --context %s -n %s logs -l cluster.x-k8s.io/provider=infrastructure-azure --tail=50\n"+
+				"  3. Check pod events: kubectl --context %s -n %s describe deployment capz-controller-manager\n"+
+				"  4. Verify CAPI is ready first: kubectl --context %s -n %s get deployment capi-controller-manager\n\n"+
+				"Common causes:\n"+
+				"  - CAPI controller not ready yet (CAPZ depends on CAPI)\n"+
+				"  - Azure credentials not configured in aso-controller-settings secret\n"+
+				"  - Image pull issues (check network connectivity)",
+				elapsed.Round(time.Second),
+				context, config.CAPZNamespace,
+				context, config.CAPZNamespace,
+				context, config.CAPZNamespace,
+				context, config.CAPINamespace)
 			return
 		}
 
@@ -435,7 +463,21 @@ func TestKindCluster_ASOControllerReady(t *testing.T) {
 
 		if elapsed > timeout {
 			PrintToTTY("\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
-			t.Errorf("Timeout waiting for Azure Service Operator controller manager to be available")
+			t.Errorf("Timeout waiting for Azure Service Operator controller manager to be available after %v.\n\n"+
+				"Troubleshooting steps:\n"+
+				"  1. Check ASO pod status: kubectl --context %s -n %s get pods -l app.kubernetes.io/name=azure-service-operator\n"+
+				"  2. Check ASO pod logs: kubectl --context %s -n %s logs -l app.kubernetes.io/name=azure-service-operator --tail=100\n"+
+				"  3. Check ASO credentials: kubectl --context %s -n %s get secret aso-controller-settings -o yaml\n"+
+				"  4. Verify ASO CRDs installed: kubectl get crds | grep azure.com\n\n"+
+				"Common causes:\n"+
+				"  - Missing or invalid Azure credentials in aso-controller-settings secret\n"+
+				"  - ASO pod in CrashLoopBackOff due to authentication failures\n"+
+				"  - CRD initialization taking longer than expected (ASO has many CRDs)\n\n"+
+				"To increase timeout: export ASO_CONTROLLER_TIMEOUT=15m",
+				elapsed.Round(time.Second),
+				context, config.CAPZNamespace,
+				context, config.CAPZNamespace,
+				context, config.CAPZNamespace)
 			return
 		}
 
@@ -513,7 +555,21 @@ func TestKindCluster_WebhooksReady(t *testing.T) {
 
 			if elapsed > timeout {
 				PrintToTTY("\n❌ Timeout waiting for %s webhook after %v\n", wh.name, elapsed.Round(time.Second))
-				t.Errorf("Timeout waiting for %s webhook to be responsive", wh.name)
+				t.Errorf("Timeout waiting for %s webhook to be responsive after %v.\n\n"+
+					"Troubleshooting steps:\n"+
+					"  1. Check webhook service exists: kubectl --context %s -n %s get svc %s\n"+
+					"  2. Check endpoint has addresses: kubectl --context %s -n %s get endpoints %s\n"+
+					"  3. Check controller pod is running: kubectl --context %s -n %s get pods\n"+
+					"  4. Check for certificate issues: kubectl --context %s get certificates -A\n\n"+
+					"Common causes:\n"+
+					"  - Controller manager pod not running or crashing\n"+
+					"  - cert-manager hasn't issued webhook certificate yet\n"+
+					"  - Service selector doesn't match pod labels",
+					wh.name, elapsed.Round(time.Second),
+					context, wh.namespace, wh.service,
+					context, wh.namespace, wh.service,
+					context, wh.namespace,
+					context)
 				break
 			}
 
