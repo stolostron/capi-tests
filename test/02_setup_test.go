@@ -25,12 +25,13 @@ func TestSetup_CloneRepository(t *testing.T) {
 		// Validate repository integrity by checking if HEAD is valid
 		// This detects corrupted clones from interrupted operations
 		output, err := RunCommandQuiet(t, "git", "-C", config.RepoDir, "rev-parse", "HEAD")
-		if err != nil || strings.TrimSpace(output) == "" {
+		headSHA := strings.TrimSpace(output)
+		if err != nil || headSHA == "" {
 			t.Logf("Warning: Repository at %s may be corrupted (git rev-parse HEAD failed)", config.RepoDir)
 			t.Logf("Consider deleting and re-cloning: rm -rf %s", config.RepoDir)
 			// Don't fail - let subsequent tests determine if repo is usable
 		} else {
-			t.Logf("Repository HEAD: %s", strings.TrimSpace(output)[:min(12, len(strings.TrimSpace(output)))])
+			t.Logf("Repository HEAD: %s", headSHA[:min(12, len(headSHA))])
 		}
 
 		// Register the existing repository for tracking in test output
