@@ -216,6 +216,7 @@ These targets are called by `make test-all` but can be run individually for debu
 | `make _deploy-crs` | Deploy CRs and verify deployment |
 | `make _verify` | Verify deployed cluster |
 | `make _delete` | Delete workload cluster and verify cleanup |
+| `make _cleanup` | Validate cleanup operations completed successfully |
 
 #### Cleanup Targets
 
@@ -276,7 +277,9 @@ results/
     ├── junit-cluster.xml          # Cluster deployment test results
     ├── junit-generate-yamls.xml   # YAML generation test results
     ├── junit-deploy-crs.xml       # CR deployment test results
-    └── junit-verify.xml           # Verification test results
+    ├── junit-verify.xml           # Verification test results
+    ├── junit-delete.xml           # Deletion test results
+    └── junit-cleanup.xml          # Cleanup validation test results
 ```
 
 #### Using Test Results
@@ -368,14 +371,16 @@ See [CROSS_PLATFORM.md](docs/CROSS_PLATFORM.md) for cross-platform compatibility
 ```
 test/
 ├── 01_check_dependencies_test.go  # Tool and auth verification
-├── 02_setup_test.go           # Repository setup
-├── 03_cluster_test.go         # Management cluster deployment
-├── 04_generate_yamls_test.go  # Resource generation
-├── 05_deploy_crs_test.go      # Cluster provisioning monitoring
-├── 06_verification_test.go    # Final cluster validation
-├── config.go                  # Configuration management
-├── helpers.go                 # Shared utilities
-└── README.md               # Detailed test documentation
+├── 02_setup_test.go               # Repository setup
+├── 03_cluster_test.go             # Management cluster deployment
+├── 04_generate_yamls_test.go      # Resource generation
+├── 05_deploy_crs_test.go          # Cluster provisioning monitoring
+├── 06_verification_test.go        # Final cluster validation
+├── 07_deletion_test.go            # Workload cluster deletion
+├── 08_cleanup_test.go             # Cleanup validation
+├── config.go                      # Configuration management
+├── helpers.go                     # Shared utilities
+└── README.md                      # Detailed test documentation
 ```
 
 For detailed test documentation, see [test/README.md](test/README.md).
