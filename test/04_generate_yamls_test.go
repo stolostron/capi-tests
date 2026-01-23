@@ -94,7 +94,11 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
 	}
-	defer os.Chdir(originalDir)
+	defer func() {
+		if err := os.Chdir(originalDir); err != nil {
+			t.Logf("Warning: failed to change back to original directory: %v", err)
+		}
+	}()
 
 	if err := os.Chdir(config.RepoDir); err != nil {
 		t.Fatalf("Failed to change to repository directory: %v", err)
