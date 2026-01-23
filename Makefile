@@ -606,10 +606,16 @@ fix-docker-config: ## Fix Docker credential helper configuration issues
 		fi; \
 	else \
 		echo "⚠️  jq not found - using sed fallback"; \
-		sed -E '/"credsStore":/d; /"credHelpers":/,/}/d' "$$CONFIG_FILE" > "$$TMP_FILE" && \
-		sed -E 's/,\s*([}]])/\1/g' "$$TMP_FILE" > "$$TMP_FILE.2" && mv "$$TMP_FILE.2" "$$TMP_FILE" && \
-		mv "$$TMP_FILE" "$$CONFIG_FILE"; \
-		echo "✅ Docker config fixed using sed"; \
+		if sed -E '/"credsStore":/d; /"credHelpers":/,/}/d' "$$CONFIG_FILE" > "$$TMP_FILE" && \
+		   sed -E 's/,\s*([}]])/\1/g' "$$TMP_FILE" > "$$TMP_FILE.2" && \
+		   mv "$$TMP_FILE.2" "$$TMP_FILE" && \
+		   mv "$$TMP_FILE" "$$CONFIG_FILE"; then \
+			echo "✅ Docker config fixed using sed"; \
+		else \
+			rm -f "$$TMP_FILE" "$$TMP_FILE.2"; \
+			echo "❌ Failed to fix Docker config with sed"; \
+			exit 1; \
+		fi; \
 	fi; \
 	echo ""; \
 	echo "Updated Docker config:"; \

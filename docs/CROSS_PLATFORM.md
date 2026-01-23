@@ -37,12 +37,16 @@ The shell scripts use the following Bash-specific features:
 
 ### macOS Compatibility Notes
 
-macOS ships with Bash 3.2 (due to GPLv3 licensing). All scripts are compatible with Bash 3.2. However, users may install newer Bash via Homebrew:
+macOS ships with Bash 3.2 (due to GPLv3 licensing). The `generate-summary.sh` script is compatible with Bash 3.2, but `cleanup-azure-resources.sh` requires Bash 4.0+ due to process substitution patterns. Users should install newer Bash via Homebrew for full compatibility:
 
 ```bash
-# Optional: Install newer Bash on macOS
+# Check your current Bash version
+bash --version
+# macOS default is typically 3.2.x - you need 4.0+ for cleanup-azure-resources.sh
+
+# Install newer Bash on macOS
 brew install bash
-# Add to /etc/shells if needed
+# Add to /etc/shells if needed (path differs: /opt/homebrew/bin/bash on Apple Silicon, /usr/local/bin/bash on Intel)
 echo '/opt/homebrew/bin/bash' | sudo tee -a /etc/shells
 ```
 
@@ -64,9 +68,9 @@ The test suite uses `os.TempDir()` in Go code, which returns:
 
 **Key files:**
 
-- `test/config.go:46`: Uses `os.TempDir()` for default repository directory
-- `test/helpers.go:1846`: Uses `os.TempDir()` for temporary files
-- `test/06_verification_test.go:17`: Uses `filepath.Join(os.TempDir(), ...)` for kubeconfig
+- `test/config.go`: The `getDefaultRepoDir()` function uses `os.TempDir()` for the default repository directory
+- `test/helpers.go`: The `GetResultsDir()` function falls back to `os.TempDir()` when a results directory cannot be created
+- `test/06_verification_test.go`: The `getKubeconfigPath()` function uses `filepath.Join(os.TempDir(), ...)` for kubeconfig paths
 
 ### Hardcoded Paths
 
