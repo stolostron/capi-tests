@@ -34,8 +34,10 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
+    # Tool versions - keep in sync with README.md Prerequisites
     - name: Install Kind
       run: |
+        # Kind v0.20.0 - minimum version for this project
         curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
         chmod +x ./kind
         sudo mv ./kind /usr/local/bin/kind
@@ -43,6 +45,7 @@ jobs:
 
     - name: Install kubectl
       run: |
+        # kubectl - uses latest stable (compatible with Kubernetes 1.28+)
         curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
         chmod +x kubectl
         sudo mv kubectl /usr/local/bin/
@@ -51,7 +54,8 @@ jobs:
     - name: Install Helm
       uses: azure/setup-helm@v4
       with:
-        version: 'latest'
+        # Helm 3.12+ required
+        version: 'v3.16.0'
 
     - name: Clone cluster-api-installer repository
       run: |

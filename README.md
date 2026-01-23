@@ -39,14 +39,34 @@ Target usage of this test suite will be:
 
 ### Required Tools
 
-- **Docker** or **Podman** - Container runtime
-- **Kind** - Kubernetes in Docker for management cluster
-- **Azure CLI** (`az`) - Azure authentication and management
-- **OpenShift CLI** (`oc`) - OpenShift cluster interaction
-- **Helm** - Package manager for Kubernetes
-- **Git** - Source control
-- **kubectl** - Kubernetes CLI
-- **Go** 1.21+ - For running tests
+The following tools are required for running the test suite:
+
+| Tool | Minimum Version | Tested Version | Purpose |
+|------|----------------|----------------|---------|
+| **Go** | 1.22 | 1.22+ | Running tests |
+| **Docker** or **Podman** | 20.10+ | latest | Container runtime |
+| **Kind** | 0.20.0 | 0.20.0 | Kubernetes in Docker for management cluster |
+| **Azure CLI** (`az`) | 2.50.0 | latest | Azure authentication and management |
+| **kubectl** | 1.28+ | latest | Kubernetes CLI |
+| **OpenShift CLI** (`oc`) | 4.14+ | latest | OpenShift cluster interaction |
+| **Helm** | 3.12+ | latest | Package manager for Kubernetes |
+| **Git** | 2.30+ | latest | Source control |
+| **jq** | 1.6+ | latest | JSON processing (optional, for scripts) |
+
+**Note**: The Go version is specified in `go.mod` and workflows automatically use this version.
+
+To verify your tool versions:
+```bash
+go version
+docker --version   # or: podman --version
+kind version
+az version
+kubectl version --client
+oc version --client
+helm version
+git --version
+jq --version
+```
 
 ### Azure Access
 

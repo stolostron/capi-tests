@@ -361,7 +361,6 @@ The `/sync-main` Claude Code command helps keep your branch updated with proper 
 
 ## Known Issues
 
-- `go.mod` specifies invalid Go version 1.25.4 (should be 1.21 or 1.22)
 - `test/start_test.go` contains trivial test with unreachable code
 - Command injection vulnerability in `06_verification_test.go:68` (base64 decode)
 
@@ -475,6 +474,7 @@ Commands will prompt for any required information and guide you through the task
 - `README.md` - Repository overview and quick start
 - `test/README.md` - Detailed test suite documentation
 - `docs/INTEGRATION.md` - Integration patterns with cluster-api-installer
+- `docs/DEPENDENCIES.md` - Dependency management, security scanning, and updates
 - `docs/TESTING_GUIDELINES.md` - Go testing best practices and guidelines
 - `docs/API_REVIEW.md` - V1 API/Interface contract review
 - `TEST_COVERAGE.md` - Test coverage analysis and metrics

@@ -322,6 +322,96 @@ find vendor/cluster-api-installer -name "*.sh" -exec chmod +x {} \;
 | Quick Testing | Dynamic Clone | Zero setup |
 | Long-term Maintenance | Git Submodule | Trackable versions |
 
+## Dependency Management Strategy
+
+### Branch/Version Pinning
+
+The cluster-api-installer dependency uses the following pinning strategy:
+
+| Environment | Strategy | Branch/Version |
+|-------------|----------|----------------|
+| Development | Branch tracking | `ARO-ASO` (default) |
+| CI/CD | Branch tracking | `ARO-ASO` |
+| Production | Commit pinning | Specific commit hash |
+
+**Configuration via environment variables:**
+```bash
+# Branch tracking (default)
+export ARO_REPO_BRANCH=ARO-ASO
+
+# Commit pinning for production stability
+export ARO_REPO_BRANCH=<commit-hash>
+```
+
+### Compatibility Testing
+
+Before updating the cluster-api-installer dependency:
+
+1. **Local Testing**
+   ```bash
+   # Clone the new version
+   export ARO_REPO_DIR=/tmp/cluster-api-installer-test
+   git clone -b ARO-ASO https://github.com/RadekCap/cluster-api-installer.git $ARO_REPO_DIR
+
+   # Run full test suite
+   make test-all
+   ```
+
+2. **CI Validation**
+   - Create a feature branch with the updated dependency
+   - Run the full test workflow
+   - Verify all phases pass before merging
+
+3. **Breaking Change Detection**
+   - Script interface changes (arguments, exit codes)
+   - YAML structure changes
+   - New required environment variables
+
+### Update Procedure
+
+1. **Check for updates**
+   ```bash
+   cd vendor/cluster-api-installer
+   git fetch origin
+   git log HEAD..origin/ARO-ASO --oneline
+   ```
+
+2. **Review changes**
+   ```bash
+   git diff HEAD..origin/ARO-ASO -- scripts/
+   git diff HEAD..origin/ARO-ASO -- doc/aro-hcp-scripts/
+   ```
+
+3. **Update submodule**
+   ```bash
+   make update-submodule
+   ```
+
+4. **Test compatibility**
+   ```bash
+   make test
+   make test-all  # If Azure resources available
+   ```
+
+5. **Commit update**
+   ```bash
+   git add vendor/cluster-api-installer
+   git commit -m "deps: update cluster-api-installer to latest ARO-ASO"
+   ```
+
+### Rollback Procedure
+
+If an update causes failures:
+
+```bash
+# Revert to previous commit
+cd vendor/cluster-api-installer
+git checkout <previous-commit>
+cd ../..
+git add vendor/cluster-api-installer
+git commit -m "revert: rollback cluster-api-installer due to compatibility issues"
+```
+
 ## Future Enhancements
 
 1. **Go Module Integration**: If cluster-api-installer exports Go packages
