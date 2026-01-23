@@ -24,8 +24,23 @@ results/
 # Deployment state (written by tests, read by cleanup)
 .deployment-state.json
 
-# Credentials (never commit)
+# Credentials and secrets (never commit)
 credentials.json
+credentials.yaml
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+kubeconfig
+*-kubeconfig.yaml
+.env
+.env.*
+!.env.example
+
+# Azure credentials
+azure.json
+service-principal.json
 
 # Local Claude instructions and commands (not committed)
 CLAUDE.local.md

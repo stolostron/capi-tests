@@ -394,7 +394,6 @@ The `/sync-main` Claude Code command helps keep your branch updated with proper 
 ## Known Issues
 
 - `test/start_test.go` contains trivial test with unreachable code
-- Command injection vulnerability in `06_verification_test.go:68` (base64 decode)
 
 These are tracked issues and should be fixed in separate PRs when addressed.
 
@@ -511,6 +510,7 @@ Commands will prompt for any required information and guide you through the task
 - `docs/CROSS_PLATFORM.md` - Cross-platform compatibility guide (OS support, shell compatibility, installation)
 - `docs/API_REVIEW.md` - V1 API/Interface contract review
 - `docs/PERFORMANCE_REVIEW.md` - V1 Performance review and optimization analysis
+- `docs/SECURITY_REVIEW.md` - V1 Security review and vulnerability assessment
 - `TEST_COVERAGE.md` - Test coverage analysis and metrics
 
 ### Community Health Files
