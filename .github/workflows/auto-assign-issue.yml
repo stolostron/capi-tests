@@ -5,12 +5,14 @@ on:
     types:
       - opened
 
+permissions:
+  issues: write
+
 jobs:
   assign-issue:
     name: Assign Issue to RadekCap
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
+    timeout-minutes: 5
 
     steps:
     - name: Assign Issue to RadekCap

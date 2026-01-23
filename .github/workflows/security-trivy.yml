@@ -19,13 +19,14 @@ jobs:
   trivy:
     name: Trivy Security Scanner
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
     - name: Run Trivy vulnerability scanner in repo mode
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@22438a435773de8c97dc0958cc0b823c45b064ac # master
       with:
         scan-type: 'fs'
         scan-ref: '.'
@@ -37,7 +38,7 @@ jobs:
       id: trivy-scan
 
     - name: Run Trivy for human-readable output
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@22438a435773de8c97dc0958cc0b823c45b064ac # master
       with:
         scan-type: 'fs'
         scan-ref: '.'
@@ -94,14 +95,14 @@ jobs:
 
     - name: Upload Trivy results (SARIF)
       if: always()
-      uses: github/codeql-action/upload-sarif@v4
+      uses: github/codeql-action/upload-sarif@5c3b9c403c9a72fb5fa559496012b60fa351d4b8 # v4
       with:
         sarif_file: 'trivy-results.sarif'
       continue-on-error: true
 
     - name: Upload Trivy results (artifact)
       if: always()
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
       with:
         name: trivy-results
         path: |

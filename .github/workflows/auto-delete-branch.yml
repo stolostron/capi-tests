@@ -5,12 +5,14 @@ on:
     types:
       - closed
 
+permissions:
+  contents: write
+
 jobs:
   delete-branch:
     name: Delete merged branch
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    timeout-minutes: 5
     if: github.event.pull_request.merged == true
 
     steps:
