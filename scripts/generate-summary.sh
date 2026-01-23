@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # generate-summary.sh - Generate a summary report from JUnit XML test results
 #

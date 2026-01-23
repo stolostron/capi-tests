@@ -508,6 +508,7 @@ Commands will prompt for any required information and guide you through the task
 - `docs/INTEGRATION.md` - Integration patterns with cluster-api-installer
 - `docs/DEPENDENCIES.md` - Dependency management, security scanning, and updates
 - `docs/TESTING_GUIDELINES.md` - Go testing best practices and guidelines
+- `docs/CROSS_PLATFORM.md` - Cross-platform compatibility guide (OS support, shell compatibility, installation)
 - `docs/API_REVIEW.md` - V1 API/Interface contract review
 - `TEST_COVERAGE.md` - Test coverage analysis and metrics
 

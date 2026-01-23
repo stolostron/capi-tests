@@ -363,6 +363,8 @@ make test-all
 
 See [INTEGRATION.md](docs/INTEGRATION.md) for detailed integration patterns.
 
+See [CROSS_PLATFORM.md](docs/CROSS_PLATFORM.md) for cross-platform compatibility information including supported operating systems, shell compatibility, and platform-specific installation instructions.
+
 ## Test Structure
 
 ```
