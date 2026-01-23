@@ -101,7 +101,7 @@ jobs:
 
     - name: Upload Trivy results (artifact)
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: trivy-results
         path: |
