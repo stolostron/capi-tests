@@ -510,6 +510,7 @@ Commands will prompt for any required information and guide you through the task
 - `docs/TESTING_GUIDELINES.md` - Go testing best practices and guidelines
 - `docs/CROSS_PLATFORM.md` - Cross-platform compatibility guide (OS support, shell compatibility, installation)
 - `docs/API_REVIEW.md` - V1 API/Interface contract review
+- `docs/PERFORMANCE_REVIEW.md` - V1 Performance review and optimization analysis
 - `TEST_COVERAGE.md` - Test coverage analysis and metrics
 
 ### Community Health Files
