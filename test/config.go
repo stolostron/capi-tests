@@ -19,7 +19,7 @@ const (
 	// DefaultCAPZUser is the default user identifier for CAPZ resources.
 	// Used in ClusterNamePrefix (for resource group naming) and User field.
 	// Extracted to a constant to ensure consistency across all usages.
-	DefaultCAPZUser = "rcapd"
+	DefaultCAPZUser = "rcapb"
 
 	// DefaultDeploymentEnv is the default deployment environment identifier.
 	// Used in ClusterNamePrefix and Environment field.
@@ -83,8 +83,8 @@ type TestConfig struct {
 func NewTestConfig() *TestConfig {
 	return &TestConfig{
 		// Repository defaults
-		RepoURL:    GetEnvOrDefault("ARO_REPO_URL", "https://github.com/RadekCap/cluster-api-installer"),
-		RepoBranch: GetEnvOrDefault("ARO_REPO_BRANCH", "ARO-ASO"),
+		RepoURL:    GetEnvOrDefault("ARO_REPO_URL", "https://github.com/stolostron/cluster-api-installer"),
+		RepoBranch: GetEnvOrDefault("ARO_REPO_BRANCH", "main"),
 		RepoDir:    getDefaultRepoDir(),
 
 		// Cluster defaults
