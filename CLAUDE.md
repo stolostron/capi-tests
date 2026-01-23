@@ -23,6 +23,35 @@ Tests are designed to run **sequentially** in a specific order, with each phase 
 
 Tests are **idempotent** - they skip steps already completed, allowing re-runs.
 
+### Idempotency Guarantees
+
+All test phases are designed to be idempotent and safe to re-run:
+
+| Phase | Skip Detection | Re-run Behavior |
+|-------|----------------|-----------------|
+| 01 Check Dependencies | N/A (stateless) | Always runs - no persistent state |
+| 02 Setup | Directory exists | Validates git integrity, skips clone |
+| 03 Kind Cluster | `kind get clusters` | Skips if cluster already exists |
+| 04 Generate YAMLs | All YAML files exist | Skips if credentials.yaml, is.yaml, aro.yaml all present |
+| 05 Deploy CRs | File existence | Uses `kubectl apply` (inherently idempotent) |
+| 06 Verification | Kubeconfig + cluster state | Guards on required files and cluster phase |
+| 07 Deletion | Resource existence | Skips if already deleted |
+
+**Key idempotency patterns:**
+- File-based detection (check if output exists before generating)
+- Resource-based detection (check if Kubernetes resources exist)
+- `kubectl apply` for CR deployment (creates or updates, never duplicates)
+- Graceful skip with `t.Skipf()` when prerequisites aren't met
+
+**To force regeneration:**
+```bash
+# Delete output directory to regenerate YAMLs
+rm -rf /tmp/cluster-api-installer-aro/rcap-stage/
+
+# Delete Kind cluster to redeploy
+kind delete cluster --name capz-tests-stage
+```
+
 ### Configuration System
 
 All test configuration is centralized in `test/config.go` via the `TestConfig` struct. Configuration follows this precedence:

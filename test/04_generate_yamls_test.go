@@ -6,8 +6,10 @@ import (
 	"testing"
 )
 
-// infrastructureGenerationSucceeded tracks whether TestInfrastructure_GenerateResources completed successfully.
-// When false, dependent verification tests will skip to avoid confusing cascading failures.
+// infrastructureGenerationSucceeded tracks whether TestInfrastructure_GenerateResources completed successfully
+// within the current test process. This is set to true when generation completes or when existing files are
+// detected (idempotency). Note: Verification tests now use file-based detection instead of this flag,
+// so they work correctly when run in separate test invocations.
 var infrastructureGenerationSucceeded bool
 
 // TestInfrastructure_GenerateResources tests generating ARO infrastructure resources
@@ -28,14 +30,50 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 		GetDomainPrefix(config.CAPZUser, config.Environment),
 		len(GetDomainPrefix(config.CAPZUser, config.Environment)))
 
+	// Output directory for generated resources
+	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
+
+	// Check if all expected files already exist (idempotency)
+	// This allows safe re-runs without regenerating existing infrastructure
+	expectedFiles := []string{
+		"credentials.yaml",
+		"is.yaml",
+		"aro.yaml",
+	}
+
+	if DirExists(outputDir) {
+		allFilesExist := true
+		var missingFiles []string
+		for _, file := range expectedFiles {
+			if !FileExists(filepath.Join(outputDir, file)) {
+				allFilesExist = false
+				missingFiles = append(missingFiles, file)
+			}
+		}
+		if allFilesExist {
+			PrintToTTY("\n=== Infrastructure YAML files already exist ===\n")
+			PrintToTTY("✅ All expected files found in: %s\n", outputDir)
+			for _, file := range expectedFiles {
+				PrintToTTY("  ✅ %s\n", file)
+			}
+			PrintToTTY("\nSkipping generation (idempotent - already complete)\n")
+			PrintToTTY("To force regeneration, delete the output directory:\n")
+			PrintToTTY("  rm -rf %s\n\n", outputDir)
+			t.Logf("Infrastructure already generated at %s, skipping", outputDir)
+			infrastructureGenerationSucceeded = true
+			return
+		}
+		// Partial state detected - log warning and regenerate
+		PrintToTTY("\n⚠️  Output directory exists but missing files: %v\n", missingFiles)
+		PrintToTTY("Will regenerate infrastructure...\n\n")
+		t.Logf("Partial state detected, missing files: %v - will regenerate", missingFiles)
+	}
+
 	genScriptPath := filepath.Join(config.RepoDir, config.GenScriptPath)
 	if !FileExists(genScriptPath) {
 		t.Errorf("Generation script not found: %s", genScriptPath)
 		return
 	}
-
-	// Output directory for generated resources
-	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
 
 	t.Logf("Generating infrastructure resources for cluster '%s' (env: %s)", config.WorkloadClusterName, config.Environment)
 
@@ -86,12 +124,7 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	PrintToTTY("Output directory created: %s\n", outputDir)
 	t.Logf("Output directory created: %s", outputDir)
 
-	// Log paths of all generated files
-	expectedFiles := []string{
-		"credentials.yaml",
-		"is.yaml",
-		"aro.yaml",
-	}
+	// Log paths of all generated files (expectedFiles defined earlier for idempotency check)
 	for _, file := range expectedFiles {
 		filePath := filepath.Join(outputDir, file)
 		if FileExists(filePath) {
@@ -117,11 +150,9 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 }
 
 // TestInfrastructure_VerifyCredentialsYAML verifies credentials.yaml exists and is valid
+// This test uses file-based detection for idempotency - it will work correctly
+// whether run in the same test invocation as GenerateResources or separately.
 func TestInfrastructure_VerifyCredentialsYAML(t *testing.T) {
-	if !infrastructureGenerationSucceeded {
-		t.Skip("Skipping: TestInfrastructure_GenerateResources did not succeed")
-	}
-
 	t.Log("Verifying credentials.yaml")
 
 	config := NewTestConfig()
@@ -158,11 +189,9 @@ func TestInfrastructure_VerifyCredentialsYAML(t *testing.T) {
 }
 
 // TestInfrastructure_VerifyInfrastructureSecretsYAML verifies is.yaml exists and is valid
+// This test uses file-based detection for idempotency - it will work correctly
+// whether run in the same test invocation as GenerateResources or separately.
 func TestInfrastructure_VerifyInfrastructureSecretsYAML(t *testing.T) {
-	if !infrastructureGenerationSucceeded {
-		t.Skip("Skipping: TestInfrastructure_GenerateResources did not succeed")
-	}
-
 	t.Log("Verifying is.yaml (infrastructure secrets)")
 
 	config := NewTestConfig()
@@ -199,11 +228,9 @@ func TestInfrastructure_VerifyInfrastructureSecretsYAML(t *testing.T) {
 }
 
 // TestInfrastructure_VerifyAROClusterYAML verifies aro.yaml exists and is valid
+// This test uses file-based detection for idempotency - it will work correctly
+// whether run in the same test invocation as GenerateResources or separately.
 func TestInfrastructure_VerifyAROClusterYAML(t *testing.T) {
-	if !infrastructureGenerationSucceeded {
-		t.Skip("Skipping: TestInfrastructure_GenerateResources did not succeed")
-	}
-
 	t.Log("Verifying aro.yaml (ARO cluster configuration)")
 
 	config := NewTestConfig()

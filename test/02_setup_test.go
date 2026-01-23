@@ -3,6 +3,7 @@ package test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -10,7 +11,7 @@ import (
 func TestSetup_CloneRepository(t *testing.T) {
 	config := NewTestConfig()
 
-	// Check if directory already exists
+	// Check if directory already exists (idempotency check)
 	if DirExists(config.RepoDir) {
 		t.Logf("Repository directory already exists at %s", config.RepoDir)
 
@@ -21,10 +22,21 @@ func TestSetup_CloneRepository(t *testing.T) {
 			return
 		}
 
+		// Validate repository integrity by checking if HEAD is valid
+		// This detects corrupted clones from interrupted operations
+		output, err := RunCommandQuiet(t, "git", "-C", config.RepoDir, "rev-parse", "HEAD")
+		if err != nil || strings.TrimSpace(output) == "" {
+			t.Logf("Warning: Repository at %s may be corrupted (git rev-parse HEAD failed)", config.RepoDir)
+			t.Logf("Consider deleting and re-cloning: rm -rf %s", config.RepoDir)
+			// Don't fail - let subsequent tests determine if repo is usable
+		} else {
+			t.Logf("Repository HEAD: %s", strings.TrimSpace(output)[:min(12, len(strings.TrimSpace(output)))])
+		}
+
 		// Register the existing repository for tracking in test output
 		RegisterClonedRepository(config.RepoURL, config.RepoBranch, config.RepoDir)
 
-		t.Log("Using existing repository")
+		t.Log("Using existing repository (idempotent - skipping clone)")
 		return
 	}
 
