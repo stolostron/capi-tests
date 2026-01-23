@@ -1,14 +1,16 @@
 name: Cluster Preparation
 
-# DISABLED: This workflow is temporarily disabled due to failures.
-# It can still be triggered manually via workflow_dispatch.
-# To re-enable, uncomment the push and pull_request triggers below.
+# DISABLED: This workflow is disabled.
+# To re-enable, uncomment the triggers below.
 on:
-  workflow_dispatch:
+  # workflow_dispatch:
   # push:
   #   branches: [ "**" ]
   # pull_request:
   #   branches: [ "**" ]
+  schedule:
+    # Never runs - placeholder to satisfy GitHub Actions syntax
+    - cron: '0 0 31 2 *'
 
 permissions:
   contents: read
