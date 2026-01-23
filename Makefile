@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _cluster _generate-yamls _deploy-crds _verify _delete test-all _test-all-impl clean clean-all clean-azure help summary
+.PHONY: test _check-dep _setup _cluster _generate-yamls _deploy-crds _verify _delete _cleanup test-all _test-all-impl clean clean-all clean-azure help summary
 
 # Default values
 # Extract CAPZ_USER default from Go config to maintain single source of truth
@@ -82,6 +82,7 @@ help: ## Display this help message
 	@echo "  5. make _deploy-crs      # Deploy CRs and verify deployment"
 	@echo "  6. make _verify          # Verify deployed cluster"
 	@echo "  7. make _delete          # Delete workload cluster and verify cleanup"
+	@echo "  8. make _cleanup         # Validate cleanup operations (optional, standalone)"
 
 test: _check-dep ## Run check dependencies tests only
 
@@ -222,6 +223,26 @@ _delete: check-gotestsum
 		echo "✅ Cluster Deletion Tests completed"; \
 	else \
 		echo "❌ Cluster Deletion Tests failed"; \
+	fi; \
+	echo ""; \
+	exit $$EXIT_CODE
+
+_cleanup: check-gotestsum
+	@mkdir -p $(RESULTS_DIR)
+	@echo "=== Running Cleanup Validation Tests ==="
+	@echo "Results will be saved to: $(RESULTS_DIR)"
+	@echo ""
+	@EXIT_CODE=0; \
+	$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-cleanup.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestCleanup -timeout 30m || EXIT_CODE=$$?; \
+	mkdir -p $(LATEST_RESULTS_DIR); \
+	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
+	echo ""; \
+	echo "Test results saved to: $(RESULTS_DIR)/junit-cleanup.xml"; \
+	echo "Latest results copied to: $(LATEST_RESULTS_DIR)/"; \
+	if [ $$EXIT_CODE -eq 0 ]; then \
+		echo "✅ Cleanup Validation Tests completed"; \
+	else \
+		echo "❌ Cleanup Validation Tests failed"; \
 	fi; \
 	echo ""; \
 	exit $$EXIT_CODE

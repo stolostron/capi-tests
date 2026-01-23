@@ -20,6 +20,8 @@ Tests are designed to run **sequentially** in a specific order, with each phase 
 4. **Infrastructure** (`04_generate_yamls_test.go`) - YAML generation
 5. **Deployment** (`05_deploy_crs_test.go`) - CR deployment monitoring
 6. **Verification** (`06_verification_test.go`) - Final cluster validation
+7. **Deletion** (`07_deletion_test.go`) - Workload cluster deletion
+8. **Cleanup Validation** (`08_cleanup_test.go`) - Cleanup operations validation (standalone)
 
 Tests are **idempotent** - they skip steps already completed, allowing re-runs.
 
@@ -36,6 +38,7 @@ All test phases are designed to be idempotent and safe to re-run:
 | 05 Deploy CRs | File existence | Uses `kubectl apply` (inherently idempotent) |
 | 06 Verification | Kubeconfig + cluster state | Guards on required files and cluster phase |
 | 07 Deletion | Resource existence | Skips if already deleted |
+| 08 Cleanup Validation | N/A (stateless) | Always reports current cleanup status |
 
 **Key idempotency patterns:**
 - File-based detection (check if output exists before generating)
