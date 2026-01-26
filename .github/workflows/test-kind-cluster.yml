@@ -1,16 +1,19 @@
 name: Cluster Preparation
 
-# DISABLED: This workflow is disabled.
-# To re-enable, uncomment the triggers below.
+# DISABLED: This workflow requires Azure credentials not available in GitHub Actions.
+# To re-enable, uncomment the triggers below and configure Azure secrets.
 on:
   # workflow_dispatch:
   # push:
   #   branches: [ "**" ]
   # pull_request:
   #   branches: [ "**" ]
-  schedule:
-    # Never runs - placeholder to satisfy GitHub Actions syntax
-    - cron: '0 0 31 2 *'
+  workflow_dispatch:
+    inputs:
+      placeholder:
+        description: 'Workflow is disabled - do not run'
+        required: false
+        default: 'disabled'
 
 permissions:
   contents: read
