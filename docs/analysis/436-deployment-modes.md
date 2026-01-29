@@ -14,7 +14,7 @@
 |------|---------|---------|-------------|-----------|----------|------------|
 | Kind | `USE_KIND=true` | Local Kind cluster | Deployed by tests | `capi-system` / `capz-system` | Local development | v1 |
 | K8S | `USE_K8S=true` | Local K8s cluster | Deployed by tests | `multicluster-engine` | Generic Kubernetes | v1 |
-| OCP | (default) | Local CRC/OpenShift | Deployed by tests | `multicluster-engine` | Local OpenShift testing | v1 |
+| OCP | (default) | Local CRC/OpenShift | Deployed by tests | `capi-system` / `capz-system` | Local OpenShift testing | v1 |
 | MCE | `USE_KUBECONFIG=<path>` | MCE installation | Pre-installed | `multicluster-engine` | Production-like testing, OpenShift CI | v2 |
 
 ---
