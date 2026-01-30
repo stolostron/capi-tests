@@ -132,7 +132,7 @@ _cluster: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-cluster.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestKindCluster -timeout $(CLUSTER_TIMEOUT) -failfast || EXIT_CODE=$$?; \
+	$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-cluster.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestExternalCluster|TestKindCluster" -timeout $(CLUSTER_TIMEOUT) -failfast || EXIT_CODE=$$?; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	echo ""; \
@@ -253,8 +253,9 @@ test-all: ## Run all test phases sequentially
 	@# Run the actual test execution with output captured to terminal and file
 	@# Use 'script' to create a pseudo-TTY so gotestsum outputs verbose test logs
 	@# (gotestsum hides verbose output when it detects stdout is not a TTY)
+	@# Note: Use 'script -q -c "cmd" /dev/null' syntax (Linux) to preserve environment variables
 	@if command -v script >/dev/null 2>&1; then \
-		script -q /dev/null bash -c '$(MAKE) --no-print-directory _test-all-impl' 2>&1 | tee $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE); \
+		script -q -c "$(MAKE) --no-print-directory _test-all-impl" /dev/null 2>&1 | tee $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE); \
 		EXIT_CODE=$${PIPESTATUS[0]}; \
 	else \
 		$(MAKE) --no-print-directory _test-all-impl 2>&1 | tee $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE); \

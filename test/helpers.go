@@ -2555,3 +2555,136 @@ func FormatValidationResults(results []ConfigValidationResult) string {
 
 	return sb.String()
 }
+
+// =============================================================================
+// MCE (MultiClusterEngine) Helper Functions
+// =============================================================================
+
+// IsMCECluster checks if the external cluster has MCE (MultiClusterEngine) installed.
+// Returns true if the 'multiclusterengine' resource exists, false otherwise.
+func IsMCECluster(t *testing.T, kubeContext string) bool {
+	t.Helper()
+	_, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+		"get", "mce", "multiclusterengine", "-o", "name")
+	return err == nil
+}
+
+// MCEComponentStatus represents the status of an MCE component
+type MCEComponentStatus struct {
+	Name    string
+	Enabled bool
+	Exists  bool
+}
+
+// GetMCEComponentStatus retrieves the enabled status of a specific MCE component.
+// Returns the component status or an error if the MCE resource cannot be queried.
+func GetMCEComponentStatus(t *testing.T, kubeContext, componentName string) (*MCEComponentStatus, error) {
+	t.Helper()
+
+	// Query component enabled status using jsonpath
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+		"get", "mce", "multiclusterengine", "-o",
+		fmt.Sprintf("jsonpath={.spec.overrides.components[?(@.name=='%s')].enabled}", componentName))
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to query MCE component status: %w", err)
+	}
+
+	status := &MCEComponentStatus{
+		Name:   componentName,
+		Exists: output != "",
+	}
+
+	if output == "true" {
+		status.Enabled = true
+	}
+
+	return status, nil
+}
+
+// EnableMCEComponent enables a specific MCE component by patching the multiclusterengine resource.
+// This uses jq to transform the components array while preserving other settings.
+func EnableMCEComponent(t *testing.T, kubeContext, componentName string) error {
+	t.Helper()
+
+	PrintToTTY("Enabling MCE component: %s\n", componentName)
+	t.Logf("Enabling MCE component: %s", componentName)
+
+	// Get current MCE resource as JSON
+	currentOutput, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+		"get", "mce", "multiclusterengine", "-o", "json")
+	if err != nil {
+		return fmt.Errorf("failed to get MCE resource: %w", err)
+	}
+
+	// Build the jq expression to update the specific component
+	jqExpr := fmt.Sprintf(
+		`.spec.overrides.components | map(if .name == "%s" then .enabled = true else . end)`,
+		componentName)
+
+	// Use jq to transform the components array
+	jqCmd := exec.Command("jq", "-c", jqExpr)
+	jqCmd.Stdin = strings.NewReader(currentOutput)
+	transformedBytes, err := jqCmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to transform MCE components with jq: %w", err)
+	}
+	transformed := strings.TrimSpace(string(transformedBytes))
+
+	// Build the patch JSON
+	patchJSON := fmt.Sprintf(`{"spec":{"overrides":{"components":%s}}}`, transformed)
+
+	// Apply the patch
+	output, err := RunCommand(t, "kubectl", "--context", kubeContext,
+		"patch", "mce", "multiclusterengine", "--type=merge", "-p", patchJSON)
+	if err != nil {
+		return fmt.Errorf("failed to patch MCE resource: %w\nOutput: %s", err, output)
+	}
+
+	PrintToTTY("✅ MCE component %s enabled successfully\n", componentName)
+	t.Logf("MCE component %s enabled successfully", componentName)
+	return nil
+}
+
+// WaitForMCEController waits for a controller deployment to become available after MCE enablement.
+// Returns nil when the controller is available, or an error if timeout is reached.
+func WaitForMCEController(t *testing.T, kubeContext, namespace, deploymentName string, timeout time.Duration) error {
+	t.Helper()
+
+	if timeout == 0 {
+		timeout = DefaultMCEEnablementTimeout
+	}
+
+	pollInterval := 15 * time.Second
+	startTime := time.Now()
+
+	PrintToTTY("\n=== Waiting for MCE controller: %s ===\n", deploymentName)
+	PrintToTTY("Namespace: %s | Timeout: %v\n\n", namespace, timeout)
+
+	iteration := 0
+	for {
+		elapsed := time.Since(startTime)
+
+		if elapsed > timeout {
+			return fmt.Errorf("timeout waiting for MCE controller %s after %v", deploymentName, elapsed.Round(time.Second))
+		}
+
+		iteration++
+
+		// Check if deployment exists and is available
+		output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+			"-n", namespace, "get", "deployment", deploymentName,
+			"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}")
+
+		if err != nil {
+			PrintToTTY("[%d] Deployment %s not found yet, waiting...\n", iteration, deploymentName)
+		} else if strings.TrimSpace(output) == "True" {
+			PrintToTTY("✅ MCE controller %s is available! (took %v)\n", deploymentName, elapsed.Round(time.Second))
+			return nil
+		} else {
+			PrintToTTY("[%d] Deployment %s status: %s\n", iteration, deploymentName, strings.TrimSpace(output))
+		}
+
+		time.Sleep(pollInterval)
+	}
+}

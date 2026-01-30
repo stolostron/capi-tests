@@ -9,16 +9,16 @@ import (
 	"time"
 )
 
-// TestExternalCluster_Connectivity validates the external cluster is reachable.
+// TestExternalCluster_01_Connectivity validates the external cluster is reachable.
 // This test runs only when USE_KUBECONFIG is set, validating pre-installed controllers.
-func TestExternalCluster_Connectivity(t *testing.T) {
+func TestExternalCluster_01_Connectivity(t *testing.T) {
 	config := NewTestConfig()
 
 	if !config.IsExternalCluster() {
 		t.Skip("Not using external cluster (USE_KUBECONFIG not set)")
 	}
 
-	PrintTestHeader(t, "TestExternalCluster_Connectivity",
+	PrintTestHeader(t, "TestExternalCluster_01_Connectivity",
 		"Validate external cluster is reachable via kubeconfig")
 
 	// Set KUBECONFIG for kubectl
@@ -39,63 +39,189 @@ func TestExternalCluster_Connectivity(t *testing.T) {
 	t.Logf("External cluster nodes:\n%s", output)
 }
 
-// TestExternalCluster_ControllersReady validates CAPI/CAPZ/ASO controllers are installed.
-// This test runs only when USE_KUBECONFIG is set, validating pre-installed controllers.
-func TestExternalCluster_ControllersReady(t *testing.T) {
+// TestExternalCluster_02_EnableMCE enables CAPI and CAPZ components if not already enabled.
+// This test runs only when:
+// - USE_KUBECONFIG is set (external cluster mode)
+// - MCE is installed on the cluster
+// - MCE_AUTO_ENABLE is true (default)
+func TestExternalCluster_02_EnableMCE(t *testing.T) {
 	config := NewTestConfig()
 
 	if !config.IsExternalCluster() {
 		t.Skip("Not using external cluster (USE_KUBECONFIG not set)")
 	}
 
-	PrintTestHeader(t, "TestExternalCluster_ControllersReady",
+	SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	context := config.GetKubeContext()
+
+	// Check if MCE is installed
+	if !IsMCECluster(t, context) {
+		t.Skip("Not an MCE cluster, skipping MCE component enablement")
+	}
+
+	// Check if auto-enablement is allowed
+	if !config.MCEAutoEnable {
+		t.Skip("MCE auto-enablement disabled (MCE_AUTO_ENABLE=false)")
+	}
+
+	PrintTestHeader(t, "TestExternalCluster_02_EnableMCE",
+		"Enable CAPI and CAPZ components in MCE if not already enabled")
+
+	PrintToTTY("\n=== Checking MCE component status ===\n")
+
+	components := []string{MCEComponentCAPI, MCEComponentCAPZ}
+	enabledCount := 0
+	needsEnablement := false
+
+	for _, component := range components {
+		status, err := GetMCEComponentStatus(t, context, component)
+		if err != nil {
+			t.Fatalf("Failed to get status for %s: %v", component, err)
+		}
+
+		if status.Enabled {
+			PrintToTTY("✅ Component %s: already enabled\n", component)
+			t.Logf("Component %s is already enabled", component)
+			enabledCount++
+			continue
+		}
+
+		PrintToTTY("⚠️  Component %s: disabled, will enable...\n", component)
+		needsEnablement = true
+		if err := EnableMCEComponent(t, context, component); err != nil {
+			errStr := err.Error()
+
+			// Check for HyperShift exclusivity error - common MCE constraint
+			if strings.Contains(errStr, "component exclusivity violation") ||
+				strings.Contains(errStr, "HyperShift") {
+				PrintToTTY("\n❌ MCE Component Exclusivity Error\n")
+				PrintToTTY("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+				PrintToTTY("HyperShift and Cluster API components cannot be enabled simultaneously.\n\n")
+				PrintToTTY("To use CAPZ, you must first disable HyperShift components:\n")
+				PrintToTTY("  kubectl patch mce multiclusterengine --type=merge -p '\n")
+				PrintToTTY("    {\"spec\":{\"overrides\":{\"components\":[\n")
+				PrintToTTY("      {\"name\":\"hypershift\",\"enabled\":false},\n")
+				PrintToTTY("      {\"name\":\"hypershift-local-hosting\",\"enabled\":false}\n")
+				PrintToTTY("    ]}}}'\n\n")
+				PrintToTTY("Or use an MCE cluster without HyperShift enabled.\n")
+				PrintToTTY("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
+				t.Fatalf("Cannot enable %s: MCE component exclusivity violation (HyperShift vs Cluster API)", component)
+			}
+
+			t.Fatalf("Failed to enable %s: %v\n\n"+
+				"Troubleshooting steps:\n"+
+				"  1. Verify MCE operator is healthy: kubectl get csv -n multicluster-engine\n"+
+				"  2. Check MCE conditions: kubectl get mce multiclusterengine -o yaml\n"+
+				"  3. Verify you have cluster-admin permissions\n"+
+				"  4. Ensure jq is installed: jq --version\n", component, err)
+		}
+	}
+
+	if enabledCount == len(components) {
+		PrintToTTY("\n✅ All MCE components were already enabled\n\n")
+		t.Log("All MCE components were already enabled")
+		return
+	}
+
+	if needsEnablement {
+		PrintToTTY("\n=== Waiting for MCE to reconcile components ===\n")
+		PrintToTTY("Initial wait: 30 seconds for MCE to start deploying controllers...\n")
+		time.Sleep(30 * time.Second)
+
+		// Wait for controllers to become available
+		controllersToWait := []struct {
+			name       string
+			namespace  string
+			deployment string
+		}{
+			{"CAPI", config.CAPINamespace, "capi-controller-manager"},
+			{"CAPZ", config.CAPZNamespace, "capz-controller-manager"},
+			{"ASO", config.CAPZNamespace, "azureserviceoperator-controller-manager"},
+		}
+
+		for _, ctrl := range controllersToWait {
+			if err := WaitForMCEController(t, context, ctrl.namespace, ctrl.deployment, config.MCEEnablementTimeout); err != nil {
+				t.Errorf("Failed waiting for %s controller: %v\n\n"+
+					"Troubleshooting steps:\n"+
+					"  1. Check component status: kubectl get mce multiclusterengine -o json | jq '.spec.overrides.components'\n"+
+					"  2. Check pod status: kubectl get pods -n %s\n"+
+					"  3. Check MCE operator logs: kubectl logs -n multicluster-engine -l control-plane=backplane-operator --tail=50\n",
+					ctrl.name, err, ctrl.namespace)
+			}
+		}
+
+		PrintToTTY("\n✅ MCE components enabled and controllers ready\n\n")
+		t.Log("MCE components enabled and controllers are ready")
+	}
+}
+
+// TestExternalCluster_03_ControllersReady validates CAPI/CAPZ/ASO controllers are installed.
+// This test runs only when USE_KUBECONFIG is set, validating pre-installed controllers.
+// If controllers are missing, it provides remediation hints based on whether this is an MCE cluster.
+func TestExternalCluster_03_ControllersReady(t *testing.T) {
+	config := NewTestConfig()
+
+	if !config.IsExternalCluster() {
+		t.Skip("Not using external cluster (USE_KUBECONFIG not set)")
+	}
+
+	PrintTestHeader(t, "TestExternalCluster_03_ControllersReady",
 		"Validate CAPI/CAPZ/ASO controllers are installed on external cluster")
 
 	// Set KUBECONFIG for kubectl
 	SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
 	context := config.GetKubeContext()
 
+	// Check if this is an MCE cluster for better error messages
+	isMCE := IsMCECluster(t, context)
+
 	PrintToTTY("\n=== Checking for pre-installed controllers ===\n")
 	PrintToTTY("CAPI Namespace: %s\n", config.CAPINamespace)
-	PrintToTTY("CAPZ Namespace: %s\n\n", config.CAPZNamespace)
+	PrintToTTY("CAPZ Namespace: %s\n", config.CAPZNamespace)
+	if isMCE {
+		PrintToTTY("MCE Cluster: yes\n")
+	}
+	PrintToTTY("\n")
 
-	// Check CAPI controller
-	PrintToTTY("Checking CAPI controller manager...\n")
-	_, err := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPINamespace,
-		"get", "deployment", "capi-controller-manager")
-	if err != nil {
-		PrintToTTY("❌ CAPI controller not found in %s namespace\n", config.CAPINamespace)
-		t.Errorf("CAPI controller not found in %s namespace: %v", config.CAPINamespace, err)
-	} else {
-		PrintToTTY("✅ CAPI controller manager found\n")
-		t.Logf("CAPI controller manager found in %s", config.CAPINamespace)
+	controllers := []struct {
+		name       string
+		namespace  string
+		deployment string
+	}{
+		{"CAPI", config.CAPINamespace, "capi-controller-manager"},
+		{"CAPZ", config.CAPZNamespace, "capz-controller-manager"},
+		{"ASO", config.CAPZNamespace, "azureserviceoperator-controller-manager"},
 	}
 
-	// Check CAPZ controller
-	PrintToTTY("Checking CAPZ controller manager...\n")
-	_, err = RunCommand(t, "kubectl", "--context", context, "-n", config.CAPZNamespace,
-		"get", "deployment", "capz-controller-manager")
-	if err != nil {
-		PrintToTTY("❌ CAPZ controller not found in %s namespace\n", config.CAPZNamespace)
-		t.Errorf("CAPZ controller not found in %s namespace: %v", config.CAPZNamespace, err)
-	} else {
-		PrintToTTY("✅ CAPZ controller manager found\n")
-		t.Logf("CAPZ controller manager found in %s", config.CAPZNamespace)
+	allFound := true
+	for _, ctrl := range controllers {
+		PrintToTTY("Checking %s controller manager...\n", ctrl.name)
+		_, err := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.namespace,
+			"get", "deployment", ctrl.deployment)
+		if err != nil {
+			PrintToTTY("❌ %s controller not found in %s namespace\n", ctrl.name, ctrl.namespace)
+			allFound = false
+
+			// Provide MCE-specific remediation hints
+			if isMCE && !config.MCEAutoEnable {
+				t.Errorf("%s controller not found in %s namespace.\n\n"+
+					"This is an MCE cluster but MCE_AUTO_ENABLE=false.\n"+
+					"To enable auto-enablement: MCE_AUTO_ENABLE=true make test-all\n"+
+					"Or manually enable the component:\n"+
+					"  kubectl patch mce multiclusterengine --type=merge -p '{\"spec\":{\"overrides\":{\"components\":[{\"name\":\"%s\",\"enabled\":true}]}}}'",
+					ctrl.name, ctrl.namespace, MCEComponentCAPI)
+			} else {
+				t.Errorf("%s controller not found in %s namespace: %v", ctrl.name, ctrl.namespace, err)
+			}
+		} else {
+			PrintToTTY("✅ %s controller manager found\n", ctrl.name)
+			t.Logf("%s controller manager found in %s", ctrl.name, ctrl.namespace)
+		}
 	}
 
-	// Check ASO controller
-	PrintToTTY("Checking ASO controller manager...\n")
-	_, err = RunCommand(t, "kubectl", "--context", context, "-n", config.CAPZNamespace,
-		"get", "deployment", "azureserviceoperator-controller-manager")
-	if err != nil {
-		PrintToTTY("❌ ASO controller not found in %s namespace\n", config.CAPZNamespace)
-		t.Errorf("ASO controller not found in %s namespace: %v", config.CAPZNamespace, err)
-	} else {
-		PrintToTTY("✅ ASO controller manager found\n")
-		t.Logf("ASO controller manager found in %s", config.CAPZNamespace)
+	if allFound {
+		PrintToTTY("\n✅ All required controllers are installed on external cluster\n\n")
 	}
-
-	PrintToTTY("\n✅ All required controllers are installed on external cluster\n\n")
 }
 
 // TestKindCluster_KindClusterReady tests deploying a Kind cluster with CAPZ and verifies it's ready
