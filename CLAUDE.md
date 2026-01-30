@@ -312,6 +312,18 @@ This is validated during Check Dependencies (phase 1) to prevent late deployment
 ### Test Behavior
 - `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `45m`, format: Go duration like `1h`, `45m`)
 
+### MCE Component Management
+- `MCE_AUTO_ENABLE` - Auto-enable MCE CAPI/CAPZ components if not found on external cluster (default: `true` when `USE_KUBECONFIG` is set)
+- `MCE_ENABLEMENT_TIMEOUT` - Timeout for waiting after MCE component enablement (default: `15m`, format: Go duration)
+
+When using an external MCE cluster (`USE_KUBECONFIG`), the test suite will:
+1. Detect if the cluster is an MCE installation
+2. Check if CAPI (`cluster-api`) and CAPZ (`cluster-api-provider-azure-preview`) components are enabled
+3. If disabled and `MCE_AUTO_ENABLE=true`, automatically enable them via MCE patching
+4. Wait for controllers to become available before proceeding
+
+**Note**: MCE auto-enablement requires `jq` to be installed for JSON transformation.
+
 ## Key Architecture Decisions
 
 ### Why Tests Are Sequential

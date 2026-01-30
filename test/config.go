@@ -16,6 +16,10 @@ const (
 	// scanning existing CRDs, applying missing ones, and restarting to pick up new CRDs.
 	DefaultASOControllerTimeout = 10 * time.Minute
 
+	// DefaultMCEEnablementTimeout is the default timeout for waiting after MCE component enablement.
+	// MCE components need time to deploy controllers, pull images, and initialize.
+	DefaultMCEEnablementTimeout = 15 * time.Minute
+
 	// DefaultCAPZUser is the default user identifier for CAPZ resources.
 	// Used in ClusterNamePrefix (for resource group naming) and User field.
 	// Extracted to a constant to ensure consistency across all usages.
@@ -24,6 +28,10 @@ const (
 	// DefaultDeploymentEnv is the default deployment environment identifier.
 	// Used in ClusterNamePrefix and Environment field.
 	DefaultDeploymentEnv = "stage"
+
+	// MCE component names as used in mce.spec.overrides.components
+	MCEComponentCAPI = "cluster-api"
+	MCEComponentCAPZ = "cluster-api-provider-azure-preview"
 )
 
 var (
@@ -85,6 +93,14 @@ type TestConfig struct {
 	// Timeouts
 	DeploymentTimeout    time.Duration
 	ASOControllerTimeout time.Duration
+
+	// MCE (MultiClusterEngine) configuration
+	// MCEAutoEnable controls whether to automatically enable MCE CAPI/CAPZ components
+	// if they are not found on an external cluster. Default: true when IsExternalCluster().
+	MCEAutoEnable bool
+	// MCEEnablementTimeout is the timeout for waiting after MCE component enablement.
+	// Controllers need time to be deployed, images pulled, and pods started.
+	MCEEnablementTimeout time.Duration
 }
 
 // NewTestConfig creates a new test configuration with defaults
@@ -127,6 +143,10 @@ func NewTestConfig() *TestConfig {
 		// Timeouts
 		DeploymentTimeout:    parseDeploymentTimeout(),
 		ASOControllerTimeout: parseASOControllerTimeout(),
+
+		// MCE configuration
+		MCEAutoEnable:        parseMCEAutoEnable(useKubeconfig),
+		MCEEnablementTimeout: parseMCEEnablementTimeout(),
 	}
 }
 
@@ -177,6 +197,35 @@ func parseASOControllerTimeout() time.Duration {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: invalid ASO_CONTROLLER_TIMEOUT '%s', using default %v\n", timeoutStr, DefaultASOControllerTimeout)
 		return DefaultASOControllerTimeout
+	}
+	return timeout
+}
+
+// parseMCEAutoEnable parses the MCE_AUTO_ENABLE environment variable.
+// Returns true (default) when using external kubeconfig, false otherwise.
+// Can be explicitly set to "false" to disable auto-enablement.
+func parseMCEAutoEnable(useKubeconfig string) bool {
+	envVal := os.Getenv("MCE_AUTO_ENABLE")
+	if envVal != "" {
+		return envVal == "true"
+	}
+	// Default to true only when using external kubeconfig
+	return useKubeconfig != ""
+}
+
+// parseMCEEnablementTimeout parses the MCE_ENABLEMENT_TIMEOUT environment variable.
+// Returns the parsed duration or defaults to DefaultMCEEnablementTimeout.
+// Logs a warning if the provided value is invalid.
+func parseMCEEnablementTimeout() time.Duration {
+	timeoutStr := os.Getenv("MCE_ENABLEMENT_TIMEOUT")
+	if timeoutStr == "" {
+		return DefaultMCEEnablementTimeout
+	}
+
+	timeout, err := time.ParseDuration(timeoutStr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: invalid MCE_ENABLEMENT_TIMEOUT '%s', using default %v\n", timeoutStr, DefaultMCEEnablementTimeout)
+		return DefaultMCEEnablementTimeout
 	}
 	return timeout
 }

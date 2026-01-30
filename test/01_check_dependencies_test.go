@@ -40,6 +40,29 @@ func TestCheckDependencies_ToolAvailable(t *testing.T) {
 	}
 }
 
+// TestCheckDependencies_OptionalTools checks for optional tools that enhance functionality.
+// These tools are not required for basic operation but enable additional features.
+func TestCheckDependencies_OptionalTools(t *testing.T) {
+	optionalTools := []struct {
+		name        string
+		description string
+		requiredFor string
+	}{
+		{"jq", "JSON processor for MCE component patching", "MCE auto-enablement (MCE_AUTO_ENABLE=true)"},
+	}
+
+	for _, tool := range optionalTools {
+		t.Run(tool.name, func(t *testing.T) {
+			if !CommandExists(tool.name) {
+				t.Logf("Optional tool '%s' not found: %s\n  Required for: %s",
+					tool.name, tool.description, tool.requiredFor)
+			} else {
+				t.Logf("Optional tool '%s' is available: %s", tool.name, tool.description)
+			}
+		})
+	}
+}
+
 // TestCheckDependencies_ExternalKubeconfig validates the external kubeconfig when USE_KUBECONFIG is set.
 // This validates connectivity early before other tests fail with confusing errors.
 func TestCheckDependencies_ExternalKubeconfig(t *testing.T) {
