@@ -461,6 +461,36 @@ func ExtractClusterNameFromYAML(filePath string) (string, error) {
 	return "", fmt.Errorf("no Cluster resource found in %s", filePath)
 }
 
+// CheckYAMLConfigMatch verifies that existing YAML files match the current configuration.
+// It extracts the cluster name from the aro.yaml file and compares it with the expected
+// cluster name prefix. This is used to detect configuration mismatches that would cause
+// the test to use stale YAML files with outdated values.
+//
+// Returns:
+//   - matches: true if the existing YAML matches the expected prefix, false otherwise
+//   - existingPrefix: the cluster name extracted from the existing YAML file
+//
+// If the file doesn't exist or cannot be parsed, returns (false, "") to trigger regeneration.
+func CheckYAMLConfigMatch(t *testing.T, aroYAMLPath, expectedPrefix string) (matches bool, existingPrefix string) {
+	t.Helper()
+
+	// Extract cluster name from existing aro.yaml
+	clusterName, err := ExtractClusterNameFromYAML(aroYAMLPath)
+	if err != nil {
+		// File doesn't exist or can't be parsed - needs regeneration
+		t.Logf("Could not extract cluster name from %s: %v", aroYAMLPath, err)
+		return false, ""
+	}
+
+	// Compare the extracted cluster name with expected prefix
+	// The cluster name in aro.yaml should match the ClusterNamePrefix (e.g., "rcapu-stage")
+	if clusterName == expectedPrefix {
+		return true, clusterName
+	}
+
+	return false, clusterName
+}
+
 // AROControlPlaneCondition represents a condition from the AROControlPlane status
 type AROControlPlaneCondition struct {
 	Type    string `json:"type"`

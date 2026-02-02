@@ -51,17 +51,32 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 			}
 		}
 		if allFilesExist {
-			PrintToTTY("\n=== Infrastructure YAML files already exist ===\n")
-			PrintToTTY("✅ All expected files found in: %s\n", outputDir)
-			for _, file := range expectedFiles {
-				PrintToTTY("  ✅ %s\n", file)
+			// Check if existing YAMLs match current config before skipping
+			aroYAMLPath := filepath.Join(outputDir, "aro.yaml")
+			matches, existingPrefix := CheckYAMLConfigMatch(t, aroYAMLPath, config.ClusterNamePrefix)
+
+			if !matches {
+				PrintToTTY("\n⚠️  Configuration mismatch detected!\n")
+				PrintToTTY("Existing YAMLs use prefix: %s\n", existingPrefix)
+				PrintToTTY("Current config expects: %s\n", config.ClusterNamePrefix)
+				PrintToTTY("Will regenerate infrastructure...\n\n")
+				t.Logf("Config mismatch: existing=%s, expected=%s - will regenerate",
+					existingPrefix, config.ClusterNamePrefix)
+				// Fall through to regeneration (don't return)
+			} else {
+				// Config matches - safe to skip generation
+				PrintToTTY("\n=== Infrastructure YAML files already exist ===\n")
+				PrintToTTY("✅ All expected files found in: %s\n", outputDir)
+				for _, file := range expectedFiles {
+					PrintToTTY("  ✅ %s\n", file)
+				}
+				PrintToTTY("\nSkipping generation (idempotent - already complete)\n")
+				PrintToTTY("To force regeneration, delete the output directory:\n")
+				PrintToTTY("  rm -rf %s\n\n", outputDir)
+				t.Logf("Infrastructure already generated at %s, skipping", outputDir)
+				infrastructureGenerationSucceeded = true
+				return
 			}
-			PrintToTTY("\nSkipping generation (idempotent - already complete)\n")
-			PrintToTTY("To force regeneration, delete the output directory:\n")
-			PrintToTTY("  rm -rf %s\n\n", outputDir)
-			t.Logf("Infrastructure already generated at %s, skipping", outputDir)
-			infrastructureGenerationSucceeded = true
-			return
 		}
 		// Partial state detected - log warning and regenerate
 		PrintToTTY("\n⚠️  Output directory exists but missing files: %v\n", missingFiles)

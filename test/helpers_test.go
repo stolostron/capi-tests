@@ -320,6 +320,122 @@ metadata:
 	}
 }
 
+func TestCheckYAMLConfigMatch(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir := t.TempDir()
+
+	tests := []struct {
+		name           string
+		setupFile      func(t *testing.T) string // Returns file path
+		expectedPrefix string
+		wantMatch      bool
+		wantExisting   string
+	}{
+		{
+			name: "matching prefix",
+			setupFile: func(t *testing.T) string {
+				path := filepath.Join(tmpDir, "matching.yaml")
+				content := []byte(`---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: rcapu-stage
+  namespace: default
+`)
+				if err := os.WriteFile(path, content, 0644); err != nil {
+					t.Fatalf("Failed to create test file: %v", err)
+				}
+				return path
+			},
+			expectedPrefix: "rcapu-stage",
+			wantMatch:      true,
+			wantExisting:   "rcapu-stage",
+		},
+		{
+			name: "mismatched prefix",
+			setupFile: func(t *testing.T) string {
+				path := filepath.Join(tmpDir, "mismatched.yaml")
+				content := []byte(`---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: rcapb-stage
+  namespace: default
+`)
+				if err := os.WriteFile(path, content, 0644); err != nil {
+					t.Fatalf("Failed to create test file: %v", err)
+				}
+				return path
+			},
+			expectedPrefix: "rcapu-stage",
+			wantMatch:      false,
+			wantExisting:   "rcapb-stage",
+		},
+		{
+			name: "missing file returns false",
+			setupFile: func(t *testing.T) string {
+				return filepath.Join(tmpDir, "nonexistent.yaml")
+			},
+			expectedPrefix: "rcapu-stage",
+			wantMatch:      false,
+			wantExisting:   "",
+		},
+		{
+			name: "file without Cluster resource returns false",
+			setupFile: func(t *testing.T) string {
+				path := filepath.Join(tmpDir, "no-cluster.yaml")
+				content := []byte(`---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: some-config
+`)
+				if err := os.WriteFile(path, content, 0644); err != nil {
+					t.Fatalf("Failed to create test file: %v", err)
+				}
+				return path
+			},
+			expectedPrefix: "rcapu-stage",
+			wantMatch:      false,
+			wantExisting:   "",
+		},
+		{
+			name: "different environment suffix",
+			setupFile: func(t *testing.T) string {
+				path := filepath.Join(tmpDir, "diff-env.yaml")
+				content := []byte(`---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: rcapu-prod
+  namespace: default
+`)
+				if err := os.WriteFile(path, content, 0644); err != nil {
+					t.Fatalf("Failed to create test file: %v", err)
+				}
+				return path
+			},
+			expectedPrefix: "rcapu-stage",
+			wantMatch:      false,
+			wantExisting:   "rcapu-prod",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filePath := tt.setupFile(t)
+			gotMatch, gotExisting := CheckYAMLConfigMatch(t, filePath, tt.expectedPrefix)
+
+			if gotMatch != tt.wantMatch {
+				t.Errorf("CheckYAMLConfigMatch() match = %v, want %v", gotMatch, tt.wantMatch)
+			}
+			if gotExisting != tt.wantExisting {
+				t.Errorf("CheckYAMLConfigMatch() existing = %q, want %q", gotExisting, tt.wantExisting)
+			}
+		})
+	}
+}
+
 func TestValidateYAMLFile(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir := t.TempDir()
