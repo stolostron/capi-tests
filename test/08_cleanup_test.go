@@ -83,8 +83,9 @@ func TestCleanup_VerifyKubeconfigRemoval(t *testing.T) {
 	PrintTestHeader(t, "TestCleanup_VerifyKubeconfigRemoval",
 		"Verify kubeconfig files can be identified for cleanup")
 
-	// Check for kubeconfig files in /tmp
-	pattern := "/tmp/*-kubeconfig.yaml"
+	// Check for kubeconfig files in temp directory (cross-platform)
+	tempDir := os.TempDir()
+	pattern := filepath.Join(tempDir, "*-kubeconfig.yaml")
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		PrintToTTY("Error searching for kubeconfig files: %v\n\n", err)
@@ -93,7 +94,7 @@ func TestCleanup_VerifyKubeconfigRemoval(t *testing.T) {
 	}
 
 	if len(matches) == 0 {
-		PrintToTTY("No kubeconfig files found in /tmp (clean state)\n\n")
+		PrintToTTY("No kubeconfig files found in %s (clean state)\n\n", tempDir)
 		t.Log("No kubeconfig files found - environment is clean")
 		return
 	}
@@ -115,7 +116,7 @@ func TestCleanup_VerifyClonedRepositoryRemoval(t *testing.T) {
 
 	repoDir := config.RepoDir
 	if repoDir == "" {
-		repoDir = "/tmp/cluster-api-installer-aro"
+		repoDir = filepath.Join(os.TempDir(), "cluster-api-installer-aro")
 	}
 
 	if DirExists(repoDir) {
@@ -684,19 +685,21 @@ func TestCleanup_Summary(t *testing.T) {
 	if CommandExists("kind") {
 		output, _ := RunCommandQuiet(t, "kind", "get", "clusters")
 		clusters := strings.TrimSpace(output)
-		if clusters != "" && strings.Contains(clusters, config.ManagementClusterName) {
-			PrintToTTY("  Kind Cluster:     %s EXISTS\n", config.ManagementClusterName)
-		} else if clusters != "" {
-			PrintToTTY("  Kind Cluster:     Other clusters exist\n")
-		} else {
+		// kind outputs "No kind clusters found." when empty, so check for that
+		if clusters == "" || strings.Contains(clusters, "No kind clusters found") {
 			PrintToTTY("  Kind Cluster:     CLEAN\n")
+		} else if strings.Contains(clusters, config.ManagementClusterName) {
+			PrintToTTY("  Kind Cluster:     %s EXISTS\n", config.ManagementClusterName)
+		} else {
+			PrintToTTY("  Kind Cluster:     Other clusters exist\n")
 		}
 	} else {
 		PrintToTTY("  Kind Cluster:     kind not available\n")
 	}
 
-	// Kubeconfig
-	matches, _ := filepath.Glob("/tmp/*-kubeconfig.yaml")
+	// Kubeconfig (cross-platform)
+	tempDir := os.TempDir()
+	matches, _ := filepath.Glob(filepath.Join(tempDir, "*-kubeconfig.yaml"))
 	if len(matches) > 0 {
 		PrintToTTY("  Kubeconfig:       %d file(s) found\n", len(matches))
 	} else {
@@ -706,7 +709,7 @@ func TestCleanup_Summary(t *testing.T) {
 	// Repository
 	repoDir := config.RepoDir
 	if repoDir == "" {
-		repoDir = "/tmp/cluster-api-installer-aro"
+		repoDir = filepath.Join(os.TempDir(), "cluster-api-installer-aro")
 	}
 	if DirExists(repoDir) {
 		PrintToTTY("  Cloned Repo:      EXISTS at %s\n", repoDir)

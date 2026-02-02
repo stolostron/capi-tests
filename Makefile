@@ -376,33 +376,35 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 			echo "Management cluster '$(CLEANUP_MANAGEMENT_CLUSTER)' not found (already clean)."; \
 		fi; \
 		echo ""; \
-		if [ -d "/tmp/cluster-api-installer-aro" ]; then \
-			echo "Directory /tmp/cluster-api-installer-aro exists."; \
-			read -p "Delete /tmp/cluster-api-installer-aro? [y/N] " -n 1 -r; \
+	REPO_DIR="$${TMPDIR:-/tmp}/cluster-api-installer-aro"; \
+		if [ -d "$$REPO_DIR" ]; then \
+			echo "Directory $$REPO_DIR exists."; \
+			read -p "Delete $$REPO_DIR? [y/N] " -n 1 -r; \
 			echo ""; \
 			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 				echo "Deleting directory..."; \
-				rm -rf /tmp/cluster-api-installer-aro || echo "Failed to delete directory"; \
+				rm -rf "$$REPO_DIR" || echo "Failed to delete directory"; \
 			else \
 				echo "Skipped directory deletion."; \
 			fi; \
 		else \
-			echo "Directory /tmp/cluster-api-installer-aro not found (already clean)."; \
+			echo "Directory $$REPO_DIR not found (already clean)."; \
 		fi; \
 		echo ""; \
-		if ls /tmp/*-kubeconfig.yaml 1> /dev/null 2>&1; then \
-			echo "Kubeconfig files found in /tmp:"; \
-			ls -1 /tmp/*-kubeconfig.yaml; \
+		TEMP_DIR="$${TMPDIR:-/tmp}"; \
+		if ls "$$TEMP_DIR"/*-kubeconfig.yaml 1> /dev/null 2>&1; then \
+			echo "Kubeconfig files found in $$TEMP_DIR:"; \
+			ls -1 "$$TEMP_DIR"/*-kubeconfig.yaml; \
 			read -p "Delete kubeconfig files? [y/N] " -n 1 -r; \
 			echo ""; \
 			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 				echo "Deleting kubeconfig files..."; \
-				rm -f /tmp/*-kubeconfig.yaml || echo "Failed to delete kubeconfig files"; \
+				rm -f "$$TEMP_DIR"/*-kubeconfig.yaml || echo "Failed to delete kubeconfig files"; \
 			else \
 				echo "Skipped kubeconfig files deletion."; \
 			fi; \
 		else \
-			echo "No kubeconfig files found in /tmp (already clean)."; \
+			echo "No kubeconfig files found in $$TEMP_DIR (already clean)."; \
 		fi; \
 		echo ""; \
 		if [ -d "results" ]; then \
@@ -497,21 +499,23 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 		echo "Management cluster '$(CLEANUP_MANAGEMENT_CLUSTER)' not found (already clean)."; \
 	fi
 	@echo ""
-	@# Delete cluster-api-installer directory
-	@if [ -d "/tmp/cluster-api-installer-aro" ]; then \
-		echo "Deleting /tmp/cluster-api-installer-aro..."; \
-		rm -rf /tmp/cluster-api-installer-aro || echo "Failed to delete directory"; \
+	@# Delete cluster-api-installer directory (use TMPDIR for cross-platform support)
+	@REPO_DIR="$${TMPDIR:-/tmp}/cluster-api-installer-aro"; \
+	if [ -d "$$REPO_DIR" ]; then \
+		echo "Deleting $$REPO_DIR..."; \
+		rm -rf "$$REPO_DIR" || echo "Failed to delete directory"; \
 	else \
-		echo "Directory /tmp/cluster-api-installer-aro not found (already clean)."; \
+		echo "Directory $$REPO_DIR not found (already clean)."; \
 	fi
 	@echo ""
-	@# Delete kubeconfig files
-	@if ls /tmp/*-kubeconfig.yaml 1> /dev/null 2>&1; then \
+	@# Delete kubeconfig files (use TMPDIR for cross-platform support)
+	@TEMP_DIR="$${TMPDIR:-/tmp}"; \
+	if ls "$$TEMP_DIR"/*-kubeconfig.yaml 1> /dev/null 2>&1; then \
 		echo "Deleting kubeconfig files:"; \
-		ls -1 /tmp/*-kubeconfig.yaml; \
-		rm -f /tmp/*-kubeconfig.yaml || echo "Failed to delete kubeconfig files"; \
+		ls -1 "$$TEMP_DIR"/*-kubeconfig.yaml; \
+		rm -f "$$TEMP_DIR"/*-kubeconfig.yaml || echo "Failed to delete kubeconfig files"; \
 	else \
-		echo "No kubeconfig files found in /tmp (already clean)."; \
+		echo "No kubeconfig files found in $$TEMP_DIR (already clean)."; \
 	fi
 	@echo ""
 	@# Delete results directory
