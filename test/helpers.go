@@ -2557,6 +2557,104 @@ func FormatValidationResults(results []ConfigValidationResult) string {
 }
 
 // =============================================================================
+// Cluster Resource Detection Functions
+// =============================================================================
+
+// GetExistingClusterNames returns names of all Cluster CRs in the specified namespace.
+// Returns an empty slice if no clusters are found or if the Cluster CRD is not installed.
+func GetExistingClusterNames(t *testing.T, kubeContext, namespace string) ([]string, error) {
+	t.Helper()
+
+	// Get all Cluster resources in the namespace
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+		"-n", namespace, "get", "cluster", "-o", "jsonpath={.items[*].metadata.name}")
+
+	if err != nil {
+		// Check if the error is because CRD doesn't exist (expected on fresh clusters)
+		if strings.Contains(output, "the server doesn't have a resource type") ||
+			strings.Contains(output, "No resources found") ||
+			strings.Contains(err.Error(), "NotFound") {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("failed to list Cluster resources: %w", err)
+	}
+
+	// Parse the space-separated list of cluster names
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return []string{}, nil
+	}
+
+	names := strings.Fields(output)
+	return names, nil
+}
+
+// CheckForMismatchedClusters checks if any existing Cluster CRs don't match the expected prefix.
+// Returns a list of cluster names that don't start with the expected prefix.
+// This is used to detect stale Cluster resources from previous configurations (e.g., different CAPZ_USER).
+func CheckForMismatchedClusters(t *testing.T, kubeContext, namespace, expectedPrefix string) ([]string, error) {
+	t.Helper()
+
+	existingClusters, err := GetExistingClusterNames(t, kubeContext, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	var mismatched []string
+	for _, name := range existingClusters {
+		// Check if the cluster name starts with the expected prefix
+		if !strings.HasPrefix(name, expectedPrefix) {
+			mismatched = append(mismatched, name)
+		}
+	}
+
+	return mismatched, nil
+}
+
+// FormatMismatchedClustersError formats a user-friendly error message for mismatched clusters.
+// This provides clear guidance on how to clean up stale Cluster resources.
+func FormatMismatchedClustersError(mismatched []string, expectedPrefix, namespace string) string {
+	var sb strings.Builder
+
+	sb.WriteString("\n")
+	sb.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	sb.WriteString("❌ EXISTING CLUSTER RESOURCES DETECTED\n")
+	sb.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
+
+	sb.WriteString("Found existing Cluster CRs that don't match current configuration:\n\n")
+	for _, name := range mismatched {
+		sb.WriteString(fmt.Sprintf("  • %s\n", name))
+	}
+
+	sb.WriteString(fmt.Sprintf("\nCurrent config expects cluster names starting with: %s\n\n", expectedPrefix))
+
+	sb.WriteString("This typically happens when CAPZ_USER was changed without cleaning up\n")
+	sb.WriteString("the previous cluster resources. Deploying new clusters alongside old ones\n")
+	sb.WriteString("can cause conflicts and unexpected behavior.\n\n")
+
+	sb.WriteString("TO CLEAN UP:\n\n")
+
+	// Single cluster cleanup
+	if len(mismatched) == 1 {
+		sb.WriteString(fmt.Sprintf("  kubectl delete cluster %s -n %s\n\n", mismatched[0], namespace))
+	} else {
+		// Multiple clusters
+		sb.WriteString(fmt.Sprintf("  # Delete specific cluster:\n"))
+		sb.WriteString(fmt.Sprintf("  kubectl delete cluster %s -n %s\n\n", mismatched[0], namespace))
+		sb.WriteString(fmt.Sprintf("  # Or delete all clusters in namespace:\n"))
+		sb.WriteString(fmt.Sprintf("  kubectl delete cluster --all -n %s\n\n", namespace))
+	}
+
+	sb.WriteString("  # Or use make clean for complete cleanup:\n")
+	sb.WriteString("  make clean\n\n")
+
+	sb.WriteString("After cleanup, re-run the tests.\n")
+	sb.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+
+	return sb.String()
+}
+
+// =============================================================================
 // MCE (MultiClusterEngine) Helper Functions
 // =============================================================================
 

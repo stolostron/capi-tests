@@ -9,6 +9,64 @@ import (
 	"time"
 )
 
+// TestDeployment_CheckExistingClusters checks for existing Cluster CRs that don't match current config.
+// This fail-fast check prevents deploying new clusters alongside stale resources from previous
+// configurations (e.g., when CAPZ_USER was changed without cleanup).
+func TestDeployment_CheckExistingClusters(t *testing.T) {
+
+	config := NewTestConfig()
+
+	// Set KUBECONFIG for external cluster mode
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	}
+
+	context := config.GetKubeContext()
+
+	PrintToTTY("\n=== Checking for existing Cluster resources ===\n")
+	PrintToTTY("Namespace: %s\n", config.TestNamespace)
+	PrintToTTY("Expected prefix: %s\n\n", config.ClusterNamePrefix)
+
+	// Check for existing clusters that don't match current config
+	mismatched, err := CheckForMismatchedClusters(t, context, config.TestNamespace, config.ClusterNamePrefix)
+	if err != nil {
+		// Non-fatal: log warning and continue if check fails
+		// This allows tests to proceed on clusters without CAPI installed
+		PrintToTTY("⚠️  Could not check existing clusters: %v\n", err)
+		t.Logf("Warning: Could not check existing clusters: %v", err)
+		PrintToTTY("Continuing with deployment...\n\n")
+		return
+	}
+
+	// Also get all existing clusters for informational purposes
+	existing, _ := GetExistingClusterNames(t, context, config.TestNamespace)
+	if len(existing) > 0 {
+		PrintToTTY("Found %d existing Cluster resource(s):\n", len(existing))
+		for _, name := range existing {
+			if strings.HasPrefix(name, config.ClusterNamePrefix) {
+				PrintToTTY("  ✅ %s (matches current config)\n", name)
+			} else {
+				PrintToTTY("  ❌ %s (does NOT match current config)\n", name)
+			}
+		}
+		PrintToTTY("\n")
+	} else {
+		PrintToTTY("✅ No existing Cluster resources found\n\n")
+	}
+
+	// Fail if there are mismatched clusters
+	if len(mismatched) > 0 {
+		errorMsg := FormatMismatchedClustersError(mismatched, config.ClusterNamePrefix, config.TestNamespace)
+		PrintToTTY("%s", errorMsg)
+
+		t.Fatalf("Mismatched Cluster CRs found. Clean up existing clusters before deploying with new CAPZ_USER.\n"+
+			"Found %d cluster(s) not matching prefix '%s': %v",
+			len(mismatched), config.ClusterNamePrefix, mismatched)
+	}
+
+	PrintToTTY("✅ All existing clusters match current configuration\n\n")
+}
+
 // TestDeployment_ApplyResources tests applying generated resources to the cluster
 func TestDeployment_ApplyResources(t *testing.T) {
 
