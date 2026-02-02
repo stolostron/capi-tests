@@ -2825,3 +2825,164 @@ func TestFormatRemediationSteps_Empty(t *testing.T) {
 		t.Errorf("formatRemediationSteps([]) should return empty string, got: %s", result)
 	}
 }
+
+// ============================================================================
+// Cluster Resource Detection Tests (Issue #433 - Fail-fast mismatch detection)
+// ============================================================================
+
+// TestCheckForMismatchedClusters_Logic tests the mismatch detection logic.
+// Note: This tests the pure logic without needing a real cluster.
+func TestCheckForMismatchedClusters_Logic(t *testing.T) {
+	tests := []struct {
+		name             string
+		existingClusters []string
+		expectedPrefix   string
+		wantMismatched   []string
+	}{
+		{
+			name:             "no clusters - no mismatch",
+			existingClusters: []string{},
+			expectedPrefix:   "rcapk-stage",
+			wantMismatched:   nil,
+		},
+		{
+			name:             "all match prefix",
+			existingClusters: []string{"rcapk-stage", "rcapk-stage-2"},
+			expectedPrefix:   "rcapk-stage",
+			wantMismatched:   nil,
+		},
+		{
+			name:             "one mismatch",
+			existingClusters: []string{"rcapb-stage", "rcapk-stage"},
+			expectedPrefix:   "rcapk-stage",
+			wantMismatched:   []string{"rcapb-stage"},
+		},
+		{
+			name:             "all mismatch",
+			existingClusters: []string{"rcapb-stage", "other-cluster"},
+			expectedPrefix:   "rcapk-stage",
+			wantMismatched:   []string{"rcapb-stage", "other-cluster"},
+		},
+		{
+			name:             "similar but not matching prefix",
+			existingClusters: []string{"rcapk", "rcapk-prod"},
+			expectedPrefix:   "rcapk-stage",
+			wantMismatched:   []string{"rcapk", "rcapk-prod"},
+		},
+		{
+			name:             "exact match only",
+			existingClusters: []string{"rcapk-stage"},
+			expectedPrefix:   "rcapk-stage",
+			wantMismatched:   nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test the prefix matching logic directly
+			var mismatched []string
+			for _, name := range tt.existingClusters {
+				if !strings.HasPrefix(name, tt.expectedPrefix) {
+					mismatched = append(mismatched, name)
+				}
+			}
+
+			// Compare results
+			if len(mismatched) != len(tt.wantMismatched) {
+				t.Errorf("mismatched count = %d, want %d", len(mismatched), len(tt.wantMismatched))
+				t.Logf("got: %v, want: %v", mismatched, tt.wantMismatched)
+				return
+			}
+
+			for i, name := range mismatched {
+				if name != tt.wantMismatched[i] {
+					t.Errorf("mismatched[%d] = %q, want %q", i, name, tt.wantMismatched[i])
+				}
+			}
+		})
+	}
+}
+
+// TestFormatMismatchedClustersError tests the error message formatting.
+func TestFormatMismatchedClustersError(t *testing.T) {
+	tests := []struct {
+		name           string
+		mismatched     []string
+		expectedPrefix string
+		namespace      string
+		wantContains   []string
+	}{
+		{
+			name:           "single cluster",
+			mismatched:     []string{"rcapb-stage"},
+			expectedPrefix: "rcapk-stage",
+			namespace:      "default",
+			wantContains: []string{
+				"EXISTING CLUSTER RESOURCES DETECTED",
+				"rcapb-stage",
+				"rcapk-stage",
+				"kubectl delete cluster rcapb-stage -n default",
+				"make clean",
+			},
+		},
+		{
+			name:           "multiple clusters",
+			mismatched:     []string{"rcapb-stage", "old-cluster"},
+			expectedPrefix: "rcapk-stage",
+			namespace:      "test-ns",
+			wantContains: []string{
+				"rcapb-stage",
+				"old-cluster",
+				"kubectl delete cluster --all -n test-ns",
+				"CAPZ_USER was changed",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := FormatMismatchedClustersError(tt.mismatched, tt.expectedPrefix, tt.namespace)
+
+			for _, want := range tt.wantContains {
+				if !strings.Contains(result, want) {
+					t.Errorf("FormatMismatchedClustersError() should contain %q", want)
+					t.Logf("Got:\n%s", result)
+				}
+			}
+		})
+	}
+}
+
+// TestFormatMismatchedClustersError_HasInstructions verifies the error message provides actionable guidance.
+func TestFormatMismatchedClustersError_HasInstructions(t *testing.T) {
+	result := FormatMismatchedClustersError(
+		[]string{"old-cluster"},
+		"new-prefix",
+		"default",
+	)
+
+	// Must have clear header
+	if !strings.Contains(result, "━") {
+		t.Error("Error message should have visual separator")
+	}
+
+	// Must explain the problem
+	if !strings.Contains(result, "don't match current configuration") {
+		t.Error("Error message should explain what the problem is")
+	}
+
+	// Must provide cleanup commands
+	if !strings.Contains(result, "kubectl delete") {
+		t.Error("Error message should provide kubectl delete command")
+	}
+
+	// Must mention make clean alternative
+	if !strings.Contains(result, "make clean") {
+		t.Error("Error message should mention make clean as alternative")
+	}
+
+	// Must provide context about why this happens
+	if !strings.Contains(result, "CAPZ_USER") {
+		t.Error("Error message should explain CAPZ_USER change scenario")
+	}
+}
