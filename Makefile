@@ -253,9 +253,13 @@ test-all: ## Run all test phases sequentially
 	@# Run the actual test execution with output captured to terminal and file
 	@# Use 'script' to create a pseudo-TTY so gotestsum outputs verbose test logs
 	@# (gotestsum hides verbose output when it detects stdout is not a TTY)
-	@# Note: Use 'script -q -c "cmd" /dev/null' syntax (Linux) to preserve environment variables
+	@# Note: Linux uses 'script -q -c "cmd" /dev/null', macOS uses 'script -q /dev/null cmd'
 	@if command -v script >/dev/null 2>&1; then \
-		script -q -c "$(MAKE) --no-print-directory _test-all-impl" /dev/null 2>&1 | tee $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE); \
+		if [ "$$(uname)" = "Darwin" ]; then \
+			script -q /dev/null $(MAKE) --no-print-directory _test-all-impl 2>&1 | tee $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE); \
+		else \
+			script -q -c "$(MAKE) --no-print-directory _test-all-impl" /dev/null 2>&1 | tee $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE); \
+		fi; \
 		EXIT_CODE=$${PIPESTATUS[0]}; \
 	else \
 		$(MAKE) --no-print-directory _test-all-impl 2>&1 | tee $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE); \
