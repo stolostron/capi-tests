@@ -9,10 +9,65 @@ import (
 	"time"
 )
 
-// TestDeployment_CheckExistingClusters checks for existing Cluster CRs that don't match current config.
+// TestDeployment_00_CreateNamespace creates the workload cluster namespace before deploying resources.
+// The namespace is unique per test run (prefix + timestamp) to allow parallel test runs
+// and easy cleanup. This namespace is where CAPI CRs (Cluster, AROControlPlane, MachinePool)
+// are deployed, which then create Azure resources.
+func TestDeployment_00_CreateNamespace(t *testing.T) {
+	config := NewTestConfig()
+
+	// Set KUBECONFIG for external cluster mode
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	}
+
+	context := config.GetKubeContext()
+
+	PrintTestHeader(t, "TestDeployment_00_CreateNamespace",
+		fmt.Sprintf("Create test namespace: %s", config.WorkloadClusterNamespace))
+
+	PrintToTTY("\n=== Creating test namespace ===\n")
+	PrintToTTY("Namespace: %s\n", config.WorkloadClusterNamespace)
+	PrintToTTY("Context: %s\n\n", context)
+
+	// Check if namespace already exists
+	_, err := RunCommandQuiet(t, "kubectl", "--context", context, "get", "namespace", config.WorkloadClusterNamespace)
+	if err == nil {
+		PrintToTTY("✅ Namespace '%s' already exists\n\n", config.WorkloadClusterNamespace)
+		t.Logf("Namespace '%s' already exists", config.WorkloadClusterNamespace)
+		return
+	}
+
+	// Create the namespace
+	PrintToTTY("Creating namespace '%s'...\n", config.WorkloadClusterNamespace)
+	output, err := RunCommand(t, "kubectl", "--context", context, "create", "namespace", config.WorkloadClusterNamespace)
+	if err != nil {
+		PrintToTTY("❌ Failed to create namespace: %v\n", err)
+		t.Fatalf("Failed to create namespace '%s': %v\nOutput: %s", config.WorkloadClusterNamespace, err, output)
+		return
+	}
+
+	PrintToTTY("✅ Namespace '%s' created successfully\n\n", config.WorkloadClusterNamespace)
+	t.Logf("Created namespace: %s", config.WorkloadClusterNamespace)
+
+	// Add labels for easy identification and cleanup
+	PrintToTTY("Adding labels to namespace...\n")
+	_, err = RunCommand(t, "kubectl", "--context", context, "label", "namespace", config.WorkloadClusterNamespace,
+		"capz-test=true",
+		fmt.Sprintf("capz-test-prefix=%s", GetEnvOrDefault("WORKLOAD_CLUSTER_NAMESPACE_PREFIX", "capz-test")),
+		"--overwrite")
+	if err != nil {
+		PrintToTTY("⚠️  Failed to add labels (non-fatal): %v\n", err)
+		t.Logf("Warning: failed to add labels to namespace: %v", err)
+	} else {
+		PrintToTTY("✅ Labels added to namespace\n\n")
+	}
+}
+
+// TestDeployment_01_CheckExistingClusters checks for existing Cluster CRs that don't match current config.
 // This fail-fast check prevents deploying new clusters alongside stale resources from previous
 // configurations (e.g., when CAPZ_USER was changed without cleanup).
-func TestDeployment_CheckExistingClusters(t *testing.T) {
+func TestDeployment_01_CheckExistingClusters(t *testing.T) {
 
 	config := NewTestConfig()
 
