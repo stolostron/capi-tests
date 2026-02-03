@@ -291,7 +291,8 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 - `REGION` - Azure region (default: `uksouth`)
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`)
 - `CAPZ_USER` - User identifier for domain prefix (default: `rcap`). Must be short enough that `${CAPZ_USER}-${DEPLOYMENT_ENV}` does not exceed 15 characters.
-- `TEST_NAMESPACE` - Kubernetes namespace for testing resources (default: `default`). All resource checks will be scoped to this namespace instead of using `-A` (all namespaces).
+- `WORKLOAD_CLUSTER_NAMESPACE` - Namespace for workload cluster resources (CAPI CRs that create Azure resources). If set, uses the exact value provided (for resume scenarios). If not set, generates a unique namespace per test run using `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` format (e.g., `capz-test-20260202-135526`). This namespace is passed as `$NAMESPACE` to the YAML generation script.
+- `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` - Prefix for auto-generated workload cluster namespace (default: `capz-test`). Only used when `WORKLOAD_CLUSTER_NAMESPACE` is not set.
 
 ### External Cluster Mode
 - `USE_KUBECONFIG` - Path to an external kubeconfig file. When set, the test suite runs in "external cluster mode":
@@ -305,7 +306,8 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 - `CAPZ_USER`
 - `CS_CLUSTER_NAME`
 - `DEPLOYMENT_ENV`
-- `TEST_NAMESPACE`
+- `WORKLOAD_CLUSTER_NAMESPACE`
+- `WORKLOAD_CLUSTER_NAMESPACE_PREFIX`
 
 This is validated during Check Dependencies (phase 1) to prevent late deployment failures.
 

@@ -1,6 +1,7 @@
 package test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
@@ -23,7 +24,7 @@ const (
 	// DefaultCAPZUser is the default user identifier for CAPZ resources.
 	// Used in ClusterNamePrefix (for resource group naming) and User field.
 	// Extracted to a constant to ensure consistency across all usages.
-	DefaultCAPZUser = "rcapb"
+	DefaultCAPZUser = "rcapx"
 
 	// DefaultDeploymentEnv is the default deployment environment identifier.
 	// Used in ClusterNamePrefix and Environment field.
@@ -37,6 +38,9 @@ const (
 var (
 	defaultRepoDir     string
 	defaultRepoDirOnce sync.Once
+
+	workloadClusterNamespace     string
+	workloadClusterNamespaceOnce sync.Once
 )
 
 // getDefaultRepoDir returns the default repository directory path.
@@ -57,6 +61,77 @@ func getDefaultRepoDir() string {
 	return defaultRepoDir
 }
 
+// getWorkloadClusterNamespace returns the namespace for workload cluster resources.
+// The namespace is unique per test run, combining the configured prefix with a timestamp.
+// Format: {prefix}-{YYYYMMDD-HHMMSS} (e.g., "capz-test-20260202-135526")
+// This namespace is passed as $NAMESPACE to the YAML generation script and used for
+// all Azure resource checks.
+//
+// Resolution order:
+// 1. WORKLOAD_CLUSTER_NAMESPACE env var (explicit override for resume scenarios)
+// 2. Saved deployment state file (.deployment-state.json) - ensures consistency across phases
+// 3. Extract from existing generated YAMLs (if they exist)
+// 4. Generate unique namespace using WORKLOAD_CLUSTER_NAMESPACE_PREFIX (default: "capz-test")
+func getWorkloadClusterNamespace() string {
+	workloadClusterNamespaceOnce.Do(func() {
+		// Check if a full namespace is explicitly provided (for resume scenarios)
+		if ns := os.Getenv("WORKLOAD_CLUSTER_NAMESPACE"); ns != "" {
+			workloadClusterNamespace = ns
+			return
+		}
+
+		// Check if there's a saved deployment state with namespace
+		// This ensures consistency when running phases separately
+		if state, err := ReadDeploymentState(); err == nil && state != nil && state.WorkloadClusterNamespace != "" {
+			workloadClusterNamespace = state.WorkloadClusterNamespace
+			return
+		}
+
+		// Check if generated YAMLs exist and extract namespace from them
+		// This handles the case where phases run in separate processes
+		repoDir := getDefaultRepoDir()
+		user := GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser)
+		env := GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv)
+		clusterName := GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", "capz-tests-cluster")
+		outputDir := fmt.Sprintf("%s-%s", clusterName, env)
+		isYAMLPath := fmt.Sprintf("%s/%s/is.yaml", repoDir, outputDir)
+
+		if ns, err := ExtractNamespaceFromYAML(isYAMLPath); err == nil && ns != "" {
+			workloadClusterNamespace = ns
+			// Also write deployment state to persist for future phases
+			_ = writeNamespaceToState(ns, user, env)
+			return
+		}
+
+		// Generate unique namespace with timestamp
+		prefix := GetEnvOrDefault("WORKLOAD_CLUSTER_NAMESPACE_PREFIX", "capz-test")
+		timestamp := time.Now().Format("20060102-150405")
+		workloadClusterNamespace = fmt.Sprintf("%s-%s", prefix, timestamp)
+	})
+
+	return workloadClusterNamespace
+}
+
+// writeNamespaceToState writes just the namespace to a minimal state file.
+// This is used when extracting namespace from existing YAMLs to persist it for future phases.
+func writeNamespaceToState(namespace, user, env string) error {
+	clusterNamePrefix := fmt.Sprintf("%s-%s", user, env)
+	state := DeploymentState{
+		ResourceGroup:            fmt.Sprintf("%s-resgroup", clusterNamePrefix),
+		WorkloadClusterNamespace: namespace,
+		ClusterNamePrefix:        clusterNamePrefix,
+		User:                     user,
+		Environment:              env,
+	}
+
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(DeploymentStateFile, data, 0600)
+}
+
 // TestConfig holds configuration for ARO-CAPZ tests
 type TestConfig struct {
 	// Repository configuration
@@ -72,9 +147,9 @@ type TestConfig struct {
 	Region                string
 	AzureSubscriptionName string // Azure subscription name (from AZURE_SUBSCRIPTION_NAME env var)
 	Environment           string
-	CAPZUser              string // User identifier for CAPZ resources (from CAPZ_USER env var)
-	TestNamespace         string // Namespace for testing resources (default: "default")
-	CAPINamespace         string // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
+	CAPZUser                 string // User identifier for CAPZ resources (from CAPZ_USER env var)
+	WorkloadClusterNamespace string // Namespace for workload cluster resources on management cluster (unique per test run)
+	CAPINamespace            string // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
 	CAPZNamespace         string // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" when USE_K8S=true)
 
 	// External cluster configuration
@@ -127,9 +202,9 @@ func NewTestConfig() *TestConfig {
 		Region:                GetEnvOrDefault("REGION", "uksouth"),
 		AzureSubscriptionName: os.Getenv("AZURE_SUBSCRIPTION_NAME"),
 		Environment:           GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv),
-		CAPZUser:              GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser),
-		TestNamespace:         GetEnvOrDefault("TEST_NAMESPACE", "default"),
-		CAPINamespace:         getControllerNamespace("CAPI_NAMESPACE", "capi-system"),
+		CAPZUser:                 GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser),
+		WorkloadClusterNamespace: getWorkloadClusterNamespace(),
+		CAPINamespace:            getControllerNamespace("CAPI_NAMESPACE", "capi-system"),
 		CAPZNamespace:         getControllerNamespace("CAPZ_NAMESPACE", "capz-system"),
 
 		// External cluster

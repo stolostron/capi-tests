@@ -39,6 +39,146 @@ func TestExternalCluster_01_Connectivity(t *testing.T) {
 	t.Logf("External cluster nodes:\n%s", output)
 }
 
+// MCEComponentExpectation defines the expected state of an MCE component
+type MCEComponentExpectation struct {
+	Name            string
+	ExpectedEnabled bool
+}
+
+// ExpectedMCEComponents lists all MCE components and their expected enabled states.
+// These are the baseline components that should be configured before enabling CAPI/CAPZ.
+var ExpectedMCEComponents = []MCEComponentExpectation{
+	// Components that should be enabled
+	{"local-cluster", true},
+	{"assisted-service", true},
+	{"cluster-lifecycle", true},
+	{"cluster-manager", true},
+	{"discovery", true},
+	{"hive", true},
+	{"server-foundation", true},
+	{"cluster-proxy-addon", true},
+	{"managedserviceaccount", true},
+	// Components that should be disabled (HyperShift conflicts with CAPI)
+	{"hypershift", false},
+	{"hypershift-local-hosting", false},
+}
+
+// TestExternalCluster_01b_MCEBaselineStatus validates and configures MCE component baseline before enabling CAPI/CAPZ.
+// This test ensures the cluster is in the expected state with HyperShift disabled
+// (required for CAPI/CAPZ enablement due to MCE component exclusivity).
+// Components not in the expected state are automatically corrected.
+func TestExternalCluster_01b_MCEBaselineStatus(t *testing.T) {
+	config := NewTestConfig()
+
+	if !config.IsExternalCluster() {
+		t.Skip("Not using external cluster (USE_KUBECONFIG not set)")
+	}
+
+	SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	context := config.GetKubeContext()
+
+	// Check if MCE is installed
+	if !IsMCECluster(t, context) {
+		t.Skip("Not an MCE cluster, skipping MCE baseline validation")
+	}
+
+	PrintTestHeader(t, "TestExternalCluster_01b_MCEBaselineStatus",
+		"Validate and configure MCE components baseline (HyperShift disabled, core components enabled)")
+
+	PrintToTTY("\n=== Checking MCE component baseline status ===\n")
+	PrintToTTY("%-35s %s\n", "COMPONENT", "STATUS")
+	PrintToTTY("%s\n", strings.Repeat("-", 50))
+
+	// Track components that need to be fixed
+	type componentFix struct {
+		name    string
+		enabled bool // target state
+	}
+	var componentsToFix []componentFix
+	var queryErrors []string
+
+	for _, expected := range ExpectedMCEComponents {
+		status, err := GetMCEComponentStatus(t, context, expected.Name)
+		if err != nil {
+			queryErrors = append(queryErrors, fmt.Sprintf("%s: %v", expected.Name, err))
+			PrintToTTY("%-35s ⚠️  error: %v\n", expected.Name, err)
+			continue
+		}
+
+		// Determine actual status display
+		actualStatus := "disabled"
+		if status.Enabled {
+			actualStatus = "enabled"
+		}
+
+		// Check if it matches expected
+		if status.Enabled == expected.ExpectedEnabled {
+			PrintToTTY("%-35s ✅ %s\n", expected.Name, actualStatus)
+		} else {
+			expectedStatus := "disabled"
+			if expected.ExpectedEnabled {
+				expectedStatus = "enabled"
+			}
+			PrintToTTY("%-35s ⚠️  %s (need: %s)\n", expected.Name, actualStatus, expectedStatus)
+			componentsToFix = append(componentsToFix, componentFix{
+				name:    expected.Name,
+				enabled: expected.ExpectedEnabled,
+			})
+		}
+	}
+
+	PrintToTTY("%s\n", strings.Repeat("-", 50))
+
+	// Report query errors (non-fatal, continue with fixes)
+	if len(queryErrors) > 0 {
+		PrintToTTY("\n⚠️  Failed to query %d component(s):\n", len(queryErrors))
+		for _, e := range queryErrors {
+			PrintToTTY("   - %s\n", e)
+		}
+	}
+
+	// Fix components that are not in the expected state
+	if len(componentsToFix) > 0 {
+		PrintToTTY("\n=== Configuring %d component(s) to expected state ===\n\n", len(componentsToFix))
+
+		var fixErrors []string
+		var fixedComponents []string
+
+		for _, fix := range componentsToFix {
+			if err := SetMCEComponentState(t, context, fix.name, fix.enabled); err != nil {
+				fixErrors = append(fixErrors, fmt.Sprintf("%s: %v", fix.name, err))
+				PrintToTTY("❌ Failed to configure %s: %v\n", fix.name, err)
+			} else {
+				action := "disabled"
+				if fix.enabled {
+					action = "enabled"
+				}
+				fixedComponents = append(fixedComponents, fmt.Sprintf("%s → %s", fix.name, action))
+			}
+		}
+
+		// Report fix errors (fatal if any)
+		if len(fixErrors) > 0 {
+			PrintToTTY("\n❌ Failed to configure %d component(s):\n", len(fixErrors))
+			for _, e := range fixErrors {
+				PrintToTTY("   - %s\n", e)
+			}
+			t.Fatalf("Failed to configure MCE components: %v", fixErrors)
+			return
+		}
+
+		// Report successful changes
+		PrintToTTY("\n✅ Successfully configured %d component(s):\n", len(fixedComponents))
+		for _, c := range fixedComponents {
+			PrintToTTY("   - %s\n", c)
+		}
+		t.Logf("Configured MCE components: %v", fixedComponents)
+	}
+
+	PrintToTTY("\n✅ All MCE components are in expected baseline state\n\n")
+	t.Log("MCE component baseline validation passed")
+}
+
 // TestExternalCluster_02_EnableMCE enables CAPI and CAPZ components if not already enabled.
 // This test runs only when:
 // - USE_KUBECONFIG is set (external cluster mode)

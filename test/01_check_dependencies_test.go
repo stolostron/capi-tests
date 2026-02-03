@@ -700,13 +700,13 @@ func TestCheckDependencies_NamingCompliance(t *testing.T) {
 		}
 	})
 
-	// Validate TEST_NAMESPACE
-	t.Run("TEST_NAMESPACE", func(t *testing.T) {
-		if err := ValidateRFC1123Name(config.TestNamespace, "TEST_NAMESPACE"); err != nil {
+	// Validate WORKLOAD_CLUSTER_NAMESPACE
+	t.Run("WORKLOAD_CLUSTER_NAMESPACE", func(t *testing.T) {
+		if err := ValidateRFC1123Name(config.WorkloadClusterNamespace, "WORKLOAD_CLUSTER_NAMESPACE"); err != nil {
 			validationErrors = append(validationErrors, err.Error())
 			t.Error(err)
 		} else {
-			t.Logf("TEST_NAMESPACE '%s' is RFC 1123 compliant", config.TestNamespace)
+			t.Logf("WORKLOAD_CLUSTER_NAMESPACE '%s' is RFC 1123 compliant", config.WorkloadClusterNamespace)
 		}
 	})
 

@@ -7,14 +7,13 @@ import (
 	"testing"
 )
 
-// TestSetup_CloneRepository tests cloning the cluster-api-installer repository
+// TestSetup_CloneRepository tests cloning the cluster-api-installer repository.
+// The repository is needed for YAML generation even in external cluster mode.
 func TestSetup_CloneRepository(t *testing.T) {
 	config := NewTestConfig()
 
-	// Skip in external cluster mode - controllers are pre-installed
-	if config.IsExternalCluster() {
-		t.Skip("Using external cluster (USE_KUBECONFIG set), skipping repository clone")
-	}
+	// Note: We still need the repo in external cluster mode for YAML generation (Phase 04)
+	// Only the Kind cluster deployment (Phase 03) is skipped
 
 	// Check if directory already exists (idempotency check)
 	if DirExists(config.RepoDir) {
@@ -65,10 +64,7 @@ func TestSetup_CloneRepository(t *testing.T) {
 func TestSetup_VerifyRepositoryStructure(t *testing.T) {
 	config := NewTestConfig()
 
-	// Skip in external cluster mode - controllers are pre-installed
-	if config.IsExternalCluster() {
-		t.Skip("Using external cluster (USE_KUBECONFIG set), skipping repository structure check")
-	}
+	// Note: Repo is needed in external cluster mode for YAML generation
 
 	if !DirExists(config.RepoDir) {
 		t.Skipf("Repository not cloned yet at %s", config.RepoDir)
@@ -94,10 +90,7 @@ func TestSetup_VerifyRepositoryStructure(t *testing.T) {
 func TestSetup_ScriptPermissions(t *testing.T) {
 	config := NewTestConfig()
 
-	// Skip in external cluster mode - controllers are pre-installed
-	if config.IsExternalCluster() {
-		t.Skip("Using external cluster (USE_KUBECONFIG set), skipping script permissions check")
-	}
+	// Note: Repo is needed in external cluster mode for YAML generation
 
 	if !DirExists(config.RepoDir) {
 		t.Skipf("Repository not cloned yet at %s", config.RepoDir)
