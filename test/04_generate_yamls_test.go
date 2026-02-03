@@ -53,35 +53,57 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 		if allFilesExist {
 			// Check if existing YAMLs match current config before skipping
 			aroYAMLPath := filepath.Join(outputDir, "aro.yaml")
-			matches, existingPrefix := CheckYAMLConfigMatch(t, aroYAMLPath, config.ClusterNamePrefix)
+			isYAMLPath := filepath.Join(outputDir, "is.yaml")
 
-			if !matches {
-				PrintToTTY("\n⚠️  Configuration mismatch detected!\n")
+			// Check 1: Prefix mismatch (e.g., CAPZ_USER changed)
+			prefixMatches, existingPrefix := CheckYAMLConfigMatch(t, aroYAMLPath, config.ClusterNamePrefix)
+			if !prefixMatches {
+				PrintToTTY("\n⚠️  Configuration prefix mismatch detected!\n")
 				PrintToTTY("Existing YAMLs use prefix: %s\n", existingPrefix)
 				PrintToTTY("Current config expects: %s\n", config.ClusterNamePrefix)
 				PrintToTTY("Will regenerate infrastructure...\n\n")
-				t.Logf("Config mismatch: existing=%s, expected=%s - will regenerate",
+				t.Logf("Prefix mismatch: existing=%s, expected=%s - will regenerate",
 					existingPrefix, config.ClusterNamePrefix)
 				// Fall through to regeneration (don't return)
 			} else {
-				// Config matches - safe to skip generation
-				PrintToTTY("\n=== Infrastructure YAML files already exist ===\n")
-				PrintToTTY("✅ All expected files found in: %s\n", outputDir)
-				for _, file := range expectedFiles {
-					PrintToTTY("  ✅ %s\n", file)
+				// Check 2: Namespace mismatch (new test run with unique namespace)
+				existingNamespace, err := ExtractNamespaceFromYAML(isYAMLPath)
+				if err != nil {
+					PrintToTTY("\n⚠️  Cannot read namespace from existing YAML: %v\n", err)
+					PrintToTTY("Will regenerate infrastructure...\n\n")
+					t.Logf("Cannot read namespace from existing YAML: %v - will regenerate", err)
+					// Fall through to regeneration
+				} else if existingNamespace != config.WorkloadClusterNamespace {
+					PrintToTTY("\n⚠️  Namespace mismatch detected!\n")
+					PrintToTTY("Existing YAMLs use namespace: %s\n", existingNamespace)
+					PrintToTTY("Current config expects: %s\n", config.WorkloadClusterNamespace)
+					PrintToTTY("Will regenerate infrastructure...\n\n")
+					t.Logf("Namespace mismatch: existing=%s, expected=%s - will regenerate",
+						existingNamespace, config.WorkloadClusterNamespace)
+					// Fall through to regeneration
+				} else {
+					// Both prefix and namespace match - safe to skip generation
+					PrintToTTY("\n=== Infrastructure YAML files already exist ===\n")
+					PrintToTTY("✅ All expected files found in: %s\n", outputDir)
+					PrintToTTY("✅ Prefix matches: %s\n", existingPrefix)
+					PrintToTTY("✅ Namespace matches: %s\n", existingNamespace)
+					for _, file := range expectedFiles {
+						PrintToTTY("  ✅ %s\n", file)
+					}
+					PrintToTTY("\nSkipping generation (idempotent - already complete)\n")
+					PrintToTTY("To force regeneration, delete the output directory:\n")
+					PrintToTTY("  rm -rf %s\n\n", outputDir)
+					t.Logf("Infrastructure already generated at %s, skipping", outputDir)
+					infrastructureGenerationSucceeded = true
+					return
 				}
-				PrintToTTY("\nSkipping generation (idempotent - already complete)\n")
-				PrintToTTY("To force regeneration, delete the output directory:\n")
-				PrintToTTY("  rm -rf %s\n\n", outputDir)
-				t.Logf("Infrastructure already generated at %s, skipping", outputDir)
-				infrastructureGenerationSucceeded = true
-				return
 			}
+		} else {
+			// Partial state detected - log warning and regenerate
+			PrintToTTY("\n⚠️  Output directory exists but missing files: %v\n", missingFiles)
+			PrintToTTY("Will regenerate infrastructure...\n\n")
+			t.Logf("Partial state detected, missing files: %v - will regenerate", missingFiles)
 		}
-		// Partial state detected - log warning and regenerate
-		PrintToTTY("\n⚠️  Output directory exists but missing files: %v\n", missingFiles)
-		PrintToTTY("Will regenerate infrastructure...\n\n")
-		t.Logf("Partial state detected, missing files: %v - will regenerate", missingFiles)
 	}
 
 	genScriptPath := filepath.Join(config.RepoDir, config.GenScriptPath)
@@ -99,10 +121,15 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	SetEnvVar(t, "REGION", config.Region)
 	SetEnvVar(t, "CS_CLUSTER_NAME", config.ClusterNamePrefix)
 	SetEnvVar(t, "OPENSHIFT_VERSION", config.OpenShiftVersion)
+	// Pass namespace as NAMESPACE env var for YAML generation script
+	// This namespace will be embedded in generated YAMLs for Azure resources
+	SetEnvVar(t, "NAMESPACE", config.WorkloadClusterNamespace)
 
 	if config.AzureSubscriptionName != "" {
 		SetEnvVar(t, "AZURE_SUBSCRIPTION_NAME", config.AzureSubscriptionName)
 	}
+
+	PrintToTTY("Workload cluster namespace: %s\n", config.WorkloadClusterNamespace)
 
 	// Change to repository directory for script execution
 	originalDir, err := os.Getwd()
@@ -165,6 +192,14 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	// Mark generation as successful only if no errors occurred
 	if !t.Failed() {
 		infrastructureGenerationSucceeded = true
+
+		// Save deployment state to track namespace and other config for cleanup
+		if err := WriteDeploymentState(config); err != nil {
+			t.Logf("Warning: failed to write deployment state: %v", err)
+		} else {
+			PrintToTTY("📝 Deployment state saved to %s\n", DeploymentStateFile)
+			t.Logf("Deployment state saved (namespace: %s)", config.WorkloadClusterNamespace)
+		}
 	}
 }
 
