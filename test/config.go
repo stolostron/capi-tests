@@ -1,8 +1,10 @@
 package test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -68,16 +70,32 @@ func getDefaultRepoDir() string {
 //
 // Resolution order:
 // 1. WORKLOAD_CLUSTER_NAMESPACE env var (explicit override for resume scenarios)
-// 2. Generate unique namespace using WORKLOAD_CLUSTER_NAMESPACE_PREFIX (default: "capz-test")
+// 2. Existing deployment state file in RepoDir (auto-resume from previous run)
+// 3. Generate unique namespace using WORKLOAD_CLUSTER_NAMESPACE_PREFIX (default: "capz-test")
 //
-// To resume a previous deployment, explicitly set WORKLOAD_CLUSTER_NAMESPACE to the
-// namespace used in that deployment (e.g., WORKLOAD_CLUSTER_NAMESPACE=capz-test-20260202-155301).
+// The auto-resume from deployment state ensures that subsequent test phases
+// (run as separate go test invocations) use the same namespace as YAML generation.
 func getWorkloadClusterNamespace() string {
 	workloadClusterNamespaceOnce.Do(func() {
 		// Check if a full namespace is explicitly provided (for resume scenarios)
 		if ns := os.Getenv("WORKLOAD_CLUSTER_NAMESPACE"); ns != "" {
 			workloadClusterNamespace = ns
 			return
+		}
+
+		// Check for existing deployment state file in RepoDir
+		// This handles the case where YAML generation ran in a previous test invocation
+		// and we need to use the same namespace for subsequent phases
+		repoDir := getDefaultRepoDir()
+		stateFilePath := filepath.Join(repoDir, ".deployment-state.json")
+		if data, err := os.ReadFile(stateFilePath); err == nil {
+			var state struct {
+				WorkloadClusterNamespace string `json:"workload_cluster_namespace"`
+			}
+			if err := json.Unmarshal(data, &state); err == nil && state.WorkloadClusterNamespace != "" {
+				workloadClusterNamespace = state.WorkloadClusterNamespace
+				return
+			}
 		}
 
 		// Generate unique namespace with timestamp for fresh runs
