@@ -1,7 +1,6 @@
 package test
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
@@ -63,15 +62,16 @@ func getDefaultRepoDir() string {
 
 // getWorkloadClusterNamespace returns the namespace for workload cluster resources.
 // The namespace is unique per test run, combining the configured prefix with a timestamp.
-// Format: {prefix}-{YYYYMMDD-HHMMSS} (e.g., "capz-test-20260202-135526")
+// Format: {prefix}-{YYYYMMDD-HHMMSS} (e.g., "capz-test-20260203-140812")
 // This namespace is passed as $NAMESPACE to the YAML generation script and used for
 // all Azure resource checks.
 //
 // Resolution order:
 // 1. WORKLOAD_CLUSTER_NAMESPACE env var (explicit override for resume scenarios)
-// 2. Saved deployment state file (.deployment-state.json) - ensures consistency across phases
-// 3. Extract from existing generated YAMLs (if they exist)
-// 4. Generate unique namespace using WORKLOAD_CLUSTER_NAMESPACE_PREFIX (default: "capz-test")
+// 2. Generate unique namespace using WORKLOAD_CLUSTER_NAMESPACE_PREFIX (default: "capz-test")
+//
+// To resume a previous deployment, explicitly set WORKLOAD_CLUSTER_NAMESPACE to the
+// namespace used in that deployment (e.g., WORKLOAD_CLUSTER_NAMESPACE=capz-test-20260202-155301).
 func getWorkloadClusterNamespace() string {
 	workloadClusterNamespaceOnce.Do(func() {
 		// Check if a full namespace is explicitly provided (for resume scenarios)
@@ -80,56 +80,13 @@ func getWorkloadClusterNamespace() string {
 			return
 		}
 
-		// Check if there's a saved deployment state with namespace
-		// This ensures consistency when running phases separately
-		if state, err := ReadDeploymentState(); err == nil && state != nil && state.WorkloadClusterNamespace != "" {
-			workloadClusterNamespace = state.WorkloadClusterNamespace
-			return
-		}
-
-		// Check if generated YAMLs exist and extract namespace from them
-		// This handles the case where phases run in separate processes
-		repoDir := getDefaultRepoDir()
-		user := GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser)
-		env := GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv)
-		clusterName := GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", "capz-tests-cluster")
-		outputDir := fmt.Sprintf("%s-%s", clusterName, env)
-		isYAMLPath := fmt.Sprintf("%s/%s/is.yaml", repoDir, outputDir)
-
-		if ns, err := ExtractNamespaceFromYAML(isYAMLPath); err == nil && ns != "" {
-			workloadClusterNamespace = ns
-			// Also write deployment state to persist for future phases
-			_ = writeNamespaceToState(ns, user, env)
-			return
-		}
-
-		// Generate unique namespace with timestamp
+		// Generate unique namespace with timestamp for fresh runs
 		prefix := GetEnvOrDefault("WORKLOAD_CLUSTER_NAMESPACE_PREFIX", "capz-test")
 		timestamp := time.Now().Format("20060102-150405")
 		workloadClusterNamespace = fmt.Sprintf("%s-%s", prefix, timestamp)
 	})
 
 	return workloadClusterNamespace
-}
-
-// writeNamespaceToState writes just the namespace to a minimal state file.
-// This is used when extracting namespace from existing YAMLs to persist it for future phases.
-func writeNamespaceToState(namespace, user, env string) error {
-	clusterNamePrefix := fmt.Sprintf("%s-%s", user, env)
-	state := DeploymentState{
-		ResourceGroup:            fmt.Sprintf("%s-resgroup", clusterNamePrefix),
-		WorkloadClusterNamespace: namespace,
-		ClusterNamePrefix:        clusterNamePrefix,
-		User:                     user,
-		Environment:              env,
-	}
-
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(DeploymentStateFile, data, 0600)
 }
 
 // TestConfig holds configuration for ARO-CAPZ tests
