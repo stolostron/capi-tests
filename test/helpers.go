@@ -1445,7 +1445,7 @@ func FormatComponentVersions(versions []ComponentVersion, config *TestConfig) st
 			result.WriteString(fmt.Sprintf("  Subscription:       %s\n", config.AzureSubscriptionName))
 		}
 		result.WriteString(fmt.Sprintf("  Resource Group:     %s-resgroup\n", config.ClusterNamePrefix))
-		result.WriteString(fmt.Sprintf("  OpenShift Version:  %s\n", config.OpenShiftVersion))
+		result.WriteString(fmt.Sprintf("  OpenShift Version:  %s\n", config.OCPVersion))
 	}
 
 	// Used repositories

@@ -120,7 +120,7 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	SetEnvVar(t, "WORKLOAD_CLUSTER_NAME", config.WorkloadClusterName)
 	SetEnvVar(t, "REGION", config.Region)
 	SetEnvVar(t, "CS_CLUSTER_NAME", config.ClusterNamePrefix)
-	SetEnvVar(t, "OPENSHIFT_VERSION", config.OpenShiftVersion)
+	SetEnvVar(t, "OCP_VERSION", config.OCPVersion)
 	// Pass namespace as NAMESPACE env var for YAML generation script
 	// This namespace will be embedded in generated YAMLs for Azure resources
 	SetEnvVar(t, "NAMESPACE", config.WorkloadClusterNamespace)

@@ -287,7 +287,7 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - ARO workload cluster name (default: `capz-tests-cluster`)
 - `CS_CLUSTER_NAME` - **C**luster **S**ervice cluster name prefix used for YAML generation and Azure resource naming (default: `${CAPZ_USER}-${DEPLOYMENT_ENV}`). The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`. This prefix is also used for the ExternalAuth resource ID.
-- `OPENSHIFT_VERSION` - OpenShift version (default: `4.21`)
+- `OCP_VERSION` - OpenShift version (default: `4.21`)
 - `REGION` - Azure region (default: `uksouth`)
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`)
 - `CAPZ_USER` - User identifier for domain prefix (default: `rcap`). Must be short enough that `${CAPZ_USER}-${DEPLOYMENT_ENV}` does not exceed 15 characters.

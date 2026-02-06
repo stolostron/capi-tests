@@ -51,7 +51,7 @@ This document provides a comprehensive review of all public interfaces that will
 | `MANAGEMENT_CLUSTER_NAME` | ✅ Approved | Good | Clear, descriptive, no abbreviations |
 | `WORKLOAD_CLUSTER_NAME` | ✅ Approved | Good | Clear, descriptive, no abbreviations |
 | `CS_CLUSTER_NAME` | ⚠️ Warning | Needs Review | **CS prefix unclear** - what does CS mean? |
-| `OPENSHIFT_VERSION` | ✅ Approved | Good | Industry standard naming |
+| `OCP_VERSION` | ✅ Approved | Good | Matches cluster-api-installer variable |
 | `REGION` | ✅ Approved | Good | Simple and clear |
 | `DEPLOYMENT_ENV` | ✅ Approved | Good | Clear abbreviation (ENV is well-known) |
 | `CAPZ_USER` | ✅ Approved | Good | Consistent with CAPZ terminology |
@@ -109,7 +109,7 @@ type TestConfig struct {
     ManagementClusterName string        // ✅ Good - descriptive
     WorkloadClusterName   string        // ✅ Good - descriptive
     ClusterNamePrefix     string        // ✅ Good - better than CS_CLUSTER_NAME
-    OpenShiftVersion      string        // ✅ Good - clear
+    OCPVersion            string        // ✅ Good - matches installer variable
     Region                string        // ✅ Good - simple
     AzureSubscriptionName string        // ✅ Good - clear that it's the name (FIXED)
     Environment           string        // ✅ Good - matches DEPLOYMENT_ENV

@@ -1906,7 +1906,7 @@ func TestFormatComponentVersions(t *testing.T) {
 			WorkloadClusterName:   "test-workload",
 			Region:                "eastus",
 			ClusterNamePrefix:     "test-prefix",
-			OpenShiftVersion:      "4.21",
+			OCPVersion:            "4.21",
 		}
 		result := FormatComponentVersions(versions, config)
 		checks := []string{
@@ -2660,7 +2660,7 @@ func TestFormatComponentVersions_ConfigFallback(t *testing.T) {
 		WorkloadClusterName:   "workload-cluster",
 		Region:                "eastus",
 		ClusterNamePrefix:     "test",
-		OpenShiftVersion:      "4.21",
+		OCPVersion:            "4.21",
 	}
 
 	versions := []ComponentVersion{

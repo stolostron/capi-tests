@@ -217,7 +217,7 @@ MANAGEMENT_CLUSTER_NAME=capz-tests-stage  # For running tests
 KIND_CLUSTER_NAME=capz-tests-stage        # For direct script usage (advanced)
 CLUSTER_NAME=capz-tests-cluster
 CS_CLUSTER_NAME=rcap-stage  # Resource group will be ${CS_CLUSTER_NAME}-resgroup
-OPENSHIFT_VERSION=4.21
+OCP_VERSION=4.21
 REGION=uksouth
 DEPLOYMENT_ENV=stage
 
