@@ -161,7 +161,7 @@ func NewTestConfig() *TestConfig {
 	// When using external kubeconfig, default to MCE namespaces (USE_K8S=true)
 	// This triggers multicluster-engine namespace for all controllers
 	if useKubeconfig != "" && os.Getenv("USE_K8S") == "" {
-		os.Setenv("USE_K8S", "true") // #nosec G104 - os.Setenv with fixed key/value cannot fail in practice
+		_ = os.Setenv("USE_K8S", "true") // #nosec G104 - os.Setenv with fixed key/value cannot fail in practice
 	}
 
 	return &TestConfig{

@@ -2705,9 +2705,9 @@ func FormatMismatchedClustersError(mismatched []string, expectedPrefix, namespac
 		sb.WriteString(fmt.Sprintf("  kubectl delete cluster %s -n %s\n\n", mismatched[0], namespace))
 	} else {
 		// Multiple clusters
-		sb.WriteString(fmt.Sprintf("  # Delete specific cluster:\n"))
+		sb.WriteString("  # Delete specific cluster:\n")
 		sb.WriteString(fmt.Sprintf("  kubectl delete cluster %s -n %s\n\n", mismatched[0], namespace))
-		sb.WriteString(fmt.Sprintf("  # Or delete all clusters in namespace:\n"))
+		sb.WriteString("  # Or delete all clusters in namespace:\n")
 		sb.WriteString(fmt.Sprintf("  kubectl delete cluster --all -n %s\n\n", namespace))
 	}
 
