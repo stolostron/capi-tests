@@ -82,12 +82,15 @@ t.Logf("AZURE_TENANT_ID auto-extracted from Azure CLI: %s...%s", tenantID[:8], t
 - Go version: 1.24
 
 **Security Scans**:
-- `gosec ./...`: 0 issues (2 #nosec annotations with justifications)
+- `gosec ./...`: 0 issues (5 #nosec annotations with justifications)
 - `govulncheck ./...`: No vulnerabilities found
 
 **#nosec Annotations** (properly documented):
 1. `helpers.go:403` - G304 (path traversal) - "filePath comes from test configuration"
 2. `helpers.go:1438` - G304 (path traversal) - "filePath is validated via os.Stat above and comes from test configuration"
+3. `helpers.go` - G204 (command injection) x2 - "jq binary with expression built from validated MCE component name, not user input"
+4. `config.go` - G304 (path traversal) - "path constructed from repo directory and fixed filename"
+5. `config.go` - G104 (unhandled error) - "os.Setenv with fixed key/value cannot fail in practice"
 
 ### 5. File Operations
 

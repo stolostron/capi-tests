@@ -2792,6 +2792,7 @@ func SetMCEComponentState(t *testing.T, kubeContext, componentName string, enabl
 		componentName, enabled)
 
 	// Use jq to transform the components array
+	// #nosec G204 - jq binary with expression built from validated MCE component name, not user input
 	jqCmd := exec.Command("jq", "-c", jqExpr)
 	jqCmd.Stdin = strings.NewReader(currentOutput)
 	transformedBytes, err := jqCmd.Output()
@@ -2840,6 +2841,7 @@ func EnableMCEComponent(t *testing.T, kubeContext, componentName string) error {
 		componentName)
 
 	// Use jq to transform the components array
+	// #nosec G204 - jq binary with expression built from validated MCE component name, not user input
 	jqCmd := exec.Command("jq", "-c", jqExpr)
 	jqCmd.Stdin = strings.NewReader(currentOutput)
 	transformedBytes, err := jqCmd.Output()

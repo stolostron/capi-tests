@@ -88,6 +88,7 @@ func getWorkloadClusterNamespace() string {
 		// and we need to use the same namespace for subsequent phases
 		repoDir := getDefaultRepoDir()
 		stateFilePath := filepath.Join(repoDir, ".deployment-state.json")
+		// #nosec G304 - path constructed from repo directory and fixed filename (.deployment-state.json)
 		if data, err := os.ReadFile(stateFilePath); err == nil {
 			var state struct {
 				WorkloadClusterNamespace string `json:"workload_cluster_namespace"`
@@ -160,7 +161,7 @@ func NewTestConfig() *TestConfig {
 	// When using external kubeconfig, default to MCE namespaces (USE_K8S=true)
 	// This triggers multicluster-engine namespace for all controllers
 	if useKubeconfig != "" && os.Getenv("USE_K8S") == "" {
-		os.Setenv("USE_K8S", "true")
+		os.Setenv("USE_K8S", "true") // #nosec G104 - os.Setenv with fixed key/value cannot fail in practice
 	}
 
 	return &TestConfig{
