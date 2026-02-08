@@ -2,556 +2,327 @@
 
 This document provides comprehensive information about the test coverage for the ARO-CAPZ deployment test suite.
 
+## Review History
+
+| Version | Date | Issue | Notes |
+|---------|------|-------|-------|
+| V1 | 2026-01-23 | #393 | Initial coverage documentation |
+| V1.1 | 2026-02-08 | ACM-29883 | Updated for external cluster mode, MCE, namespace generation |
+
 ## Overview
 
-The test suite provides end-to-end coverage of the Azure Red Hat OpenShift (ARO) deployment process using Cluster API Provider Azure (CAPZ) and Azure Service Operator (ASO). The tests validate each step of the deployment workflow as documented in the [cluster-api-installer ARO-CAPZ documentation](https://github.com/RadekCap/cluster-api-installer/blob/ARO-ASO/doc/ARO-capz.md).
+The test suite provides end-to-end coverage of the Azure Red Hat OpenShift (ARO) deployment process using Cluster API Provider Azure (CAPZ) and Azure Service Operator (ASO). The tests validate each step of the deployment workflow.
+
+### Coverage Metrics Summary
+
+| Metric | Value |
+|--------|-------|
+| Production code | 3,237 lines (helpers.go + config.go) |
+| Test code | 7,852 lines (10 test files + 2 unit test files) |
+| Test-to-production ratio | 2.4:1 |
+| Unit test functions | 58 (helpers_test.go: 52, config_test.go: 6) |
+| Integration test functions | 76 (across 10 phase files) |
+| Total test functions | 134 |
+| Unit test coverage (statements) | 32.1% |
+| gosec issues | 0 (7 #nosec annotations) |
+
+**Note on unit test coverage**: The 32.1% statement coverage reflects that many helper functions (e.g., `RunCommand`, `SetEnvVar`, MCE functions) require a live Kubernetes cluster or Azure environment to execute. These are covered by integration tests during `make test-all` runs but cannot be exercised in isolated unit tests.
+
+---
 
 ## Test Structure
 
-### Test Files and Coverage
+### Unit Tests
 
-#### 1. Check Dependencies Verification (`test/01_check_dependencies_test.go`)
+Unit tests validate pure logic functions that don't require external dependencies.
 
-**Purpose**: Validates that all required tools and authentication are in place before attempting deployment.
+#### helpers_test.go (52 tests, 3,348 lines)
 
-**Coverage**:
-- ✓ Docker/Podman availability check
-- ✓ Kind (Kubernetes in Docker) installation verification
-- ✓ Azure CLI (`az`) presence and version
-- ✓ OpenShift CLI (`oc`) availability
-- ✓ Helm installation check
-- ✓ Git version verification
-- ✓ kubectl availability
-- ✓ Azure CLI authentication status
-- ✓ Tool version compatibility
+Functions with unit test coverage:
 
-**Key Test Cases**:
-- `TestCheckDependencies_ToolAvailable` - Verifies all CLI tools are installed
-- `TestCheckDependencies_AzureCLILogin_IsLoggedIn` - Validates Azure authentication
-- `TestCheckDependencies_DockerCredentialHelper` - Checks Docker credential helper configuration
+| Function | Coverage | Test Count | Notes |
+|----------|----------|------------|-------|
+| `IsKubectlApplySuccess` | via integration | 1 | Table-driven with success/failure cases |
+| `ExtractClusterNameFromYAML` | 88.9% | 1 | Table-driven, multi-document YAML |
+| `CheckYAMLConfigMatch` | via integration | 1 | **V1.1** - Namespace mismatch detection |
+| `ValidateYAMLFile` | 92.9% | 1 | YAML syntax and structure validation |
+| `ExtractNamespaceFromYAML` | 100% | 1 | **V1.1** - Namespace extraction from YAML |
+| `DeploymentState_Namespace` | via integration | 1 | **V1.1** - State file read/write/delete cycle |
+| `FormatAROControlPlaneConditions` | 100% | 1 | Condition formatting |
+| `isWaitingCondition` | 100% | 1 | Waiting condition detection |
+| `GetDomainPrefix` | 100% | 1 | Domain prefix generation |
+| `ValidateDomainPrefix` | 100% | 2 | RFC compliance, max length |
+| `ValidateRFC1123Name` | 100% | 2 | RFC 1123 compliance |
+| `GetExternalAuthID` | 100% | 1 | External auth ID generation |
+| `ValidateExternalAuthID` | 100% | 2 | Auth ID validation |
+| `isRetryableKubectlError` | via integration | 1 | Retry logic |
+| `extractVersionFromImage` | 100% | 1 | Version extraction from container images |
+| `FormatComponentVersions` | 96.3% | 3 | Version table formatting |
+| `ParseControllerLogs` | 100% | 1 | Controller log parsing |
+| `FormatControllerLogSummaries` | 85.7% | 2 | Log summary formatting |
+| `DetectAzureError` | via integration | 1 | Azure error detection |
+| `FormatAzureError` | 100% | 1 | Azure error formatting |
+| `HasServicePrincipalCredentials` | via integration | 1 | SP credential detection |
+| `GetAzureAuthDescription` | via integration | 1 | Auth mode description |
+| `ClonedRepositoryTracking` | 100% | 1 | Repository tracking |
+| `ValidateAzureRegion` | 88.9% | 1 | Azure region validation |
+| `findSimilarRegions` | 85.7% | 1 | Fuzzy region matching |
+| `ValidateTimeout` | 100% | 1 | Timeout validation |
+| `ValidateDeploymentTimeout` | 100% | 1 | Deployment timeout validation |
+| `ValidateASOControllerTimeout` | 100% | 1 | ASO timeout validation |
+| `ValidateAllConfigurations` | 76.2% | 2 | Full config validation |
+| `FormatValidationResults` | 92.9% | 1 | Validation result formatting |
+| `formatRemediationSteps` | 100% | 2 | Remediation step formatting |
+| `CheckForMismatchedClusters` | via integration | 1 | **V1.1** - Cluster mismatch detection |
+| `FormatMismatchedClustersError` | 100% | 2 | **V1.1** - Mismatch error formatting |
 
-**Why This Matters**: Catching missing tools early prevents failures deep into the deployment process.
+#### config_test.go (6 tests, 151 lines)
 
----
+| Function | Test Count | Notes |
+|----------|------------|-------|
+| `getDefaultRepoDir` | 3 | Env var override, consistency (sync.Once), path format |
+| `parseDeploymentTimeout` | 3 | Default, valid durations, invalid durations |
 
-#### 2. Repository Setup (`test/02_setup_test.go`)
+### Integration Tests (Phase Files)
 
-**Purpose**: Ensures the cluster-api-installer repository is properly cloned and configured.
+Integration tests exercise the full deployment workflow and cover functions that require external dependencies.
 
-**Coverage**:
-- ✓ Repository cloning from specified branch
-- ✓ Directory structure validation
-- ✓ Essential scripts presence verification
-- ✓ Script permissions configuration
-- ✓ Documentation availability check
+#### Phase 1: Check Dependencies (`01_check_dependencies_test.go`) - 18 tests, 879 lines
 
-**Key Test Cases**:
-- `TestSetup_CloneRepository` - Clones cluster-api-installer repository
-- `TestSetup_VerifyStructure` - Validates repository structure
-- `TestSetup_CheckScripts` - Ensures required scripts exist and are executable
+| Test | Coverage | V1.1 Changes |
+|------|----------|-------------|
+| `TestCheckDependencies_ToolAvailable` | Tool validation | - |
+| `TestCheckDependencies_AzureCLILogin_IsLoggedIn` | Azure auth | - |
+| `TestCheckDependencies_DockerCredentialHelper` | Docker config | - |
+| `TestCheckDependencies_ExternalKubeconfig` | External cluster validation | **V1.1** - validates `USE_KUBECONFIG`, calls `ExtractCurrentContext()` |
+| `TestCheckDependencies_ValidateConfiguration` | Config validation | **V1.1** - RFC 1123, namespace validation |
+| + 13 more tests | Various | - |
 
-**Integration Points**: Supports multiple integration approaches (submodule, dynamic clone, vendored scripts).
+#### Phase 3: Cluster (`03_cluster_test.go`) - 11 tests, 1,023 lines
 
----
+| Test | Coverage | V1.1 Changes |
+|------|----------|-------------|
+| `TestExternalCluster_01_Connectivity` | **V1.1** | External cluster node access |
+| `TestExternalCluster_01b_MCEBaselineStatus` | **V1.1** | MCE component baseline, calls `SetMCEComponentState()` |
+| `TestExternalCluster_02_EnableMCE` | **V1.1** | MCE enablement, calls `EnableMCEComponent()`, `WaitForMCEController()` |
+| `TestExternalCluster_03_ControllersReady` | **V1.1** | Controller readiness on external cluster |
+| `TestKindCluster_*` (7 tests) | Kind cluster deployment | - |
 
-#### 3. Kind Cluster Deployment (`test/03_cluster_test.go`)
+#### Phase 4: Generate YAMLs (`04_generate_yamls_test.go`) - 4 tests, 321 lines
 
-**Purpose**: Deploys and validates the management cluster that will orchestrate ARO deployment.
+| Test | Coverage | V1.1 Changes |
+|------|----------|-------------|
+| `TestInfrastructure_GenerateResources` | YAML generation | **V1.1** - uses `CheckYAMLConfigMatch()` for namespace mismatch detection |
 
-**Coverage**:
-- ✓ Kind cluster creation
-- ✓ Cluster accessibility verification
-- ✓ CAPI (Cluster API) components installation
-- ✓ CAPZ (Cluster API Provider Azure) deployment
-- ✓ ASO (Azure Service Operator) installation
-- ✓ Component health checks
-- ✓ API server readiness
+#### Phase 5: Deploy CRs (`05_deploy_crs_test.go`) - 9 tests, 574 lines
 
-**Key Test Cases**:
-- `TestKindCluster_Deploy` - Creates Kind cluster with CAPZ
-- `TestKindCluster_VerifyAccess` - Validates cluster connectivity
-- `TestKindCluster_CheckCAPIComponents` - Verifies CAPI installation
+| Test | Coverage | V1.1 Changes |
+|------|----------|-------------|
+| `TestDeployment_00_CreateNamespace` | **V1.1** | Namespace creation for workload cluster |
+| `TestDeployment_01_CheckExistingClusters` | **V1.1** | Calls `GetExistingClusterNames()`, `CheckForMismatchedClusters()` |
+| `TestDeployment_ApplyResources` | CR deployment | **V1.1** - uses `ApplyWithRetryInNamespace()` |
+| + 6 more tests | Monitoring, conditions | - |
 
-**Resources Created**:
-- Kind cluster (default: `capz-tests-stage`)
-- CAPI controllers
-- CAPZ provider
-- Azure Service Operator
+#### Remaining Phases
 
----
-
-#### 4. Infrastructure Generation (`test/04_generate_yamls_test.go`)
-
-**Purpose**: Generates and applies ARO infrastructure resources to the management cluster.
-
-**Coverage**:
-- ✓ Infrastructure resource generation via script
-- ✓ YAML file validation
-- ✓ Credentials secret generation
-- ✓ Infrastructure secrets creation
-- ✓ Cluster configuration generation
-- ✓ Resource application to management cluster
-- ✓ Resource status verification
-
-**Key Test Cases**:
-- `TestInfrastructure_GenerateResources` - Runs generation script
-- `TestInfrastructure_VerifyGeneratedFiles` - Validates YAML outputs
-- `TestInfrastructure_ApplyResources` - Applies resources to cluster
-
-**Generated Resources**:
-- Azure credentials secrets
-- Infrastructure configuration
-- Cluster manifests
-- Network configuration
-- Identity and access resources
-
----
-
-#### 5. Deployment Monitoring (`test/05_deploy_crs_test.go`)
-
-**Purpose**: Monitors the ARO cluster deployment progress and validates successful provisioning.
-
-**Coverage**:
-- ✓ Cluster resource status monitoring
-- ✓ Control plane readiness checks
-- ✓ Infrastructure provisioning validation
-- ✓ Cluster condition monitoring
-- ✓ Deployment timeout handling
-- ✓ Error detection and reporting
-
-**Key Test Cases**:
-- `TestDeployment_MonitorCluster` - Tracks deployment using clusterctl
-- `TestDeployment_WaitForControlPlane` - Waits for control plane ready
-- `TestDeployment_CheckClusterConditions` - Validates cluster health
-
-**Monitoring Includes**:
-- InfrastructureReady condition
-- ControlPlaneReady condition
-- Cluster provisioning state
-- Node readiness
-- Component health
-
-**Timeout**: Configurable, default 30 minutes for control plane
+| Phase | Tests | Lines | V1.1 Changes |
+|-------|-------|-------|-------------|
+| 02 Setup | 3 | 129 | - |
+| 06 Verification | 7 | 354 | `IsExternalCluster()` guards |
+| 07 Deletion | 6 | 304 | `IsExternalCluster()` guards |
+| 08 Cleanup | 18 | 769 | - |
 
 ---
 
-#### 6. Cluster Verification (`test/06_verification_test.go`)
+## V1.1 Coverage Assessment
 
-**Purpose**: Performs comprehensive validation of the deployed ARO cluster.
+### New Helper Functions
 
-**Coverage**:
-- ✓ Kubeconfig retrieval
-- ✓ Cluster API connectivity
-- ✓ Node count and status verification
-- ✓ OpenShift version validation
-- ✓ Cluster operator health checks
-- ✓ Console accessibility
-- ✓ API endpoint validation
-- ✓ Authentication verification
+| Function | Unit Tests | Integration Tests | Assessment |
+|----------|-----------|-------------------|------------|
+| `SetMCEComponentState()` | None | `TestExternalCluster_01b_MCEBaselineStatus` | Adequate - requires live MCE cluster |
+| `EnableMCEComponent()` | None | `TestExternalCluster_02_EnableMCE` | Adequate - requires live MCE cluster |
+| `WaitForMCEController()` | None | `TestExternalCluster_02_EnableMCE` | Adequate - requires live cluster |
+| `ExtractNamespaceFromYAML()` | 100% | `TestInfrastructure_GenerateResources` | Well covered |
+| `ExtractCurrentContext()` | None | `TestCheckDependencies_ExternalKubeconfig` | Adequate - requires kubeconfig file |
+| `CheckYAMLConfigMatch()` | Unit test exists | `TestInfrastructure_GenerateResources` | Well covered |
+| `GetExistingClusterNames()` | None | `TestDeployment_01_CheckExistingClusters` | Adequate - requires live cluster |
+| `CheckForMismatchedClusters()` | Unit test (logic) | `TestDeployment_01_CheckExistingClusters` | Well covered |
+| `FormatMismatchedClustersError()` | 100% | `TestDeployment_01_CheckExistingClusters` | Well covered |
+| `IsMCECluster()` | None | `TestExternalCluster_02_EnableMCE` | Adequate - requires live cluster |
+| `GetMCEComponentStatus()` | None | `TestExternalCluster_01b_MCEBaselineStatus` | Adequate - requires live cluster |
+| `ApplyWithRetryInNamespace()` | None | `TestDeployment_ApplyResources` | Adequate - requires live cluster |
 
-**Key Test Cases**:
-- `TestVerification_GetKubeconfig` - Retrieves cluster credentials
-- `TestVerification_VerifyNodes` - Checks node health
-- `TestVerification_CheckOpenShiftVersion` - Validates OCP version
-- `TestVerification_CheckClusterOperators` - Verifies operator status
+### New Config Methods
 
-**Validation Points**:
-- All nodes in Ready state
-- Expected OpenShift version deployed
-- All cluster operators available and not degraded
-- API server responsive
-- Authentication configured correctly
+| Method | Unit Tests | Integration Tests | Assessment |
+|--------|-----------|-------------------|------------|
+| `IsExternalCluster()` | None | Used in 5 phase files as guard condition | Well covered by integration |
+| `GetKubeContext()` | 0% statement | Used in 4 phase files | Covered by integration, not unit |
+| `getWorkloadClusterNamespace()` | Indirect via `TestDeploymentState_Namespace` | Used throughout | Adequate |
 
----
+### New Integration Test Phases
 
-### Supporting Infrastructure
+| Test | Purpose | Code Path Covered |
+|------|---------|-------------------|
+| `TestExternalCluster_01_Connectivity` | Validates external cluster access | `IsExternalCluster()`, `GetKubeContext()`, kubectl node listing |
+| `TestExternalCluster_01b_MCEBaselineStatus` | Ensures MCE component baseline | `GetMCEComponentStatus()`, `SetMCEComponentState()` |
+| `TestExternalCluster_02_EnableMCE` | Enables CAPI/CAPZ on MCE | `EnableMCEComponent()`, `WaitForMCEController()`, `IsMCECluster()` |
+| `TestExternalCluster_03_ControllersReady` | Validates controller deployments | Controller namespace lookups, deployment checks |
+| `TestDeployment_00_CreateNamespace` | Creates workload cluster namespace | Namespace generation, `kubectl create namespace` |
+| `TestDeployment_01_CheckExistingClusters` | Detects stale clusters | `GetExistingClusterNames()`, `CheckForMismatchedClusters()` |
 
-#### Configuration Management (`test/config.go`)
+### Coverage Gaps
 
-**Purpose**: Centralized configuration with environment variable support.
+#### Functions without unit tests (require external dependencies)
 
-**Features**:
-- Environment variable-based configuration
-- Sensible defaults for all settings
-- Support for multiple environments (stage, prod)
-- Path configuration for scripts and tools
-- Azure subscription management
+These functions have 0% unit test coverage but are exercised by integration tests during `make test-all`:
 
-**Configurable Parameters**:
-- Repository settings (URL, branch, directory)
-- Cluster settings (name, region, version)
-- Azure settings (subscription, resource group)
-- Tool paths (clusterctl, scripts)
+| Function | Reason | Integration Coverage |
+|----------|--------|---------------------|
+| `SetMCEComponentState()` | Requires MCE cluster | `TestExternalCluster_01b_MCEBaselineStatus` |
+| `EnableMCEComponent()` | Requires MCE cluster | `TestExternalCluster_02_EnableMCE` |
+| `WaitForMCEController()` | Requires MCE cluster | `TestExternalCluster_02_EnableMCE` |
+| `GetMCEComponentStatus()` | Requires MCE cluster | `TestExternalCluster_01b_MCEBaselineStatus` |
+| `IsMCECluster()` | Requires kubectl | `TestExternalCluster_02_EnableMCE` |
+| `ExtractCurrentContext()` | Requires kubeconfig + kubectl | `TestCheckDependencies_ExternalKubeconfig` |
+| `GetExistingClusterNames()` | Requires kubectl | `TestDeployment_01_CheckExistingClusters` |
+| `ApplyWithRetryInNamespace()` | Requires kubectl | `TestDeployment_ApplyResources` |
+| `GetKubeContext()` | Requires kubeconfig or Kind | Used in 4 phase files |
 
----
+These are not feasibly unit-testable without mocking `exec.Command`, which would add complexity without proportional value in a test suite that already exercises these paths via integration tests.
 
-#### Helper Functions (`test/helpers.go`)
+#### Config methods without dedicated unit tests
 
-**Purpose**: Shared utilities used across all test files.
+| Method | Reason | Covered By |
+|--------|--------|------------|
+| `IsExternalCluster()` | Trivial one-liner (`c.UseKubeconfig != ""`) | Used as guard in 5 phase files |
+| `GetKubeContext()` | Delegates to `ExtractCurrentContext()` or string format | Integration tests in 4 phase files |
 
-**Utilities Provided**:
-- `CommandExists()` - Check tool availability
-- `RunCommand()` - Execute shell commands with output capture
-- `SetEnvVar()` - Manage environment variables in tests
-- `FileExists()` / `DirExists()` - Filesystem checks
-- `GetEnvOrDefault()` - Configuration with fallbacks
+These are simple enough that dedicated unit tests would not add meaningful value.
 
 ---
 
 ## Test Execution Modes
 
-### Quick Validation (Check Dependencies Only)
-
-Fast validation of prerequisites without creating Azure resources.
+### Quick Validation (Unit Tests Only)
 
 ```bash
 make test
 ```
 
-**Duration**: ~30 seconds
-**Requirements**: Local tools and Azure CLI login
-**Coverage**: Tool availability, Azure authentication, configuration validation
-**Use Cases**:
-- Local development validation before pushing
-- CI/CD pipeline quick checks
-- Verifying environment setup
-
----
+**Duration**: ~15 seconds
+**Coverage**: 32.1% of statements (pure logic functions)
 
 ### Full Test Suite
-
-Runs complete end-to-end deployment and verification through all 7 phases.
 
 ```bash
 make test-all
 ```
 
-**Duration**: 30-60 minutes (depending on Azure provisioning time)
-**Requirements**: Full Azure credentials and permissions
+**Duration**: 30-60 minutes (depends on Azure provisioning)
 **Phases Executed**:
-1. Check Dependencies (`_check-dep`) - Tool and auth validation
-2. Setup (`_setup`) - Repository cloning
-3. Cluster (`_cluster`) - Kind management cluster deployment
-4. Generate YAMLs (`_generate-yamls`) - Infrastructure YAML generation
-5. Deploy CRs (`_deploy-crs`) - Custom Resource deployment
-6. Verification (`_verify`) - Cluster validation
-7. Delete (`_delete`) - Cleanup (optional)
+1. Check Dependencies (`_check-dep`)
+2. Setup (`_setup`)
+3. Cluster (`_cluster`) - Kind or External cluster mode
+4. Generate YAMLs (`_generate-yamls`)
+5. Deploy CRs (`_deploy-crs`)
+6. Verification (`_verify`)
+7. Delete (`_delete`)
+8. Cleanup (`_cleanup`)
+
+### External Cluster Mode
+
+When `USE_KUBECONFIG` is set, the test suite exercises the MCE code path:
+
+```bash
+USE_KUBECONFIG=/path/to/kubeconfig make test-all
+```
+
+**Additional phases activated**:
+- `TestExternalCluster_01_Connectivity`
+- `TestExternalCluster_01b_MCEBaselineStatus`
+- `TestExternalCluster_02_EnableMCE`
+- `TestExternalCluster_03_ControllersReady`
+
+**Phases skipped**:
+- `TestSetup_CloneRepository` (controllers pre-installed)
+- `TestKindCluster_*` (using external cluster)
 
 ---
 
-### Phase-Specific Testing
+## Phase Coverage Summary
 
-Run individual test phases for targeted validation.
-
-**Makefile Targets** (internal, used by `test-all`):
-```bash
-make _check-dep      # Check dependencies
-make _setup          # Repository setup
-make _cluster        # Kind cluster deployment
-make _generate-yamls # YAML generation
-make _deploy-crs     # CR deployment
-make _verify         # Cluster verification
-make _delete         # Cluster deletion
-```
-
-**Go Test Commands** (for running specific test functions):
-```bash
-go test -v ./test -run TestCheckDependencies
-go test -v ./test -run TestSetup
-go test -v ./test -run TestKindCluster
-go test -v ./test -run TestInfrastructure
-go test -v ./test -run TestDeployment
-go test -v ./test -run TestVerification
-```
+| Phase | File | Tests | Lines | V1.1 New Tests |
+|-------|------|-------|-------|---------------|
+| 01 Check Dependencies | `01_check_dependencies_test.go` | 18 | 879 | External kubeconfig validation |
+| 02 Setup | `02_setup_test.go` | 3 | 129 | - |
+| 03 Cluster | `03_cluster_test.go` | 11 | 1,023 | +4 external cluster/MCE tests |
+| 04 Generate YAMLs | `04_generate_yamls_test.go` | 4 | 321 | Namespace mismatch detection |
+| 05 Deploy CRs | `05_deploy_crs_test.go` | 9 | 574 | +2 namespace/cluster checks |
+| 06 Verification | `06_verification_test.go` | 7 | 354 | External cluster guards |
+| 07 Deletion | `07_deletion_test.go` | 6 | 304 | External cluster guards |
+| 08 Cleanup | `08_cleanup_test.go` | 18 | 769 | - |
+| Unit: helpers | `helpers_test.go` | 52 | 3,348 | +6 new test functions |
+| Unit: config | `config_test.go` | 6 | 151 | - |
+| **Total** | **10 files** | **134** | **7,852** | |
 
 ---
 
-## Coverage Metrics
-
-### Test Phase Coverage
-
-| Phase | Test Files | Test Cases | Lines of Code | Coverage |
-|-------|-----------|------------|---------------|----------|
-| Check Dependencies | 1 | 6 | 80 | Tool validation, auth checks |
-| Setup | 1 | 3 | 116 | Repository structure, scripts |
-| Kind Cluster | 1 | 3 | 142 | Cluster deployment, CAPI |
-| Infrastructure | 1 | 3 | 163 | Resource generation, YAML validation |
-| Deployment | 1 | 3 | 138 | Monitoring, health checks |
-| Verification | 1 | 6 | 209 | Cluster validation, operators |
-| **Total** | **6** | **21** | **848** | **End-to-end workflow** |
-
-### Deployment Workflow Coverage
+## Deployment Workflow Coverage
 
 The test suite covers 100% of the documented ARO-CAPZ deployment workflow:
 
-- ✅ Check dependencies verification
-- ✅ Repository setup
-- ✅ Management cluster deployment
-- ✅ CAPI components installation
-- ✅ Infrastructure resource generation
-- ✅ Resource application
-- ✅ Cluster provisioning
-- ✅ Deployment monitoring
-- ✅ Cluster verification
-- ✅ Health validation
-
----
-
-## Integration Testing
-
-### Integration Approaches Tested
-
-1. **Git Submodule Integration**
-   - Repository as submodule
-   - Version pinning
-   - Update workflows
-
-2. **Dynamic Clone Integration**
-   - Runtime repository cloning
-   - Branch specification
-   - Automatic cleanup
-
-3. **Vendored Scripts Integration**
-   - Offline operation
-   - No external dependencies
-   - Manual sync validation
-
-All three approaches are documented and tested in `docs/INTEGRATION.md`.
+- Check dependencies verification
+- Repository setup
+- Management cluster deployment (Kind or External)
+- CAPI/CAPZ/ASO controller validation
+- MCE component management (V1.1)
+- Infrastructure resource generation
+- Namespace creation and validation (V1.1)
+- Resource application with retry
+- Cluster provisioning monitoring
+- Cluster verification
+- Cluster deletion
+- Cleanup validation
 
 ---
 
 ## CI/CD Coverage
 
-### GitHub Actions Integration
+### GitHub Actions Workflows
 
-Two workflow files provide automated testing:
-
-1. **`check-dependencies.yml`**
-   - Runs on all pushes and PRs
-   - Validates dependency checks
-   - Quick feedback (< 2 minutes)
-
-2. **`test.yml`**
-   - Full test suite execution
-   - Can be triggered manually
-   - Requires Azure credentials as secrets
-
-**Coverage**: CI/CD pipeline validates dependencies on every commit.
+| Workflow | Trigger | Coverage |
+|----------|---------|----------|
+| `check-dependencies.yml` | Push, PR | Unit tests + dependency checks |
+| `test.yml` | Manual | Full integration suite |
+| `security-gosec.yml` | Daily | Static analysis |
+| `security-govulncheck.yml` | Daily | Vulnerability scanning |
+| `security-nancy.yml` | Daily | OSS Index scanning |
+| `security-trivy.yml` | Daily | Comprehensive scanning |
 
 ---
 
-## Test Features
+## Future Considerations
 
-### Idempotency
+1. **Interface-based mocking**: MCE and kubectl functions could be made unit-testable by introducing interfaces, but this would add abstraction complexity to a test suite
+2. **Coverage target**: The 32.1% unit test coverage is appropriate for this codebase where most value comes from integration tests against real infrastructure
+3. **External cluster CI**: Consider adding a CI job with `USE_KUBECONFIG` to exercise the MCE code path automatically
 
-All tests are designed to be idempotent:
-- Re-running tests skips already-completed steps
-- Safe to run multiple times
-- Helpful for debugging and development
-
-### Error Handling
-
-Comprehensive error handling:
-- Clear error messages
-- Context-aware failures
-- Helpful troubleshooting guidance
-- Graceful degradation where appropriate
-
-### Configurability
-
-Every aspect is configurable via environment variables:
-- Cluster names and regions
-- Repository locations
-- Tool paths
-- Timeout values
-- Environment (stage/prod)
-
-### Logging
-
-Detailed logging throughout:
-- Step-by-step progress
-- Command outputs
-- Status updates
-- Error context
-
----
-
-## Coverage Gaps and Future Enhancements
-
-### Current Gaps
-
-1. **Network Testing**: No specific network policy or connectivity tests
-2. **Scaling Tests**: No validation of cluster scaling operations
-3. **Upgrade Tests**: No testing of cluster upgrades
-4. **Backup/Restore**: No disaster recovery testing
-5. **Performance Tests**: No load or performance validation
-6. **Security Scanning**: No security posture validation
-
-### Planned Enhancements
-
-1. **Additional Test Scenarios**
-   - Cluster scaling (up and down)
-   - Version upgrades
-   - Node replacement
-   - Disaster recovery
-
-2. **Performance Testing**
-   - Cluster provisioning time benchmarks
-   - Resource utilization monitoring
-   - API response time validation
-
-3. **Security Testing**
-   - RBAC validation
-   - Network policy enforcement
-   - Secret management verification
-   - Compliance checking
-
-4. **Multi-Environment Testing**
-   - Test across multiple Azure regions
-   - Validate different OpenShift versions
-   - Test various cluster sizes
-
----
-
-## Running the Test Suite
-
-### Prerequisites
-
-Ensure all required tools are installed:
-```bash
-make check-prereq
-```
-
-### Full Test Run
+## Verification Commands
 
 ```bash
-# Set configuration
-export CLUSTER_NAME=my-test-cluster
-export REGION=uksouth
-export AZURE_SUBSCRIPTION_NAME=your-subscription-id
-
-# Run all tests
+# Run unit tests with coverage
 make test
+
+# Get function-level coverage breakdown
+go test -coverprofile=coverage.out ./test/ -short
+go tool cover -func=coverage.out
+
+# Run full integration suite
+make test-all
+
+# Run specific phase
+go test -v ./test -run TestExternalCluster -timeout 30m
+go test -v ./test -run TestDeployment -timeout 60m
 ```
-
-### Cleanup
-
-After testing, clean up resources:
-```bash
-make clean  # Interactive - prompts before deleting each resource
-```
-
-The cleanup process will ask you to confirm deletion of:
-- Kind cluster
-- Repository clone in `/tmp`
-- Kubeconfig files
-- Results directory
-
-You can selectively choose what to delete, preserving resources you want to keep.
-
----
-
-## Troubleshooting Test Failures
-
-### Check Dependencies Failures
-
-**Symptom**: Tests fail during dependency checks
-**Solution**: Install missing tools or update versions
-```bash
-make check-prereq
-```
-
-### Setup Failures
-
-**Symptom**: Repository clone or structure validation fails
-**Solution**: Check network connectivity and repository access
-```bash
-git clone -b ARO-ASO https://github.com/RadekCap/cluster-api-installer.git /tmp/cluster-api-installer-aro
-```
-
-### Kind Cluster Failures
-
-**Symptom**: Kind cluster deployment fails
-**Solution**: Check Docker/Podman is running
-```bash
-docker info  # or podman info
-kind get clusters
-```
-
-### Infrastructure Failures
-
-**Symptom**: Resource generation or application fails
-**Solution**: Verify Azure credentials and permissions
-```bash
-az login
-az account show
-```
-
-### Deployment Timeout
-
-**Symptom**: Tests timeout waiting for cluster
-**Solution**: Check Azure portal for resource status, increase timeout
-```bash
-# Increase timeout in 05_deploy_crs_test.go
-timeout := 60 * time.Minute  # default is 30m
-```
-
----
-
-## Documentation Coverage
-
-### Comprehensive Documentation
-
-1. **Main README** (`README.md`)
-   - Framework overview
-   - Getting started guide
-   - Check Dependencies
-
-2. **Test README** (`test/README.md`)
-   - Detailed test documentation
-   - Configuration guide
-   - Usage examples
-
-3. **Integration Guide** (`docs/INTEGRATION.md`)
-   - Integration approaches
-   - Setup instructions
-   - Best practices
-
-4. **Test Coverage** (`TEST_COVERAGE.md` - this document)
-   - Test structure
-   - Coverage details
-   - Troubleshooting
-
-5. **Makefile**
-   - Self-documenting targets
-   - Usage help
-
-**Total Documentation**: ~1,200 lines covering all aspects of the test suite
-
----
-
-## Continuous Improvement
-
-The test suite is designed to evolve with the ARO-CAPZ deployment process:
-
-1. **Test Additions**: New tests added as features are developed
-2. **Coverage Expansion**: Increasing coverage of edge cases and scenarios
-3. **Documentation Updates**: Keeping documentation in sync with tests
-4. **Performance Optimization**: Improving test execution time
-5. **Feedback Integration**: Incorporating user feedback and real-world usage
-
----
-
-## Summary
-
-This test suite provides comprehensive coverage of the ARO-CAPZ deployment workflow:
-
-- **6 test files** covering all deployment phases
-- **21 test cases** validating each step
-- **Idempotent execution** for safe re-runs
-- **Configurable** via environment variables
-- **Well-documented** with 4 documentation files
-- **CI/CD ready** with GitHub Actions workflows
-- **Multiple integration options** for different use cases
-
-The test suite ensures reliable, repeatable ARO deployments and serves as both validation and documentation of the deployment process.
