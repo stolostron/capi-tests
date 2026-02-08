@@ -25,7 +25,7 @@ const (
 	// DefaultCAPZUser is the default user identifier for CAPZ resources.
 	// Used in ClusterNamePrefix (for resource group naming) and User field.
 	// Extracted to a constant to ensure consistency across all usages.
-	DefaultCAPZUser = "rcap"
+	DefaultCAPZUser = "rcapb"
 
 	// DefaultDeploymentEnv is the default deployment environment identifier.
 	// Used in ClusterNamePrefix and Environment field.
@@ -116,17 +116,17 @@ type TestConfig struct {
 	RepoDir    string
 
 	// Cluster configuration
-	ManagementClusterName string
-	WorkloadClusterName   string
-	ClusterNamePrefix     string // Used as CS_CLUSTER_NAME for YAML generation; resource group becomes ${ClusterNamePrefix}-resgroup
-	OCPVersion            string
-	Region                string
-	AzureSubscriptionName string // Azure subscription name (from AZURE_SUBSCRIPTION_NAME env var)
-	Environment           string
+	ManagementClusterName    string
+	WorkloadClusterName      string
+	ClusterNamePrefix        string // Used as CS_CLUSTER_NAME for YAML generation; resource group becomes ${ClusterNamePrefix}-resgroup
+	OCPVersion               string
+	Region                   string
+	AzureSubscriptionName    string // Azure subscription name (from AZURE_SUBSCRIPTION_NAME env var)
+	Environment              string
 	CAPZUser                 string // User identifier for CAPZ resources (from CAPZ_USER env var)
 	WorkloadClusterNamespace string // Namespace for workload cluster resources on management cluster (unique per test run)
 	CAPINamespace            string // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
-	CAPZNamespace         string // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" when USE_K8S=true)
+	CAPZNamespace            string // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" when USE_K8S=true)
 
 	// External cluster configuration
 	// UseKubeconfig is the path to an external kubeconfig file.
@@ -171,17 +171,17 @@ func NewTestConfig() *TestConfig {
 		RepoDir:    getDefaultRepoDir(),
 
 		// Cluster defaults
-		ManagementClusterName: GetEnvOrDefault("MANAGEMENT_CLUSTER_NAME", "capz-tests-stage"),
-		WorkloadClusterName:   GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", "capz-tests-cluster"),
-		ClusterNamePrefix:     GetEnvOrDefault("CS_CLUSTER_NAME", fmt.Sprintf("%s-%s", GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser), GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv))),
-		OCPVersion:            GetEnvOrDefault("OCP_VERSION", "4.21"),
-		Region:                GetEnvOrDefault("REGION", "uksouth"),
-		AzureSubscriptionName: os.Getenv("AZURE_SUBSCRIPTION_NAME"),
-		Environment:           GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv),
+		ManagementClusterName:    GetEnvOrDefault("MANAGEMENT_CLUSTER_NAME", "capz-tests-stage"),
+		WorkloadClusterName:      GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", "capz-tests-cluster"),
+		ClusterNamePrefix:        GetEnvOrDefault("CS_CLUSTER_NAME", fmt.Sprintf("%s-%s", GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser), GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv))),
+		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.21"),
+		Region:                   GetEnvOrDefault("REGION", "uksouth"),
+		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),
+		Environment:              GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv),
 		CAPZUser:                 GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser),
 		WorkloadClusterNamespace: getWorkloadClusterNamespace(),
 		CAPINamespace:            getControllerNamespace("CAPI_NAMESPACE", "capi-system"),
-		CAPZNamespace:         getControllerNamespace("CAPZ_NAMESPACE", "capz-system"),
+		CAPZNamespace:            getControllerNamespace("CAPZ_NAMESPACE", "capz-system"),
 
 		// External cluster
 		UseKubeconfig: useKubeconfig,
@@ -301,6 +301,20 @@ func (c *TestConfig) GetProvisionedClusterName() string {
 		// Fall back to WorkloadClusterName if aro.yaml doesn't exist or can't be parsed
 		// This allows earlier phases (before YAML generation) to still work
 		return c.WorkloadClusterName
+	}
+
+	return name
+}
+
+// GetProvisionedAROControlPlaneName returns the actual AROControlPlane resource name
+// from the generated aro.yaml file. Falls back to GetProvisionedClusterName() + "-control-plane"
+// if aro.yaml doesn't exist or doesn't contain an AROControlPlane resource.
+func (c *TestConfig) GetProvisionedAROControlPlaneName() string {
+	aroYAMLPath := fmt.Sprintf("%s/%s/aro.yaml", c.RepoDir, c.GetOutputDirName())
+
+	name, err := ExtractAROControlPlaneNameFromYAML(aroYAMLPath)
+	if err != nil {
+		return c.GetProvisionedClusterName() + "-control-plane"
 	}
 
 	return name

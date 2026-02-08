@@ -424,7 +424,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	// Get the specific AROControlPlane name for the cluster being deployed
 	// This prevents checking the wrong control plane when multiple clusters exist (issue #355)
 	provisionedClusterName := config.GetProvisionedClusterName()
-	aroControlPlaneName := provisionedClusterName
+	aroControlPlaneName := config.GetProvisionedAROControlPlaneName()
 
 	// Wait for control plane to be ready (with configurable timeout)
 	timeout := config.DeploymentTimeout

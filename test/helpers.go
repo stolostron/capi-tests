@@ -461,6 +461,58 @@ func ExtractClusterNameFromYAML(filePath string) (string, error) {
 	return "", fmt.Errorf("no Cluster resource found in %s", filePath)
 }
 
+// ExtractAROControlPlaneNameFromYAML extracts the AROControlPlane resource name from a YAML file.
+// It looks for a resource with kind "AROControlPlane" and apiVersion starting with
+// "controlplane.cluster.x-k8s.io/" and returns its metadata.name.
+func ExtractAROControlPlaneNameFromYAML(filePath string) (string, error) {
+	if _, err := os.Stat(filePath); err != nil {
+		return "", fmt.Errorf("file not accessible: %w", err)
+	}
+
+	// #nosec G304 - filePath comes from test configuration
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %w", err)
+	}
+
+	docs := strings.Split(string(data), "---")
+	for _, doc := range docs {
+		doc = strings.TrimSpace(doc)
+		if doc == "" {
+			continue
+		}
+
+		var content map[string]interface{}
+		if err := yaml.Unmarshal([]byte(doc), &content); err != nil {
+			continue
+		}
+
+		kind, ok := content["kind"].(string)
+		if !ok || kind != "AROControlPlane" {
+			continue
+		}
+
+		apiVersion, ok := content["apiVersion"].(string)
+		if !ok || !strings.HasPrefix(apiVersion, "controlplane.cluster.x-k8s.io/") {
+			continue
+		}
+
+		metadata, ok := content["metadata"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, ok := metadata["name"].(string)
+		if !ok || name == "" {
+			continue
+		}
+
+		return name, nil
+	}
+
+	return "", fmt.Errorf("no AROControlPlane resource found in %s", filePath)
+}
+
 // CheckYAMLConfigMatch verifies that existing YAML files match the current configuration.
 // It extracts the cluster name from the aro.yaml file and compares it with the expected
 // cluster name prefix. This is used to detect configuration mismatches that would cause
