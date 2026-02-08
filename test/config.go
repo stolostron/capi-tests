@@ -174,7 +174,7 @@ func NewTestConfig() *TestConfig {
 		ManagementClusterName:    GetEnvOrDefault("MANAGEMENT_CLUSTER_NAME", "capz-tests-stage"),
 		WorkloadClusterName:      GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", "capz-tests-cluster"),
 		ClusterNamePrefix:        GetEnvOrDefault("CS_CLUSTER_NAME", fmt.Sprintf("%s-%s", GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser), GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv))),
-		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.21"),
+		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.20"),
 		Region:                   GetEnvOrDefault("REGION", "uksouth"),
 		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),
 		Environment:              GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv),
