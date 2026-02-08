@@ -251,11 +251,18 @@ type TestConfig struct {
 | `IsMCECluster` | `(t, kubeContext string) bool` | ✅ Approved | `Is*` predicate naming |
 | `GetMCEComponentStatus` | `(t, kubeContext, componentName string) (*MCEComponentStatus, error)` | ✅ Approved | `Get*` naming, returns struct pointer |
 | `SetMCEComponentState` | `(t, kubeContext, componentName string, enabled bool) error` | ✅ Approved | `Set*` naming, clear bool parameter |
-| `EnableMCEComponent` | `(t, kubeContext, componentName string) error` | ✅ Approved | Convenience wrapper for SetMCEComponentState |
+| `EnableMCEComponent` | `(t, kubeContext, componentName string) error` | ⚠️ Refactor | Currently duplicates `SetMCEComponentState` logic; should delegate to it (ACM-29872) |
 | `WaitForMCEController` | `(t, kubeContext, namespace, deploymentName string, timeout Duration) error` | ✅ Approved | `WaitFor*` consistent |
 | `CheckYAMLConfigMatch` | `(t, aroYAMLPath, expectedPrefix string) (bool, string)` | ✅ Approved | Named returns for clarity |
+| `ExtractNamespaceFromYAML` | `(filePath string) (string, error)` | ✅ Approved | Pure function, no `t` needed |
+| `ApplyWithRetryInNamespace` | `(t, kubeContext, namespace, yamlPath string, maxRetries int) error` | ✅ Approved | Namespace-explicit variant of `ApplyWithRetry` |
+| `GetExistingClusterNames` | `(t, kubeContext, namespace string) ([]string, error)` | ✅ Approved | `Get*` naming |
+| `CheckForMismatchedClusters` | `(t, kubeContext, namespace, expectedPrefix string) ([]string, error)` | ✅ Approved | Returns slice of mismatched names |
+| `FormatMismatchedClustersError` | `(mismatched []string, expectedPrefix, namespace string) string` | ✅ Approved | `Format*` naming, pure function |
+| `ReadDeploymentState` | `() (*DeploymentState, error)` | ✅ Approved | No `t` needed (utility) |
 | `WriteDeploymentState` | `(config *TestConfig) error` | ✅ Approved | No `t` needed (utility) |
-| `CheckMismatchedClusters` | `(t, kubeContext, namespace, expectedClusterName string) ([]string, error)` | ✅ Approved | Returns slice of mismatched names |
+| `GetClusterPhase` | `(t, kubeContext, namespace, clusterName string) (string, error)` | ✅ Approved | `Get*` naming |
+| `GetDeletionResourceStatus` | `(t, kubeContext, namespace, clusterName, resourceGroup string) DeletionResourceStatus` | ✅ Approved | Returns value type |
 
 ### Findings and Recommendations
 

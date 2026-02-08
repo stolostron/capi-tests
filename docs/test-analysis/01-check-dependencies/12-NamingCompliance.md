@@ -96,7 +96,7 @@ This test catches naming issues in Phase 1 (seconds) instead of Phase 5 (45+ min
 === RUN   TestCheckDependencies_NamingCompliance/CS_CLUSTER_NAME
     01_check_dependencies_test.go:591: CS_CLUSTER_NAME 'rcap-stage' is RFC 1123 compliant
 === RUN   TestCheckDependencies_NamingCompliance/WORKLOAD_CLUSTER_NAMESPACE
-    01_check_dependencies_test.go:607: WORKLOAD_CLUSTER_NAMESPACE 'default' is RFC 1123 compliant
+    01_check_dependencies_test.go:607: WORKLOAD_CLUSTER_NAMESPACE 'capz-test-20260203-140812' is RFC 1123 compliant
 --- PASS: TestCheckDependencies_NamingCompliance (0.00s)
 ```
 
