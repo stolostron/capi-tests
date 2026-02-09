@@ -19,19 +19,6 @@ Fixes #<!-- issue number -->
 
 -
 
-## Testing
-
-### Local Testing
-
-- [ ] `make test` passes (check dependencies)
-- [ ] `make fmt` run
-- [ ] `make lint` passes
-
-### Full Test Suite (if applicable)
-
-- [ ] `make test-all` passes
-- [ ] New test phase added (if applicable)
-
 ## Checklist
 
 - [ ] Code follows the project's coding style
