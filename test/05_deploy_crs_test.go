@@ -444,25 +444,42 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 			PrintToTTY("[%d] ✅ AROControlPlane.Ready: true\n", iteration)
 		}
 
-		// Check MachinePool ready/provisioned status
+		// Check MachinePool status (phase, ready, replicas)
 		if !machinePoolReady {
-			// Check machinepool.status.phase (Provisioned) or ready status
-			phaseOutput, phaseErr := RunCommandQuiet(t, "kubectl", "--context", context, "get",
-				"machinepool", machinePoolName, "-n", config.WorkloadClusterNamespace, "-o", "jsonpath={.status.phase}")
-			readyOutput, readyErr := RunCommandQuiet(t, "kubectl", "--context", context, "get",
-				"machinepool", machinePoolName, "-n", config.WorkloadClusterNamespace, "-o", "jsonpath={.status.ready}")
+			output, err := RunCommandQuiet(t, "kubectl", "--context", context, "get",
+				"machinepool", machinePoolName, "-n", config.WorkloadClusterNamespace,
+				"-o", "jsonpath={.status.phase} {.status.ready} {.status.replicas} {.status.readyReplicas}")
 
-			phase := strings.TrimSpace(phaseOutput)
-			ready := strings.TrimSpace(readyOutput)
-
-			if phaseErr != nil && readyErr != nil {
-				PrintToTTY("[%d] ⚠️  MachinePool status check failed: %v\n", iteration, phaseErr)
-			} else if ready == "true" || phase == "Running" || phase == "Provisioned" {
-				machinePoolReady = true
-				PrintToTTY("[%d] ✅ MachinePool: ready=%s phase=%s (took %v)\n", iteration, ready, phase, elapsed.Round(time.Second))
-				t.Logf("MachinePool ready=%s phase=%s (took %v)", ready, phase, elapsed.Round(time.Second))
+			if err != nil {
+				PrintToTTY("[%d] ⏳ MachinePool: not found yet\n", iteration)
 			} else {
-				PrintToTTY("[%d] ⏳ MachinePool: ready=%s phase=%s\n", iteration, ready, phase)
+				fields := strings.Fields(strings.TrimSpace(output))
+				phase, ready := "", ""
+				replicas, readyReplicas := "", ""
+				if len(fields) > 0 {
+					phase = fields[0]
+				}
+				if len(fields) > 1 {
+					ready = fields[1]
+				}
+				if len(fields) > 2 {
+					replicas = fields[2]
+				}
+				if len(fields) > 3 {
+					readyReplicas = fields[3]
+				}
+
+				if ready == "true" || phase == "Running" || phase == "Provisioned" {
+					machinePoolReady = true
+					PrintToTTY("[%d] ✅ MachinePool: %s (replicas: %s/%s, took %v)\n",
+						iteration, phase, readyReplicas, replicas, elapsed.Round(time.Second))
+					t.Logf("MachinePool %s replicas=%s/%s (took %v)", phase, readyReplicas, replicas, elapsed.Round(time.Second))
+				} else if phase != "" {
+					PrintToTTY("[%d] ⏳ MachinePool: %s (replicas: %s/%s)\n",
+						iteration, phase, readyReplicas, replicas)
+				} else {
+					PrintToTTY("[%d] ⏳ MachinePool: waiting for status\n", iteration)
+				}
 			}
 		} else {
 			PrintToTTY("[%d] ✅ MachinePool: ready\n", iteration)
