@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Apply the generated YAML manifests to the Kind cluster and monitor the ARO cluster deployment until the control plane is ready.
+Create the workload cluster namespace, apply the generated YAML manifests to the management cluster, and monitor the ARO cluster deployment until the control plane is ready.
 
 ---
 
@@ -16,13 +16,15 @@ Apply the generated YAML manifests to the Kind cluster and monitor the ARO clust
 
 | # | Test | Purpose |
 |---|------|---------|
-| 1 | [01-ApplyResources](01-ApplyResources.md) | Apply all YAML files to cluster |
-| 2 | [02-ApplyCredentialsYAML](02-ApplyCredentialsYAML.md) | Apply credentials.yaml |
-| 3 | [03-ApplyInfrastructureSecretsYAML](03-ApplyInfrastructureSecretsYAML.md) | Apply is.yaml |
-| 4 | [04-ApplyAROClusterYAML](04-ApplyAROClusterYAML.md) | Apply aro.yaml |
-| 5 | [05-MonitorCluster](05-MonitorCluster.md) | Monitor deployment with clusterctl |
-| 6 | [06-WaitForControlPlane](06-WaitForControlPlane.md) | Poll until control plane is ready |
-| 7 | [07-CheckClusterConditions](07-CheckClusterConditions.md) | Check cluster condition status |
+| 1 | [08-CreateNamespace](08-CreateNamespace.md) | Create workload cluster namespace |
+| 2 | [09-CheckExistingClusters](09-CheckExistingClusters.md) | Check for mismatched cluster resources |
+| 3 | [01-ApplyResources](01-ApplyResources.md) | Apply all YAML files to cluster |
+| 4 | [02-ApplyCredentialsYAML](02-ApplyCredentialsYAML.md) | Apply credentials.yaml |
+| 5 | [03-ApplyInfrastructureSecretsYAML](03-ApplyInfrastructureSecretsYAML.md) | Apply is.yaml |
+| 6 | [04-ApplyAROClusterYAML](04-ApplyAROClusterYAML.md) | Apply aro.yaml |
+| 7 | [05-MonitorCluster](05-MonitorCluster.md) | Monitor deployment with clusterctl |
+| 8 | [06-WaitForControlPlane](06-WaitForControlPlane.md) | Poll until control plane is ready |
+| 9 | [07-CheckClusterConditions](07-CheckClusterConditions.md) | Check cluster condition status |
 
 ---
 
@@ -35,31 +37,46 @@ Apply the generated YAML manifests to the Kind cluster and monitor the ARO clust
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Tests 1-4: Apply Resources                                      │
-│  ├── kubectl apply -f credentials.yaml                           │
-│  ├── kubectl apply -f is.yaml                                    │
-│  └── kubectl apply -f aro.yaml                                   │
+│  Test 1: CreateNamespace                                          │
+│  ├── Create unique namespace (capz-test-YYYYMMDD-HHMMSS)         │
+│  └── Add identification labels (capz-test=true)                  │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Test 5: MonitorCluster                                          │
-│  ├── kubectl get cluster <name>                                  │
-│  └── clusterctl describe cluster <name> --show-conditions=all    │
+│  Test 2: CheckExistingClusters                                    │
+│  ├── Check for mismatched Cluster CRs                             │
+│  └── Fail-fast if stale clusters from different config exist      │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Test 6: WaitForControlPlane                                     │
-│  └── Poll arocontrolplane until status.ready=true                │
-│      (timeout: DEPLOYMENT_TIMEOUT, default 45m)                  │
+│  Tests 3-6: Apply Resources                                       │
+│  ├── kubectl apply -f credentials.yaml                            │
+│  ├── kubectl apply -f is.yaml                                     │
+│  └── kubectl apply -f aro.yaml                                    │
+│  (with retry logic for transient connection issues)               │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Test 7: CheckClusterConditions                                  │
-│  ├── Check InfrastructureReady condition                         │
-│  └── Check ControlPlaneReady condition                           │
+│  Test 7: MonitorCluster                                           │
+│  ├── kubectl get cluster <name>                                   │
+│  └── clusterctl describe cluster <name> --show-conditions=all     │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Test 8: WaitForControlPlane                                      │
+│  └── Poll arocontrolplane until status.ready=true                 │
+│      (timeout: DEPLOYMENT_TIMEOUT, default 45m)                   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Test 9: CheckClusterConditions                                   │
+│  ├── Check InfrastructureReady condition                          │
+│  └── Check ControlPlaneReady condition                            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -71,7 +88,18 @@ Apply the generated YAML manifests to the Kind cluster and monitor the ARO clust
 |------|----------|
 | `credentials.yaml` | Azure credentials secret |
 | `is.yaml` | Infrastructure secrets |
-| `aro.yaml` | ARO cluster resources |
+| `aro.yaml` | ARO cluster resources (Cluster, AROControlPlane, MachinePool) |
+
+---
+
+## Namespace Isolation
+
+Each test run creates a unique namespace to enable:
+- Parallel test runs on the same cluster
+- Easy cleanup of test resources
+- Clear separation between test runs
+
+Namespace format: `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` (e.g., `capz-test-20260202-135526`)
 
 ---
 
@@ -82,3 +110,5 @@ Apply the generated YAML manifests to the Kind cluster and monitor the ARO clust
 | `DEPLOYMENT_TIMEOUT` | `45m` | Control plane wait timeout |
 | `MANAGEMENT_CLUSTER_NAME` | `capz-tests-stage` | kubectl context |
 | `WORKLOAD_CLUSTER_NAME` | `capz-tests-cluster` | ARO cluster name |
+| `WORKLOAD_CLUSTER_NAMESPACE` | auto-generated | Namespace for cluster resources |
+| `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` | `capz-test` | Prefix for auto-generated namespace |

@@ -8,19 +8,32 @@
 
 ## Purpose
 
-Deploy a Kind cluster with CAPI, CAPZ, and ASO controllers, then verify all controllers are ready.
+Deploy a Kind cluster with CAPI, CAPZ, and ASO controllers, then verify all controllers are ready. When using an external cluster (`USE_KUBECONFIG`), validates pre-installed controllers and optionally enables MCE components.
+
+---
 
 ## Test Summary
 
-| # | Test | File | Purpose |
-|---|------|------|---------|
-| 1 | [01-KindClusterReady](01-KindClusterReady.md) | `TestKindCluster_KindClusterReady` | Deploy Kind cluster with CAPI/CAPZ/ASO controllers |
-| 2 | [02-CAPINamespacesExists](02-CAPINamespacesExists.md) | `TestKindCluster_CAPINamespacesExists` | Verify CAPI namespaces exist |
-| 3 | [03-CAPIControllerReady](03-CAPIControllerReady.md) | `TestKindCluster_CAPIControllerReady` | Wait for CAPI controller (10m timeout) |
-| 4 | [04-CAPZControllerReady](04-CAPZControllerReady.md) | `TestKindCluster_CAPZControllerReady` | Wait for CAPZ controller (10m timeout) |
-| 5 | [05-ASOCredentialsConfigured](05-ASOCredentialsConfigured.md) | `TestKindCluster_ASOCredentialsConfigured` | Validate ASO credentials (currently skipped) |
-| 6 | [06-ASOControllerReady](06-ASOControllerReady.md) | `TestKindCluster_ASOControllerReady` | Wait for ASO controller (10m timeout) |
-| 7 | [07-WebhooksReady](07-WebhooksReady.md) | `TestKindCluster_WebhooksReady` | Wait for CAPI/CAPZ/ASO/MCE webhooks (5m timeout) |
+### External Cluster Tests (when USE_KUBECONFIG is set)
+
+| # | Test | Purpose |
+|---|------|---------|
+| 1 | [08-ExternalCluster-Connectivity](08-ExternalCluster-Connectivity.md) | Validate external cluster connectivity |
+| 2 | [09-ExternalCluster-MCEBaselineStatus](09-ExternalCluster-MCEBaselineStatus.md) | Validate and configure MCE component baseline |
+| 3 | [10-ExternalCluster-EnableMCE](10-ExternalCluster-EnableMCE.md) | Enable CAPI/CAPZ components in MCE |
+| 4 | [11-ExternalCluster-ControllersReady](11-ExternalCluster-ControllersReady.md) | Validate pre-installed controllers |
+
+### Kind Cluster Tests (default mode)
+
+| # | Test | Purpose |
+|---|------|---------|
+| 5 | [01-KindClusterReady](01-KindClusterReady.md) | Deploy Kind cluster with CAPI/CAPZ/ASO controllers |
+| 6 | [02-CAPINamespacesExists](02-CAPINamespacesExists.md) | Verify CAPI namespaces exist |
+| 7 | [03-CAPIControllerReady](03-CAPIControllerReady.md) | Wait for CAPI controller (10m timeout) |
+| 8 | [04-CAPZControllerReady](04-CAPZControllerReady.md) | Wait for CAPZ controller (10m timeout) |
+| 9 | [05-ASOCredentialsConfigured](05-ASOCredentialsConfigured.md) | Validate ASO credentials secret |
+| 10 | [06-ASOControllerReady](06-ASOControllerReady.md) | Wait for ASO controller (configurable timeout) |
+| 11 | [07-WebhooksReady](07-WebhooksReady.md) | Wait for CAPI/CAPZ/ASO/MCE webhooks (5m timeout) |
 
 ---
 
@@ -31,64 +44,27 @@ Deploy a Kind cluster with CAPI, CAPZ, and ASO controllers, then verify all cont
 │                    make _cluster                                 │
 └─────────────────────────────────────────────────────────────────┘
                               │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Test 1: KindClusterReady                                        │
-│  ├── Check if cluster exists (kind get clusters)                 │
-│  ├── If not: ensure Azure credentials, run deploy-charts-kind-capz│
-│  │   ├── Create Kind cluster                                     │
-│  │   ├── Install cert-manager                                    │
-│  │   ├── Deploy CAPI charts                                      │
-│  │   ├── Deploy CAPZ charts                                      │
-│  │   └── Patch ASO credentials secret                            │
-│  └── Verify: kubectl get nodes                                   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Test 2: CAPINamespacesExists                                    │
-│  ├── Check namespace: capi-system                                │
-│  ├── Check namespace: capz-system                                │
-│  └── List CAPI pods (informational)                              │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Test 3: CAPIControllerReady                                     │
-│  └── Poll until capi-controller-manager Available=True           │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Test 4: CAPZControllerReady                                     │
-│  └── Poll until capz-controller-manager Available=True           │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Test 5: ASOCredentialsConfigured (SKIPPED)                      │
-│  └── Validates aso-controller-settings secret                    │
-│  └── Currently skipped: requires service principal               │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Test 6: ASOControllerReady                                      │
-│  └── Poll until azureserviceoperator-controller-manager          │
-│      Available=True                                              │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Test 7: WebhooksReady                                           │
-│  └── Check CAPI, CAPZ, ASO, MCE webhooks are responsive         │
-│  └── Uses curl from ephemeral pod to test HTTPS connectivity    │
-└─────────────────────────────────────────────────────────────────┘
+                    ┌─────────┴─────────┐
+                    │                   │
+           USE_KUBECONFIG?          Kind mode
+                    │                   │
+                    ▼                   ▼
+┌──────────────────────────┐  ┌──────────────────────────┐
+│  EXTERNAL CLUSTER PATH    │  │  KIND CLUSTER PATH        │
+│                           │  │                           │
+│  1. Connectivity check    │  │  5. Deploy Kind cluster   │
+│  2. MCE baseline status   │  │  6. Check CAPI namespaces │
+│  3. Enable MCE CAPI/CAPZ  │  │  7. Wait CAPI controller  │
+│  4. Verify controllers    │  │  8. Wait CAPZ controller  │
+│                           │  │  9. Verify ASO credentials│
+└──────────────────────────┘  │  10. Wait ASO controller   │
+                              │  11. Wait for webhooks     │
+                              └──────────────────────────┘
 ```
 
 ---
 
-## Components Deployed
+## Components Deployed (Kind Mode)
 
 | Component | Namespace | Description |
 |-----------|-----------|-------------|
@@ -99,13 +75,26 @@ Deploy a Kind cluster with CAPI, CAPZ, and ASO controllers, then verify all cont
 
 ---
 
+## MCE Components (External Cluster Mode)
+
+| Component | MCE Name | Expected State |
+|-----------|----------|---------------|
+| CAPI | `cluster-api` | enabled |
+| CAPZ | `cluster-api-provider-azure-preview` | enabled |
+| HyperShift | `hypershift` | **disabled** (mutual exclusion with CAPI) |
+
+---
+
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `MANAGEMENT_CLUSTER_NAME` | `capz-tests-stage` | Kind cluster name |
 | `ARO_REPO_DIR` | `/tmp/cluster-api-installer-aro` | Path to cluster-api-installer |
-| `CLUSTER_TIMEOUT` | `30m` | Make target timeout |
+| `USE_KUBECONFIG` | (unset) | Path to external cluster kubeconfig |
+| `MCE_AUTO_ENABLE` | `true` (when USE_KUBECONFIG set) | Auto-enable MCE components |
+| `MCE_ENABLEMENT_TIMEOUT` | `15m` | Timeout for MCE component enablement |
+| `ASO_CONTROLLER_TIMEOUT` | `10m` | Timeout for ASO controller readiness |
 
 ---
 

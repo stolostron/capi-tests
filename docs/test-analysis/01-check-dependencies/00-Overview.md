@@ -17,17 +17,23 @@ Verify all required tools are installed and properly configured before running t
 | # | Test | Purpose |
 |---|------|---------|
 | 1 | [01-ToolAvailable](01-ToolAvailable.md) | Check all required CLI tools are in PATH |
-| 2 | [02-DockerDaemonRunning](02-DockerDaemonRunning.md) | Verify Docker daemon is running and accessible |
-| 3 | [03-AzureCLILogin](03-AzureCLILogin.md) | Verify Azure authentication (SP or CLI) |
-| 4 | [04-AzureEnvironment](04-AzureEnvironment.md) | Validate and auto-extract Azure environment variables |
-| 5 | [05-OpenShiftCLI](05-OpenShiftCLI.md) | Verify OpenShift CLI is functional |
-| 6 | [06-Helm](06-Helm.md) | Verify Helm is installed |
-| 7 | [07-Kind](07-Kind.md) | Verify Kind is installed |
-| 8 | [08-Clusterctl](08-Clusterctl.md) | Check if clusterctl is available (informational) |
-| 9 | [09-DockerCredentialHelper](09-DockerCredentialHelper.md) | Check Docker credential helpers (macOS only) |
-| 10 | [10-PythonVersion](10-PythonVersion.md) | Validate Python version is supported (3.12.x required) |
-| 11 | [11-NamingConstraints](11-NamingConstraints.md) | Validate domain prefix and ExternalAuth ID lengths |
-| 12 | [12-NamingCompliance](12-NamingCompliance.md) | Validate RFC 1123 naming compliance |
+| 2 | [13-OptionalTools](13-OptionalTools.md) | Check optional tools (jq for MCE) |
+| 3 | [14-ExternalKubeconfig](14-ExternalKubeconfig.md) | Validate external kubeconfig connectivity |
+| 4 | [02-DockerDaemonRunning](02-DockerDaemonRunning.md) | Verify Docker daemon is running and accessible |
+| 5 | [10-PythonVersion](10-PythonVersion.md) | Validate Python version compatibility |
+| 6 | [03-AzureCLILogin](03-AzureCLILogin.md) | Verify Azure authentication (SP or CLI) |
+| 7 | [04-AzureEnvironment](04-AzureEnvironment.md) | Validate and auto-extract Azure environment variables |
+| 8 | [05-OpenShiftCLI](05-OpenShiftCLI.md) | Verify OpenShift CLI is functional |
+| 9 | [06-Helm](06-Helm.md) | Verify Helm is installed |
+| 10 | [07-Kind](07-Kind.md) | Verify Kind is installed |
+| 11 | [08-Clusterctl](08-Clusterctl.md) | Check if clusterctl is available (platform-specific) |
+| 12 | [11-NamingConstraints](11-NamingConstraints.md) | Validate domain prefix and ExternalAuth ID lengths |
+| 13 | [09-DockerCredentialHelper](09-DockerCredentialHelper.md) | Check Docker credential helpers (macOS only) |
+| 14 | [12-NamingCompliance](12-NamingCompliance.md) | Validate RFC 1123 naming compliance |
+| 15 | [15-AzureRegion](15-AzureRegion.md) | Validate configured Azure region |
+| 16 | [16-AzureSubscriptionAccess](16-AzureSubscriptionAccess.md) | Validate Azure subscription access |
+| 17 | [17-TimeoutConfiguration](17-TimeoutConfiguration.md) | Validate timeout configurations |
+| 18 | [18-ComprehensiveValidation](18-ComprehensiveValidation.md) | Comprehensive configuration validation summary |
 
 ---
 
@@ -46,75 +52,73 @@ Verify all required tools are installed and properly configured before running t
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Test 2: DockerDaemonRunning                                     │
+│  Test 2: OptionalTools                                           │
+│  └── Check: jq (for MCE auto-enablement)                        │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Test 3: ExternalKubeconfig (only when USE_KUBECONFIG set)       │
+│  └── Validate file, context, and cluster connectivity            │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Test 4: DockerDaemonRunning                                     │
 │  └── Run: docker info --format {{.ServerVersion}}               │
 │  └── Skip if: using podman or in CI environment                 │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Test 3: PythonVersion                                           │
-│  └── Check: python3/python version is 3.12.x                    │
-│  └── Skip if: macOS (see issue #330)                            │
+│  Test 5: PythonVersion                                           │
+│  └── Check: python3/python version compatibility                 │
+│  └── Fail: Python 3.14.0 (az cli incompatibility)              │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Test 4: AzureAuthentication                                     │
+│  Test 6: AzureAuthentication                                     │
 │  └── Check: Service principal OR Azure CLI login                │
-│  └── Supports both auth methods                                  │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Test 5: AzureEnvironment                                        │
+│  Test 7: AzureEnvironment                                        │
 │  └── Check AZURE_TENANT_ID (auto-extract from az if missing)    │
 │  └── Check AZURE_SUBSCRIPTION_ID/NAME (auto-extract if missing) │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Test 6: OpenShiftCLI                                            │
-│  └── Run: oc version --client                                    │
+│  Tests 8-11: Tool Version Checks                                 │
+│  ├── oc version --client                                         │
+│  ├── helm version --short                                        │
+│  ├── kind version                                                │
+│  └── clusterctl version (platform-specific behavior)             │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Test 7: Helm                                                    │
-│  └── Run: helm version --short                                   │
+│  Tests 12-14: Naming Validations                                 │
+│  ├── Domain prefix + ExternalAuth ID length constraints          │
+│  ├── Docker credential helper availability (macOS)               │
+│  └── RFC 1123 compliance for CAPZ_USER, DEPLOYMENT_ENV, etc.    │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Test 8: Kind                                                    │
-│  └── Run: kind version                                           │
+│  Tests 15-17: Azure & Configuration Validations                  │
+│  ├── Azure region validity                                       │
+│  ├── Azure subscription accessibility                            │
+│  └── Timeout configuration reasonableness                        │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Test 9: Clusterctl                                              │
-│  └── Check: clusterctl in PATH                                   │
-│  └── Informational only (not required for Phase 1)              │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Test 10: NamingConstraints                                      │
-│  └── Validate: domain prefix <= 15 chars                        │
-│  └── Validate: ExternalAuth ID <= 15 chars                      │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Test 11: DockerCredentialHelper (macOS only)                    │
-│  └── Parse ~/.docker/config.json and verify helpers exist       │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Test 12: NamingCompliance                                       │
-│  └── Validate: CAPZ_USER, DEPLOYMENT_ENV, CS_CLUSTER_NAME       │
-│  └── Validate: RFC 1123 subdomain naming compliance             │
+│  Test 18: ComprehensiveValidation                                │
+│  └── Run all validations and display summary table               │
+│  └── Fail if any critical errors found                           │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -132,17 +136,22 @@ Verify all required tools are installed and properly configured before running t
 | `git` | Version control | - |
 | `kubectl` | Kubernetes CLI | - |
 | `go` | Go runtime | - |
-| `python3` | Python runtime (3.12.x) | `python` |
+| `python3` | Python runtime | `python` |
 | `clusterctl` | Cluster API CLI (optional) | Provided by cluster-api-installer |
+| `jq` | JSON processor (optional) | Required for MCE auto-enablement |
 
 ---
 
 ## Fail-Fast Validations
 
-These tests catch configuration errors early (Phase 1) that would otherwise cause cryptic failures in later phases (Phase 5):
+These tests catch configuration errors early (Phase 1) that would otherwise cause cryptic failures in later phases:
 
 | Test | What It Prevents |
 |------|------------------|
-| PythonVersion | Script failures with Python 3.13+ |
+| PythonVersion | az cli incompatibility with Python 3.14.0 |
 | NamingConstraints | Azure DNS name length violations |
 | NamingCompliance | Kubernetes resource name validation errors |
+| AzureRegion | Invalid region causing deployment failure |
+| AzureSubscriptionAccess | Expired or inaccessible subscription |
+| TimeoutConfiguration | Unreasonably short deployment timeouts |
+| ComprehensiveValidation | Summary of all critical configuration issues |

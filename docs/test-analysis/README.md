@@ -34,16 +34,16 @@ make test-all
 
 | Phase | Make Target | Test File | Tests | Timeout | Description |
 |-------|-------------|-----------|-------|---------|-------------|
-| 1 | [_check-dep](01-check-dependencies/00-Overview.md) | `01_check_dependencies_test.go` | 16 | 2m | Verify tools, authentication, and naming |
+| 1 | [_check-dep](01-check-dependencies/00-Overview.md) | `01_check_dependencies_test.go` | 18 | 2m | Verify tools, authentication, and naming |
 | 2 | [_setup](02-setup/00-Overview.md) | `02_setup_test.go` | 3 | 2m | Clone repository, verify scripts |
-| 3 | [_cluster](03-cluster/00-Overview.md) | `03_cluster_test.go` | 7 | 30m | Deploy Kind cluster with controllers |
+| 3 | [_cluster](03-cluster/00-Overview.md) | `03_cluster_test.go` | 11 | 30m | Deploy Kind/external cluster with controllers |
 | 4 | [_generate-yamls](04-generate-yamls/00-Overview.md) | `04_generate_yamls_test.go` | 4 | 20m | Generate YAML manifests |
-| 5 | [_deploy-crs](05-deploy-crs/00-Overview.md) | `05_deploy_crs_test.go` | 7 | 40m | Apply CRs, wait for deployment |
+| 5 | [_deploy-crs](05-deploy-crs/00-Overview.md) | `05_deploy_crs_test.go` | 9 | 40m | Apply CRs, wait for deployment |
 | 6 | [_verify](06-verification/00-Overview.md) | `06_verification_test.go` | 7 | 20m | Validate workload cluster |
-| 7 | _delete | `07_deletion_test.go` | 6 | 60m | Delete workload cluster |
-| 8 | _cleanup | `08_cleanup_test.go` | 18 | 10m | Validate cleanup operations completed |
+| 7 | [_delete](07-deletion/00-Overview.md) | `07_deletion_test.go` | 6 | 60m | Delete workload cluster |
+| 8 | [_cleanup](08-cleanup/00-Overview.md) | `08_cleanup_test.go` | 18 | 10m | Validate cleanup operations |
 
-**Total: 68 tests across 8 phases**
+**Total: 76 tests across 8 phases**
 
 ---
 
@@ -53,26 +53,34 @@ make test-all
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           PHASE 1: CHECK DEPENDENCIES                        │
 │  Tools: docker, kind, az, oc, helm, git, kubectl, go, clusterctl, python3  │
+│  Optional: jq (for MCE)                                                     │
+│  External: Validate USE_KUBECONFIG connectivity                             │
 │  Daemon: Docker daemon running check                                         │
 │  Auth: Azure authentication (service principal or CLI)                      │
 │  Naming: RFC 1123 compliance, domain prefix length validation              │
-│  Creds: Docker credential helper check (macOS)                              │
+│  Azure: Region, subscription access, timeout configuration                 │
+│  Summary: Comprehensive validation with critical error detection           │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              PHASE 2: SETUP                                  │
 │  Clone: git clone -b main https://github.com/stolostron/cluster-api-installer│
-│  Verify: scripts/deploy-charts-kind-capz.sh, doc/aro-hcp-scripts/aro-hcp-gen│
+│  Verify: scripts/deploy-charts.sh, doc/aro-hcp-scripts/aro-hcp-gen          │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                             PHASE 3: CLUSTER                                 │
-│  Create: kind create cluster, helm install cert-manager                     │
-│  Deploy: helm template charts/cluster-api | kubectl apply                   │
-│  Patch: ASO credentials secret with Azure credentials                       │
-│  Wait: CAPI, CAPZ, ASO controllers + all webhooks ready                     │
+│  Kind mode:                                                                  │
+│    Create: kind create cluster, helm install cert-manager                   │
+│    Deploy: helm template charts/cluster-api | kubectl apply                 │
+│    Patch: ASO credentials secret with Azure credentials                     │
+│    Wait: CAPI, CAPZ, ASO controllers + all webhooks ready                   │
+│  External mode (USE_KUBECONFIG):                                             │
+│    Validate: Cluster connectivity, MCE baseline                             │
+│    Enable: MCE CAPI/CAPZ components (auto-enablement)                       │
+│    Verify: Pre-installed controllers                                         │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
@@ -86,6 +94,8 @@ make test-all
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           PHASE 5: DEPLOY CRS                                │
+│  Namespace: Create unique per-run namespace (capz-test-YYYYMMDD-HHMMSS)    │
+│  Guard: Check for mismatched cluster resources (stale config detection)     │
 │  Health: Wait for cluster healthy before applying                           │
 │  Apply: kubectl apply -f credentials.yaml, is.yaml, aro.yaml (with retry)  │
 │  Monitor: clusterctl describe cluster                                        │
@@ -105,18 +115,21 @@ make test-all
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                            PHASE 7: DELETION                                 │
-│  Delete: kubectl delete cluster <cluster-name>                              │
-│  Wait: Monitor cluster resource until deleted                                │
-│  Verify: Check AROControlPlane, MachinePool deleted                         │
+│  Delete: kubectl delete cluster <cluster-name> --wait=false                 │
+│  Wait: Monitor cluster resource until fully deleted                          │
+│  Verify: AROControlPlane, MachinePool resources deleted                     │
 │  Azure: Verify Azure resource group cleanup                                  │
+│  Summary: Deletion status report                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           PHASE 8: CLEANUP                                   │
-│  Validate: Verify all cleanup operations completed successfully             │
-│  Check: Workload cluster, control plane, machine pools deleted              │
-│  Azure: Verify resource group and orphaned resources cleaned up             │
+│  Local: Kind cluster, kubeconfig, repository, results, deployment state    │
+│  Azure: Resource group, orphaned resources, AD apps, service principals    │
+│  Script: Cleanup script validation (help, dry-run, prefix validation)      │
+│  Edge cases: Non-existent resources, prefix matching accuracy               │
+│  Summary: Comprehensive cleanup status with actionable commands             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -148,10 +161,11 @@ make _cleanup        # Phase 8
 | `MANAGEMENT_CLUSTER_NAME` | `capz-tests-stage` | Kind cluster name |
 | `WORKLOAD_CLUSTER_NAME` | `capz-tests-cluster` | ARO cluster name |
 | `ARO_REPO_DIR` | `/tmp/cluster-api-installer-aro` | Repository path |
-| `DEPLOYMENT_TIMEOUT` | `60m` | Control plane wait timeout |
+| `DEPLOYMENT_TIMEOUT` | `45m` | Control plane wait timeout |
 | `DEPLOYMENT_ENV` | `stage` | Environment identifier |
 | `REGION` | `uksouth` | Azure region |
 | `CAPZ_USER` | `rcap` | User identifier (RFC 1123 compliant) |
+| `USE_KUBECONFIG` | (unset) | Path to external cluster kubeconfig |
 
 ---
 
@@ -173,7 +187,13 @@ docs/test-analysis/
 │   ├── 09-DockerCredentialHelper.md
 │   ├── 10-PythonVersion.md
 │   ├── 11-NamingConstraints.md
-│   └── 12-NamingCompliance.md
+│   ├── 12-NamingCompliance.md
+│   ├── 13-OptionalTools.md
+│   ├── 14-ExternalKubeconfig.md
+│   ├── 15-AzureRegion.md
+│   ├── 16-AzureSubscriptionAccess.md
+│   ├── 17-TimeoutConfiguration.md
+│   └── 18-ComprehensiveValidation.md
 ├── 02-setup/
 │   ├── 00-Overview.md
 │   ├── 01-CloneRepository.md
@@ -187,7 +207,11 @@ docs/test-analysis/
 │   ├── 04-CAPZControllerReady.md
 │   ├── 05-ASOCredentialsConfigured.md
 │   ├── 06-ASOControllerReady.md
-│   └── 07-WebhooksReady.md
+│   ├── 07-WebhooksReady.md
+│   ├── 08-ExternalCluster-Connectivity.md
+│   ├── 09-ExternalCluster-MCEBaselineStatus.md
+│   ├── 10-ExternalCluster-EnableMCE.md
+│   └── 11-ExternalCluster-ControllersReady.md
 ├── 04-generate-yamls/
 │   ├── 00-Overview.md
 │   ├── 01-GenerateResources.md
@@ -202,14 +226,44 @@ docs/test-analysis/
 │   ├── 04-ApplyAROClusterYAML.md
 │   ├── 05-MonitorCluster.md
 │   ├── 06-WaitForControlPlane.md
-│   └── 07-CheckClusterConditions.md
-└── 06-verification/
+│   ├── 07-CheckClusterConditions.md
+│   ├── 08-CreateNamespace.md
+│   └── 09-CheckExistingClusters.md
+├── 06-verification/
+│   ├── 00-Overview.md
+│   ├── 01-RetrieveKubeconfig.md
+│   ├── 02-ClusterNodes.md
+│   ├── 03-ClusterVersion.md
+│   ├── 04-ClusterOperators.md
+│   ├── 05-ClusterHealth.md
+│   ├── 06-TestedVersionsSummary.md
+│   └── 07-ControllerLogSummary.md
+├── 07-deletion/
+│   ├── 00-Overview.md
+│   ├── 01-DeleteCluster.md
+│   ├── 02-WaitForClusterDeletion.md
+│   ├── 03-VerifyAROControlPlaneDeletion.md
+│   ├── 04-VerifyMachinePoolDeletion.md
+│   ├── 05-VerifyAzureResourcesDeletion.md
+│   └── 06-Summary.md
+└── 08-cleanup/
     ├── 00-Overview.md
-    ├── 01-RetrieveKubeconfig.md
-    ├── 02-ClusterNodes.md
-    ├── 03-ClusterVersion.md
-    ├── 04-ClusterOperators.md
-    ├── 05-ClusterHealth.md
-    ├── 06-TestedVersionsSummary.md
-    └── 07-ControllerLogSummary.md
+    ├── 01-VerifyKindClusterDeletion.md
+    ├── 02-VerifyKubeconfigRemoval.md
+    ├── 03-VerifyClonedRepositoryRemoval.md
+    ├── 04-VerifyResultsDirectoryRemoval.md
+    ├── 05-VerifyDeploymentStateFile.md
+    ├── 06-AzureCLIAvailability.md
+    ├── 07-AzureAuthentication.md
+    ├── 08-VerifyResourceGroupStatus.md
+    ├── 09-VerifyOrphanedResources.md
+    ├── 10-VerifyADApplications.md
+    ├── 11-VerifyServicePrincipals.md
+    ├── 12-ScriptExists.md
+    ├── 13-ScriptHelpWorks.md
+    ├── 14-DryRunMode.md
+    ├── 15-PrefixValidation.md
+    ├── 16-NonExistentResourcesNoError.md
+    ├── 17-ResourceDiscoveryPrefixMatching.md
+    └── 18-Summary.md
 ```
