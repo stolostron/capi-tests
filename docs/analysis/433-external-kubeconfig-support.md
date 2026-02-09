@@ -24,7 +24,7 @@ The solution introduces a single environment variable `USE_KUBECONFIG` that, whe
 Phase 01: Check Dependencies     → Validate tools (kubectl, kind, az, etc.)
 Phase 02: Setup                  → Clone cluster-api-installer repository
 Phase 03: Cluster                → Create Kind cluster, deploy CAPI/CAPZ/ASO
-Phase 04: Generate YAMLs         → Generate credentials.yaml, is.yaml, aro.yaml
+Phase 04: Generate YAMLs         → Generate credentials.yaml, aro.yaml
 Phase 05: Deploy CRs             → Apply resources, monitor deployment
 Phase 06: Verification           → Retrieve kubeconfig, verify workload cluster
 Phase 07: Deletion               → Delete workload cluster

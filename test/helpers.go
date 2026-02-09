@@ -655,6 +655,159 @@ func FormatAROControlPlaneConditions(jsonData string) string {
 	return result.String()
 }
 
+// AROClusterResourceStatus represents a resource entry from AROCluster status.resources[]
+type AROClusterResourceStatus struct {
+	Ready    bool `json:"ready"`
+	Resource struct {
+		Group   string `json:"group"`
+		Kind    string `json:"kind"`
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	} `json:"resource"`
+}
+
+// AROClusterStatus represents the status section of the AROCluster resource
+type AROClusterStatus struct {
+	Conditions []AROControlPlaneCondition `json:"conditions"`
+	Resources  []AROClusterResourceStatus `json:"resources"`
+	Ready      bool                       `json:"ready"`
+}
+
+// ResourceKindSummary holds the ready/total count for a single resource kind.
+type ResourceKindSummary struct {
+	Kind  string
+	Ready int
+	Total int
+}
+
+// InfrastructureResourceStatus holds the parsed state of AROCluster infrastructure resources.
+type InfrastructureResourceStatus struct {
+	TotalResources int
+	ReadyResources int
+	KindSummaries  []ResourceKindSummary
+	Conditions     []AROControlPlaneCondition
+	NotReady       []AROClusterResourceStatus
+}
+
+// GetInfrastructureResourceStatus fetches and parses AROCluster.status.resources[] and status.conditions.
+// Returns an InfrastructureResourceStatus with per-kind breakdown and not-ready resource list.
+func GetInfrastructureResourceStatus(t *testing.T, kubeContext, namespace, clusterName string) InfrastructureResourceStatus {
+	t.Helper()
+
+	var result InfrastructureResourceStatus
+
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace,
+		"get", "arocluster", clusterName, "-o", "jsonpath={.status}")
+	if err != nil || strings.TrimSpace(output) == "" {
+		return result
+	}
+
+	var status AROClusterStatus
+	if err := json.Unmarshal([]byte(output), &status); err != nil {
+		return result
+	}
+
+	result.TotalResources = len(status.Resources)
+	result.Conditions = status.Conditions
+
+	// Count ready and collect not-ready resources
+	for _, r := range status.Resources {
+		if r.Ready {
+			result.ReadyResources++
+		} else {
+			result.NotReady = append(result.NotReady, r)
+		}
+	}
+
+	// Group resources by kind, preserving insertion order
+	var kindOrder []string
+	kindMap := make(map[string]*ResourceKindSummary)
+	for _, r := range status.Resources {
+		kind := r.Resource.Kind
+		if _, exists := kindMap[kind]; !exists {
+			kindOrder = append(kindOrder, kind)
+			kindMap[kind] = &ResourceKindSummary{Kind: kind}
+		}
+		kindMap[kind].Total++
+		if r.Ready {
+			kindMap[kind].Ready++
+		}
+	}
+
+	for _, kind := range kindOrder {
+		result.KindSummaries = append(result.KindSummaries, *kindMap[kind])
+	}
+
+	return result
+}
+
+// FormatInfrastructureProgress formats the infrastructure resource status as a box-style progress report.
+func FormatInfrastructureProgress(status InfrastructureResourceStatus) string {
+	var sb strings.Builder
+
+	const labelWidth = 24
+	const boxInnerWidth = 59
+
+	// Helper to format a row with emoji, label, and value
+	formatRow := func(emoji, label, value string) string {
+		const valueWidth = 32
+		if len(value) > valueWidth {
+			value = value[:valueWidth-3] + "..."
+		}
+		return fmt.Sprintf("│ %s %-*s%-*s │\n", emoji, labelWidth, label, valueWidth, value)
+	}
+
+	sb.WriteString("┌─────────────────────────────────────────────────────────────┐\n")
+	sb.WriteString("│               INFRASTRUCTURE RECONCILIATION                 │\n")
+	sb.WriteString("├─────────────────────────────────────────────────────────────┤\n")
+
+	// Per-kind breakdown
+	for _, ks := range status.KindSummaries {
+		icon := "⏳"
+		if ks.Ready == ks.Total {
+			icon = "✅"
+		}
+		sb.WriteString(formatRow(icon, ks.Kind, fmt.Sprintf("%d/%d", ks.Ready, ks.Total)))
+	}
+
+	// Summary separator and totals
+	sb.WriteString("├─────────────────────────────────────────────────────────────┤\n")
+
+	if status.ReadyResources == status.TotalResources {
+		sb.WriteString(formatRow("✅", "Total", fmt.Sprintf("%d/%d resources reconciled", status.ReadyResources, status.TotalResources)))
+	} else {
+		sb.WriteString(formatRow("📦", "Total", fmt.Sprintf("%d/%d resources reconciled", status.ReadyResources, status.TotalResources)))
+	}
+
+	// AROCluster conditions
+	for _, cond := range status.Conditions {
+		icon := "⏳"
+		if cond.Status == "True" {
+			icon = "✅"
+		}
+		detail := cond.Status
+		if cond.Status != "True" && cond.Reason != "" {
+			detail = fmt.Sprintf("%s (%s)", cond.Status, cond.Reason)
+		}
+		sb.WriteString(formatRow(icon, cond.Type, detail))
+	}
+
+	sb.WriteString("└─────────────────────────────────────────────────────────────┘\n")
+
+	return sb.String()
+}
+
+// ReportInfrastructureProgress prints infrastructure reconciliation status to TTY and test log.
+func ReportInfrastructureProgress(t *testing.T, iteration int, elapsed, remaining time.Duration, status InfrastructureResourceStatus) {
+	t.Helper()
+
+	PrintToTTY("[%d] 📋 AROCluster infrastructure:\n", iteration)
+	PrintToTTY("%s", FormatInfrastructureProgress(status))
+
+	// Log summary for test output
+	t.Logf("Infrastructure progress: %d/%d resources reconciled", status.ReadyResources, status.TotalResources)
+}
+
 // EnsureAzureCredentialsSet ensures Azure credentials are available as environment variables.
 // If AZURE_TENANT_ID or AZURE_SUBSCRIPTION_ID are not set, it auto-extracts them from
 // the Azure CLI. This is critical for the deployment script which needs these env vars
@@ -1016,7 +1169,7 @@ func ApplyWithRetryInNamespace(t *testing.T, kubeContext, namespace, yamlPath st
 		PrintToTTY("[%d/%d] Applying %s to namespace %s...\n", attempt, maxRetries, yamlPath, namespace)
 		t.Logf("Applying %s to namespace %s (attempt %d/%d)", yamlPath, namespace, attempt, maxRetries)
 
-		output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "apply", "-f", yamlPath)
+		output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "apply", "--validate=warn", "-f", yamlPath)
 
 		// Check if apply was successful
 		if err == nil || IsKubectlApplySuccess(output) {

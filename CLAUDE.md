@@ -34,7 +34,7 @@ All test phases are designed to be idempotent and safe to re-run:
 | 01 Check Dependencies | N/A (stateless) | Always runs - no persistent state |
 | 02 Setup | Directory exists | Validates git integrity, skips clone |
 | 03 Kind Cluster | `kind get clusters` | Skips if cluster already exists |
-| 04 Generate YAMLs | All YAML files exist | Skips if credentials.yaml, is.yaml, aro.yaml all present |
+| 04 Generate YAMLs | All YAML files exist | Skips if credentials.yaml and aro.yaml both present |
 | 05 Deploy CRs | File existence | Uses `kubectl apply` (inherently idempotent) |
 | 06 Verification | Kubeconfig + cluster state | Guards on required files and cluster phase |
 | 07 Deletion | Resource existence | Skips if already deleted |
@@ -293,6 +293,10 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 - `CAPZ_USER` - User identifier for domain prefix (default: `rcap`). Must be short enough that `${CAPZ_USER}-${DEPLOYMENT_ENV}` does not exceed 15 characters.
 - `WORKLOAD_CLUSTER_NAMESPACE` - Namespace for workload cluster resources (CAPI CRs that create Azure resources). If set, uses the exact value provided (for resume scenarios). If not set, generates a unique namespace per test run using `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` format (e.g., `capz-test-20260202-135526`). This namespace is passed as `$NAMESPACE` to the YAML generation script.
 - `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` - Prefix for auto-generated workload cluster namespace (default: `capz-test`). Only used when `WORKLOAD_CLUSTER_NAMESPACE` is not set.
+
+### Kind Mode
+- `USE_KIND` - Enable Kind deployment mode (default: `false`). When set to `true`:
+  - Creates a local Kind management cluster with CAPI/CAPZ/ASO controllers
 
 ### External Cluster Mode
 - `USE_KUBECONFIG` - Path to an external kubeconfig file. When set, the test suite runs in "external cluster mode":

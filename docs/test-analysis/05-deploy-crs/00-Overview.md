@@ -20,11 +20,10 @@ Create the workload cluster namespace, apply the generated YAML manifests to the
 | 2 | [09-CheckExistingClusters](09-CheckExistingClusters.md) | Check for mismatched cluster resources |
 | 3 | [01-ApplyResources](01-ApplyResources.md) | Apply all YAML files to cluster |
 | 4 | [02-ApplyCredentialsYAML](02-ApplyCredentialsYAML.md) | Apply credentials.yaml |
-| 5 | [03-ApplyInfrastructureSecretsYAML](03-ApplyInfrastructureSecretsYAML.md) | Apply is.yaml |
-| 6 | [04-ApplyAROClusterYAML](04-ApplyAROClusterYAML.md) | Apply aro.yaml |
-| 7 | [05-MonitorCluster](05-MonitorCluster.md) | Monitor deployment with clusterctl |
-| 8 | [06-WaitForControlPlane](06-WaitForControlPlane.md) | Poll until control plane is ready |
-| 9 | [07-CheckClusterConditions](07-CheckClusterConditions.md) | Check cluster condition status |
+| 5 | [04-ApplyAROClusterYAML](04-ApplyAROClusterYAML.md) | Apply aro.yaml |
+| 6 | [05-MonitorCluster](05-MonitorCluster.md) | Monitor deployment with clusterctl |
+| 7 | [06-WaitForControlPlane](06-WaitForControlPlane.md) | Poll until control plane is ready |
+| 8 | [07-CheckClusterConditions](07-CheckClusterConditions.md) | Check cluster condition status |
 
 ---
 
@@ -51,9 +50,8 @@ Create the workload cluster namespace, apply the generated YAML manifests to the
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Tests 3-6: Apply Resources                                       │
+│  Tests 3-5: Apply Resources                                       │
 │  ├── kubectl apply -f credentials.yaml                            │
-│  ├── kubectl apply -f is.yaml                                     │
 │  └── kubectl apply -f aro.yaml                                    │
 │  (with retry logic for transient connection issues)               │
 └─────────────────────────────────────────────────────────────────┘
@@ -87,8 +85,7 @@ Create the workload cluster namespace, apply the generated YAML manifests to the
 | File | Contains |
 |------|----------|
 | `credentials.yaml` | Azure credentials secret |
-| `is.yaml` | Infrastructure secrets |
-| `aro.yaml` | ARO cluster resources (Cluster, AROControlPlane, MachinePool) |
+| `aro.yaml` | ARO cluster resources (Cluster, AROControlPlane, AROCluster with ASO resources, MachinePool) |
 
 ---
 

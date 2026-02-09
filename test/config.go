@@ -22,10 +22,15 @@ const (
 	// MCE components need time to deploy controllers, pull images, and initialize.
 	DefaultMCEEnablementTimeout = 15 * time.Minute
 
+	// DefaultNodeReadyTimeout is the default timeout for waiting for worker nodes to become available.
+	// In ARO HCP, the control plane becomes ready before worker nodes are provisioned.
+	// The AROMachinePool creates nodes after the HcpOpenShiftCluster is up.
+	DefaultNodeReadyTimeout = 30 * time.Minute
+
 	// DefaultCAPZUser is the default user identifier for CAPZ resources.
 	// Used in ClusterNamePrefix (for resource group naming) and User field.
 	// Extracted to a constant to ensure consistency across all usages.
-	DefaultCAPZUser = "rcapb"
+	DefaultCAPZUser = "rcapn"
 
 	// DefaultDeploymentEnv is the default deployment environment identifier.
 	// Used in ClusterNamePrefix and Environment field.
@@ -136,6 +141,10 @@ type TestConfig struct {
 	// - Uses current-context from the kubeconfig
 	UseKubeconfig string
 
+	// UseKind enables Kind deployment mode (USE_KIND=true).
+	// When true, creates a local Kind management cluster with CAPI/CAPZ/ASO controllers.
+	UseKind bool
+
 	// Paths
 	ClusterctlBinPath string
 	ScriptsPath       string
@@ -167,7 +176,7 @@ func NewTestConfig() *TestConfig {
 	return &TestConfig{
 		// Repository defaults
 		RepoURL:    GetEnvOrDefault("ARO_REPO_URL", "https://github.com/stolostron/cluster-api-installer"),
-		RepoBranch: GetEnvOrDefault("ARO_REPO_BRANCH", "main"),
+		RepoBranch: GetEnvOrDefault("ARO_REPO_BRANCH", "installer-adobe"),
 		RepoDir:    getDefaultRepoDir(),
 
 		// Cluster defaults
@@ -185,6 +194,9 @@ func NewTestConfig() *TestConfig {
 
 		// External cluster
 		UseKubeconfig: useKubeconfig,
+
+		// Kind mode
+		UseKind: os.Getenv("USE_KIND") == "true",
 
 		// Paths
 		ClusterctlBinPath: GetEnvOrDefault("CLUSTERCTL_BIN", "./bin/clusterctl"),
@@ -329,6 +341,22 @@ func (c *TestConfig) GetAROYAMLPath() string {
 // instead of creating a local Kind cluster.
 func (c *TestConfig) IsExternalCluster() bool {
 	return c.UseKubeconfig != ""
+}
+
+// IsKindMode returns true when Kind deployment mode is enabled (USE_KIND=true).
+func (c *TestConfig) IsKindMode() bool {
+	return c.UseKind
+}
+
+// GetExpectedFiles returns the list of expected YAML files for infrastructure deployment.
+// The generation script produces credentials.yaml (Azure credentials for CAPZ/ASO) and
+// aro.yaml (Cluster, AROControlPlane, AROCluster with ASO resources, MachinePool).
+// Infrastructure resources are embedded in AROCluster.spec.resources[] within aro.yaml.
+func (c *TestConfig) GetExpectedFiles() []string {
+	return []string{
+		"credentials.yaml",
+		"aro.yaml",
+	}
 }
 
 // GetKubeContext returns the kubectl context to use for the management cluster.

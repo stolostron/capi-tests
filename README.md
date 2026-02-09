@@ -129,6 +129,11 @@ export CS_CLUSTER_NAME=-my-cluster  # Invalid - starts with hyphen
 
 The test suite validates naming compliance during the Check Dependencies phase (phase 1), preventing late failures during CR deployment (phase 5).
 
+### Kind Mode
+
+- `USE_KIND` - Enable Kind deployment mode (default: `false`). When set to `true`:
+  - Creates a local Kind management cluster with CAPI/CAPZ/ASO controllers
+
 ### Test Behavior
 
 - `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `60m`). Use Go duration format: `1h`, `45m`, `90m`, etc.

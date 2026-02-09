@@ -48,7 +48,7 @@
       └─ No → FAIL: "Output directory not created"
 
 7. Verify each expected file:
-   └─ For each [credentials.yaml, is.yaml, aro.yaml]:
+   └─ For each [credentials.yaml, aro.yaml]:
       └─ FileExists(file)?
          ├─ Yes → Log file path and size
          └─ No  → FAIL: "Expected file not found"
@@ -75,7 +75,6 @@ if config.AzureSubscriptionName != "" {
 ```go
 expectedFiles := []string{
     "credentials.yaml",
-    "is.yaml",
     "aro.yaml",
 }
 ```
@@ -90,7 +89,6 @@ Running infrastructure generation script: /tmp/cluster-api-installer-aro/doc/aro
 ✅ Infrastructure generation completed successfully
 Output directory created: /tmp/cluster-api-installer-aro/stage-radek-capz-tests-cluster
   ✅ Generated file: /tmp/.../credentials.yaml (1234 bytes)
-  ✅ Generated file: /tmp/.../is.yaml (5678 bytes)
   ✅ Generated file: /tmp/.../aro.yaml (9012 bytes)
 ```
 

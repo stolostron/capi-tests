@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // getKubeconfigPath returns the path where the workload cluster kubeconfig is stored.
@@ -117,7 +118,10 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 	SetEnvVar(t, "ARO_CLUSTER_KUBECONFIG", kubeconfigPath)
 }
 
-// TestVerification_ClusterNodes verifies cluster nodes are available
+// TestVerification_ClusterNodes verifies cluster nodes are available.
+// In ARO HCP, the control plane becomes ready before worker nodes are provisioned.
+// The AROMachinePool creates nodes after the HcpOpenShiftCluster is up, so this
+// test polls until at least one node appears or the timeout is reached.
 func TestVerification_ClusterNodes(t *testing.T) {
 
 	config := NewTestConfig()
@@ -127,26 +131,66 @@ func TestVerification_ClusterNodes(t *testing.T) {
 		t.Skipf("Kubeconfig not available at %s, run TestVerification_RetrieveKubeconfig first", kubeconfigPath)
 	}
 
-	t.Log("Checking cluster nodes...")
-
 	SetEnvVar(t, "KUBECONFIG", kubeconfigPath)
 
-	output, err := RunCommand(t, "kubectl", "get", "nodes")
-	if err != nil {
-		t.Errorf("Failed to get cluster nodes: %v\nOutput: %s", err, output)
-		return
+	timeout := DefaultNodeReadyTimeout
+	pollInterval := 30 * time.Second
+	startTime := time.Now()
+
+	PrintToTTY("\n=== Waiting for cluster nodes to become available ===\n")
+	PrintToTTY("Timeout: %v | Poll interval: %v\n\n", timeout, pollInterval)
+	t.Logf("Waiting for cluster nodes (timeout: %v)...", timeout)
+
+	iteration := 0
+	for {
+		elapsed := time.Since(startTime)
+		remaining := timeout - elapsed
+
+		if elapsed > timeout {
+			PrintToTTY("\n❌ Timeout reached after %v waiting for nodes\n\n", elapsed.Round(time.Second))
+			t.Errorf("Timeout waiting for cluster nodes after %v.\n\n"+
+				"Troubleshooting steps:\n"+
+				"  1. Check MachinePool status: kubectl --context %s -n %s get machinepool\n"+
+				"  2. Check AROMachinePool status: kubectl --context %s -n %s get aromachinepool\n"+
+				"  3. Check nodes: KUBECONFIG=%s kubectl get nodes\n",
+				elapsed.Round(time.Second),
+				config.GetKubeContext(), config.WorkloadClusterNamespace,
+				config.GetKubeContext(), config.WorkloadClusterNamespace,
+				kubeconfigPath)
+			return
+		}
+
+		iteration++
+		PrintToTTY("[%d] Checking cluster nodes...\n", iteration)
+
+		output, err := RunCommand(t, "kubectl", "get", "nodes")
+		if err != nil {
+			PrintToTTY("[%d] ⚠️  Failed to get nodes: %v\n", iteration, err)
+			t.Logf("Failed to get nodes (attempt %d): %v", iteration, err)
+		} else {
+			lines := strings.Split(strings.TrimSpace(output), "\n")
+			// Filter out empty lines
+			nodeCount := 0
+			for _, line := range lines {
+				if strings.TrimSpace(line) != "" && !strings.HasPrefix(line, "NAME") {
+					nodeCount++
+				}
+			}
+
+			if nodeCount > 0 {
+				PrintToTTY("\n✅ Cluster nodes available! (took %v)\n", elapsed.Round(time.Second))
+				PrintToTTY("%s\n\n", output)
+				t.Logf("Cluster nodes:\n%s", output)
+				t.Logf("Cluster has %d node(s)", nodeCount)
+				return
+			}
+
+			PrintToTTY("[%d] No nodes found yet\n", iteration)
+		}
+
+		ReportProgress(t, iteration, elapsed, remaining, timeout)
+		time.Sleep(pollInterval)
 	}
-
-	t.Logf("Cluster nodes:\n%s", output)
-
-	// Verify we have at least one node
-	lines := strings.Split(output, "\n")
-	if len(lines) < 2 { // Header + at least one node
-		t.Errorf("Expected at least one node, got output:\n%s", output)
-		return
-	}
-
-	t.Logf("Cluster has %d node(s)", len(lines)-1)
 }
 
 // TestVerification_ClusterVersion verifies the OpenShift cluster version

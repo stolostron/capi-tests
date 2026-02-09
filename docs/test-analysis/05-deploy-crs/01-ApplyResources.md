@@ -11,8 +11,7 @@
 | Step | Command | Purpose |
 |------|---------|---------|
 | 1 | `kubectl --context kind-<name> apply -f credentials.yaml` | Apply credentials |
-| 2 | `kubectl --context kind-<name> apply -f is.yaml` | Apply infrastructure secrets |
-| 3 | `kubectl --context kind-<name> apply -f aro.yaml` | Apply ARO cluster |
+| 2 | `kubectl --context kind-<name> apply -f aro.yaml` | Apply ARO cluster |
 
 ---
 
@@ -29,7 +28,7 @@
 3. Change to output directory:
    └─ os.Chdir(outputDir)
 
-4. For each file in [credentials.yaml, is.yaml, aro.yaml]:
+4. For each file in [credentials.yaml, aro.yaml]:
    │
    ├─► FileExists(file)?
    │   └─ No → FAIL: "Cannot apply missing file"
@@ -48,7 +47,6 @@
 ```go
 expectedFiles := []string{
     "credentials.yaml",
-    "is.yaml",
     "aro.yaml",
 }
 ```
@@ -61,8 +59,6 @@ expectedFiles := []string{
 === Applying Kubernetes resources ===
 Applying resource file: credentials.yaml...
 ✅ Successfully applied credentials.yaml
-Applying resource file: is.yaml...
-✅ Successfully applied is.yaml
 Applying resource file: aro.yaml...
 ✅ Successfully applied aro.yaml
 

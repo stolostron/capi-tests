@@ -18,8 +18,7 @@ Generate Kubernetes YAML manifests for ARO infrastructure resources using the `a
 |---|------|---------|
 | 1 | [01-GenerateResources](01-GenerateResources.md) | Run generation script and create YAML files |
 | 2 | [02-VerifyCredentialsYAML](02-VerifyCredentialsYAML.md) | Validate credentials.yaml syntax |
-| 3 | [03-VerifyInfrastructureSecretsYAML](03-VerifyInfrastructureSecretsYAML.md) | Validate is.yaml syntax |
-| 4 | [04-VerifyAROClusterYAML](04-VerifyAROClusterYAML.md) | Validate aro.yaml syntax |
+| 3 | [04-VerifyAROClusterYAML](04-VerifyAROClusterYAML.md) | Validate aro.yaml syntax |
 
 ---
 
@@ -47,13 +46,7 @@ Generate Kubernetes YAML manifests for ARO infrastructure resources using the `a
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Test 3: VerifyInfrastructureSecretsYAML                         │
-│  └── ValidateYAMLFile(is.yaml)                                   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Test 4: VerifyAROClusterYAML                                    │
+│  Test 3: VerifyAROClusterYAML                                    │
 │  └── ValidateYAMLFile(aro.yaml)                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -65,8 +58,7 @@ Generate Kubernetes YAML manifests for ARO infrastructure resources using the `a
 | File | Description |
 |------|-------------|
 | `credentials.yaml` | Azure credentials secret |
-| `is.yaml` | Infrastructure secrets |
-| `aro.yaml` | ARO cluster configuration |
+| `aro.yaml` | ARO cluster configuration (Cluster, AROControlPlane, AROCluster with ASO resources, MachinePool) |
 
 ---
 

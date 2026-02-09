@@ -16,8 +16,8 @@ Resources are organized by dependency level. Each level requires the resources a
 LEVEL 0 - YAML Inputs (no dependencies, applied by kubectl)
 ├── Secret/aso-credential                    (credentials.yaml)
 ├── Secret/cluster-identity-secret           (credentials.yaml)
-├── AzureClusterIdentity/cluster-identity    (is.yaml)
-├── ResourceGroup/rcape-stage-resgroup       (is.yaml)
+├── AzureClusterIdentity/cluster-identity    (credentials.yaml)
+├── ResourceGroup/rcape-stage-resgroup       (aro.yaml - AROCluster.spec.resources[])
 └── Cluster/rcape-stage                      (aro.yaml - top-level CAPI resource)
 
 LEVEL 1 - Direct children of Cluster or ResourceGroup
@@ -111,7 +111,7 @@ LEVEL 5 - Controller-generated (identity mappings, kubeconfig)
 ### Summary of dependency chain:
 
 ```
-credentials.yaml → is.yaml → aro.yaml
+credentials.yaml → aro.yaml
                                 │
                     Cluster ────┤
                                 ├── AROCluster
@@ -214,7 +214,7 @@ ResourceGroup ──┬── VNet ──→ Subnet ──→ RoleAssignments (x
 ## A.4. Kubernetes Timeline Summary
 
 ```
-0s        Apply credentials.yaml + is.yaml + aro.yaml
+0s        Apply credentials.yaml + aro.yaml
           ├── Secrets, AzureClusterIdentity, ResourceGroup, VNet, NSG, Vault, Subnet created
 1s        CAPI reconciliation: Cluster → AROCluster, AROControlPlane, MachinePool
           └── All 13 UserAssignedIdentities + 28 RoleAssignments created
@@ -350,7 +350,7 @@ Service-managed-identity grants Federated Credentials role to:
 All times relative to first `kubectl apply`. Based on ASO Ready condition timestamps.
 
 ```
-T+0s     ─── kubectl apply (credentials.yaml, is.yaml, aro.yaml) ───
+T+0s     ─── kubectl apply (credentials.yaml, aro.yaml) ───
 
 T+6s     ResourceGroup ................................. Succeeded    (6s to provision)
 T+12s    NetworkSecurityGroup .......................... Succeeded    (12s)

@@ -87,7 +87,7 @@ make test-all
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          PHASE 4: GENERATE YAMLS                             │
 │  Run: bash aro-hcp-gen.sh <output-dir>                                       │
-│  Output: credentials.yaml, is.yaml, aro.yaml                                 │
+│  Output: credentials.yaml, aro.yaml                                          │
 │  Validate: YAML syntax check                                                 │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
@@ -97,7 +97,7 @@ make test-all
 │  Namespace: Create unique per-run namespace (capz-test-YYYYMMDD-HHMMSS)    │
 │  Guard: Check for mismatched cluster resources (stale config detection)     │
 │  Health: Wait for cluster healthy before applying                           │
-│  Apply: kubectl apply -f credentials.yaml, is.yaml, aro.yaml (with retry)  │
+│  Apply: kubectl apply -f credentials.yaml, aro.yaml (with retry)           │
 │  Monitor: clusterctl describe cluster                                        │
 │  Wait: Poll arocontrolplane until status.ready=true (45m timeout)           │
 └─────────────────────────────────────────────────────────────────────────────┘

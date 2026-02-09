@@ -149,3 +149,54 @@ func TestParseDeploymentTimeout_InvalidDuration(t *testing.T) {
 		})
 	}
 }
+
+func TestIsKindMode(t *testing.T) {
+	testCases := []struct {
+		name     string
+		envValue string
+		expected bool
+	}{
+		{"not set", "", false},
+		{"true", "true", true},
+		{"false", "false", false},
+		{"invalid", "yes", false},
+	}
+
+	originalValue := os.Getenv("USE_KIND")
+	defer func() {
+		if originalValue != "" {
+			_ = os.Setenv("USE_KIND", originalValue)
+		} else {
+			_ = os.Unsetenv("USE_KIND")
+		}
+	}()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.envValue != "" {
+				_ = os.Setenv("USE_KIND", tc.envValue)
+			} else {
+				_ = os.Unsetenv("USE_KIND")
+			}
+			config := NewTestConfig()
+			if config.IsKindMode() != tc.expected {
+				t.Errorf("IsKindMode() = %v, expected %v (USE_KIND=%q)", config.IsKindMode(), tc.expected, tc.envValue)
+			}
+		})
+	}
+}
+
+func TestGetExpectedFiles(t *testing.T) {
+	config := NewTestConfig()
+	files := config.GetExpectedFiles()
+
+	expected := []string{"credentials.yaml", "aro.yaml"}
+	if len(files) != len(expected) {
+		t.Fatalf("GetExpectedFiles() returned %d files, expected %d: %v", len(files), len(expected), files)
+	}
+	for i, file := range files {
+		if file != expected[i] {
+			t.Errorf("GetExpectedFiles()[%d] = %q, expected %q", i, file, expected[i])
+		}
+	}
+}
