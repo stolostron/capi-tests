@@ -444,41 +444,59 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 			PrintToTTY("[%d] ✅ AROControlPlane.Ready: true\n", iteration)
 		}
 
-		// Check MachinePool status (phase, ready, replicas)
+		// Check MachinePool and AROMachinePool status
 		if !machinePoolReady {
-			output, err := RunCommandQuiet(t, "kubectl", "--context", context, "get",
+			// Query each field separately to avoid jsonpath field-collapse bug
+			mpPhase, mpPhaseErr := RunCommandQuiet(t, "kubectl", "--context", context, "get",
 				"machinepool", machinePoolName, "-n", config.WorkloadClusterNamespace,
-				"-o", "jsonpath={.status.phase} {.status.ready} {.status.replicas} {.status.readyReplicas}")
+				"-o", "jsonpath={.status.phase}")
+			mpReady, _ := RunCommandQuiet(t, "kubectl", "--context", context, "get",
+				"machinepool", machinePoolName, "-n", config.WorkloadClusterNamespace,
+				"-o", "jsonpath={.status.ready}")
+			mpReplicas, _ := RunCommandQuiet(t, "kubectl", "--context", context, "get",
+				"machinepool", machinePoolName, "-n", config.WorkloadClusterNamespace,
+				"-o", "jsonpath={.status.replicas}")
+			mpReadyReplicas, _ := RunCommandQuiet(t, "kubectl", "--context", context, "get",
+				"machinepool", machinePoolName, "-n", config.WorkloadClusterNamespace,
+				"-o", "jsonpath={.status.readyReplicas}")
 
-			if err != nil {
+			phase := strings.TrimSpace(mpPhase)
+			ready := strings.TrimSpace(mpReady)
+			replicas := strings.TrimSpace(mpReplicas)
+			readyReplicas := strings.TrimSpace(mpReadyReplicas)
+
+			// Check AROMachinePool status
+			aroMPReady, _ := RunCommandQuiet(t, "kubectl", "--context", context, "get",
+				"aromachinepool", machinePoolName, "-n", config.WorkloadClusterNamespace,
+				"-o", "jsonpath={.status.ready}")
+			aroMPProvState, _ := RunCommandQuiet(t, "kubectl", "--context", context, "get",
+				"aromachinepool", machinePoolName, "-n", config.WorkloadClusterNamespace,
+				"-o", "jsonpath={.status.provisioningState}")
+
+			aroReady := strings.TrimSpace(aroMPReady)
+			aroProvState := strings.TrimSpace(aroMPProvState)
+
+			if mpPhaseErr != nil {
+				// MachinePool resource doesn't exist yet
 				PrintToTTY("[%d] ⏳ MachinePool: not found yet\n", iteration)
+			} else if ready == "true" || phase == "Running" || phase == "Provisioned" {
+				machinePoolReady = true
+				PrintToTTY("[%d] ✅ MachinePool: %s (replicas: %s/%s, took %v)\n",
+					iteration, phase, readyReplicas, replicas, elapsed.Round(time.Second))
+				t.Logf("MachinePool %s replicas=%s/%s (took %v)", phase, readyReplicas, replicas, elapsed.Round(time.Second))
+			} else if phase != "" {
+				PrintToTTY("[%d] ⏳ MachinePool: %s (replicas: %s/%s)\n",
+					iteration, phase, readyReplicas, replicas)
 			} else {
-				fields := strings.Fields(strings.TrimSpace(output))
-				phase, ready := "", ""
-				replicas, readyReplicas := "", ""
-				if len(fields) > 0 {
-					phase = fields[0]
-				}
-				if len(fields) > 1 {
-					ready = fields[1]
-				}
-				if len(fields) > 2 {
-					replicas = fields[2]
-				}
-				if len(fields) > 3 {
-					readyReplicas = fields[3]
-				}
+				PrintToTTY("[%d] ⏳ MachinePool: waiting for status\n", iteration)
+			}
 
-				if ready == "true" || phase == "Running" || phase == "Provisioned" {
-					machinePoolReady = true
-					PrintToTTY("[%d] ✅ MachinePool: %s (replicas: %s/%s, took %v)\n",
-						iteration, phase, readyReplicas, replicas, elapsed.Round(time.Second))
-					t.Logf("MachinePool %s replicas=%s/%s (took %v)", phase, readyReplicas, replicas, elapsed.Round(time.Second))
-				} else if phase != "" {
-					PrintToTTY("[%d] ⏳ MachinePool: %s (replicas: %s/%s)\n",
-						iteration, phase, readyReplicas, replicas)
+			// Display AROMachinePool status
+			if aroReady != "" || aroProvState != "" {
+				if aroReady == "true" {
+					PrintToTTY("[%d] ✅ AROMachinePool: ready=%s provisioningState=%s\n", iteration, aroReady, aroProvState)
 				} else {
-					PrintToTTY("[%d] ⏳ MachinePool: waiting for status\n", iteration)
+					PrintToTTY("[%d] ⏳ AROMachinePool: ready=%s provisioningState=%s\n", iteration, aroReady, aroProvState)
 				}
 			}
 		} else {
