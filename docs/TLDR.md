@@ -3,6 +3,7 @@
 ```bash
 git clone https://github.com/RadekCap/CAPZTests.git
 cd CAPZTests
+git checkout dev
 ```
 
 Example of a local diff for `test/config.go`:
