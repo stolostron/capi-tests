@@ -20,7 +20,7 @@ permissions:
   issues: write
 
 env:
-  ARO_REPO_URL: https://github.com/RadekCap/cluster-api-installer.git
+  ARO_REPO_URL: https://github.com/stolostron/cluster-api-installer.git
   ARO_REPO_BRANCH: ARO-ASO
   ARO_REPO_DIR: /tmp/cluster-api-installer-aro
 
