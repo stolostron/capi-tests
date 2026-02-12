@@ -32,7 +32,7 @@ jobs:
         cache: true
 
     - name: Run gosec security scanner
-      uses: securego/gosec@e2fa6ab0ba09771b9205dd0cafa997a2f730f582 # master
+      uses: securego/gosec@1b7e1e94bc2077fc1adccfc1358399fad2958d5a # master
       with:
         args: '-fmt=json -out=gosec-results.json -stdout -verbose=text ./...'
       continue-on-error: true
