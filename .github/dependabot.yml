@@ -17,8 +17,6 @@ updates:
     labels:
       - "dependencies"
       - "go"
-    reviewers:
-      - "RadekCap"
     # Group minor and patch updates to reduce PR noise
     groups:
       go-dependencies:
@@ -42,8 +40,6 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
-    reviewers:
-      - "RadekCap"
     # Group action updates
     groups:
       github-actions:
