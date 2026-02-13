@@ -3348,12 +3348,12 @@ func TestFormatMismatchedClustersError_HasInstructions(t *testing.T) {
 }
 
 func TestResolveDockerConfigPath_Default(t *testing.T) {
-	// Save and clear DOCKER_CONFIG to test the default path
-	originalDockerConfig := os.Getenv("DOCKER_CONFIG")
-	_ = os.Unsetenv("DOCKER_CONFIG")
+	// Save and clear DOCKER_SECRETS to test the default path
+	originalDockerConfig := os.Getenv("DOCKER_SECRETS")
+	_ = os.Unsetenv("DOCKER_SECRETS")
 	defer func() {
 		if originalDockerConfig != "" {
-			_ = os.Setenv("DOCKER_CONFIG", originalDockerConfig)
+			_ = os.Setenv("DOCKER_SECRETS", originalDockerConfig)
 		}
 	}()
 
@@ -3380,19 +3380,19 @@ func TestResolveDockerConfigPath_CustomDockerConfig(t *testing.T) {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
 
-	originalDockerConfig := os.Getenv("DOCKER_CONFIG")
-	_ = os.Setenv("DOCKER_CONFIG", tmpDir)
+	originalDockerConfig := os.Getenv("DOCKER_SECRETS")
+	_ = os.Setenv("DOCKER_SECRETS", tmpDir)
 	defer func() {
 		if originalDockerConfig != "" {
-			_ = os.Setenv("DOCKER_CONFIG", originalDockerConfig)
+			_ = os.Setenv("DOCKER_SECRETS", originalDockerConfig)
 		} else {
-			_ = os.Unsetenv("DOCKER_CONFIG")
+			_ = os.Unsetenv("DOCKER_SECRETS")
 		}
 	}()
 
 	path, found := ResolveDockerConfigPath()
 	if !found {
-		t.Fatal("Expected to find Docker config via DOCKER_CONFIG env var")
+		t.Fatal("Expected to find Docker config via DOCKER_SECRETS env var")
 	}
 	if path != configPath {
 		t.Errorf("Expected %s, got %s", configPath, path)
@@ -3401,9 +3401,9 @@ func TestResolveDockerConfigPath_CustomDockerConfig(t *testing.T) {
 
 func TestResolveDockerConfigPath_MissingFile(t *testing.T) {
 	// Point to a non-existent directory
-	_ = os.Setenv("DOCKER_CONFIG", "/nonexistent/path")
+	_ = os.Setenv("DOCKER_SECRETS", "/nonexistent/path")
 	defer func() {
-		_ = os.Unsetenv("DOCKER_CONFIG")
+		_ = os.Unsetenv("DOCKER_SECRETS")
 	}()
 
 	// Also ensure the default path doesn't exist by temporarily overriding HOME
@@ -3434,14 +3434,14 @@ func TestGenerateKindConfig(t *testing.T) {
 		t.Fatalf("Failed to create test docker config: %v", err)
 	}
 
-	// Point DOCKER_CONFIG to our fake config
-	originalDockerConfig := os.Getenv("DOCKER_CONFIG")
-	_ = os.Setenv("DOCKER_CONFIG", dockerDir)
+	// Point DOCKER_SECRETS to our fake config
+	originalDockerConfig := os.Getenv("DOCKER_SECRETS")
+	_ = os.Setenv("DOCKER_SECRETS", dockerDir)
 	defer func() {
 		if originalDockerConfig != "" {
-			_ = os.Setenv("DOCKER_CONFIG", originalDockerConfig)
+			_ = os.Setenv("DOCKER_SECRETS", originalDockerConfig)
 		} else {
-			_ = os.Unsetenv("DOCKER_CONFIG")
+			_ = os.Unsetenv("DOCKER_SECRETS")
 		}
 	}()
 
@@ -3485,11 +3485,11 @@ func TestGenerateKindConfig_NoDockerConfig(t *testing.T) {
 	}
 
 	// Point to non-existent docker config
-	_ = os.Setenv("DOCKER_CONFIG", "/nonexistent")
+	_ = os.Setenv("DOCKER_SECRETS", "/nonexistent")
 	originalHome := os.Getenv("HOME")
 	_ = os.Setenv("HOME", "/nonexistent")
 	defer func() {
-		_ = os.Unsetenv("DOCKER_CONFIG")
+		_ = os.Unsetenv("DOCKER_SECRETS")
 		_ = os.Setenv("HOME", originalHome)
 	}()
 

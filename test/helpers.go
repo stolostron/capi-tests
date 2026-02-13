@@ -1019,12 +1019,12 @@ func EnsureAWSCredentialsSet(t *testing.T) error {
 
 // ResolveDockerConfigPath returns the path to the Docker config file following Docker's
 // standard convention:
-//  1. $DOCKER_CONFIG/config.json (if DOCKER_CONFIG is set)
+//  1. $DOCKER_SECRETS/config.json (if DOCKER_SECRETS is set)
 //  2. $HOME/.docker/config.json (default)
 //
 // Returns the path and true if the file exists, or empty string and false otherwise.
 func ResolveDockerConfigPath() (string, bool) {
-	if dockerConfig := os.Getenv("DOCKER_CONFIG"); dockerConfig != "" {
+	if dockerConfig := os.Getenv("DOCKER_SECRETS"); dockerConfig != "" {
 		path := filepath.Join(dockerConfig, "config.json")
 		if FileExists(path) {
 			return path, true
@@ -1055,7 +1055,7 @@ func GenerateKindConfig(t *testing.T, repoDir, clusterName string) (string, erro
 
 	dockerConfigPath, found := ResolveDockerConfigPath()
 	if !found {
-		t.Log("Warning: no Docker config found ($DOCKER_CONFIG/config.json or ~/.docker/config.json)")
+		t.Log("Warning: no Docker config found ($DOCKER_SECRETS/config.json or ~/.docker/config.json)")
 		t.Log("Kind nodes will not have registry credentials - private image pulls may fail")
 		return "", nil
 	}

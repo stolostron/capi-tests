@@ -606,8 +606,8 @@ func TestCheckDependencies_DockerCredentialHelper(t *testing.T) {
 		return
 	}
 
-	// Determine Docker config directory (respect DOCKER_CONFIG env var)
-	dockerConfigDir := os.Getenv("DOCKER_CONFIG")
+	// Determine Docker config directory (respect DOCKER_SECRETS env var)
+	dockerConfigDir := os.Getenv("DOCKER_SECRETS")
 	if dockerConfigDir == "" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
