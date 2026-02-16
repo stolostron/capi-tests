@@ -262,7 +262,7 @@ var (
 // resolveCommandLogDir returns the results directory path for command logging.
 func resolveCommandLogDir() string {
 	if dir := os.Getenv("TEST_RESULTS_DIR"); dir != "" {
-		return dir
+		return filepath.Clean(dir)
 	}
 	return GetResultsDir()
 }
@@ -2230,7 +2230,7 @@ func SaveAllControllerLogs(t *testing.T, kubeContext, outputDir string, summarie
 func GetResultsDir() string {
 	// Check for environment variable set by Makefile
 	if envDir := os.Getenv("TEST_RESULTS_DIR"); envDir != "" {
-		// Sanitize path to prevent path traversal (gosec G703)
+		// Normalize path to resolve relative components like ".."
 		cleanDir := filepath.Clean(envDir)
 		// Ensure directory exists
 		if err := os.MkdirAll(cleanDir, 0750); err == nil {
