@@ -93,7 +93,7 @@ func RunCommand(t *testing.T, name string, args ...string) (string, error) {
 	t.Logf("Executing command: %s", cmdStr)
 	logCommandToFile(t.Name(), cmdStr)
 
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command(name, args...) // #nosec G204 -- test helper designed to execute arbitrary commands for test orchestration
 	output, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(output)), err
 }
@@ -114,7 +114,7 @@ func RunCommandQuiet(t *testing.T, name string, args ...string) (string, error) 
 	t.Logf("Executing command (quiet): %s", cmdStr)
 	logCommandToFile(t.Name(), cmdStr)
 
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command(name, args...) // #nosec G204 -- test helper designed to execute arbitrary commands for test orchestration
 	output, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(output)), err
 }
@@ -160,7 +160,7 @@ func RunCommandWithStreaming(t *testing.T, name string, args ...string) (string,
 	t.Logf("Executing command (streaming): %s", cmdStr)
 	logCommandToFile(t.Name(), cmdStr)
 
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command(name, args...) // #nosec G204 -- test helper designed to execute arbitrary commands for test orchestration
 
 	// Create pipes for stdout and stderr
 	stdout, err := cmd.StdoutPipe()
@@ -262,7 +262,7 @@ var (
 // resolveCommandLogDir returns the results directory path for command logging.
 func resolveCommandLogDir() string {
 	if dir := os.Getenv("TEST_RESULTS_DIR"); dir != "" {
-		return dir
+		return filepath.Clean(dir)
 	}
 	return GetResultsDir()
 }
@@ -348,7 +348,7 @@ func GetEnvOrDefault(key, defaultValue string) string {
 // ExtractCurrentContext reads the current-context from a kubeconfig file.
 // Returns the context name or empty string if extraction fails.
 func ExtractCurrentContext(kubeconfigPath string) string {
-	output, err := exec.Command("kubectl", "config", "current-context",
+	output, err := exec.Command("kubectl", "config", "current-context", // #nosec G204 -- kubeconfigPath is from trusted test configuration
 		"--kubeconfig", kubeconfigPath).Output()
 	if err != nil {
 		return ""
@@ -2230,9 +2230,11 @@ func SaveAllControllerLogs(t *testing.T, kubeContext, outputDir string, summarie
 func GetResultsDir() string {
 	// Check for environment variable set by Makefile
 	if envDir := os.Getenv("TEST_RESULTS_DIR"); envDir != "" {
+		// Normalize path to resolve relative components like ".."
+		cleanDir := filepath.Clean(envDir)
 		// Ensure directory exists
-		if err := os.MkdirAll(envDir, 0750); err == nil {
-			return envDir
+		if err := os.MkdirAll(cleanDir, 0750); err == nil {
+			return cleanDir
 		}
 	}
 
