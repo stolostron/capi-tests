@@ -746,16 +746,16 @@ func FormatAROControlPlaneConditions(jsonData string) string {
 		}
 
 		// Format the condition line
-		result.WriteString(fmt.Sprintf("  %s %s: %s", icon, cond.Type, cond.Status))
+		fmt.Fprintf(&result, "  %s %s: %s", icon, cond.Type, cond.Status)
 
 		// Add context based on whether it's a waiting condition or regular status
 		if cond.Status != "True" {
 			if isWaiting {
 				// Show user-friendly waiting description instead of misleading "ReconciliationFailed"
-				result.WriteString(fmt.Sprintf(" (%s)", waitingDesc))
+				fmt.Fprintf(&result, " (%s)", waitingDesc)
 			} else if cond.Reason != "" {
 				// Show the original reason for non-waiting conditions
-				result.WriteString(fmt.Sprintf(" (%s)", cond.Reason))
+				fmt.Fprintf(&result, " (%s)", cond.Reason)
 			}
 		}
 
