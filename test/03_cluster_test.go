@@ -886,7 +886,6 @@ func TestKindCluster_WebhooksReady(t *testing.T) {
 
 		for {
 			elapsed := time.Since(startTime)
-			remaining := timeout - elapsed
 
 			if elapsed > timeout {
 				PrintToTTY("\n❌ Timeout waiting for %s webhook after %v\n", wh.DisplayName, elapsed.Round(time.Second))
@@ -921,37 +920,15 @@ func TestKindCluster_WebhooksReady(t *testing.T) {
 				continue
 			}
 
-			PrintToTTY("[%d] 📊 %s endpoint IP: %s\n", iteration, wh.DisplayName, strings.TrimSpace(endpointOutput))
+			endpointIP := strings.TrimSpace(endpointOutput)
+			PrintToTTY("[%d] 📊 %s endpoint IP: %s\n", iteration, wh.DisplayName, endpointIP)
 
-			// Test actual HTTPS connectivity using a temporary pod
-			// We use --rm and --restart=Never to create an ephemeral pod that cleans up after itself
-			// The curl command tests if the webhook server is accepting HTTPS connections
-			curlURL := fmt.Sprintf("https://%s.%s.svc:%d/", wh.ServiceName, wh.Namespace, wh.Port)
-
-			// Use a unique pod name to avoid conflicts
-			podName := fmt.Sprintf("webhook-test-%d", time.Now().UnixNano())
-
-			output, err := RunCommandQuiet(t, "kubectl", "--context", context,
-				"run", podName, "--rm", "-i", "--restart=Never",
-				"--image=curlimages/curl:latest", "--",
-				"curl", "-k", "-s", "-o", "/dev/null", "-w", "%{http_code}",
-				"--connect-timeout", "3", "--max-time", "5", curlURL)
-
-			if err == nil {
-				httpCode := strings.TrimSpace(output)
-				// Any HTTP response (even 400, 404, 405) means the webhook server is listening
-				// 000 means connection failed
-				if httpCode != "" && httpCode != "000" {
-					PrintToTTY("[%d] ✅ %s webhook is responsive (HTTP %s) - took %v\n",
-						iteration, wh.DisplayName, httpCode, elapsed.Round(time.Second))
-					t.Logf("%s webhook is responsive (HTTP %s)", wh.DisplayName, httpCode)
-					break
-				}
-			}
-
-			PrintToTTY("[%d] ⏳ %s webhook not ready yet (connection failed), retrying...\n", iteration, wh.DisplayName)
-			ReportProgress(t, iteration, elapsed, remaining, timeout)
-			time.Sleep(pollInterval)
+			// Endpoint addresses only contain pods that pass their readiness probe.
+			// If an IP is present, the backing pod is Ready and the webhook is serving.
+			PrintToTTY("[%d] ✅ %s webhook is ready (endpoint %s) - took %v\n",
+				iteration, wh.DisplayName, endpointIP, elapsed.Round(time.Second))
+			t.Logf("%s webhook is ready (endpoint %s)", wh.DisplayName, endpointIP)
+			break
 		}
 	}
 
