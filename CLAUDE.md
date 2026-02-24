@@ -530,6 +530,10 @@ Simply type the command in Claude Code:
 
 Commands will prompt for any required information and guide you through the task.
 
+## Pull Request Format
+
+When creating pull requests, always read and follow `.github/PULL_REQUEST_TEMPLATE.md`. Do not add sections that aren't in the template (e.g., do not add "Test plan"). Before creating the PR, always print the full PR description to the terminal and wait for user confirmation before proceeding.
+
 ## Destructive Actions
 
 - Never delete Azure resources without explicit confirmation
