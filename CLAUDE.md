@@ -386,6 +386,17 @@ Centralized helpers in `helpers.go` ensure:
 
 ## Git Workflow
 
+### Pull Request Descriptions
+
+When creating pull requests, use this format (no "Test plan" section):
+
+```
+## Summary
+<1-3 bullet points>
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+```
+
 ### Branching Strategy
 - Main branch for PRs: `main`
 - Tests run on: `main` and feature branches
