@@ -3054,13 +3054,26 @@ func GetExistingClusterNames(t *testing.T, kubeContext, namespace string) ([]str
 		return nil, fmt.Errorf("failed to list Cluster resources: %w", err)
 	}
 
-	// Parse the space-separated list of cluster names
-	output = strings.TrimSpace(output)
-	if output == "" {
+	// Filter out Kubernetes deprecation warnings (e.g., "Warning: cluster.x-k8s.io/v1beta1
+	// Cluster is deprecated") that appear on stderr but get captured by CombinedOutput.
+	// Without filtering, these warnings get split by strings.Fields() into tokens
+	// that are mistakenly treated as cluster names.
+	var filtered []string
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "Warning:") {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+
+	// Parse the space-separated list of cluster names from remaining lines
+	cleanOutput := strings.Join(filtered, " ")
+	if cleanOutput == "" {
 		return []string{}, nil
 	}
 
-	names := strings.Fields(output)
+	names := strings.Fields(cleanOutput)
 	return names, nil
 }
 

@@ -3263,6 +3263,85 @@ func TestCheckForMismatchedClusters_Logic(t *testing.T) {
 	}
 }
 
+// TestGetExistingClusterNames_WarningFiltering tests that Kubernetes deprecation warnings
+// in combined stdout+stderr output are filtered out when parsing cluster names.
+// This prevents false positives in TestDeployment_01_CheckExistingClusters (ARO-24822).
+func TestGetExistingClusterNames_WarningFiltering(t *testing.T) {
+	tests := []struct {
+		name       string
+		output     string
+		wantNames  []string
+	}{
+		{
+			name:      "clean output - no warnings",
+			output:    "rcapv-stage",
+			wantNames: []string{"rcapv-stage"},
+		},
+		{
+			name:      "v1beta1 deprecation warning with cluster name",
+			output:    "Warning: cluster.x-k8s.io/v1beta1 Cluster is deprecated; use cluster.x-k8s.io/v1beta2 Cluster\nrcapv-stage",
+			wantNames: []string{"rcapv-stage"},
+		},
+		{
+			name:      "multiple warnings",
+			output:    "Warning: something deprecated\nWarning: another warning\nmy-cluster",
+			wantNames: []string{"my-cluster"},
+		},
+		{
+			name:      "multiple clusters with warning",
+			output:    "Warning: cluster.x-k8s.io/v1beta1 Cluster is deprecated\ncluster-a cluster-b cluster-c",
+			wantNames: []string{"cluster-a", "cluster-b", "cluster-c"},
+		},
+		{
+			name:      "warning only - no clusters",
+			output:    "Warning: cluster.x-k8s.io/v1beta1 Cluster is deprecated",
+			wantNames: []string{},
+		},
+		{
+			name:      "empty output",
+			output:    "",
+			wantNames: []string{},
+		},
+		{
+			name:      "whitespace only",
+			output:    "  \n  \n  ",
+			wantNames: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Replicate the filtering logic from GetExistingClusterNames
+			var filtered []string
+			for _, line := range strings.Split(tt.output, "\n") {
+				line = strings.TrimSpace(line)
+				if line == "" || strings.HasPrefix(line, "Warning:") {
+					continue
+				}
+				filtered = append(filtered, line)
+			}
+			cleanOutput := strings.Join(filtered, " ")
+			var names []string
+			if cleanOutput != "" {
+				names = strings.Fields(cleanOutput)
+			}
+			if names == nil {
+				names = []string{}
+			}
+
+			if len(names) != len(tt.wantNames) {
+				t.Errorf("got %d names %v, want %d names %v", len(names), names, len(tt.wantNames), tt.wantNames)
+				return
+			}
+			for i, name := range names {
+				if name != tt.wantNames[i] {
+					t.Errorf("names[%d] = %q, want %q", i, name, tt.wantNames[i])
+				}
+			}
+		})
+	}
+}
+
 // TestFormatMismatchedClustersError tests the error message formatting.
 func TestFormatMismatchedClustersError(t *testing.T) {
 	tests := []struct {
