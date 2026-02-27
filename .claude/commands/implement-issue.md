@@ -59,7 +59,7 @@ Automatically analyze a GitHub issue, implement the required changes, and create
 5. **Ensure main branch is up to date with upstream**
    - Sync fork with upstream on GitHub:
      ```bash
-     gh repo sync
+     gh repo sync --branch main
      ```
    - Update local main:
      ```bash
@@ -191,7 +191,7 @@ Automatically analyze a GitHub issue, implement the required changes, and create
       )"
       ```
 
-15. **Post comment on the issue explaining the implementation**
+15. **Post comment on the issue describing the implementation**
     - After creating the PR, post a comment on the original issue
     - The comment should explain what was implemented, not just link to the PR
     - Use `gh issue comment <issue-number>` with a comprehensive explanation
