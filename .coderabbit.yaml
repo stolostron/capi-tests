@@ -1,0 +1,45 @@
+# CodeRabbit configuration
+# https://docs.coderabbit.ai/reference/configuration
+language: "en-US"
+early_access: false
+
+reviews:
+  profile: assertive
+  high_level_summary: true
+  collapse_walkthrough: true
+  request_changes_workflow: true
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+
+  path_filters:
+    - "!vendor/**"
+    - "!**/*.md"
+
+  path_instructions:
+    - path: "test/*_test.go"
+      instructions: |
+        Test files must follow these patterns:
+        - Use `config := NewTestConfig()` for configuration (never hardcode values)
+        - Use helpers from test/helpers.go (RunCommand, FileExists, etc.)
+        - Use t.Skipf() for unmet prerequisites
+        - Use t.Helper() in helper functions
+        - Tests are sequential and idempotent
+
+    - path: "test/config.go"
+      instructions: |
+        All new configuration must use GetEnvOrDefault().
+        Never hardcode values. Follow 12-factor app principles.
+
+    - path: "test/helpers.go"
+      instructions: |
+        Helper functions must use t.Helper() and t.Cleanup() where applicable.
+
+chat:
+  auto_reply: true
+
+tools:
+  golangci-lint:
+    enabled: true
