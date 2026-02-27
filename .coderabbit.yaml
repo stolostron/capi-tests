@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 # CodeRabbit configuration
 # https://docs.coderabbit.ai/reference/configuration
 language: "en-US"
@@ -37,9 +38,9 @@ reviews:
       instructions: |
         Helper functions must use t.Helper() and t.Cleanup() where applicable.
 
+  tools:
+    golangci-lint:
+      enabled: true
+
 chat:
   auto_reply: true
-
-tools:
-  golangci-lint:
-    enabled: true
