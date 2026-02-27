@@ -6,7 +6,7 @@ description: Analyze a GitHub issue and create a pull request that implements th
 
 Automatically analyze a GitHub issue, implement the required changes, and create a pull request with the fix.
 
-**Note**: This is a repo-specific override that uses `v2` as the base branch instead of `main`.
+**Note**: This is a repo-specific override of the global `/implement-issue` command.
 
 ## Usage
 
@@ -56,12 +56,17 @@ Automatically analyze a GitHub issue, implement the required changes, and create
        - Option 3: Cancel operation
    - Handle user's choice before proceeding
 
-5. **Ensure v2 branch is up to date**
-   ```bash
-   git checkout v2
-   git pull origin v2
-   ```
-   - If pull fails, explain error and exit
+5. **Ensure main branch is up to date with upstream**
+   - Sync fork with upstream on GitHub:
+     ```bash
+     gh repo sync --branch main
+     ```
+   - Update local main:
+     ```bash
+     git checkout main
+     git pull origin main
+     ```
+   - If sync or pull fails, explain error and exit
 
 6. **Create feature branch**
    - Generate branch name from issue:
@@ -73,7 +78,7 @@ Automatically analyze a GitHub issue, implement the required changes, and create
      git checkout -b <branch-name>
      ```
 
-7. **Enter plan mode for non-trivial implementations**
+7. **Plan and break down the implementation**
    - Use the `EnterPlanMode` tool for:
      - New feature implementations
      - Changes affecting multiple files
@@ -82,32 +87,16 @@ Automatically analyze a GitHub issue, implement the required changes, and create
    - In plan mode:
      - Explore the codebase thoroughly
      - Design the implementation approach
+     - Break down work into tasks using `TaskCreate` (each with `subject`, `description`, `activeForm`)
      - Present the plan to the user for approval
      - Use `ExitPlanMode` when ready to implement
+   - Use `TaskUpdate` to mark tasks as `in_progress` when starting and `completed` when done
    - Skip plan mode only for:
      - Single-line or trivial fixes
      - Simple documentation updates
      - Obvious bug fixes with clear solutions
 
-8. **Use TaskCreate to create implementation plan**
-   - Break down the implementation into specific tasks using `TaskCreate`
-   - Each task should have:
-     - `subject`: Brief, actionable title (imperative form)
-     - `description`: Detailed description of what needs to be done
-     - `activeForm`: Present continuous form for spinner display
-   - Example tasks:
-     - "Read current implementation of X" / "Reading current implementation"
-     - "Create new function Y in file Z" / "Creating new function"
-     - "Add tests for feature X" / "Adding tests"
-     - "Update documentation" / "Updating documentation"
-     - "Run tests to verify changes" / "Running tests"
-     - "Run code review" / "Running code review"
-     - "Commit changes" / "Committing changes"
-     - "Create pull request" / "Creating pull request"
-   - Use `TaskUpdate` to mark tasks as `in_progress` when starting and `completed` when done
-   - Use `TaskList` to check progress and find next tasks
-
-9. **Implement the fix**
+8. **Implement the fix**
    - Follow repository patterns from CLAUDE.md
    - Read existing code before making changes
    - Implement changes step-by-step, updating tasks as you progress
@@ -117,7 +106,7 @@ Automatically analyze a GitHub issue, implement the required changes, and create
      - Follow existing code style and patterns
      - Add comments where logic isn't self-evident
 
-10. **Run relevant tests**
+9. **Run relevant tests**
     - Determine which tests to run based on the project:
       - Check CLAUDE.md for test commands
       - Check package.json scripts, Makefile targets, or equivalent
@@ -128,17 +117,17 @@ Automatically analyze a GitHub issue, implement the required changes, and create
       - Re-run tests
       - Repeat until tests pass
 
-11. **Format code**
+10. **Format code**
     - Run project-specific formatting command if available
     - Check CLAUDE.md for formatting guidelines
 
-12. **Run code review before committing**
+11. **Run code review before committing**
     - Use the Task tool to launch the `pr-review-toolkit:code-reviewer` agent
     - The agent will review unstaged changes (use `git diff` to identify what to review)
     - Address any issues found by the code reviewer before proceeding
     - Re-run the code reviewer if significant changes were made during fixes
 
-13. **Commit changes**
+12. **Commit changes**
     - Create descriptive commit message following this format:
       ```
       <Brief summary> (fixes #<issue-number>)
@@ -149,7 +138,7 @@ Automatically analyze a GitHub issue, implement the required changes, and create
 
       Generated with [Claude Code](https://claude.com/claude-code)
 
-      Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+      Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
       ```
     - Commit using:
       ```bash
@@ -160,52 +149,49 @@ Automatically analyze a GitHub issue, implement the required changes, and create
       )"
       ```
 
-14. **Push branch to remote**
+13. **Push branch to remote**
     ```bash
     git push -u origin <branch-name>
     ```
 
-15. **Create pull request**
-    - Use `gh pr create` with detailed PR description
-    - **Important**: Set base branch to `v2`
-    - PR title: `<Brief summary> (fixes #<issue-number>)`
-    - PR body should include:
-      - ## Summary
-      - ## Problem (reference original issue)
-      - ## Solution
-      - ## Changes
-      - ## Testing
-      - Fixes #<issue-number>
-      - Generated with Claude Code
+14. **Create pull request**
+    - Use `gh pr create` with PR description following `.github/PULL_REQUEST_TEMPLATE.md`
+    - **Important**: Read and follow the PR template before creating the PR
+    - **Important**: Print the full PR description to the terminal and wait for user confirmation before proceeding
+    - PR title: `<type>: <brief summary> (fixes #<issue-number>)`
     - Example:
       ```bash
-      gh pr create --base v2 --title "Add logging function (fixes #72)" --body "$(cat <<'EOF'
-      ## Summary
+      gh pr create --base main --title "fix: add logging function (fixes #72)" --body "$(cat <<'EOF'
+      ## Description
+
       Implements logging function as requested in #72
-
-      ## Problem
-      <Describe the problem from the issue>
-
-      ## Solution
-      <Describe how you fixed it>
-
-      ## Changes
-      - <Change 1>
-      - <Change 2>
-
-      ## Testing
-      - [x] Tests pass
-      - [x] Code formatted
-      - [x] Code review passed
 
       Fixes #72
 
-      Generated with [Claude Code](https://claude.com/claude-code)
+      ## Type of Change
+
+      - [x] Bug fix (non-breaking change that fixes an issue)
+
+      ## Changes Made
+
+      - <Change 1>
+      - <Change 2>
+
+      ## Checklist
+
+      - [x] Code follows the project's coding style
+      - [x] Documentation updated (README.md, CLAUDE.md, etc.)
+      - [x] Tests added that prove fix/feature works
+      - [x] New and existing tests pass locally
+      - [x] No security issues introduced
+      - [x] Commit messages follow convention: `type: description (fixes #123)`
+
+      🤖 Generated with [Claude Code](https://claude.com/claude-code)
       EOF
       )"
       ```
 
-16. **Post comment on the issue explaining the implementation**
+15. **Post comment on the issue describing the implementation**
     - After creating the PR, post a comment on the original issue
     - The comment should explain what was implemented, not just link to the PR
     - Use `gh issue comment <issue-number>` with a comprehensive explanation
@@ -239,7 +225,7 @@ Automatically analyze a GitHub issue, implement the required changes, and create
       )"
       ```
 
-17. **Provide summary to user**
+16. **Provide summary to user**
     - Display PR URL
     - Display issue comment confirmation
     - List files changed
@@ -257,9 +243,9 @@ Automatically analyze a GitHub issue, implement the required changes, and create
 - **Code review**: Always run the code-reviewer agent before committing
 
 ### Git Best Practices
-- **Base branch**: Always use `v2` as the base branch (not `main`)
+- **Base branch**: Always use `main` as the base branch
 - **Branch naming**: `fix-issue-<number>-<brief-description>` or `feature-issue-<number>-<brief-description>`
-- **Commit messages**: Descriptive, reference issue number, use `Claude Opus 4.5` in Co-Author
+- **Commit messages**: Descriptive, reference issue number, use `Claude Opus 4.6` in Co-Author
 - **One issue per PR**: Don't mix multiple unrelated changes
 - **Specific staging**: Use `git add <specific-files>` instead of `git add .` or `git add -A`
 
@@ -315,9 +301,9 @@ After completing implementation, verify:
 - [ ] Code formatted per project conventions
 - [ ] Code review passed (pr-review-toolkit:code-reviewer)
 - [ ] Commit message references issue number
-- [ ] Commit message uses `Claude Opus 4.5` in Co-Author
+- [ ] Commit message uses `Claude Opus 4.6` in Co-Author
 - [ ] PR description includes "Fixes #<issue-number>"
-- [ ] PR base branch is `v2`
+- [ ] PR base branch is `main`
 - [ ] Branch pushed to remote
 - [ ] PR created successfully
 - [ ] Issue comment posted explaining the implementation
