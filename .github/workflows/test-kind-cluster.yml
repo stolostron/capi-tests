@@ -55,10 +55,13 @@ jobs:
     # Tool versions - keep in sync with README.md Prerequisites
     - name: Install Kind
       run: |
-        # Kind v0.20.0 - minimum version for this project
-        curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
-        chmod +x ./kind
-        sudo mv ./kind /usr/local/bin/kind
+        KIND_VERSION=v0.31.0
+        KIND_BIN=kind-linux-amd64
+        curl -fsSLo "./${KIND_BIN}" "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/${KIND_BIN}"
+        curl -fsSLo "./${KIND_BIN}.sha256sum" "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/${KIND_BIN}.sha256sum"
+        sha256sum --check "./${KIND_BIN}.sha256sum"
+        chmod +x "./${KIND_BIN}"
+        sudo mv "./${KIND_BIN}" /usr/local/bin/kind
         kind version
 
     - name: Install kubectl
@@ -74,15 +77,6 @@ jobs:
       with:
         # Helm 3.12+ required
         version: 'v3.16.0'
-
-    - name: Clone cluster-api-installer repository
-      run: |
-        if [ -d "$ARO_REPO_DIR" ]; then
-          echo "Repository already exists, skipping clone"
-        else
-          git clone -b "$ARO_REPO_BRANCH" "$ARO_REPO_URL" "$ARO_REPO_DIR"
-          echo "Repository cloned successfully"
-        fi
 
     - name: Run Kind cluster tests
       run: |

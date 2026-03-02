@@ -103,7 +103,7 @@ jobs:
         retention-days: 30
 
     - name: Create GitHub issue on failure
-      if: failure() && github.event_name != 'pull_request'
+      if: failure()
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
