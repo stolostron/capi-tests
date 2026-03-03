@@ -1,0 +1,106 @@
+name: 'Run Go Tests'
+description: 'Run Go tests with gotestsum, generate summary, create annotations, and upload artifacts'
+
+inputs:
+  test-run:
+    description: 'Test filter pattern for Go -run flag (e.g., TestCheckDependencies)'
+    required: true
+  test-timeout:
+    description: 'Go test timeout (e.g., 30m, 1h). If empty, uses Go default (10m).'
+    required: false
+    default: ''
+  test-flags:
+    description: 'Additional Go test flags (e.g., -short)'
+    required: false
+    default: ''
+  summary-title:
+    description: 'Title for the GitHub step summary'
+    required: true
+  annotation-file:
+    description: 'Source file path for ::error annotations on test failures'
+    required: true
+  artifact-name:
+    description: 'Name for the uploaded test artifact'
+    required: true
+  retention-days:
+    description: 'Artifact retention in days'
+    required: false
+    default: '30'
+
+outputs:
+  outcome:
+    description: 'Test run outcome: success or failure'
+    value: ${{ steps.test-run.outcome }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run tests
+      shell: bash
+      run: |
+        mkdir -p test-results
+        TIMEOUT_FLAG=""
+        if [ -n "${{ inputs.test-timeout }}" ]; then
+          TIMEOUT_FLAG="-timeout ${{ inputs.test-timeout }}"
+        fi
+        go run gotest.tools/gotestsum@v1.13.0 \
+          --format testname \
+          --jsonfile test-results/tests.json \
+          --junitfile test-results/junit.xml \
+          -- ${{ inputs.test-flags }} -v ./test -run '${{ inputs.test-run }}' $TIMEOUT_FLAG
+      continue-on-error: true
+      id: test-run
+
+    - name: Generate test summary
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        echo "# ${{ inputs.summary-title }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ -f test-results/tests.json ]; then
+          echo "| Test | Status | Duration |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|----------|" >> $GITHUB_STEP_SUMMARY
+
+          jq -r 'select(.Test != null and .Action != null) |
+                 select(.Action == "pass" or .Action == "fail" or .Action == "skip") |
+                 "| \(.Test) | \(if .Action == "pass" then "✅ PASS" elif .Action == "fail" then "❌ FAIL" else "⏭️ SKIP" end) | \(.Elapsed // 0)s |"' \
+                 test-results/tests.json >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          TOTAL=$(jq -r 'select(.Test != null and (.Action == "pass" or .Action == "fail" or .Action == "skip")) | .Test' test-results/tests.json | wc -l | tr -d " ")
+          PASSED=$(jq -r 'select(.Test != null and .Action == "pass") | .Test' test-results/tests.json | wc -l | tr -d " ")
+          FAILED=$(jq -r 'select(.Test != null and .Action == "fail") | .Test' test-results/tests.json | wc -l | tr -d " ")
+          SKIPPED=$(jq -r 'select(.Test != null and .Action == "skip") | .Test' test-results/tests.json | wc -l | tr -d " ")
+
+          echo "## Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total Tests:** $TOTAL" >> $GITHUB_STEP_SUMMARY
+          echo "- **Passed:** ✅ $PASSED" >> $GITHUB_STEP_SUMMARY
+          echo "- **Failed:** ❌ $FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "- **Skipped:** ⏭️ $SKIPPED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ No test results found" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Create test annotations
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        if [ -f test-results/tests.json ]; then
+          jq -r 'select(.Test != null and .Action == "fail") |
+                 "::error file=${{ inputs.annotation-file }},title=Test Failed::\(.Test) failed"' \
+                 test-results/tests.json || true
+        fi
+
+    - name: Upload test results
+      if: ${{ always() }}
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: test-results/
+        retention-days: ${{ inputs.retention-days }}
+
+    - name: Fail if tests failed
+      if: ${{ steps.test-run.outcome == 'failure' }}
+      shell: bash
+      run: exit 1
