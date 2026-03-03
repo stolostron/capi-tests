@@ -210,7 +210,7 @@ docs/test-analysis/
 │   ├── 07-WebhooksReady.md
 │   ├── 08-ExternalCluster-Connectivity.md
 │   ├── 09-ExternalCluster-MCEBaselineStatus.md
-│   ├── 10-ExternalCluster-EnableMCE.md
+│   ├── 10-ExternalCluster-EnsureMCEComponents.md
 │   └── 11-ExternalCluster-ControllersReady.md
 ├── 04-generate-yamls/
 │   ├── 00-Overview.md

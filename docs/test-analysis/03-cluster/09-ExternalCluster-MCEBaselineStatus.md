@@ -54,4 +54,4 @@
 
 - HyperShift and Cluster API components are **mutually exclusive** in MCE
 - This test automatically corrects mismatched component states
-- Must run before `TestExternalCluster_02_EnableMCE` to ensure proper baseline
+- Must run before `TestExternalCluster_02_EnsureMCEComponents` to ensure proper baseline
