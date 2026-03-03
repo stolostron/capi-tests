@@ -24,6 +24,7 @@ jobs:
 
     steps:
     - name: Validate AWS secrets
+      id: secrets
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -34,25 +35,31 @@ jobs:
         [ -z "$AWS_SECRET_ACCESS_KEY" ] && missing="$missing AWS_SECRET_ACCESS_KEY"
         [ -z "$AWS_REGION" ] && missing="$missing AWS_REGION"
         if [ -n "$missing" ]; then
-          echo "::error::Missing required repository secrets:$missing"
+          echo "::warning::Missing required repository secrets:$missing"
           echo "Configure these in Settings > Secrets and variables > Actions"
-          exit 1
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          exit 0
         fi
         echo "All required AWS secrets are configured"
+        echo "configured=true" >> "$GITHUB_OUTPUT"
 
     - name: Checkout code
+      if: steps.secrets.outputs.configured == 'true'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
     - name: Set up Go
+      if: steps.secrets.outputs.configured == 'true'
       uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
       with:
         go-version-file: 'go.mod'
         cache: true
 
     - name: Install dependencies
+      if: steps.secrets.outputs.configured == 'true'
       run: go mod download
 
     - name: Install OpenShift CLI
+      if: steps.secrets.outputs.configured == 'true'
       run: |
         wget -q https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz
         tar -xzf openshift-client-linux.tar.gz
@@ -61,10 +68,12 @@ jobs:
         oc version --client
 
     - name: Verify AWS CLI
+      if: steps.secrets.outputs.configured == 'true'
       run: aws --version
 
     # Tool versions - keep in sync with README.md Prerequisites
     - name: Install Kind
+      if: steps.secrets.outputs.configured == 'true'
       run: |
         KIND_VERSION=v0.31.0
         KIND_BIN=kind-linux-amd64
@@ -76,6 +85,7 @@ jobs:
         kind version
 
     - name: Install kubectl
+      if: steps.secrets.outputs.configured == 'true'
       run: |
         # kubectl - uses latest stable (compatible with Kubernetes 1.28+)
         curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -84,12 +94,14 @@ jobs:
         kubectl version --client
 
     - name: Install Helm
+      if: steps.secrets.outputs.configured == 'true'
       uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
       with:
         # Helm 3.12+ required
         version: 'v3.16.0'
 
     - name: 'Phase 1: Check Dependencies'
+      if: steps.secrets.outputs.configured == 'true'
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -99,13 +111,13 @@ jobs:
       id: phase1
 
     - name: 'Phase 2: Repository Setup'
-      if: steps.phase1.outcome == 'success'
+      if: steps.secrets.outputs.configured == 'true' && steps.phase1.outcome == 'success'
       run: make _setup
       continue-on-error: true
       id: phase2
 
     - name: 'Phase 3: Kind Cluster'
-      if: steps.phase2.outcome == 'success'
+      if: steps.secrets.outputs.configured == 'true' && steps.phase2.outcome == 'success'
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -115,7 +127,7 @@ jobs:
       id: phase3
 
     - name: Generate test summary
-      if: always()
+      if: always() && steps.secrets.outputs.configured == 'true'
       run: |
         python3 - << 'PYEOF'
         import xml.etree.ElementTree as ET
@@ -180,7 +192,7 @@ jobs:
         PYEOF
 
     - name: Create test annotations
-      if: always()
+      if: always() && steps.secrets.outputs.configured == 'true'
       run: |
         python3 - << 'PYEOF'
         import xml.etree.ElementTree as ET
@@ -210,7 +222,7 @@ jobs:
         PYEOF
 
     - name: Upload test results
-      if: always()
+      if: always() && steps.secrets.outputs.configured == 'true'
       uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       with:
         name: test-results-management-cluster-rosa
@@ -218,7 +230,7 @@ jobs:
         retention-days: 30
 
     - name: Create GitHub issue on failure
-      if: always() && (steps.phase1.outcome == 'failure' || steps.phase2.outcome == 'failure' || steps.phase3.outcome == 'failure')
+      if: always() && steps.secrets.outputs.configured == 'true' && (steps.phase1.outcome == 'failure' || steps.phase2.outcome == 'failure' || steps.phase3.outcome == 'failure')
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         WORKFLOW_NAME: Management Cluster (ROSA)
@@ -285,7 +297,7 @@ jobs:
         fi
 
     - name: Fail if any phase failed
-      if: always()
+      if: always() && steps.secrets.outputs.configured == 'true'
       env:
         PHASE1_OUTCOME: ${{ steps.phase1.outcome }}
         PHASE2_OUTCOME: ${{ steps.phase2.outcome }}
