@@ -20,7 +20,7 @@ Deploy a Kind cluster with CAPI, CAPZ, and ASO controllers, then verify all cont
 |---|------|---------|
 | 1 | [08-ExternalCluster-Connectivity](08-ExternalCluster-Connectivity.md) | Validate external cluster connectivity |
 | 2 | [09-ExternalCluster-MCEBaselineStatus](09-ExternalCluster-MCEBaselineStatus.md) | Validate and configure MCE component baseline |
-| 3 | [10-ExternalCluster-EnableMCE](10-ExternalCluster-EnableMCE.md) | Enable CAPI/CAPZ components in MCE |
+| 3 | [10-ExternalCluster-EnsureMCEComponents](10-ExternalCluster-EnsureMCEComponents.md) | Ensure CAPI/CAPZ components are enabled in MCE |
 | 4 | [11-ExternalCluster-ControllersReady](11-ExternalCluster-ControllersReady.md) | Validate pre-installed controllers |
 
 ### Kind Cluster Tests (default mode)

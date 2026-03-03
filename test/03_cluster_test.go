@@ -179,12 +179,12 @@ func TestExternalCluster_01b_MCEBaselineStatus(t *testing.T) {
 	t.Log("MCE component baseline validation passed")
 }
 
-// TestExternalCluster_02_EnableMCE enables CAPI and CAPZ components if not already enabled.
+// TestExternalCluster_02_EnsureMCEComponents ensures CAPI and CAPZ components are enabled in MCE.
 // This test runs only when:
 // - USE_KUBECONFIG is set (external cluster mode)
 // - MCE is installed on the cluster
 // - MCE_AUTO_ENABLE is true (default)
-func TestExternalCluster_02_EnableMCE(t *testing.T) {
+func TestExternalCluster_02_EnsureMCEComponents(t *testing.T) {
 	config := NewTestConfig()
 
 	if !config.IsExternalCluster() {
@@ -204,7 +204,7 @@ func TestExternalCluster_02_EnableMCE(t *testing.T) {
 		t.Skip("MCE auto-enablement disabled (MCE_AUTO_ENABLE=false)")
 	}
 
-	PrintTestHeader(t, "TestExternalCluster_02_EnableMCE",
+	PrintTestHeader(t, "TestExternalCluster_02_EnsureMCEComponents",
 		"Enable CAPI and CAPZ components in MCE if not already enabled")
 
 	PrintToTTY("\n=== Checking MCE component status ===\n")

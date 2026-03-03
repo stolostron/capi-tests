@@ -1,4 +1,4 @@
-# Test 10: TestExternalCluster_02_EnableMCE
+# Test 10: TestExternalCluster_02_EnsureMCEComponents
 
 **Location:** `test/03_cluster_test.go:187-296`
 

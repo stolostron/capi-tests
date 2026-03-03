@@ -104,7 +104,7 @@ Integration tests exercise the full deployment workflow and cover functions that
 |------|----------|-------------|
 | `TestExternalCluster_01_Connectivity` | **V1.1** | External cluster node access |
 | `TestExternalCluster_01b_MCEBaselineStatus` | **V1.1** | MCE component baseline, calls `SetMCEComponentState()` |
-| `TestExternalCluster_02_EnableMCE` | **V1.1** | MCE enablement, calls `EnableMCEComponent()`, `WaitForMCEController()` |
+| `TestExternalCluster_02_EnsureMCEComponents` | **V1.1** | MCE enablement, calls `EnableMCEComponent()`, `WaitForMCEController()` |
 | `TestExternalCluster_03_ControllersReady` | **V1.1** | Controller readiness on external cluster |
 | `TestKindCluster_*` (7 tests) | Kind cluster deployment | - |
 
@@ -141,15 +141,15 @@ Integration tests exercise the full deployment workflow and cover functions that
 | Function | Unit Tests | Integration Tests | Assessment |
 |----------|-----------|-------------------|------------|
 | `SetMCEComponentState()` | None | `TestExternalCluster_01b_MCEBaselineStatus` | Adequate - requires live MCE cluster |
-| `EnableMCEComponent()` | None | `TestExternalCluster_02_EnableMCE` | Adequate - requires live MCE cluster |
-| `WaitForMCEController()` | None | `TestExternalCluster_02_EnableMCE` | Adequate - requires live cluster |
+| `EnableMCEComponent()` | None | `TestExternalCluster_02_EnsureMCEComponents` | Adequate - requires live MCE cluster |
+| `WaitForMCEController()` | None | `TestExternalCluster_02_EnsureMCEComponents` | Adequate - requires live cluster |
 | `ExtractNamespaceFromYAML()` | 100% | `TestInfrastructure_GenerateResources` | Well covered |
 | `ExtractCurrentContext()` | None | `TestCheckDependencies_ExternalKubeconfig` | Adequate - requires kubeconfig file |
 | `CheckYAMLConfigMatch()` | Unit test exists | `TestInfrastructure_GenerateResources` | Well covered |
 | `GetExistingClusterNames()` | None | `TestDeployment_01_CheckExistingClusters` | Adequate - requires live cluster |
 | `CheckForMismatchedClusters()` | Unit test (logic) | `TestDeployment_01_CheckExistingClusters` | Well covered |
 | `FormatMismatchedClustersError()` | 100% | `TestDeployment_01_CheckExistingClusters` | Well covered |
-| `IsMCECluster()` | None | `TestExternalCluster_02_EnableMCE` | Adequate - requires live cluster |
+| `IsMCECluster()` | None | `TestExternalCluster_02_EnsureMCEComponents` | Adequate - requires live cluster |
 | `GetMCEComponentStatus()` | None | `TestExternalCluster_01b_MCEBaselineStatus` | Adequate - requires live cluster |
 | `ApplyWithRetryInNamespace()` | None | `TestDeployment_ApplyResources` | Adequate - requires live cluster |
 
@@ -167,7 +167,7 @@ Integration tests exercise the full deployment workflow and cover functions that
 |------|---------|-------------------|
 | `TestExternalCluster_01_Connectivity` | Validates external cluster access | `IsExternalCluster()`, `GetKubeContext()`, kubectl node listing |
 | `TestExternalCluster_01b_MCEBaselineStatus` | Ensures MCE component baseline | `GetMCEComponentStatus()`, `SetMCEComponentState()` |
-| `TestExternalCluster_02_EnableMCE` | Enables CAPI/CAPZ on MCE | `EnableMCEComponent()`, `WaitForMCEController()`, `IsMCECluster()` |
+| `TestExternalCluster_02_EnsureMCEComponents` | Enables CAPI/CAPZ on MCE | `EnableMCEComponent()`, `WaitForMCEController()`, `IsMCECluster()` |
 | `TestExternalCluster_03_ControllersReady` | Validates controller deployments | Controller namespace lookups, deployment checks |
 | `TestDeployment_00_CreateNamespace` | Creates workload cluster namespace | Namespace generation, `kubectl create namespace` |
 | `TestDeployment_01_CheckExistingClusters` | Detects stale clusters | `GetExistingClusterNames()`, `CheckForMismatchedClusters()` |
@@ -181,10 +181,10 @@ These functions have 0% unit test coverage but are exercised by integration test
 | Function | Reason | Integration Coverage |
 |----------|--------|---------------------|
 | `SetMCEComponentState()` | Requires MCE cluster | `TestExternalCluster_01b_MCEBaselineStatus` |
-| `EnableMCEComponent()` | Requires MCE cluster | `TestExternalCluster_02_EnableMCE` |
-| `WaitForMCEController()` | Requires MCE cluster | `TestExternalCluster_02_EnableMCE` |
+| `EnableMCEComponent()` | Requires MCE cluster | `TestExternalCluster_02_EnsureMCEComponents` |
+| `WaitForMCEController()` | Requires MCE cluster | `TestExternalCluster_02_EnsureMCEComponents` |
 | `GetMCEComponentStatus()` | Requires MCE cluster | `TestExternalCluster_01b_MCEBaselineStatus` |
-| `IsMCECluster()` | Requires kubectl | `TestExternalCluster_02_EnableMCE` |
+| `IsMCECluster()` | Requires kubectl | `TestExternalCluster_02_EnsureMCEComponents` |
 | `ExtractCurrentContext()` | Requires kubeconfig + kubectl | `TestCheckDependencies_ExternalKubeconfig` |
 | `GetExistingClusterNames()` | Requires kubectl | `TestDeployment_01_CheckExistingClusters` |
 | `ApplyWithRetryInNamespace()` | Requires kubectl | `TestDeployment_ApplyResources` |
@@ -242,7 +242,7 @@ USE_KUBECONFIG=/path/to/kubeconfig make test-all
 **Additional phases activated**:
 - `TestExternalCluster_01_Connectivity`
 - `TestExternalCluster_01b_MCEBaselineStatus`
-- `TestExternalCluster_02_EnableMCE`
+- `TestExternalCluster_02_EnsureMCEComponents`
 - `TestExternalCluster_03_ControllersReady`
 
 **Phases skipped**:

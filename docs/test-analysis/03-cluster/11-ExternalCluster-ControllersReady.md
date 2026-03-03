@@ -43,5 +43,5 @@
 
 - Provides MCE-specific remediation hints when controllers are missing
 - If MCE_AUTO_ENABLE is false, suggests enabling it
-- Runs after `TestExternalCluster_02_EnableMCE` so controllers should be available
+- Runs after `TestExternalCluster_02_EnsureMCEComponents` so controllers should be available
 - The CAPINamespace/CAPZNamespace may differ between Kind and MCE deployments
