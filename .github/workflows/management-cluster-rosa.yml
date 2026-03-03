@@ -208,7 +208,7 @@ jobs:
         retention-days: 30
 
     - name: Create GitHub issue on failure
-      if: failure()
+      if: always() && (steps.phase1.outcome == 'failure' || steps.phase2.outcome == 'failure' || steps.phase3.outcome == 'failure')
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         WORKFLOW_NAME: Management Cluster (ROSA)
@@ -281,15 +281,23 @@ jobs:
         PHASE2_OUTCOME: ${{ steps.phase2.outcome }}
         PHASE3_OUTCOME: ${{ steps.phase3.outcome }}
       run: |
-        if [ "$PHASE1_OUTCOME" != "success" ]; then
+        EXIT=0
+        if [ "$PHASE1_OUTCOME" = "failure" ]; then
           echo "Phase 1 (Check Dependencies) failed"
-          exit 1
+          EXIT=1
         fi
-        if [ "$PHASE2_OUTCOME" != "success" ]; then
+        if [ "$PHASE2_OUTCOME" = "failure" ]; then
           echo "Phase 2 (Repository Setup) failed"
-          exit 1
+          EXIT=1
+        elif [ -z "$PHASE2_OUTCOME" ] || [ "$PHASE2_OUTCOME" = "skipped" ]; then
+          echo "Phase 2 (Repository Setup) was skipped (Phase 1 failed)"
+          EXIT=1
         fi
-        if [ "$PHASE3_OUTCOME" != "success" ]; then
+        if [ "$PHASE3_OUTCOME" = "failure" ]; then
           echo "Phase 3 (Kind Cluster) failed"
-          exit 1
+          EXIT=1
+        elif [ -z "$PHASE3_OUTCOME" ] || [ "$PHASE3_OUTCOME" = "skipped" ]; then
+          echo "Phase 3 (Kind Cluster) was skipped (earlier phase failed)"
+          EXIT=1
         fi
+        exit $EXIT
