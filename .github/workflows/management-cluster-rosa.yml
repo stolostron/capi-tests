@@ -1,7 +1,7 @@
 name: Management Cluster (ROSA)
 
 # Manual-only trigger. Requires AWS secrets configured in repository settings:
-#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
 on:
   workflow_dispatch:
 
@@ -15,9 +15,6 @@ env:
   ARO_REPO_BRANCH: capi-tests
   ARO_REPO_DIR: /tmp/cluster-api-installer-aro
   USE_KIND: "true"
-  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  AWS_REGION: ${{ secrets.AWS_REGION }}
 
 jobs:
   management-cluster:
@@ -27,10 +24,15 @@ jobs:
 
     steps:
     - name: Validate AWS secrets
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
       run: |
         missing=""
         [ -z "$AWS_ACCESS_KEY_ID" ] && missing="$missing AWS_ACCESS_KEY_ID"
         [ -z "$AWS_SECRET_ACCESS_KEY" ] && missing="$missing AWS_SECRET_ACCESS_KEY"
+        [ -z "$AWS_REGION" ] && missing="$missing AWS_REGION"
         if [ -n "$missing" ]; then
           echo "::error::Missing required repository secrets:$missing"
           echo "Configure these in Settings > Secrets and variables > Actions"
@@ -88,6 +90,10 @@ jobs:
         version: 'v3.16.0'
 
     - name: 'Phase 1: Check Dependencies'
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
       run: make _check-dep
       continue-on-error: true
       id: phase1
@@ -100,6 +106,10 @@ jobs:
 
     - name: 'Phase 3: Kind Cluster'
       if: steps.phase2.outcome == 'success'
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
       run: make _cluster
       continue-on-error: true
       id: phase3
@@ -148,7 +158,7 @@ jobs:
                 for tc in tree.iter("testcase"):
                     name = tc.get("name", "")
                     time_val = tc.get("time", "0")
-                    if tc.find("failure") is not None:
+                    if tc.find("failure") is not None or tc.find("error") is not None:
                         status = "❌ FAIL"
                         failed += 1
                     elif tc.find("skipped") is not None:
@@ -194,7 +204,7 @@ jobs:
                 continue
 
             for tc in tree.iter("testcase"):
-                if tc.find("failure") is not None:
+                if tc.find("failure") is not None or tc.find("error") is not None:
                     name = tc.get("name", "")
                     print(f"::error file={test_file},title=Test Failed::{name} failed")
         PYEOF
@@ -233,7 +243,7 @@ jobs:
             try:
                 tree = ET.parse(f)
                 for tc in tree.iter('testcase'):
-                    if tc.find('failure') is not None:
+                    if tc.find('failure') is not None or tc.find('error') is not None:
                         print(tc.get('name', ''))
             except Exception:
                 pass
