@@ -76,7 +76,6 @@ jobs:
         kind version
 
     - name: Install kubectl
-
       run: |
         # kubectl - uses latest stable (compatible with Kubernetes 1.28+)
         curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -85,14 +84,12 @@ jobs:
         kubectl version --client
 
     - name: Install Helm
-
       uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
       with:
         # Helm 3.12+ required
         version: 'v3.16.0'
 
     - name: 'Phase 1: Check Dependencies'
-
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -221,7 +218,12 @@ jobs:
         retention-days: 30
 
     - name: Create GitHub issue on failure
-      if: always() && (steps.phase1.outcome == 'failure' || steps.phase2.outcome == 'failure' || steps.phase3.outcome == 'failure')
+      if: >-
+        always() &&
+        secrets.AWS_ACCESS_KEY_ID != '' &&
+        secrets.AWS_SECRET_ACCESS_KEY != '' &&
+        secrets.AWS_REGION != '' &&
+        (steps.phase1.outcome == 'failure' || steps.phase2.outcome == 'failure' || steps.phase3.outcome == 'failure')
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         WORKFLOW_NAME: Management Cluster (ROSA)

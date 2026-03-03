@@ -86,14 +86,12 @@ jobs:
         kubectl version --client
 
     - name: Install Helm
-
       uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
       with:
         # Helm 3.12+ required
         version: 'v3.16.0'
 
     - name: 'Phase 1: Check Dependencies'
-
       env:
         AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
         AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -224,7 +222,13 @@ jobs:
         retention-days: 30
 
     - name: Create GitHub issue on failure
-      if: always() && (steps.phase1.outcome == 'failure' || steps.phase2.outcome == 'failure' || steps.phase3.outcome == 'failure')
+      if: >-
+        always() &&
+        secrets.AZURE_TENANT_ID != '' &&
+        secrets.AZURE_SUBSCRIPTION_ID != '' &&
+        secrets.AZURE_CLIENT_ID != '' &&
+        secrets.AZURE_CLIENT_SECRET != '' &&
+        (steps.phase1.outcome == 'failure' || steps.phase2.outcome == 'failure' || steps.phase3.outcome == 'failure')
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         WORKFLOW_NAME: Management Cluster (ARO)
