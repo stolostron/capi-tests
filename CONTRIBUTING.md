@@ -34,8 +34,8 @@ Before contributing, ensure you have:
 
 1. Fork and clone the repository:
    ```bash
-   git clone https://github.com/<your-username>/CAPZTests.git
-   cd CAPZTests
+   git clone https://github.com/<your-username>/capi-tests.git
+   cd capi-tests
    ```
 
 2. Verify prerequisites:

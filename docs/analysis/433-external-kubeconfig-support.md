@@ -1,6 +1,6 @@
 # Analysis: External Kubernetes Cluster Support via Kubeconfig
 
-**Issue:** [#433 - Add support for external Kubernetes cluster via kubeconfig](https://github.com/RadekCap/CAPZTests/issues/433)
+**Issue:** [#433 - Add support for external Kubernetes cluster via kubeconfig](https://github.com/RadekCap/capi-tests/issues/433)
 
 **Date:** 2025-01-28
 

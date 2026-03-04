@@ -1,6 +1,6 @@
 # Deployment Modes for ARO-CAPZ Test Suite
 
-**Issue:** [#436 - Document supported testing paths and deployment modes](https://github.com/RadekCap/CAPZTests/issues/436)
+**Issue:** [#436 - Document supported testing paths and deployment modes](https://github.com/RadekCap/capi-tests/issues/436)
 
 **Date:** 2025-01-28
 
