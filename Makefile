@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _cluster _generate-yamls _deploy-crds _verify _delete _cleanup test-all _test-all-impl clean clean-all clean-azure help summary
+.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crds _verify _delete _cleanup test-all _test-all-impl clean clean-all clean-azure help summary
 
 # Default values
 # Extract CAPZ_USER default from Go config to maintain single source of truth
@@ -78,7 +78,7 @@ help: ## Display this help message
 	@echo "Expected order for manual execution of internal targets:"
 	@echo "  1. make _check-dep       # Check software prerequisites needed for a proper test run"
 	@echo "  2. make _setup           # Setup and prepare input repositories with helm charts and CRDs"
-	@echo "  3. make _cluster         # Prepare cluster for testing, and prepare operators needed for testing"
+	@echo "  3. make _management_cluster # Prepare cluster for testing, and prepare operators needed for testing"
 	@echo "  4. make _generate-yamls  # Generate script for resource creation (yaml)"
 	@echo "  5. make _deploy-crs      # Deploy CRs and verify deployment"
 	@echo "  6. make _verify          # Verify deployed cluster"
@@ -90,12 +90,12 @@ help: ## Display this help message
 	@echo "  # ARO mode (default)"
 	@echo "  export INFRA_PROVIDER=aro"
 	@echo "  export USE_KIND=true"
-	@echo "  make _check-dep && make _setup && make _cluster"
+	@echo "  make _check-dep && make _setup && make _management_cluster"
 	@echo ""
 	@echo "  # ROSA mode"
 	@echo "  export INFRA_PROVIDER=rosa"
 	@echo "  export USE_KIND=true"
-	@echo "  make _check-dep && make _setup && make _cluster"
+	@echo "  make _check-dep && make _setup && make _management_cluster"
 
 test: _check-dep ## Run check dependencies tests only
 
@@ -141,7 +141,7 @@ _setup: check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_cluster: check-gotestsum
+_management_cluster: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Cluster Deployment Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -312,7 +312,7 @@ _test-all-impl:
 		echo ""; \
 		exit 1 \
 	)
-	@$(MAKE) --no-print-directory _cluster RESULTS_DIR=$(RESULTS_DIR) || ( \
+	@$(MAKE) --no-print-directory _management_cluster RESULTS_DIR=$(RESULTS_DIR) || ( \
 		echo ""; \
 		echo "❌ ERROR: Cluster deployment phase failed. Cannot continue with test suite."; \
 		echo "   Previous stages (check dependencies, setup) completed successfully."; \

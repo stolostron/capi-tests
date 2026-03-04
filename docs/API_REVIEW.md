@@ -315,7 +315,7 @@ type TestConfig struct {
 |--------|--------|-------|
 | `_check-dep` | ✅ Approved | Internal phase, underscore prefix correct |
 | `_setup` | ✅ Approved | Internal phase |
-| `_cluster` | ✅ Approved | Internal phase |
+| `_management_cluster` | ✅ Approved | Internal phase |
 | `_generate-yamls` | ✅ Approved | Internal phase |
 | `_deploy-crs` | ✅ Approved | Internal phase |
 | `_verify` | ✅ Approved | Internal phase |

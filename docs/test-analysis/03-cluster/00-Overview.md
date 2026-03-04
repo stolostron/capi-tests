@@ -1,6 +1,6 @@
 # Phase 3: Cluster
 
-**Make target:** `make _cluster`
+**Make target:** `make _management_cluster`
 **Test file:** `test/03_cluster_test.go`
 **Timeout:** 30 minutes
 
@@ -41,7 +41,7 @@ Deploy a Kind cluster with CAPI, CAPZ, and ASO controllers, then verify all cont
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    make _cluster                                 │
+│                    make _management_cluster                      │
 └─────────────────────────────────────────────────────────────────┘
                               │
                     ┌─────────┴─────────┐

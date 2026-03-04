@@ -247,7 +247,7 @@ These targets are called by `make test-all` but can be run individually for debu
 |--------|-------------|
 | `make _check-dep` | Check software prerequisites needed for a proper test run |
 | `make _setup` | Setup and prepare input repositories with helm charts and CRDs |
-| `make _cluster` | Prepare cluster for testing and operators |
+| `make _management_cluster` | Prepare cluster for testing and operators |
 | `make _generate-yamls` | Generate script for resource creation (yaml) |
 | `make _deploy-crs` | Deploy CRs and verify deployment |
 | `make _verify` | Verify deployed cluster |

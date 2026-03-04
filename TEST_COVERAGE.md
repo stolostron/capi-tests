@@ -224,7 +224,7 @@ make test-all
 **Phases Executed**:
 1. Check Dependencies (`_check-dep`)
 2. Setup (`_setup`)
-3. Cluster (`_cluster`) - Kind or External cluster mode
+3. Cluster (`_management_cluster`) - Kind or External cluster mode
 4. Generate YAMLs (`_generate-yamls`)
 5. Deploy CRs (`_deploy-crs`)
 6. Verification (`_verify`)

@@ -87,7 +87,7 @@ make test-all
 # Individual test phases (internal use - called by test-all)
 make _check-dep      # Check dependencies
 make _setup          # Repository setup
-make _cluster        # Cluster deployment
+make _management_cluster # Cluster deployment
 make _generate-yamls # YAML generation
 make _deploy-crs     # CR deployment
 make _verify         # Cluster verification

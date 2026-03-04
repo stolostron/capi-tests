@@ -330,7 +330,7 @@ time make test-all
 # Time individual phases
 time make _check-dep
 time make _setup
-time make _cluster
+time make _management_cluster
 time make _generate-yamls
 time make _deploy-crs
 time make _verify
