@@ -8,7 +8,7 @@ reviews:
   profile: assertive
   high_level_summary: true
   collapse_walkthrough: true
-  request_changes_workflow: true
+  request_changes_workflow: false
   auto_apply_labels: false
 
   auto_review:
