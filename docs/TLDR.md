@@ -1,8 +1,8 @@
 # TLDR for Running Tests Locally
 
 ```bash
-git clone https://github.com/RadekCap/CAPZTests.git
-cd CAPZTests
+git clone https://github.com/RadekCap/capi-tests.git
+cd capi-tests
 git checkout dev
 ```
 

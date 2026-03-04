@@ -1,6 +1,6 @@
 # Analysis: OpenShift CI and Sippy Integration
 
-**Issue:** [#434 - Integrate with OpenShift CI and Sippy reporting](https://github.com/RadekCap/CAPZTests/issues/434)
+**Issue:** [#434 - Integrate with OpenShift CI and Sippy reporting](https://github.com/RadekCap/capi-tests/issues/434)
 
 **Date:** 2025-01-28
 

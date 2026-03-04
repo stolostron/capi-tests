@@ -166,6 +166,6 @@ kind delete cluster --name test
 
 ## Related
 
-- [Issue #285](https://github.com/RadekCap/CAPZTests/issues/285) - Original issue tracking this problem
+- [Issue #285](https://github.com/RadekCap/capi-tests/issues/285) - Original issue tracking this problem
 - [Kind GitHub](https://github.com/kubernetes-sigs/kind) - Kind repository
 - Similar issues affect VS Code, JetBrains IDEs, and other development tools

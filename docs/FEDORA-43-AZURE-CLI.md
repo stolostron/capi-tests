@@ -183,5 +183,5 @@ sudo dnf remove azure-cli
 
 ## Related
 
-- [Issue #283](https://github.com/RadekCap/CAPZTests/issues/283) - Original issue tracking this problem
+- [Issue #283](https://github.com/RadekCap/capi-tests/issues/283) - Original issue tracking this problem
 - [Azure CLI GitHub](https://github.com/Azure/azure-cli) - Azure CLI repository

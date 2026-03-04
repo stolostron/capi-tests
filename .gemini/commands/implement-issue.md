@@ -305,8 +305,8 @@ Pushed to remote ✅
 Created PR #73 ✅
 Posted explanation on issue #72 ✅
 
-Pull Request: https://github.com/RadekCap/CAPZTests/pull/73
-Issue updated: https://github.com/RadekCap/CAPZTests/issues/72
+Pull Request: https://github.com/RadekCap/capi-tests/pull/73
+Issue updated: https://github.com/RadekCap/capi-tests/issues/72
 ```
 
 ### Example 2: New feature with tests
@@ -341,8 +341,8 @@ Files changed:
 - test/helpers_test.go (+150 lines)
 - GEMINI.md (+10 lines)
 
-Pull Request: https://github.com/RadekCap/CAPZTests/pull/76
-Issue updated: https://github.com/RadekCap/CAPZTests/issues/75
+Pull Request: https://github.com/RadekCap/capi-tests/pull/76
+Issue updated: https://github.com/RadekCap/capi-tests/issues/75
 ```
 
 ### Example 3: CI/Workflow fix
@@ -370,8 +370,8 @@ Posted explanation on issue #77 ✅
 
 Note: CI will validate this fix when the PR runs
 
-Pull Request: https://github.com/RadekCap/CAPZTests/pull/78
-Issue updated: https://github.com/RadekCap/CAPZTests/issues/77
+Pull Request: https://github.com/RadekCap/capi-tests/pull/78
+Issue updated: https://github.com/RadekCap/capi-tests/issues/77
 ```
 
 ## Post-Implementation Checklist

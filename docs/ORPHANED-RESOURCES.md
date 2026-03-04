@@ -163,7 +163,7 @@ az resource show --ids "<RESOURCE_ID>"
 
 ## Related Documentation
 
-- [ARO HCP Domain Prefix Reservation](https://github.com/RadekCap/CAPZTests/issues/289) - Cluster name reuse limitations
+- [ARO HCP Domain Prefix Reservation](https://github.com/RadekCap/capi-tests/issues/289) - Cluster name reuse limitations
 - [Azure Resource Graph Query Language](https://learn.microsoft.com/en-us/azure/governance/resource-graph/concepts/query-language)
 - [Azure CLI Resource Management](https://learn.microsoft.com/en-us/cli/azure/resource)
 
