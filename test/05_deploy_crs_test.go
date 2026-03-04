@@ -53,8 +53,8 @@ func TestDeployment_00_CreateNamespace(t *testing.T) {
 	// Add labels for easy identification and cleanup
 	PrintToTTY("Adding labels to namespace...\n")
 	_, err = RunCommand(t, "kubectl", "--context", context, "label", "namespace", config.WorkloadClusterNamespace,
-		"capz-test=true",
-		fmt.Sprintf("capz-test-prefix=%s", GetEnvOrDefault("WORKLOAD_CLUSTER_NAMESPACE_PREFIX", "capz-test")),
+		fmt.Sprintf("%s=true", config.TestLabelPrefix),
+		fmt.Sprintf("%s-prefix=%s", config.TestLabelPrefix, GetEnvOrDefault("WORKLOAD_CLUSTER_NAMESPACE_PREFIX", config.TestLabelPrefix)),
 		"--overwrite")
 	if err != nil {
 		PrintToTTY("⚠️  Failed to add labels (non-fatal): %v\n", err)

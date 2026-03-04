@@ -32,7 +32,7 @@ This document provides a comprehensive review of all public interfaces. These co
 
 | Change | V1 Behavior | V1.1 Behavior |
 |--------|-------------|---------------|
-| Namespace | Static `TEST_NAMESPACE` (default: `default`) | Auto-generated unique namespace per test run (`capz-test-YYYYMMDD-HHMMSS`). Set `WORKLOAD_CLUSTER_NAMESPACE` to override. |
+| Namespace | Static `TEST_NAMESPACE` (default: `default`) | Auto-generated unique namespace per test run (provider-specific prefix: `capz-test-YYYYMMDD-HHMMSS` for ARO, `capa-test-YYYYMMDD-HHMMSS` for ROSA). Set `WORKLOAD_CLUSTER_NAMESPACE` to override. |
 | `TestNamespace` field | `TestConfig.TestNamespace` | Renamed to `TestConfig.WorkloadClusterNamespace` |
 
 ### New Environment Variables (V1.1)
@@ -41,7 +41,7 @@ This document provides a comprehensive review of all public interfaces. These co
 |----------|----------|---------|---------|
 | `USE_KUBECONFIG` | No | _(unset)_ | Path to external kubeconfig; enables external cluster mode |
 | `WORKLOAD_CLUSTER_NAMESPACE` | No | _(auto-generated)_ | Explicit namespace override for resume scenarios |
-| `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` | No | `capz-test` | Prefix for auto-generated namespace |
+| `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` | No | Provider-specific (`capz-test` / `capa-test`) | Prefix for auto-generated namespace |
 | `MCE_AUTO_ENABLE` | No | `true` (when `USE_KUBECONFIG` set) | Auto-enable MCE CAPI/CAPZ components |
 | `MCE_ENABLEMENT_TIMEOUT` | No | `15m` | Timeout for MCE component enablement |
 

@@ -205,18 +205,20 @@ func getDefaultRepoDir() string {
 
 // getWorkloadClusterNamespace returns the namespace for workload cluster resources.
 // The namespace is unique per test run, combining the configured prefix with a timestamp.
-// Format: {prefix}-{YYYYMMDD-HHMMSS} (e.g., "capz-test-20260203-140812")
+// Format: {prefix}-{YYYYMMDD-HHMMSS} (e.g., "capz-test-20260203-140812" or "capa-test-20260203-140812")
 // This namespace is passed as $NAMESPACE to the YAML generation script and used for
-// all Azure resource checks.
+// all resource checks.
+//
+// The defaultPrefix parameter is provider-specific: "capz-test" for ARO, "capa-test" for ROSA.
 //
 // Resolution order:
 // 1. WORKLOAD_CLUSTER_NAMESPACE env var (explicit override for resume scenarios)
 // 2. Existing deployment state file in RepoDir (auto-resume from previous run)
-// 3. Generate unique namespace using WORKLOAD_CLUSTER_NAMESPACE_PREFIX (default: "capz-test")
+// 3. Generate unique namespace using WORKLOAD_CLUSTER_NAMESPACE_PREFIX (default: provider-specific prefix)
 //
 // The auto-resume from deployment state ensures that subsequent test phases
 // (run as separate go test invocations) use the same namespace as YAML generation.
-func getWorkloadClusterNamespace() string {
+func getWorkloadClusterNamespace(defaultPrefix string) string {
 	workloadClusterNamespaceOnce.Do(func() {
 		// Check if a full namespace is explicitly provided (for resume scenarios)
 		if ns := os.Getenv("WORKLOAD_CLUSTER_NAMESPACE"); ns != "" {
@@ -241,7 +243,7 @@ func getWorkloadClusterNamespace() string {
 		}
 
 		// Generate unique namespace with timestamp for fresh runs
-		prefix := GetEnvOrDefault("WORKLOAD_CLUSTER_NAMESPACE_PREFIX", "capz-test")
+		prefix := GetEnvOrDefault("WORKLOAD_CLUSTER_NAMESPACE_PREFIX", defaultPrefix)
 		timestamp := time.Now().Format("20060102-150405")
 		workloadClusterNamespace = fmt.Sprintf("%s-%s", prefix, timestamp)
 	})
@@ -266,6 +268,7 @@ type TestConfig struct {
 	Environment              string
 	CAPZUser                 string // User identifier for CAPZ resources (from CAPZ_USER env var)
 	WorkloadClusterNamespace string // Namespace for workload cluster resources on management cluster (unique per test run)
+	TestLabelPrefix          string // Provider-specific label prefix for test namespaces (e.g., "capz-test" for ARO, "capa-test" for ROSA)
 	CAPINamespace            string // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
 	CAPZNamespace            string // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" when USE_K8S=true)
 
@@ -332,6 +335,7 @@ func NewTestConfig() *TestConfig {
 	var defaultGenScriptPath string
 	var defaultMgmtCluster string
 	var defaultWorkloadCluster string
+	var testLabelPrefix string
 
 	switch infraProviderName {
 	case "rosa":
@@ -340,6 +344,7 @@ func NewTestConfig() *TestConfig {
 		defaultGenScriptPath = "./scripts/rosa-hcp/gen.sh"
 		defaultMgmtCluster = "capa-tests-stage"
 		defaultWorkloadCluster = "capa-tests-cluster"
+		testLabelPrefix = "capa-test"
 	default: // "aro"
 		infraProviderName = "aro" // normalize unknown values
 		providerNamespace = getControllerNamespace("CAPZ_NAMESPACE", "capz-system")
@@ -353,6 +358,7 @@ func NewTestConfig() *TestConfig {
 		defaultGenScriptPath = "./scripts/aro-hcp/gen.sh"
 		defaultMgmtCluster = "capz-tests-stage"
 		defaultWorkloadCluster = "capz-tests-cluster"
+		testLabelPrefix = "capz-test"
 	}
 
 	return &TestConfig{
@@ -370,7 +376,8 @@ func NewTestConfig() *TestConfig {
 		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),
 		Environment:              GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv),
 		CAPZUser:                 GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser),
-		WorkloadClusterNamespace: getWorkloadClusterNamespace(),
+		WorkloadClusterNamespace: getWorkloadClusterNamespace(testLabelPrefix),
+		TestLabelPrefix:          testLabelPrefix,
 		CAPINamespace:            getControllerNamespace("CAPI_NAMESPACE", "capi-system"),
 		CAPZNamespace:            providerNamespace,
 
