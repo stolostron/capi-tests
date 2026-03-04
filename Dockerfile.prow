@@ -5,6 +5,8 @@ ARG KIND_VERSION=v0.31.0
 ARG KUBECTL_VERSION=v1.35.2
 ARG HELM_VERSION=v3.16.0
 ARG CLUSTERCTL_VERSION=v1.12.3
+# Update CLUSTERCTL_SHA256 when changing CLUSTERCTL_VERSION (no checksum file published by upstream)
+ARG CLUSTERCTL_SHA256=9b75287b15656a62ece65c8ad7491412cebfd30c78e085a9d61396a50df17349
 ARG GOTESTSUM_VERSION=v1.13.0
 
 # Install tools needed for CAPZ tests
@@ -35,8 +37,9 @@ RUN curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o 
 # Install gotestsum for JUnit XML output
 RUN GOBIN=/usr/local/bin go install gotest.tools/gotestsum@${GOTESTSUM_VERSION}
 
-# Install clusterctl (no checksum published by upstream)
+# Install clusterctl (with checksum verification via hardcoded digest)
 RUN curl -Lo /usr/local/bin/clusterctl "https://github.com/kubernetes-sigs/cluster-api/releases/download/${CLUSTERCTL_VERSION}/clusterctl-linux-amd64" && \
+    echo "${CLUSTERCTL_SHA256}  /usr/local/bin/clusterctl" | sha256sum -c && \
     chmod +x /usr/local/bin/clusterctl
 
 # Copy repo source
