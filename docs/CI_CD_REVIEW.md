@@ -173,7 +173,7 @@ All workflows now specify explicit permissions at the workflow level:
 
 ### Rationale
 
-This is a test suite for ARO-CAPZ, which only runs on Kubernetes/Linux. Multiple OS testing is not required. The Go version is pinned to the project's `go.mod` to ensure consistency.
+This is a CAPI test suite, which only runs on Kubernetes/Linux. Multiple OS testing is not required. The Go version is pinned to the project's `go.mod` to ensure consistency.
 
 ---
 

@@ -1,4 +1,4 @@
-# Go Testing Guidelines for ARO-CAPZ Test Suite
+# Go Testing Guidelines for CAPI Test Suite
 
 This document outlines the testing guidelines and best practices used in this repository, based on proven Go testing patterns from official Go documentation and industry standards.
 

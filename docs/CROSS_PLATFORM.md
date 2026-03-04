@@ -1,6 +1,6 @@
 # Cross-Platform Compatibility Guide
 
-This document provides a comprehensive cross-platform compatibility review of the ARO-CAPZ test suite, addressing issue #402.
+This document provides a comprehensive cross-platform compatibility review of the CAPI test suite, addressing issue #402.
 
 ## Supported Platforms
 

@@ -1,6 +1,6 @@
-# Contributing to ARO-CAPZ Test Suite
+# Contributing to CAPI Test Suite
 
-Thank you for your interest in contributing to the ARO-CAPZ Test Suite! This document provides guidelines for contributing to the project.
+Thank you for your interest in contributing to the CAPI Test Suite! This document provides guidelines for contributing to the project.
 
 ## Table of Contents
 

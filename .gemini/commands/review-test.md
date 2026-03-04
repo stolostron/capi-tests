@@ -1,4 +1,4 @@
-Review test files in this repository for compliance with ARO-CAPZ test suite patterns and guidelines.
+Review test files in this repository for compliance with CAPI test suite patterns and guidelines.
 
 ## What to Review
 

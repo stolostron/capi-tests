@@ -8,7 +8,7 @@ contact_links:
     about: Detailed test suite documentation
   - name: cluster-api-installer
     url: https://github.com/RadekCap/cluster-api-installer
-    about: Issues with the ARO-CAPZ deployment itself (not the test suite)
+    about: Issues with the CAPI deployment itself (not the test suite)
   - name: Security Vulnerabilities
     url: https://github.com/RadekCap/capi-tests/blob/main/SECURITY.md
     about: Report security issues privately (do not open public issues)

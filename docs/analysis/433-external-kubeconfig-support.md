@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-This document describes the implementation approach for adding support to run the ARO-CAPZ test suite against an external Kubernetes cluster (e.g., MCE installation) instead of creating a local Kind cluster.
+This document describes the implementation approach for adding support to run the CAPI test suite against an external Kubernetes cluster (e.g., MCE installation) instead of creating a local Kind cluster.
 
 The solution introduces a single environment variable `USE_KUBECONFIG` that, when set to a kubeconfig file path, switches the test suite to "external cluster mode" where it validates pre-installed controllers rather than deploying them.
 

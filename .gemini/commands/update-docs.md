@@ -1,4 +1,4 @@
-Update all documentation files to stay in sync with code changes in the ARO-CAPZ test repository.
+Update all documentation files to stay in sync with code changes in the CAPI test repository.
 
 ## Instructions
 

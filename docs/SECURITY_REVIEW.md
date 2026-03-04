@@ -1,6 +1,6 @@
 # Security Review
 
-This document summarizes the security reviews conducted for the ARO-CAPZ test suite.
+This document summarizes the security reviews conducted for the CAPI test suite.
 
 ## Review History
 

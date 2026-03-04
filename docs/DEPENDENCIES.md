@@ -1,6 +1,6 @@
 # Dependency Management
 
-This document describes how dependencies are managed in the ARO-CAPZ test suite, including Go modules, external tools, and security scanning.
+This document describes how dependencies are managed in the CAPI test suite, including Go modules, external tools, and security scanning.
 
 ## Overview
 

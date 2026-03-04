@@ -1,4 +1,4 @@
-Create a new test phase file for the ARO-CAPZ test suite following the established patterns.
+Create a new test phase file for the CAPI test suite following the established patterns.
 
 ## Instructions
 

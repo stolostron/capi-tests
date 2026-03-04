@@ -4,9 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Purpose
 
-This is a Go-based test suite for validating Azure Red Hat OpenShift (ARO) deployments using Cluster API Provider Azure (CAPZ) and Azure Service Operator (ASO). The tests verify the complete deployment workflow from prerequisites to cluster verification.
-
-**Important**: This is NOT a multi-cloud CAPI testing framework. It is specifically for ARO-CAPZ on Azure only.
+This is a Go-based CAPI test suite, currently supporting CAPZ/ARO and CAPA/ROSA paths. The tests verify the complete deployment workflow from prerequisites to cluster verification.
 
 ## Test Architecture
 

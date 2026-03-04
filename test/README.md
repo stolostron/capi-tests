@@ -1,4 +1,4 @@
-# ARO-CAPZ Test Suite
+# CAPI Test Suite
 
 Comprehensive test suite for Azure Red Hat OpenShift (ARO) deployment using Cluster API Provider Azure (CAPZ) and Azure Service Operator (ASO).
 

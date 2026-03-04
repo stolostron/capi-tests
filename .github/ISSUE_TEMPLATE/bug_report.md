@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug in the ARO-CAPZ test suite
+about: Report a bug in the CAPI test suite
 title: '[BUG] '
 labels: bug
 assignees: ''

@@ -1,6 +1,6 @@
 # Test Coverage Documentation
 
-This document provides comprehensive information about the test coverage for the ARO-CAPZ deployment test suite.
+This document provides comprehensive information about the test coverage for the CAPI deployment test suite.
 
 ## Review History
 
@@ -271,7 +271,7 @@ USE_KUBECONFIG=/path/to/kubeconfig make test-all
 
 ## Deployment Workflow Coverage
 
-The test suite covers 100% of the documented ARO-CAPZ deployment workflow:
+The test suite covers 100% of the documented CAPI deployment workflow:
 
 - Check dependencies verification
 - Repository setup

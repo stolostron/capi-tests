@@ -1,6 +1,6 @@
-# ARO-CAPZ Test Suite Analysis
+# CAPI Test Suite Analysis
 
-This directory contains detailed analysis of all test phases in the ARO-CAPZ test suite.
+This directory contains detailed analysis of all test phases in the CAPI test suite.
 
 ---
 

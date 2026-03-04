@@ -68,7 +68,7 @@ _copy-latest-results:
 	@cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true
 
 help: ## Display this help message
-	@echo "ARO-CAPZ Test Suite Makefile"
+	@echo "CAPI Test Suite Makefile"
 	@echo ""
 	@echo "Usage: make [target]"
 	@echo ""

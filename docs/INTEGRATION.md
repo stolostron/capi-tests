@@ -131,7 +131,7 @@ make test
 **Best Choice: Dynamic Clone**
 
 ```yaml
-name: ARO-CAPZ Tests
+name: CAPI Tests
 
 on: [push, pull_request]
 

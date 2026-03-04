@@ -36,7 +36,7 @@ Target usage of this test suite will be:
 
 - **OSCI (OpenShift CI)** - Automated continuous integration testing for OpenShift deployments
 - **ACM (Advanced Cluster Management)** - Multi-cluster management and validation workflows
-- **Manual Testing** - Developer and QA validation of ARO-CAPZ deployments
+- **Manual Testing** - Developer and QA validation of CAPI deployments
 
 ## Prerequisites
 

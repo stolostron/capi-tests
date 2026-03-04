@@ -1,4 +1,4 @@
-# Deployment Modes for ARO-CAPZ Test Suite
+# Deployment Modes for CAPI Test Suite
 
 **Issue:** [#436 - Document supported testing paths and deployment modes](https://github.com/RadekCap/capi-tests/issues/436)
 

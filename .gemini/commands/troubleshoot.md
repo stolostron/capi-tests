@@ -1,4 +1,4 @@
-Systematically troubleshoot test failures in the ARO-CAPZ test suite.
+Systematically troubleshoot test failures in the CAPI test suite.
 
 ## Instructions
 

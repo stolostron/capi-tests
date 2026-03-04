@@ -1826,7 +1826,7 @@ func extractVersionFromImage(image string) string {
 func GetComponentVersions(t *testing.T, kubeContext string) []ComponentVersion {
 	t.Helper()
 
-	// Define components to check - these are the key components for ARO-CAPZ deployment
+	// Define components to check - these are the key components for CAPI deployment
 	// Get namespace configuration
 	config := NewTestConfig()
 

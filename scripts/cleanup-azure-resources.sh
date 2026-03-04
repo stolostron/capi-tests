@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cleanup-azure-resources.sh - Clean up Azure resources created during ARO-CAPZ testing
+# cleanup-azure-resources.sh - Clean up Azure resources created during CAPI testing
 #
 # This script finds and deletes Azure resources that match the naming patterns used
 # during testing. It cleans up:

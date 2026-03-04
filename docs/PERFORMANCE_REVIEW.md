@@ -21,7 +21,7 @@ This document provides a comprehensive performance review identifying unnecessar
 
 ## Executive Summary
 
-The ARO-CAPZ test suite demonstrates **good overall performance design** with appropriate polling intervals, exponential backoff patterns, and progress visibility during long-running operations. The main waiting time is inherent to Azure resource provisioning rather than test inefficiencies.
+The CAPI test suite demonstrates **good overall performance design** with appropriate polling intervals, exponential backoff patterns, and progress visibility during long-running operations. The main waiting time is inherent to Azure resource provisioning rather than test inefficiencies.
 
 **Key Findings:**
 - Polling intervals are appropriate (5-30 seconds depending on operation)
@@ -341,7 +341,7 @@ time make _delete
 
 ## Conclusion
 
-The ARO-CAPZ test suite is well-optimized for performance. The main time costs are:
+The CAPI test suite is well-optimized for performance. The main time costs are:
 
 1. **Azure resource provisioning** (30-45 minutes) - inherent to ARO deployment
 2. **Controller initialization** (5-10 minutes) - inherent to CAPI/CAPZ/ASO

@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-This document outlines the integration of the ARO-CAPZ test suite with OpenShift CI (Prow) and Sippy analytics. The goal is to run tests automatically in OpenShift CI and have results visible in Sippy dashboards for tracking test reliability and regressions.
+This document outlines the integration of the CAPI test suite with OpenShift CI (Prow) and Sippy analytics. The goal is to run tests automatically in OpenShift CI and have results visible in Sippy dashboards for tracking test reliability and regressions.
 
 **Key Finding:** The test suite already produces JUnit XML output (required by Sippy). The remaining work is CI infrastructure configuration and onboarding.
 
