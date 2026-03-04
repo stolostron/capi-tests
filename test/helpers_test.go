@@ -3268,9 +3268,9 @@ func TestCheckForMismatchedClusters_Logic(t *testing.T) {
 // This prevents false positives in TestDeployment_01_CheckExistingClusters (ARO-24822).
 func TestGetExistingClusterNames_WarningFiltering(t *testing.T) {
 	tests := []struct {
-		name       string
-		output     string
-		wantNames  []string
+		name      string
+		output    string
+		wantNames []string
 	}{
 		{
 			name:      "clean output - no warnings",
