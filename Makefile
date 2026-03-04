@@ -6,7 +6,12 @@ CAPZ_USER_DEFAULT := $(shell grep 'DefaultCAPZUser = ' test/config.go | grep -o 
 CAPZ_USER ?= $(CAPZ_USER_DEFAULT)
 DEPLOYMENT_ENV ?= stage
 REGION ?= uksouth
+INFRA_PROVIDER ?= aro
+ifeq ($(INFRA_PROVIDER),rosa)
+MANAGEMENT_CLUSTER_NAME ?= capa-tests-stage
+else
 MANAGEMENT_CLUSTER_NAME ?= capz-tests-stage
+endif
 CS_CLUSTER_NAME ?= $(CAPZ_USER)-$(DEPLOYMENT_ENV)
 AZURE_RESOURCE_GROUP ?= $(CS_CLUSTER_NAME)-resgroup
 

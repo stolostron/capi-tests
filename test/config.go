@@ -249,7 +249,7 @@ func getWorkloadClusterNamespace() string {
 	return workloadClusterNamespace
 }
 
-// TestConfig holds configuration for ARO-CAPZ tests
+// TestConfig holds configuration for CAPI tests
 type TestConfig struct {
 	// Repository configuration
 	RepoURL    string
@@ -326,16 +326,20 @@ func NewTestConfig() *TestConfig {
 	// ASOControllerTimeout is always a valid duration (used by ValidateAllConfigurations).
 	asoTimeout := parseASOControllerTimeout()
 
-	// Resolve provider-specific namespace and build provider config
+	// Resolve provider-specific namespace, cluster names, and build provider config
 	var providerNamespace string
 	var infraProviders []InfraProvider
 	var defaultGenScriptPath string
+	var defaultMgmtCluster string
+	var defaultWorkloadCluster string
 
 	switch infraProviderName {
 	case "rosa":
 		providerNamespace = getControllerNamespace("CAPA_NAMESPACE", "capa-system")
 		infraProviders = []InfraProvider{NewAWSProvider(providerNamespace)}
 		defaultGenScriptPath = "./scripts/rosa-hcp/gen.sh"
+		defaultMgmtCluster = "capa-tests-stage"
+		defaultWorkloadCluster = "capa-tests-cluster"
 	default: // "aro"
 		infraProviderName = "aro" // normalize unknown values
 		providerNamespace = getControllerNamespace("CAPZ_NAMESPACE", "capz-system")
@@ -347,6 +351,8 @@ func NewTestConfig() *TestConfig {
 		}
 		infraProviders = []InfraProvider{azureProvider}
 		defaultGenScriptPath = "./scripts/aro-hcp/gen.sh"
+		defaultMgmtCluster = "capz-tests-stage"
+		defaultWorkloadCluster = "capz-tests-cluster"
 	}
 
 	return &TestConfig{
@@ -356,8 +362,8 @@ func NewTestConfig() *TestConfig {
 		RepoDir:    getDefaultRepoDir(),
 
 		// Cluster defaults
-		ManagementClusterName:    GetEnvOrDefault("MANAGEMENT_CLUSTER_NAME", "capz-tests-stage"),
-		WorkloadClusterName:      GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", "capz-tests-cluster"),
+		ManagementClusterName:    GetEnvOrDefault("MANAGEMENT_CLUSTER_NAME", defaultMgmtCluster),
+		WorkloadClusterName:      GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", defaultWorkloadCluster),
 		ClusterNamePrefix:        GetEnvOrDefault("CS_CLUSTER_NAME", fmt.Sprintf("%s-%s", GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser), GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv))),
 		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.20"),
 		Region:                   GetEnvOrDefault("REGION", "uksouth"),

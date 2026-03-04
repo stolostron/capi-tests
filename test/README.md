@@ -82,10 +82,10 @@ Tests are configured via environment variables:
 
 ### Cluster Configuration
 
-- `MANAGEMENT_CLUSTER_NAME` - Management cluster name (default: `capz-tests-stage`)
+- `MANAGEMENT_CLUSTER_NAME` - Management cluster name (default: `capz-tests-stage` for ARO, `capa-tests-stage` for ROSA)
   - **Note**: Tests automatically translate this to `KIND_CLUSTER_NAME` for the deployment script
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
-- `WORKLOAD_CLUSTER_NAME` - ARO workload cluster name (default: `capz-tests-cluster`)
+- `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests-cluster` for ARO, `capa-tests-cluster` for ROSA)
 - `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation (default: `${CAPZ_USER}-${DEPLOYMENT_ENV}`). The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`.
 - `OCP_VERSION` - OpenShift version (default: `4.21`)
 - `REGION` - Azure region (default: `uksouth`)
