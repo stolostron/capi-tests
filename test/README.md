@@ -80,6 +80,10 @@ Tests are configured via environment variables:
 - `ARO_REPO_BRANCH` - Branch to clone (default: `ARO-ASO`)
 - `ARO_REPO_DIR` - Local repository directory (default: `/tmp/cluster-api-installer-aro`)
 
+### Infrastructure Provider
+
+- `INFRA_PROVIDER` - Infrastructure provider to use (values: `aro`, `rosa`; default: `aro`)
+
 ### Cluster Configuration
 
 - `MANAGEMENT_CLUSTER_NAME` - Management cluster name (default: `capz-tests-stage` for ARO, `capa-tests-stage` for ROSA)

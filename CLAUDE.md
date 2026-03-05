@@ -279,6 +279,12 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 - `ARO_REPO_BRANCH` - Branch to use (default: `ARO-ASO`)
 - `ARO_REPO_DIR` - Local path (default: `/tmp/cluster-api-installer-aro`)
 
+### Infrastructure Provider
+- `INFRA_PROVIDER` - Infrastructure provider to use (values: `aro`, `rosa`; default: `aro`). Selects which CAPI infrastructure provider configuration to load:
+  - `aro` - Azure Red Hat OpenShift via CAPZ/ASO
+  - `rosa` - Red Hat OpenShift on AWS via CAPA
+  - Affects defaults for `MANAGEMENT_CLUSTER_NAME`, `WORKLOAD_CLUSTER_NAME`, `WORKLOAD_CLUSTER_NAMESPACE_PREFIX`, and controller configurations
+
 ### Cluster Configuration
 - `MANAGEMENT_CLUSTER_NAME` - Management cluster name (default: `capz-tests-stage` for ARO, `capa-tests-stage` for ROSA)
   - **Note**: Tests automatically translate this to `KIND_CLUSTER_NAME` for the deployment script
