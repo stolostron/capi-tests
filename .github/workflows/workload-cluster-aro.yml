@@ -1,17 +1,27 @@
-name: Management Cluster (ARO)
+name: Full Cluster Deployment (ARO)
 
-# Management cluster deployment only (no workload cluster provisioning).
-# This workflow deploys a Kind cluster with CAPI/CAPZ/ASO controllers and validates setup.
-# Does NOT provision ARO HCP workload clusters.
+# Full end-to-end cluster deployment workflow (management cluster + workload cluster).
+# This workflow deploys a Kind management cluster and provisions an ARO HCP workload cluster.
 #
 # Manual-only trigger. Requires:
+#   - Environment (aro-stage) with:
+#     - Variables: AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID
+#     - Secret: AZURE_CLIENT_SECRET
 #   - Repository secret: QUAY_AUTH
 #
-# Compare with cluster-aro.yml:
-#   - management-cluster-aro.yml (this file): Quick validation, Kind + controllers only
-#   - cluster-aro.yml: Full deployment including ARO HCP workload cluster provisioning
+# Compare with management-cluster-aro.yml:
+#   - management-cluster-aro.yml: Quick validation, Kind + controllers only (no workload cluster)
+#   - cluster-aro.yml (this file): Full deployment including workload cluster provisioning
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        default: 'aro-stage'
+        options:
+          - aro-stage
 
 permissions:
   contents: read
@@ -26,15 +36,20 @@ env:
 
 jobs:
   management-cluster:
-    name: Management Cluster (ARO/CAPZ)
+    name: Full Cluster (ARO/CAPZ)
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    environment: ${{ inputs.environment }}
 
     steps:
-    - name: Validate credentials
+    - name: Validate Azure credentials
       id: secrets
       env:
         QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
+        AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+        AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       run: |
         CONFIGURED=true
         missing=""
@@ -42,6 +57,16 @@ jobs:
         if [ -n "$missing" ]; then
           echo "::warning::Missing required repository secrets:$missing"
           echo "Configure these in Settings > Secrets and variables > Actions"
+          CONFIGURED=false
+        fi
+        missing=""
+        [ -z "$AZURE_TENANT_ID" ] && missing="$missing vars.AZURE_TENANT_ID"
+        [ -z "$AZURE_SUBSCRIPTION_ID" ] && missing="$missing vars.AZURE_SUBSCRIPTION_ID"
+        [ -z "$AZURE_CLIENT_ID" ] && missing="$missing vars.AZURE_CLIENT_ID"
+        [ -z "$AZURE_CLIENT_SECRET" ] && missing="$missing secrets.AZURE_CLIENT_SECRET"
+        if [ -n "$missing" ]; then
+          echo "::warning::Missing required environment configuration:$missing"
+          echo "Configure in Settings > Environments > ${{ inputs.environment }}"
           CONFIGURED=false
         fi
         if [ "$CONFIGURED" = "false" ] ; then
@@ -67,6 +92,8 @@ jobs:
     - name: Install OpenShift CLI
       run: |
         wget -q https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz
+        wget -q https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/sha256sum.txt
+        grep 'openshift-client-linux.tar.gz$' sha256sum.txt | sha256sum -c -
         tar -xzf openshift-client-linux.tar.gz
         sudo mv oc /usr/local/bin/
         sudo chmod +x /usr/local/bin/oc
@@ -90,7 +117,10 @@ jobs:
     - name: Install kubectl
       run: |
         # kubectl - uses latest stable (compatible with Kubernetes 1.28+)
-        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        KUBECTL_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
+        curl -fsSLO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+        curl -fsSLO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256"
+        echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
         chmod +x kubectl
         sudo mv kubectl /usr/local/bin/
         kubectl version --client
@@ -101,19 +131,7 @@ jobs:
         # Helm 3.12+ required
         version: 'v3.16.0'
 
-    - name: 'Phase 1: Check Dependencies'
-      run: make _check-dep
-      continue-on-error: true
-      id: phase1
-
-    - name: 'Phase 2: Repository Setup'
-      if: steps.phase1.outcome == 'success'
-      run: make _setup
-      continue-on-error: true
-      id: phase2
-
     - name: 'Setup Docker pull secrets for Kind'
-      if: steps.phase2.outcome == 'success'
       env:
         QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
       run: |
@@ -140,9 +158,13 @@ jobs:
         # Export DOCKER_SECRETS for subsequent steps
         echo "DOCKER_SECRETS=${DOCKER_SECRETS}" >> $GITHUB_ENV
 
-    - name: 'Phase 3: Kind Cluster'
-      if: steps.phase2.outcome == 'success'
-      run: make _management_cluster
+    - name: 'Run test-all'
+      env:
+        AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+        AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      run: make test-all
       continue-on-error: true
       id: phase3
 
@@ -157,13 +179,17 @@ jobs:
             "check-dep": "Check Dependencies",
             "setup": "Repository Setup",
             "cluster": "Kind Cluster",
+            "generate-yamls": "Generate YAMLs",
+            "deploy-crs": "Deploy CRs",
+            "verify": "Verification",
+            "delete": "Deletion",
         }
 
         files = sorted(glob.glob("results/latest/junit-*.xml"))
         if not files:
             summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null")
             with open(summary_path, "a") as s:
-                s.write("# Management Cluster (ARO) Results\n\n")
+                s.write("# Full Cluster (ARO) Results\n\n")
                 s.write("No test results found\n")
             sys.exit(0)
 
@@ -171,7 +197,7 @@ jobs:
         summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null")
 
         with open(summary_path, "a") as summary:
-            summary.write("# Management Cluster (ARO) Results\n\n")
+            summary.write("# Full Cluster (ARO) Results\n\n")
 
             for f in files:
                 phase_key = os.path.basename(f).replace("junit-", "").replace(".xml", "")
@@ -222,6 +248,10 @@ jobs:
             "junit-check-dep.xml": "test/01_check_dependencies_test.go",
             "junit-setup.xml": "test/02_setup_test.go",
             "junit-cluster.xml": "test/03_cluster_test.go",
+            "junit-generate-yamls.xml": "test/04_generate_yamls_test.go",
+            "junit-deploy-crs.xml": "test/05_deploy_crs_test.go",
+            "junit-verify.xml": "test/06_verification_test.go",
+            "junit-delete.xml": "test/07_deletion_test.go",
         }
 
         for xml_path in sorted(glob.glob("results/latest/junit-*.xml")):
@@ -245,21 +275,19 @@ jobs:
       if: always()
       uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       with:
-        name: test-results-management-cluster-aro
+        name: test-results-full-cluster-aro
         path: results/
         retention-days: 30
 
     - name: Create GitHub issue on failure
-      if: always() && steps.secrets.outputs.configured == 'true' && (steps.phase1.outcome == 'failure' || steps.phase2.outcome == 'failure' || steps.phase3.outcome == 'failure')
+      if: always() && steps.secrets.outputs.configured == 'true' && (steps.phase3.outcome == 'failure')
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        WORKFLOW_NAME: Management Cluster (ARO)
+        WORKFLOW_NAME: Full Cluster (ARO)
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         REF_NAME: ${{ github.ref_name }}
         COMMIT_SHA: ${{ github.sha }}
         EVENT_NAME: ${{ github.event_name }}
-        PHASE1_OUTCOME: ${{ steps.phase1.outcome }}
-        PHASE2_OUTCOME: ${{ steps.phase2.outcome }}
         PHASE3_OUTCOME: ${{ steps.phase3.outcome }}
       run: |
         EXISTING_ISSUE=$(gh issue list --label "automated" --label "test-failure" --state open --json number,title --jq ".[] | select(.title | contains(\"[$WORKFLOW_NAME]\")) | .number | select(. != null)" | head -1)
@@ -290,9 +318,7 @@ jobs:
         **Triggered by:** $EVENT_NAME
 
         ### Phase Results
-        - Phase 1 (Check Dependencies): $PHASE1_OUTCOME
-        - Phase 2 (Repository Setup): $PHASE2_OUTCOME
-        - Phase 3 (Kind Cluster): $PHASE3_OUTCOME
+        - All tests: $PHASE3_OUTCOME
 
         ### Failed Tests
         EOF
@@ -319,27 +345,14 @@ jobs:
     - name: Fail if any phase failed
       if: always()
       env:
-        PHASE1_OUTCOME: ${{ steps.phase1.outcome }}
-        PHASE2_OUTCOME: ${{ steps.phase2.outcome }}
         PHASE3_OUTCOME: ${{ steps.phase3.outcome }}
       run: |
         EXIT=0
-        if [ "$PHASE1_OUTCOME" = "failure" ]; then
-          echo "Phase 1 (Check Dependencies) failed"
-          EXIT=1
-        fi
-        if [ "$PHASE2_OUTCOME" = "failure" ]; then
-          echo "Phase 2 (Repository Setup) failed"
-          EXIT=1
-        elif [ -z "$PHASE2_OUTCOME" ] || [ "$PHASE2_OUTCOME" = "skipped" ]; then
-          echo "Phase 2 (Repository Setup) was skipped (Phase 1 failed)"
-          EXIT=1
-        fi
         if [ "$PHASE3_OUTCOME" = "failure" ]; then
-          echo "Phase 3 (Kind Cluster) failed"
+          echo "Test suite (test-all) failed"
           EXIT=1
         elif [ -z "$PHASE3_OUTCOME" ] || [ "$PHASE3_OUTCOME" = "skipped" ]; then
-          echo "Phase 3 (Kind Cluster) was skipped (earlier phase failed)"
+          echo "Test suite (test-all) was skipped"
           EXIT=1
         fi
         exit $EXIT
