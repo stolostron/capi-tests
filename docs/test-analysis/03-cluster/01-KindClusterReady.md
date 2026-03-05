@@ -45,7 +45,7 @@
 | Variable | Default Value |
 |----------|---------------|
 | `config.RepoDir` | `/tmp/cluster-api-installer-aro` |
-| `config.ManagementClusterName` | `capz-tests-stage` |
+| `config.ManagementClusterName` | `capz-tests-stage` (ARO) / `capa-tests-stage` (ROSA) |
 
 ---
 

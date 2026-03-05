@@ -56,7 +56,7 @@ kubeconfigPath := filepath.Join(os.TempDir(),
     fmt.Sprintf("%s-kubeconfig.yaml", config.WorkloadClusterName))
 ```
 
-Example: `/tmp/capz-tests-cluster-kubeconfig.yaml`
+Example (ARO): `/tmp/capz-tests-cluster-kubeconfig.yaml`
 
 ---
 
@@ -82,9 +82,9 @@ The test uses Go's `encoding/base64` package for safe decoding (no shell command
 
 ```
 === RUN   TestVerification_RetrieveKubeconfig
-    06_verification_test.go:21: Retrieving kubeconfig for cluster 'capz-tests-cluster'
-    06_verification_test.go:26: Attempting Method 1: kubectl get secret capz-tests-cluster-kubeconfig...
-    06_verification_test.go:83: Kubeconfig retrieved using kubectl and saved to /tmp/capz-tests-cluster-kubeconfig.yaml
+    06_verification_test.go:21: Retrieving kubeconfig for cluster '<workload-cluster-name>'
+    06_verification_test.go:26: Attempting Method 1: kubectl get secret <workload-cluster-name>-kubeconfig...
+    06_verification_test.go:83: Kubeconfig retrieved using kubectl and saved to /tmp/<workload-cluster-name>-kubeconfig.yaml
 --- PASS: TestVerification_RetrieveKubeconfig (0.15s)
 ```
 

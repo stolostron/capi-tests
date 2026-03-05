@@ -6,7 +6,7 @@ Analysis of resources created during ARO-HCP deployment via CAPZ/ASO, covering b
 
 # Part A: Kubernetes Resources (CAPI/ASO Custom Resources)
 
-Based on live cluster data from namespace `capz-test-20260208-184931`.
+Based on live cluster data from namespace `capz-test-20260208-184931` (ARO path; ROSA uses `capa-test-*` prefix).
 
 ## A.1. Logical Dependency View (what waits for what)
 

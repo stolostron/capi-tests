@@ -107,7 +107,7 @@ The `--wait=false` flag is used so the delete command returns immediately, allow
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DEPLOYMENT_TIMEOUT` | `45m` | Timeout for waiting for deletion to complete |
-| `WORKLOAD_CLUSTER_NAME` | `capz-tests-cluster` | Name of the cluster to delete |
+| `WORKLOAD_CLUSTER_NAME` | `capz-tests-cluster` (ARO) / `capa-tests-cluster` (ROSA) | Name of the cluster to delete |
 | `WORKLOAD_CLUSTER_NAMESPACE` | auto-generated | Namespace containing cluster resources |
 | `CS_CLUSTER_NAME` | `${CAPZ_USER}-${DEPLOYMENT_ENV}` | Prefix for Azure resource group name |
 

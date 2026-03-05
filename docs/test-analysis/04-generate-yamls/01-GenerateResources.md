@@ -83,6 +83,8 @@ expectedFiles := []string{
 
 ## Example Output
 
+Example below shows the ARO path (ROSA uses `rosa-hcp-scripts/rosa-hcp-gen.sh` and `capa-tests-cluster`):
+
 ```
 === Generating infrastructure resources ===
 Running infrastructure generation script: /tmp/cluster-api-installer-aro/doc/aro-hcp-scripts/aro-hcp-gen.sh stage-radek-capz-tests-cluster

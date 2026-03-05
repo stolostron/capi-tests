@@ -83,7 +83,7 @@ Common causes:
 ```
 === RUN   TestDeletion_WaitForClusterDeletion
 Waiting for cluster 'rcap-stage' to be deleted...
-Namespace: capz-test-20260202-135526 | Timeout: 45m0s | Poll interval: 30s
+Namespace: <namespace> | Timeout: 45m0s | Poll interval: 30s
 Azure Resource Group: rcap-stage-resgroup
 
 [1] Cluster: exists | AROControlPlane: deleting | MachinePool: deleting | RG: exists

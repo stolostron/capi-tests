@@ -37,8 +37,8 @@ Create the workload cluster namespace, apply the generated YAML manifests to the
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  Test 1: CreateNamespace                                          │
-│  ├── Create unique namespace (capz-test-YYYYMMDD-HHMMSS)         │
-│  └── Add identification labels (capz-test=true)                  │
+│  ├── Create unique namespace (<prefix>-YYYYMMDD-HHMMSS)          │
+│  └── Add identification labels (<prefix>=true)                   │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -96,7 +96,7 @@ Each test run creates a unique namespace to enable:
 - Easy cleanup of test resources
 - Clear separation between test runs
 
-Namespace format: `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` (e.g., `capz-test-20260202-135526`)
+Namespace format: `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` (e.g., `capz-test-20260202-135526` for ARO, `capa-test-20260202-135526` for ROSA)
 
 ---
 
@@ -105,7 +105,7 @@ Namespace format: `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` (e.g., `ca
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DEPLOYMENT_TIMEOUT` | `45m` | Control plane wait timeout |
-| `MANAGEMENT_CLUSTER_NAME` | `capz-tests-stage` | kubectl context |
-| `WORKLOAD_CLUSTER_NAME` | `capz-tests-cluster` | ARO cluster name |
+| `MANAGEMENT_CLUSTER_NAME` | `capz-tests-stage` (ARO) / `capa-tests-stage` (ROSA) | kubectl context |
+| `WORKLOAD_CLUSTER_NAME` | `capz-tests-cluster` (ARO) / `capa-tests-cluster` (ROSA) | Workload cluster name |
 | `WORKLOAD_CLUSTER_NAMESPACE` | auto-generated | Namespace for cluster resources |
-| `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` | `capz-test` | Prefix for auto-generated namespace |
+| `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` | `capz-test` (ARO) / `capa-test` (ROSA) | Prefix for auto-generated namespace |

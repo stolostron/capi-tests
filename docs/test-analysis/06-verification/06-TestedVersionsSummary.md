@@ -61,7 +61,7 @@
             TESTED COMPONENT VERSIONS
 ===================================================
 
-Management Cluster: kind-capz-tests-stage
+Management Cluster: kind-<management-cluster-name>
 OpenShift Version:  4.21
 
 ---------------------------------------------------
@@ -86,7 +86,7 @@ OpenShift Version:  4.21
             TESTED COMPONENT VERSIONS
 ===================================================
 
-Management Cluster: kind-capz-tests-stage
+Management Cluster: kind-<management-cluster-name>
 OpenShift Version:  4.21
 
 ---------------------------------------------------

@@ -78,4 +78,4 @@ Generate Kubernetes YAML manifests for ARO infrastructure resources using the `a
 
 Files are generated to: `<ARO_REPO_DIR>/<DEPLOYMENT_ENV>-<USER>-<WORKLOAD_CLUSTER_NAME>/`
 
-Example: `/tmp/cluster-api-installer-aro/stage-radek-capz-tests-cluster/`
+Example (ARO): `/tmp/cluster-api-installer-aro/stage-radek-capz-tests-cluster/`

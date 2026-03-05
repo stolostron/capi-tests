@@ -1,5 +1,8 @@
 # Useful Commands for Checking Resource Status During Test Runs
 
+> **Note**: The examples below use ARO/CAPZ defaults (`kind-capz-tests-stage` context, `capz-system` namespace).
+> For ROSA/CAPA, substitute the context with `kind-capa-tests-stage` and the provider namespace with `capa-system`.
+
 ## ASO Logs
 
 ```bash

@@ -72,7 +72,7 @@ status:
 
 ```
 === Checking cluster conditions ===
-Cluster: capz-tests-cluster
+Cluster: <workload-cluster-name>
 
 Fetching cluster status...
 ✅ Cluster has status information

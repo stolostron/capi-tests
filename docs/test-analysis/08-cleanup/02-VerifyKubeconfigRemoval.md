@@ -22,5 +22,5 @@
 ## Key Notes
 
 - Uses cross-platform `os.TempDir()` for the search path
-- Matches pattern `*-kubeconfig.yaml` (e.g., `capz-tests-cluster-kubeconfig.yaml`)
+- Matches pattern `*-kubeconfig.yaml` (e.g., `capz-tests-cluster-kubeconfig.yaml` for ARO or `capa-tests-cluster-kubeconfig.yaml` for ROSA)
 - Does not delete files - only identifies them for cleanup

@@ -94,7 +94,7 @@ make test-all
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           PHASE 5: DEPLOY CRS                                │
-│  Namespace: Create unique per-run namespace (capz-test-YYYYMMDD-HHMMSS)    │
+│  Namespace: Create unique per-run namespace (<prefix>-YYYYMMDD-HHMMSS)     │
 │  Guard: Check for mismatched cluster resources (stale config detection)     │
 │  Health: Wait for cluster healthy before applying                           │
 │  Apply: kubectl apply -f credentials.yaml, aro.yaml (with retry)           │
@@ -158,8 +158,8 @@ make _cleanup        # Phase 8
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MANAGEMENT_CLUSTER_NAME` | `capz-tests-stage` | Kind cluster name |
-| `WORKLOAD_CLUSTER_NAME` | `capz-tests-cluster` | ARO cluster name |
+| `MANAGEMENT_CLUSTER_NAME` | `capz-tests-stage` (ARO) / `capa-tests-stage` (ROSA) | Kind cluster name |
+| `WORKLOAD_CLUSTER_NAME` | `capz-tests-cluster` (ARO) / `capa-tests-cluster` (ROSA) | Workload cluster name |
 | `ARO_REPO_DIR` | `/tmp/cluster-api-installer-aro` | Repository path |
 | `DEPLOYMENT_TIMEOUT` | `45m` | Control plane wait timeout |
 | `DEPLOYMENT_ENV` | `stage` | Environment identifier |

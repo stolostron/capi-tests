@@ -12,7 +12,7 @@
 |---------|---------|
 | `kubectl --context <ctx> get namespace <ns>` | Check if namespace exists |
 | `kubectl --context <ctx> create namespace <ns>` | Create namespace |
-| `kubectl --context <ctx> label namespace <ns> capz-test=true ...` | Add identification labels |
+| `kubectl --context <ctx> label namespace <ns> <test-label-prefix>=true ...` | Add identification labels |
 
 ---
 
@@ -29,8 +29,8 @@
        └── Failure → Fatal error
 
 3. Add labels for identification:
-   └── capz-test=true
-   └── capz-test-prefix=<prefix>
+   └── <test-label-prefix>=true
+   └── <test-label-prefix>-prefix=<prefix>
 ```
 
 ---
@@ -41,7 +41,7 @@ The namespace is unique per test run to allow parallel test runs:
 
 ```
 WORKLOAD_CLUSTER_NAMESPACE = ${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}
-Example: capz-test-20260202-135526
+Example: `capz-test-20260202-135526` (ARO) or `capa-test-20260202-135526` (ROSA)
 ```
 
 If `WORKLOAD_CLUSTER_NAMESPACE` is explicitly set, the exact value is used (for resume scenarios).

@@ -213,9 +213,9 @@ ARO_REPO_DIR=/tmp/cluster-api-installer-aro
 # Cluster Configuration
 # Note: When running tests, use MANAGEMENT_CLUSTER_NAME (tests translate to KIND_CLUSTER_NAME internally)
 # When using deployment scripts directly, use KIND_CLUSTER_NAME as shown below
-MANAGEMENT_CLUSTER_NAME=capz-tests-stage  # For running tests
+MANAGEMENT_CLUSTER_NAME=capz-tests-stage  # For running tests (default for ARO; capa-tests-stage for ROSA)
 KIND_CLUSTER_NAME=capz-tests-stage        # For direct script usage (advanced)
-CLUSTER_NAME=capz-tests-cluster
+CLUSTER_NAME=capz-tests-cluster           # Default for ARO; capa-tests-cluster for ROSA
 CS_CLUSTER_NAME=rcap-stage  # Resource group will be ${CS_CLUSTER_NAME}-resgroup
 OCP_VERSION=4.21
 REGION=uksouth

@@ -12,7 +12,7 @@ echo "fs.inotify.max_user_watches=524288" | sudo tee /etc/sysctl.d/99-kind.conf
 echo "fs.inotify.max_user_instances=512" | sudo tee -a /etc/sysctl.d/99-kind.conf
 sudo sysctl --system
 
-# Cleanup any failed Kind clusters
+# Cleanup any failed Kind clusters (use capa-tests-stage for ROSA)
 kind delete cluster --name capz-tests-stage 2>/dev/null
 docker network rm kind 2>/dev/null
 
@@ -80,7 +80,7 @@ sudo sysctl --system
 After fixing the limits, clean up any failed Kind cluster artifacts:
 
 ```bash
-# Delete the failed cluster
+# Delete the failed cluster (use capa-tests-stage for ROSA)
 kind delete cluster --name capz-tests-stage
 
 # Remove orphaned Docker network

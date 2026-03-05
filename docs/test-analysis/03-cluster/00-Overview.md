@@ -89,7 +89,7 @@ Deploy a Kind cluster with CAPI, CAPZ, and ASO controllers, then verify all cont
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MANAGEMENT_CLUSTER_NAME` | `capz-tests-stage` | Kind cluster name |
+| `MANAGEMENT_CLUSTER_NAME` | `capz-tests-stage` (ARO) / `capa-tests-stage` (ROSA) | Kind cluster name |
 | `ARO_REPO_DIR` | `/tmp/cluster-api-installer-aro` | Path to cluster-api-installer |
 | `USE_KUBECONFIG` | (unset) | Path to external cluster kubeconfig |
 | `MCE_AUTO_ENABLE` | `true` (when USE_KUBECONFIG set) | Auto-enable MCE components |
