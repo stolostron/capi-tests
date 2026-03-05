@@ -2,7 +2,6 @@ package test
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -277,9 +276,6 @@ func TestDeployment_ApplyAROClusterYAML(t *testing.T) {
 
 // TestDeployment_MonitorCluster tests monitoring the ARO cluster deployment
 func TestDeployment_MonitorCluster(t *testing.T) {
-
-	PrintToTTY("\n=== Starting Cluster Monitoring Test ===\n")
-
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
@@ -287,82 +283,69 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
 	}
 
-	PrintToTTY("Checking prerequisites...\n")
-	if !DirExists(config.RepoDir) {
-		PrintToTTY("⚠️  Repository not cloned yet at %s\n", config.RepoDir)
-		t.Skipf("Repository not cloned yet at %s", config.RepoDir)
-	}
-	PrintToTTY("✅ Repository directory exists: %s\n", config.RepoDir)
-
-	clusterctlPath := filepath.Join(config.RepoDir, config.ClusterctlBinPath)
-
-	// If clusterctl binary doesn't exist, try to use system clusterctl
-	PrintToTTY("Looking for clusterctl binary...\n")
-	if !FileExists(clusterctlPath) {
-		t.Logf("clusterctl binary not found at %s, checking system PATH", clusterctlPath)
-		PrintToTTY("clusterctl binary not found at %s, checking system PATH...\n", clusterctlPath)
-		if CommandExists("clusterctl") {
-			clusterctlPath = "clusterctl"
-			PrintToTTY("✅ Using clusterctl from system PATH\n")
-		} else {
-			PrintToTTY("❌ clusterctl not found in system PATH\n")
-			t.Skipf("clusterctl not found")
-		}
-	} else {
-		PrintToTTY("✅ Found clusterctl at: %s\n", clusterctlPath)
-	}
-
-	// Set kubectl context to Kind cluster
-	context := config.GetKubeContext()
-	SetEnvVar(t, "KUBECONFIG", fmt.Sprintf("%s/.kube/config", os.Getenv("HOME")))
-
-	// First, check if cluster resource exists
-	// Use the provisioned cluster name from aro.yaml, not WORKLOAD_CLUSTER_NAME
 	provisionedClusterName := config.GetProvisionedClusterName()
+
+	PrintTestHeader(t, "TestDeployment_MonitorCluster",
+		"Get cluster status snapshot using monitor-cluster-json.sh")
+
+	context := config.GetKubeContext()
+
 	PrintToTTY("\n=== Monitoring cluster deployment ===\n")
 	PrintToTTY("Cluster: %s\n", provisionedClusterName)
 	PrintToTTY("Namespace: %s\n", config.WorkloadClusterNamespace)
 	PrintToTTY("Context: %s\n", context)
-	PrintToTTY("\nChecking if cluster resource exists...\n")
-	t.Logf("Checking for cluster resource: %s (namespace: %s)", provisionedClusterName, config.WorkloadClusterNamespace)
+	PrintToTTY("\n")
 
-	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace, "get", "cluster", provisionedClusterName)
+	// Get cluster status using the monitoring script
+	data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 	if err != nil {
-		PrintToTTY("⚠️  Cluster resource not found (may not be deployed yet)\n\n")
-		t.Skipf("Cluster resource not found (may not be deployed yet): %v", err)
+		PrintToTTY("⚠️  Could not get cluster status (may not be deployed yet): %v\n\n", err)
+		t.Skipf("Could not get cluster status: %v", err)
 	}
 
-	PrintToTTY("✅ Cluster resource exists\n")
-	t.Logf("Cluster resource exists:\n%s", output)
+	// Display comprehensive status
+	PrintToTTY("✅ Successfully retrieved cluster status\n\n")
+	PrintToTTY("%s\n", data.FormatSummary())
+	PrintToTTY("\n")
 
-	// Use clusterctl to describe the cluster
-	PrintToTTY("\n📊 Fetching cluster status with clusterctl...\n")
-	PrintToTTY("Running: %s describe cluster %s -n %s --show-conditions=all\n", clusterctlPath, provisionedClusterName, config.WorkloadClusterNamespace)
-	PrintToTTY("This may take a few moments...\n")
-	t.Logf("Monitoring cluster deployment status using clusterctl...")
+	// Show detailed status
+	PrintToTTY("=== Cluster Details ===\n")
+	PrintToTTY("Provider: %s\n", data.GetProviderType())
+	PrintToTTY("Phase: %s\n", data.Cluster.Phase)
+	PrintToTTY("Infrastructure Ready: %v\n", data.Infrastructure.Ready)
+	PrintToTTY("Control Plane Ready: %v\n", data.ControlPlane.Ready)
 
-	output, err = RunCommand(t, clusterctlPath, "describe", "cluster", provisionedClusterName, "-n", config.WorkloadClusterNamespace, "--show-conditions=all")
-	if err != nil {
-		PrintToTTY("\n⚠️  clusterctl describe failed (cluster may still be initializing)\n")
-		PrintToTTY("Error: %v\n\n", err)
-		t.Logf("clusterctl describe failed (cluster may still be initializing): %v\nOutput: %s", err, output)
+	if len(data.MachinePools) > 0 {
+		PrintToTTY("\n=== Machine Pools ===\n")
+		for _, mp := range data.MachinePools {
+			PrintToTTY("- %s: %d/%d replicas ready\n", mp.Name, mp.ReadyReplicas, mp.Replicas)
+			if mp.Infrastructure != nil {
+				PrintToTTY("  Infrastructure: %s (ready: %v, provisioning: %s)\n",
+					mp.Infrastructure.Kind,
+					mp.Infrastructure.Ready,
+					mp.Infrastructure.ProvisioningState)
+			}
+		}
+	}
+
+	if data.Nodes != nil && len(data.Nodes) > 0 {
+		PrintToTTY("\n=== Nodes (%d total, %d ready) ===\n", data.Summary.NodeCount, data.GetReadyNodeCount())
+		for _, node := range data.Nodes {
+			PrintToTTY("- %s: ready=%s, roles=%s, version=%s\n",
+				node.Name, node.Ready, node.Roles, node.Version)
+		}
 	} else {
-		PrintToTTY("\n✅ Successfully retrieved cluster status\n")
-		PrintToTTY("\nCluster Status:\n%s\n\n", output)
-		t.Logf("Cluster status:\n%s", output)
+		PrintToTTY("\n=== Nodes ===\n")
+		PrintToTTY("No nodes available yet (kubeconfig may not be ready)\n")
 	}
 
-	PrintToTTY("=== Cluster Monitoring Test Complete ===\n\n")
+	PrintToTTY("\n=== Cluster Monitoring Test Complete ===\n\n")
+	t.Logf("Cluster status: %s", data.FormatSummary())
 }
 
-// TestDeployment_WaitForControlPlane waits for both control plane and machine pool to be ready.
-// These two components deploy in parallel:
-//   - AROControlPlane.Ready: HCP cluster + kubeconfig created
-//   - AROMachinePool: worker node pool provisioned
-//
-// The test waits for BOTH to be ready before proceeding.
+// TestDeployment_WaitForControlPlane waits for control plane and machine pools to be ready.
+// Uses the generic cluster monitoring function which works for ARO, ROSA, and any CAPI cluster.
 func TestDeployment_WaitForControlPlane(t *testing.T) {
-
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
@@ -370,182 +353,78 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
 	}
 
+	provisionedClusterName := config.GetProvisionedClusterName()
 	context := config.GetKubeContext()
 
-	// Get the specific resource names for the cluster being deployed
-	// This prevents checking the wrong resources when multiple clusters exist (issue #355)
-	provisionedClusterName := config.GetProvisionedClusterName()
-	aroControlPlaneName := config.GetProvisionedAROControlPlaneName()
-	machinePoolName := config.GetProvisionedMachinePoolName()
+	PrintTestHeader(t, "TestDeployment_WaitForControlPlane",
+		"Wait for control plane and machine pools to become ready")
 
-	// Wait for both to be ready (with configurable timeout)
-	timeout := config.DeploymentTimeout
-	pollInterval := 30 * time.Second
-	startTime := time.Now()
-
-	// Print to stderr for immediate visibility (unbuffered)
-	PrintToTTY("\n=== Waiting for control plane and machine pool to be ready ===\n")
+	PrintToTTY("\n=== Waiting for control plane to be ready ===\n")
 	PrintToTTY("Cluster: %s\n", provisionedClusterName)
-	PrintToTTY("AROControlPlane: %s\n", aroControlPlaneName)
-	PrintToTTY("MachinePool: %s\n", machinePoolName)
 	PrintToTTY("Namespace: %s\n", config.WorkloadClusterNamespace)
-	PrintToTTY("Timeout: %v | Poll interval: %v\n\n", timeout, pollInterval)
-	t.Logf("Waiting for control plane and machine pool (namespace: %s, timeout: %v)...", config.WorkloadClusterNamespace, timeout)
+	PrintToTTY("Context: %s\n", context)
+	PrintToTTY("Timeout: %v\n\n", config.DeploymentTimeout)
 
-	controlPlaneReady := false
-	machinePoolReady := false
-
-	iteration := 0
-	for {
-		elapsed := time.Since(startTime)
-		remaining := timeout - elapsed
-
-		if elapsed > timeout {
-			PrintToTTY("\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
-			t.Errorf("Timeout waiting for deployment after %v.\n"+
-				"  AROControlPlane ready: %v\n"+
-				"  MachinePool ready: %v\n\n"+
-				"Troubleshooting steps:\n"+
-				"  1. Check AROControlPlane status: kubectl --context %s -n %s get arocontrolplane %s -o yaml\n"+
-				"  2. Check MachinePool status: kubectl --context %s -n %s get machinepool %s -o yaml\n"+
-				"  3. Check cluster conditions: kubectl --context %s -n %s get cluster %s -o yaml\n"+
-				"  4. Check controller logs: kubectl --context %s -n capz-system logs -l control-plane=controller-manager --tail=100\n\n"+
-				"To increase timeout: export DEPLOYMENT_TIMEOUT=60m",
-				elapsed.Round(time.Second),
-				controlPlaneReady, machinePoolReady,
-				context, config.WorkloadClusterNamespace, aroControlPlaneName,
-				context, config.WorkloadClusterNamespace, machinePoolName,
-				context, config.WorkloadClusterNamespace, provisionedClusterName,
-				context)
-			return
-		}
-
-		iteration++
-
-		PrintToTTY("[%d] Checking deployment status...\n", iteration)
-
-		// Check AROControlPlane ready status
-		if !controlPlaneReady {
-			output, err := RunCommandQuiet(t, "kubectl", "--context", context, "get",
-				"arocontrolplane", aroControlPlaneName, "-n", config.WorkloadClusterNamespace, "-o", "jsonpath={.status.ready}")
-			if err != nil {
-				PrintToTTY("[%d] ⚠️  AROControlPlane status check failed: %v\n", iteration, err)
-			} else {
-				status := strings.TrimSpace(output)
-				if status == "true" {
-					controlPlaneReady = true
-					PrintToTTY("[%d] ✅ AROControlPlane.Ready: true (took %v)\n", iteration, elapsed.Round(time.Second))
-					t.Logf("AROControlPlane.Ready=true (took %v)", elapsed.Round(time.Second))
-				} else {
-					PrintToTTY("[%d] ⏳ AROControlPlane.Ready: %s\n", iteration, status)
-				}
-			}
-		} else {
-			PrintToTTY("[%d] ✅ AROControlPlane.Ready: true\n", iteration)
-		}
-
-		// Check MachinePool and AROMachinePool status
-		if !machinePoolReady {
-			// Query each field separately to avoid jsonpath field-collapse bug
-			mpPhase, mpPhaseErr := RunCommandQuiet(t, "kubectl", "--context", context, "get",
-				"machinepool", machinePoolName, "-n", config.WorkloadClusterNamespace,
-				"-o", "jsonpath={.status.phase}")
-			mpReady, _ := RunCommandQuiet(t, "kubectl", "--context", context, "get",
-				"machinepool", machinePoolName, "-n", config.WorkloadClusterNamespace,
-				"-o", "jsonpath={.status.ready}")
-			mpReplicas, _ := RunCommandQuiet(t, "kubectl", "--context", context, "get",
-				"machinepool", machinePoolName, "-n", config.WorkloadClusterNamespace,
-				"-o", "jsonpath={.status.replicas}")
-			mpReadyReplicas, _ := RunCommandQuiet(t, "kubectl", "--context", context, "get",
-				"machinepool", machinePoolName, "-n", config.WorkloadClusterNamespace,
-				"-o", "jsonpath={.status.readyReplicas}")
-
-			phase := strings.TrimSpace(mpPhase)
-			ready := strings.TrimSpace(mpReady)
-			replicas := strings.TrimSpace(mpReplicas)
-			readyReplicas := strings.TrimSpace(mpReadyReplicas)
-
-			// Check AROMachinePool status
-			aroMPReady, _ := RunCommandQuiet(t, "kubectl", "--context", context, "get",
-				"aromachinepool", machinePoolName, "-n", config.WorkloadClusterNamespace,
-				"-o", "jsonpath={.status.ready}")
-			aroMPProvState, _ := RunCommandQuiet(t, "kubectl", "--context", context, "get",
-				"aromachinepool", machinePoolName, "-n", config.WorkloadClusterNamespace,
-				"-o", "jsonpath={.status.provisioningState}")
-
-			aroReady := strings.TrimSpace(aroMPReady)
-			aroProvState := strings.TrimSpace(aroMPProvState)
-
-			if mpPhaseErr != nil {
-				// MachinePool resource doesn't exist yet
-				PrintToTTY("[%d] ⏳ MachinePool: not found yet\n", iteration)
-			} else if ready == "true" || phase == "Running" || phase == "Provisioned" {
-				machinePoolReady = true
-				PrintToTTY("[%d] ✅ MachinePool: %s (replicas: %s/%s, took %v)\n",
-					iteration, phase, readyReplicas, replicas, elapsed.Round(time.Second))
-				t.Logf("MachinePool %s replicas=%s/%s (took %v)", phase, readyReplicas, replicas, elapsed.Round(time.Second))
-			} else if phase != "" {
-				PrintToTTY("[%d] ⏳ MachinePool: %s (replicas: %s/%s)\n",
-					iteration, phase, readyReplicas, replicas)
-			} else {
-				PrintToTTY("[%d] ⏳ MachinePool: waiting for status\n", iteration)
-			}
-
-			// Display AROMachinePool status
-			if aroReady != "" || aroProvState != "" {
-				if aroReady == "true" {
-					PrintToTTY("[%d] ✅ AROMachinePool: ready=%s provisioningState=%s\n", iteration, aroReady, aroProvState)
-				} else {
-					PrintToTTY("[%d] ⏳ AROMachinePool: ready=%s provisioningState=%s\n", iteration, aroReady, aroProvState)
-				}
-			}
-		} else {
-			PrintToTTY("[%d] ✅ MachinePool: ready\n", iteration)
-		}
-
-		// Both ready — done
-		if controlPlaneReady && machinePoolReady {
-			PrintToTTY("\n✅ Control plane and machine pool are ready! (took %v)\n\n", elapsed.Round(time.Second))
-			t.Logf("Both AROControlPlane and MachinePool ready (took %v)", elapsed.Round(time.Second))
-
-			// Display final AROControlPlane conditions
-			finalCond, finalErr := RunCommandQuiet(t, "kubectl", "--context", context, "get",
-				"arocontrolplane", aroControlPlaneName, "-n", config.WorkloadClusterNamespace, "-o", "jsonpath={.status.conditions}")
-			if finalErr == nil && strings.TrimSpace(finalCond) != "" {
-				PrintToTTY("📋 Final AROControlPlane conditions:\n")
-				PrintToTTY("%s", FormatAROControlPlaneConditions(finalCond))
-			}
-
-			// Display final AROCluster infrastructure status
-			finalInfra := GetInfrastructureResourceStatus(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
-			if finalInfra.TotalResources > 0 {
-				ReportInfrastructureProgress(t, iteration, elapsed, time.Duration(0), finalInfra)
-			}
-
-			return
-		}
-
-		// Fetch and display AROControlPlane conditions for better visibility
-		if !controlPlaneReady {
-			conditionsOutput, condErr := RunCommandQuiet(t, "kubectl", "--context", context, "get",
-				"arocontrolplane", aroControlPlaneName, "-n", config.WorkloadClusterNamespace, "-o", "jsonpath={.status.conditions}")
-			if condErr == nil && strings.TrimSpace(conditionsOutput) != "" {
-				PrintToTTY("[%d] 📋 AROControlPlane conditions:\n", iteration)
-				PrintToTTY("%s", FormatAROControlPlaneConditions(conditionsOutput))
-			}
-		}
-
-		// Fetch and display AROCluster infrastructure resource progress
-		infraStatus := GetInfrastructureResourceStatus(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
-		if infraStatus.TotalResources > 0 {
-			ReportInfrastructureProgress(t, iteration, elapsed, remaining, infraStatus)
-		}
-
-		// Report progress using helper function
-		ReportProgress(t, iteration, elapsed, remaining, timeout)
-
-		time.Sleep(pollInterval)
+	// Wait for control plane using generic monitoring
+	data, err := MonitorControlPlaneUntilReady(t, context, config.WorkloadClusterNamespace, provisionedClusterName, config.DeploymentTimeout)
+	if err != nil {
+		PrintToTTY("\n❌ %v\n\n", err)
+		PrintToTTY("Troubleshooting steps:\n")
+		PrintToTTY("  1. Check control plane: kubectl -n %s get %s %s -o yaml\n",
+			config.WorkloadClusterNamespace, data.ControlPlane.Kind, data.ControlPlane.Name)
+		PrintToTTY("  2. Check cluster: kubectl -n %s get cluster %s -o yaml\n",
+			config.WorkloadClusterNamespace, provisionedClusterName)
+		PrintToTTY("  3. Check controller logs: kubectl -n %s logs -l control-plane=controller-manager --tail=100\n",
+			config.CAPZNamespace)
+		PrintToTTY("\nTo increase timeout: export DEPLOYMENT_TIMEOUT=60m\n\n")
+		t.Fatalf("Control plane failed to become ready: %v", err)
 	}
+
+	// Display final status
+	PrintToTTY("\n✅ Control plane is ready!\n\n")
+	PrintToTTY("%s\n\n", data.FormatSummary())
+
+	// Show detailed component status
+	PrintToTTY("=== Component Details ===\n")
+	PrintToTTY("Control Plane: %s (ready: %v, replicas: %d/%d)\n",
+		data.ControlPlane.Kind,
+		data.ControlPlane.Ready,
+		data.ControlPlane.ReadyReplicas,
+		data.ControlPlane.Replicas)
+
+	if len(data.ControlPlane.Conditions) > 0 {
+		PrintToTTY("\nControl Plane Conditions:\n")
+		for _, cond := range data.ControlPlane.Conditions {
+			status := "✅"
+			if cond.Status != "True" {
+				status = "⏳"
+			}
+			PrintToTTY("  %s %s: %s\n", status, cond.Type, cond.Status)
+			if cond.Reason != "" {
+				PrintToTTY("     Reason: %s\n", cond.Reason)
+			}
+		}
+	}
+
+	if len(data.MachinePools) > 0 {
+		PrintToTTY("\nMachine Pools:\n")
+		for _, mp := range data.MachinePools {
+			status := "✅"
+			if mp.ReadyReplicas < mp.Replicas {
+				status = "⏳"
+			}
+			PrintToTTY("  %s %s: %d/%d replicas ready\n", status, mp.Name, mp.ReadyReplicas, mp.Replicas)
+			if mp.Infrastructure != nil {
+				PrintToTTY("     Infrastructure: %s (ready: %v, state: %s)\n",
+					mp.Infrastructure.Kind,
+					mp.Infrastructure.Ready,
+					mp.Infrastructure.ProvisioningState)
+			}
+		}
+	}
+
+	PrintToTTY("\n")
+	t.Logf("Control plane ready: %s", data.FormatSummary())
 }
 
 // TestDeployment_VerifyInfrastructureResources waits for AROCluster infrastructure to be fully ready.

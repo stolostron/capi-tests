@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 )
 
 // TestDeletion_DeleteCluster tests deleting the workload cluster from the management cluster.
@@ -54,8 +53,7 @@ func TestDeletion_DeleteCluster(t *testing.T) {
 }
 
 // TestDeletion_WaitForClusterDeletion waits for the cluster to be fully deleted.
-// This monitors the cluster resource until it no longer exists, showing detailed
-// progress information about all resources being deleted.
+// Uses the generic cluster monitoring function to detect when the cluster resource is gone.
 func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 	config := NewTestConfig()
 
@@ -64,75 +62,39 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
 	}
 
-	context := config.GetKubeContext()
-
-	// Get the provisioned cluster name from aro.yaml
 	provisionedClusterName := config.GetProvisionedClusterName()
-
-	// Azure resource group name
-	resourceGroup := fmt.Sprintf("%s-resgroup", config.ClusterNamePrefix)
+	context := config.GetKubeContext()
 
 	PrintTestHeader(t, "TestDeletion_WaitForClusterDeletion",
 		"Wait for cluster resource to be fully deleted")
 
-	// Use the deployment timeout for deletion as well (deletion can take significant time)
-	timeout := config.DeploymentTimeout
-	pollInterval := 30 * time.Second
-	startTime := time.Now()
+	PrintToTTY("\n⏳ Waiting for cluster '%s' to be deleted...\n", provisionedClusterName)
+	PrintToTTY("Namespace: %s\n", config.WorkloadClusterNamespace)
+	PrintToTTY("Context: %s\n", context)
+	PrintToTTY("Timeout: %v\n\n", config.DeploymentTimeout)
 
-	PrintToTTY("⏳ Waiting for cluster '%s' to be deleted...\n", provisionedClusterName)
-	PrintToTTY("Namespace: %s | Timeout: %v | Poll interval: %v\n", config.WorkloadClusterNamespace, timeout, pollInterval)
-	PrintToTTY("Azure Resource Group: %s\n\n", resourceGroup)
-	t.Logf("Waiting for cluster '%s' deletion (namespace: %s, timeout: %v)...", provisionedClusterName, config.WorkloadClusterNamespace, timeout)
-
-	iteration := 0
-	for {
-		elapsed := time.Since(startTime)
-		remaining := timeout - elapsed
-
-		if elapsed > timeout {
-			PrintToTTY("\n❌ Timeout waiting for cluster deletion after %v\n\n", elapsed.Round(time.Second))
-			t.Errorf("Timeout waiting for cluster '%s' to be deleted after %v.\n\n"+
-				"Troubleshooting steps:\n"+
-				"  1. Check cluster status: kubectl --context %s -n %s get cluster %s -o yaml\n"+
-				"  2. Check for stuck finalizers: kubectl --context %s -n %s get cluster %s -o jsonpath='{.metadata.finalizers}'\n"+
-				"  3. Check remaining CAPI resources: kubectl --context %s -n %s get arocontrolplane,machinepool\n"+
-				"  4. Check Azure resource group: az group show --name %s 2>/dev/null\n\n"+
-				"Common causes:\n"+
-				"  - Azure resource deletion taking longer than expected\n"+
-				"  - Finalizers blocking resource deletion\n"+
-				"  - Azure resource stuck in 'Deleting' state\n\n"+
-				"To increase timeout: export DEPLOYMENT_TIMEOUT=60m\n"+
-				"To manually clean up:\n"+
-				"  make clean-azure  # Removes Azure resources",
-				provisionedClusterName, elapsed.Round(time.Second),
-				context, config.WorkloadClusterNamespace, provisionedClusterName,
-				context, config.WorkloadClusterNamespace, provisionedClusterName,
-				context, config.WorkloadClusterNamespace,
-				resourceGroup)
-			return
-		}
-
-		iteration++
-
-		// Get comprehensive deletion status
-		status := GetDeletionResourceStatus(t, context, config.WorkloadClusterNamespace, provisionedClusterName, resourceGroup)
-
-		// Check if cluster is fully deleted
-		if !status.ClusterExists {
-			PrintToTTY("\n✅ Cluster '%s' has been deleted (took %v)\n\n", provisionedClusterName, elapsed.Round(time.Second))
-			t.Logf("Cluster '%s' deleted successfully (took %v)", provisionedClusterName, elapsed.Round(time.Second))
-
-			// Show final status
-			PrintToTTY("%s", FormatDeletionProgress(status))
-			return
-		}
-
-		// Report detailed deletion progress
-		ReportDeletionProgress(t, iteration, elapsed, remaining, status)
-
-		time.Sleep(pollInterval)
+	// Monitor cluster until it's deleted
+	err := MonitorClusterUntilDeleted(t, context, config.WorkloadClusterNamespace, provisionedClusterName, config.DeploymentTimeout)
+	if err != nil {
+		PrintToTTY("\n❌ %v\n\n", err)
+		PrintToTTY("Troubleshooting steps:\n")
+		PrintToTTY("  1. Check cluster status: kubectl -n %s get cluster %s -o yaml\n",
+			config.WorkloadClusterNamespace, provisionedClusterName)
+		PrintToTTY("  2. Check for stuck finalizers: kubectl -n %s get cluster %s -o jsonpath='{.metadata.finalizers}'\n",
+			config.WorkloadClusterNamespace, provisionedClusterName)
+		PrintToTTY("  3. Check remaining CAPI resources: kubectl -n %s get all\n",
+			config.WorkloadClusterNamespace)
+		PrintToTTY("\nCommon causes:\n")
+		PrintToTTY("  - Cloud resource deletion taking longer than expected\n")
+		PrintToTTY("  - Finalizers blocking resource deletion\n")
+		PrintToTTY("  - Cloud resource stuck in 'Deleting' state\n\n")
+		PrintToTTY("To increase timeout: export DEPLOYMENT_TIMEOUT=60m\n")
+		PrintToTTY("To manually clean up: make clean-azure\n\n")
+		t.Fatalf("Cluster deletion failed: %v", err)
 	}
+
+	PrintToTTY("\n✅ Cluster '%s' has been deleted successfully\n\n", provisionedClusterName)
+	t.Logf("Cluster '%s' deleted successfully", provisionedClusterName)
 }
 
 // TestDeletion_VerifyAROControlPlaneDeletion verifies the AROControlPlane resource is deleted.
