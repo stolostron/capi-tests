@@ -164,7 +164,7 @@ make _cleanup        # Phase 8
 | `DEPLOYMENT_TIMEOUT` | `45m` | Control plane wait timeout |
 | `DEPLOYMENT_ENV` | `stage` | Environment identifier |
 | `REGION` | `uksouth` | Azure region |
-| `CAPZ_USER` | `rcap` | User identifier (RFC 1123 compliant) |
+| `CAPI_USER` | `rcap` | User identifier (RFC 1123 compliant) |
 | `USE_KUBECONFIG` | (unset) | Path to external cluster kubeconfig |
 
 ---

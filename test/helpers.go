@@ -1170,22 +1170,22 @@ const ExternalAuthIDSuffix = "-ea"
 const MaxClusterNamePrefixLength = MaxExternalAuthIDLength - len(ExternalAuthIDSuffix) // 12
 
 // GetDomainPrefix returns the domain prefix that will be used for the ARO cluster.
-// The domain prefix is derived from CAPZ_USER and DEPLOYMENT_ENV environment variables
-// in the format "${CAPZ_USER}-${DEPLOYMENT_ENV}".
+// The domain prefix is derived from CAPI_USER and DEPLOYMENT_ENV environment variables
+// in the format "${CAPI_USER}-${DEPLOYMENT_ENV}".
 func GetDomainPrefix(user, environment string) string {
 	return fmt.Sprintf("%s-%s", user, environment)
 }
 
 // ValidateDomainPrefix checks if the domain prefix length is within the allowed limit.
 // Returns an error with a descriptive message if the prefix exceeds MaxDomainPrefixLength (15 chars).
-// The domain prefix is derived from CAPZ_USER and DEPLOYMENT_ENV in the format "${CAPZ_USER}-${DEPLOYMENT_ENV}".
+// The domain prefix is derived from CAPI_USER and DEPLOYMENT_ENV in the format "${CAPI_USER}-${DEPLOYMENT_ENV}".
 func ValidateDomainPrefix(user, environment string) error {
 	prefix := GetDomainPrefix(user, environment)
 	if len(prefix) > MaxDomainPrefixLength {
 		return fmt.Errorf(
 			"domain prefix '%s' (%d chars) exceeds maximum length of %d characters\n"+
-				"  CAPZ_USER='%s' (%d chars) + '-' + DEPLOYMENT_ENV='%s' (%d chars) = %d chars\n"+
-				"  Suggestion: Use shorter values for CAPZ_USER or DEPLOYMENT_ENV environment variables",
+				"  CAPI_USER='%s' (%d chars) + '-' + DEPLOYMENT_ENV='%s' (%d chars) = %d chars\n"+
+				"  Suggestion: Use shorter values for CAPI_USER or DEPLOYMENT_ENV environment variables",
 			prefix, len(prefix), MaxDomainPrefixLength,
 			user, len(user), environment, len(environment), len(prefix))
 	}
@@ -1203,7 +1203,7 @@ var RFC1123NameRegex = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 // - Start and end with an alphanumeric character
 // - Not be empty
 //
-// This is used to validate environment variables like CAPZ_USER, CS_CLUSTER_NAME,
+// This is used to validate environment variables like CAPI_USER, CS_CLUSTER_NAME,
 // and DEPLOYMENT_ENV before deployment, preventing late failures in CR deployment.
 //
 // Parameters:
@@ -1987,7 +1987,7 @@ func WriteDeploymentState(config *TestConfig) error {
 		WorkloadClusterNamespace: config.WorkloadClusterNamespace,
 		ClusterNamePrefix:        config.ClusterNamePrefix,
 		Region:                   config.Region,
-		User:                     config.CAPZUser,
+		User:                     config.CAPIUser,
 		Environment:              config.Environment,
 	}
 
@@ -2883,7 +2883,7 @@ func ValidateAllConfigurations(t *testing.T, config *TestConfig) []ConfigValidat
 		name  string
 		value string
 	}{
-		{"CAPZ_USER", config.CAPZUser},
+		{"CAPI_USER", config.CAPIUser},
 		{"DEPLOYMENT_ENV", config.Environment},
 		{"CS_CLUSTER_NAME", config.ClusterNamePrefix},
 		{"WORKLOAD_CLUSTER_NAMESPACE", config.WorkloadClusterNamespace},
@@ -2905,13 +2905,13 @@ func ValidateAllConfigurations(t *testing.T, config *TestConfig) []ConfigValidat
 	// Validate Azure-specific naming constraints (only when ARO provider is active)
 	if config.HasProvider("aro") {
 		// Validate domain prefix length
-		domainPrefix := GetDomainPrefix(config.CAPZUser, config.Environment)
+		domainPrefix := GetDomainPrefix(config.CAPIUser, config.Environment)
 		result := ConfigValidationResult{
-			Variable:   "Domain Prefix (CAPZ_USER-DEPLOYMENT_ENV)",
+			Variable:   "Domain Prefix (CAPI_USER-DEPLOYMENT_ENV)",
 			Value:      domainPrefix,
 			IsCritical: true,
 		}
-		if err := ValidateDomainPrefix(config.CAPZUser, config.Environment); err != nil {
+		if err := ValidateDomainPrefix(config.CAPIUser, config.Environment); err != nil {
 			result.IsValid = false
 			result.Error = err
 		} else {
@@ -3079,7 +3079,7 @@ func GetExistingClusterNames(t *testing.T, kubeContext, namespace string) ([]str
 
 // CheckForMismatchedClusters checks if any existing Cluster CRs don't match the expected prefix.
 // Returns a list of cluster names that don't start with the expected prefix.
-// This is used to detect stale Cluster resources from previous configurations (e.g., different CAPZ_USER).
+// This is used to detect stale Cluster resources from previous configurations (e.g., different CAPI_USER).
 func CheckForMismatchedClusters(t *testing.T, kubeContext, namespace, expectedPrefix string) ([]string, error) {
 	t.Helper()
 
@@ -3116,7 +3116,7 @@ func FormatMismatchedClustersError(mismatched []string, expectedPrefix, namespac
 
 	fmt.Fprintf(&sb, "\nCurrent config expects cluster names starting with: %s\n\n", expectedPrefix)
 
-	sb.WriteString("This typically happens when CAPZ_USER was changed without cleaning up\n")
+	sb.WriteString("This typically happens when CAPI_USER was changed without cleaning up\n")
 	sb.WriteString("the previous cluster resources. Deploying new clusters alongside old ones\n")
 	sb.WriteString("can cause conflicts and unexpected behavior.\n\n")
 

@@ -16,7 +16,7 @@ FORCE=1 make clean-azure-resources
 # Dry-run to see what would be deleted without making changes
 ./scripts/cleanup-azure-resources.sh --dry-run
 
-# Custom prefix (default uses CAPZ_USER env var or 'rcap')
+# Custom prefix (default uses CAPI_USER env var or 'rcap')
 ./scripts/cleanup-azure-resources.sh --prefix myprefix
 ```
 

@@ -66,7 +66,7 @@ func TestDeployment_00_CreateNamespace(t *testing.T) {
 
 // TestDeployment_01_CheckExistingClusters checks for existing Cluster CRs that don't match current config.
 // This fail-fast check prevents deploying new clusters alongside stale resources from previous
-// configurations (e.g., when CAPZ_USER was changed without cleanup).
+// configurations (e.g., when CAPI_USER was changed without cleanup).
 func TestDeployment_01_CheckExistingClusters(t *testing.T) {
 
 	config := NewTestConfig()
@@ -114,7 +114,7 @@ func TestDeployment_01_CheckExistingClusters(t *testing.T) {
 		errorMsg := FormatMismatchedClustersError(mismatched, config.ClusterNamePrefix, config.WorkloadClusterNamespace)
 		PrintToTTY("%s", errorMsg)
 
-		t.Fatalf("Mismatched Cluster CRs found. Clean up existing clusters before deploying with new CAPZ_USER.\n"+
+		t.Fatalf("Mismatched Cluster CRs found. Clean up existing clusters before deploying with new CAPI_USER.\n"+
 			"Found %d cluster(s) not matching prefix '%s': %v",
 			len(mismatched), config.ClusterNamePrefix, mismatched)
 	}

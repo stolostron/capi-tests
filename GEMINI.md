@@ -169,12 +169,12 @@ See `docs/INTEGRATION.md` for detailed integration patterns.
   - **Note**: Tests automatically translate this to `KIND_CLUSTER_NAME` for the deployment script
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests-cluster` for ARO, `capa-tests-cluster` for ROSA)
-- `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation (default: `${CAPZ_USER}-${DEPLOYMENT_ENV}`). The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`.
+- `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation (default: `${CAPI_USER}-${DEPLOYMENT_ENV}`). The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`.
 - `OCP_VERSION` - OpenShift version (default: `4.21`)
 - `REGION` - Azure region (default: `uksouth`)
 - `AZURE_SUBSCRIPTION_NAME` - Azure subscription ID (required for deployment)
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`)
-- `CAPZ_USER` - User identifier for domain prefix (default: `rcap`). Must be short enough that `${CAPZ_USER}-${DEPLOYMENT_ENV}` does not exceed 15 characters.
+- `CAPI_USER` - User identifier for domain prefix (default: `rcap`). Must be short enough that `${CAPI_USER}-${DEPLOYMENT_ENV}` does not exceed 15 characters.
 
 ### Test Behavior
 - `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `45m`, format: Go duration like `1h`, `45m`)

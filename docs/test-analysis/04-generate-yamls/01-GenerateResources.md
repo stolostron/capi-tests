@@ -30,7 +30,7 @@
 
 3. Set environment variables:
    ├── DEPLOYMENT_ENV=<config.Environment>
-   ├── USER=<config.CAPZUser>
+   ├── USER=<config.CAPIUser>
    ├── WORKLOAD_CLUSTER_NAME=<config.WorkloadClusterName>
    ├── REGION=<config.Region>
    └── AZURE_SUBSCRIPTION_NAME=<config.AzureSubscriptionName> (if set)
@@ -60,7 +60,7 @@
 
 ```go
 SetEnvVar(t, "DEPLOYMENT_ENV", config.Environment)
-SetEnvVar(t, "USER", config.CAPZUser)
+SetEnvVar(t, "USER", config.CAPIUser)
 SetEnvVar(t, "WORKLOAD_CLUSTER_NAME", config.WorkloadClusterName)
 SetEnvVar(t, "REGION", config.Region)
 if config.AzureSubscriptionName != "" {

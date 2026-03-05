@@ -23,12 +23,12 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 
 	// Validate domain prefix length before attempting YAML generation
 	// The domain prefix is derived from USER and DEPLOYMENT_ENV and must not exceed 15 characters
-	if err := ValidateDomainPrefix(config.CAPZUser, config.Environment); err != nil {
+	if err := ValidateDomainPrefix(config.CAPIUser, config.Environment); err != nil {
 		t.Fatalf("Domain prefix validation failed: %v", err)
 	}
 	t.Logf("Domain prefix validation passed: '%s' (%d chars)",
-		GetDomainPrefix(config.CAPZUser, config.Environment),
-		len(GetDomainPrefix(config.CAPZUser, config.Environment)))
+		GetDomainPrefix(config.CAPIUser, config.Environment),
+		len(GetDomainPrefix(config.CAPIUser, config.Environment)))
 
 	// Output directory for generated resources
 	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
@@ -50,7 +50,7 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 			// Check if existing YAMLs match current config before skipping
 			aroYAMLPath := filepath.Join(outputDir, "aro.yaml")
 
-			// Check 1: Prefix mismatch (e.g., CAPZ_USER changed)
+			// Check 1: Prefix mismatch (e.g., CAPI_USER changed)
 			prefixMatches, existingPrefix := CheckYAMLConfigMatch(t, aroYAMLPath, config.ClusterNamePrefix)
 			if !prefixMatches {
 				PrintToTTY("\n⚠️  Configuration prefix mismatch detected!\n")
@@ -111,7 +111,7 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 
 	// Set environment variables for the generation script
 	SetEnvVar(t, "DEPLOYMENT_ENV", config.Environment)
-	SetEnvVar(t, "USER", config.CAPZUser)
+	SetEnvVar(t, "USER", config.CAPIUser)
 	SetEnvVar(t, "WORKLOAD_CLUSTER_NAME", config.WorkloadClusterName)
 	SetEnvVar(t, "REGION", config.Region)
 	SetEnvVar(t, "CS_CLUSTER_NAME", config.ClusterNamePrefix)

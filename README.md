@@ -95,19 +95,19 @@ Tests are configured via environment variables:
   - **Note**: Tests automatically translate this to `KIND_CLUSTER_NAME` for the deployment script
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests-cluster` for ARO, `capa-tests-cluster` for ROSA)
-- `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation (default: `${CAPZ_USER}-${DEPLOYMENT_ENV}`). The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`.
+- `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation (default: `${CAPI_USER}-${DEPLOYMENT_ENV}`). The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`.
 - `OCP_VERSION` - OpenShift version (default: `4.21`)
 - `REGION` - Azure region (default: `uksouth`)
 - `AZURE_SUBSCRIPTION_NAME` - Azure subscription ID
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`)
-- `CAPZ_USER` - User identifier for domain prefix (default: `rcap`)
+- `CAPI_USER` - User identifier for domain prefix (default: `rcap`)
 - `WORKLOAD_CLUSTER_NAMESPACE` - Namespace for workload cluster resources. If set, uses the exact value provided (for resume scenarios). If not set, auto-generates a unique namespace per test run using `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` format.
 - `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` - Prefix for auto-generated namespace (default: provider-specific — `capz-test` for ARO, `capa-test` for ROSA). Only used when `WORKLOAD_CLUSTER_NAMESPACE` is not set.
 
 #### Naming Requirements (RFC 1123)
 
 The following variables must be **RFC 1123 compliant** to avoid deployment failures:
-- `CAPZ_USER`
+- `CAPI_USER`
 - `CS_CLUSTER_NAME`
 - `DEPLOYMENT_ENV`
 - `WORKLOAD_CLUSTER_NAMESPACE`
@@ -120,14 +120,14 @@ The following variables must be **RFC 1123 compliant** to avoid deployment failu
 
 **Example valid values:**
 ```bash
-export CAPZ_USER=rcap        # Valid
+export CAPI_USER=rcap        # Valid
 export DEPLOYMENT_ENV=stage  # Valid
 export CS_CLUSTER_NAME=rcap-stage  # Valid
 ```
 
 **Example invalid values:**
 ```bash
-export CAPZ_USER=RCap        # Invalid - contains uppercase
+export CAPI_USER=RCap        # Invalid - contains uppercase
 export DEPLOYMENT_ENV=Stage_1  # Invalid - contains uppercase and underscore
 export CS_CLUSTER_NAME=-my-cluster  # Invalid - starts with hyphen
 ```
@@ -366,7 +366,7 @@ For automated workflows (CI/CD, scripts) or quick full resets, use:
 - Uses `--no-wait` for non-blocking deletion (deletion continues in background)
 - Gracefully skips if Azure CLI is not installed or not logged in
 - Checks if resource group exists before attempting deletion
-- The resource group name is derived from `${CAPZ_USER}-${DEPLOYMENT_ENV}-resgroup` (default: `rcap-stage-resgroup`)
+- The resource group name is derived from `${CAPI_USER}-${DEPLOYMENT_ENV}-resgroup` (default: `rcap-stage-resgroup`)
 
 ## Integration with cluster-api-installer
 

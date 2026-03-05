@@ -27,7 +27,7 @@
 
 ## What It Prevents
 
-This fail-fast check prevents deploying new clusters alongside stale resources from previous configurations. For example, if `CAPZ_USER` was changed from `user1` to `user2` without cleaning up, there would be:
+This fail-fast check prevents deploying new clusters alongside stale resources from previous configurations. For example, if `CAPI_USER` was changed from `user1` to `user2` without cleaning up, there would be:
 - `user1-stage` cluster (stale, from previous config)
 - `user2-stage` cluster (new, from current config)
 

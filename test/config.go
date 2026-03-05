@@ -27,10 +27,10 @@ const (
 	// The AROMachinePool creates nodes after the HcpOpenShiftCluster is up.
 	DefaultNodeReadyTimeout = 30 * time.Minute
 
-	// DefaultCAPZUser is the default user identifier for CAPZ resources.
+	// DefaultCAPIUser is the default user identifier for CAPI resources.
 	// Used in ClusterNamePrefix (for resource group naming) and User field.
 	// Extracted to a constant to ensure consistency across all usages.
-	DefaultCAPZUser = "rcapd"
+	DefaultCAPIUser = "rcapd"
 
 	// DefaultDeploymentEnv is the default deployment environment identifier.
 	// Used in ClusterNamePrefix and Environment field.
@@ -203,6 +203,15 @@ func getDefaultRepoDir() string {
 	return defaultRepoDir
 }
 
+// getCAPIUser returns the user identifier, preferring CAPI_USER over the
+// deprecated CAPZ_USER env var, with DefaultCAPIUser as the final fallback.
+func getCAPIUser() string {
+	if v := os.Getenv("CAPI_USER"); v != "" {
+		return v
+	}
+	return GetEnvOrDefault("CAPZ_USER", DefaultCAPIUser)
+}
+
 // getWorkloadClusterNamespace returns the namespace for workload cluster resources.
 // The namespace is unique per test run, combining the configured prefix with a timestamp.
 // Format: {prefix}-{YYYYMMDD-HHMMSS} (e.g., "capz-test-20260203-140812" or "capa-test-20260203-140812")
@@ -266,7 +275,7 @@ type TestConfig struct {
 	Region                   string
 	AzureSubscriptionName    string // Azure subscription name (from AZURE_SUBSCRIPTION_NAME env var)
 	Environment              string
-	CAPZUser                 string // User identifier for CAPZ resources (from CAPZ_USER env var)
+	CAPIUser                 string // User identifier for CAPI resources (from CAPI_USER env var, with CAPZ_USER fallback)
 	WorkloadClusterNamespace string // Namespace for workload cluster resources on management cluster (unique per test run)
 	TestLabelPrefix          string // Provider-specific label prefix for test namespaces (e.g., "capz-test" for ARO, "capa-test" for ROSA)
 	CAPINamespace            string // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
@@ -361,6 +370,9 @@ func NewTestConfig() *TestConfig {
 		testLabelPrefix = "capz-test"
 	}
 
+	// Resolve CAPI_USER with backward-compatible CAPZ_USER fallback
+	capiUser := getCAPIUser()
+
 	return &TestConfig{
 		// Repository defaults
 		RepoURL:    GetEnvOrDefault("ARO_REPO_URL", "https://github.com/stolostron/cluster-api-installer"),
@@ -370,12 +382,12 @@ func NewTestConfig() *TestConfig {
 		// Cluster defaults
 		ManagementClusterName:    GetEnvOrDefault("MANAGEMENT_CLUSTER_NAME", defaultMgmtCluster),
 		WorkloadClusterName:      GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", defaultWorkloadCluster),
-		ClusterNamePrefix:        GetEnvOrDefault("CS_CLUSTER_NAME", fmt.Sprintf("%s-%s", GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser), GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv))),
+		ClusterNamePrefix:        GetEnvOrDefault("CS_CLUSTER_NAME", fmt.Sprintf("%s-%s", capiUser, GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv))),
 		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.20"),
 		Region:                   GetEnvOrDefault("REGION", "uksouth"),
 		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),
 		Environment:              GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv),
-		CAPZUser:                 GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser),
+		CAPIUser:                 capiUser,
 		WorkloadClusterNamespace: getWorkloadClusterNamespace(testLabelPrefix),
 		TestLabelPrefix:          testLabelPrefix,
 		CAPINamespace:            getControllerNamespace("CAPI_NAMESPACE", "capi-system"),
