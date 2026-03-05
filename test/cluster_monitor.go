@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -131,12 +130,9 @@ type ConditionsSummary struct {
 func MonitorCluster(t *testing.T, kubeContext, namespace, clusterName string) (*ClusterMonitorData, error) {
 	t.Helper()
 
-	// Find the script in the repository's scripts directory
-	// The script is located at scripts/monitor-cluster-json.sh relative to the repo root
-	scriptPath := filepath.Join("scripts", "monitor-cluster-json.sh")
-	if !FileExists(scriptPath) {
-		return nil, fmt.Errorf("monitor script not found: %s (are you running from the repo root?)", scriptPath)
-	}
+	// When running tests with 'go test ./test', the working directory is the test/ package directory
+	// So we need to go up one level to find scripts/
+	scriptPath := "../scripts/monitor-cluster-json.sh"
 
 	// Run the monitoring script with --context parameter
 	cmd := exec.Command("bash", scriptPath, "--context", kubeContext, namespace, clusterName)
