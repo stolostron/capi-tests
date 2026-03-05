@@ -1,9 +1,4 @@
-# CAPI Test Suite (formerly ARO-CAPZ Test Suite)
-
-> [!IMPORTANT]
-> **This repository is being transitioned** from its original form (CAPZTests) to a generalized CAPI test suite.
-> Provider-specific configuration is being extracted and the codebase is under active review.
-> The documentation below still reflects the original CAPZ-focused scope and will be updated as the generalization progresses.
+# CAPI Test Suite
 
 [![Check Dependencies](https://github.com/RadekCap/capi-tests/actions/workflows/check-dependencies.yml/badge.svg)](https://github.com/RadekCap/capi-tests/actions/workflows/check-dependencies.yml)
 [![Repository Setup](https://github.com/RadekCap/capi-tests/actions/workflows/test-setup.yml/badge.svg)](https://github.com/RadekCap/capi-tests/actions/workflows/test-setup.yml)
@@ -15,20 +10,19 @@
 [![Trivy](https://github.com/RadekCap/capi-tests/actions/workflows/security-trivy.yml/badge.svg)](https://github.com/RadekCap/capi-tests/actions/workflows/security-trivy.yml)
 [![nancy](https://github.com/RadekCap/capi-tests/actions/workflows/security-nancy.yml/badge.svg)](https://github.com/RadekCap/capi-tests/actions/workflows/security-nancy.yml)
 
-Comprehensive test suite for Azure Red Hat OpenShift (ARO) deployment using Cluster API Provider Azure (CAPZ) and Azure Service Operator (ASO).
+Go-based CAPI test suite supporting ARO (CAPZ/ASO) and ROSA (CAPA) deployment paths.
 
 ## Overview
 
-This repository contains a Go-based test suite that validates the complete ARO cluster deployment workflow on Azure using CAPZ. The tests verify each step of the deployment process, from prerequisite verification to final cluster validation.
+This repository contains a Go-based CAPI test suite, currently supporting CAPZ/ARO and CAPA/ROSA paths. The tests verify the complete deployment workflow from prerequisite verification to final cluster validation.
 
-The test suite is designed to work with the [cluster-api-installer](https://github.com/stolostron/cluster-api-installer) ARO-CAPZ implementation.
+The test suite is designed to work with the [cluster-api-installer](https://github.com/stolostron/cluster-api-installer).
 
 ## What This Tests
 
 The test suite validates:
-- **CAPZ on Azure** - Cluster API Provider Azure for deploying Kubernetes infrastructure on Azure
-- **ARO Deployment** - Azure Red Hat OpenShift cluster provisioning
-- **ASO Integration** - Azure Service Operator for managing Azure resources
+- **ARO (CAPZ/ASO)** - Azure Red Hat OpenShift via Cluster API Provider Azure and Azure Service Operator
+- **ROSA (CAPA)** - Red Hat OpenShift on AWS via Cluster API Provider AWS
 
 ## Consumers
 

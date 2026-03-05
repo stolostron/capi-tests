@@ -1,10 +1,10 @@
 # CAPI Test Suite
 
-Comprehensive test suite for Azure Red Hat OpenShift (ARO) deployment using Cluster API Provider Azure (CAPZ) and Azure Service Operator (ASO).
+Go-based CAPI test suite, currently supporting CAPZ/ARO and CAPA/ROSA paths. The tests verify the complete deployment workflow from prerequisites to cluster verification.
 
 ## Overview
 
-This test suite validates each step of the ARO deployment process as documented in the [cluster-api-installer ARO-CAPZ documentation](https://github.com/RadekCap/cluster-api-installer/blob/ARO-ASO/doc/ARO-capz.md).
+This test suite validates each step of the deployment process using the [cluster-api-installer](https://github.com/stolostron/cluster-api-installer).
 
 ## Test Structure
 

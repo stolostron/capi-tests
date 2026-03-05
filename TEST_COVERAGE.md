@@ -11,7 +11,7 @@ This document provides comprehensive information about the test coverage for the
 
 ## Overview
 
-The test suite provides end-to-end coverage of the Azure Red Hat OpenShift (ARO) deployment process using Cluster API Provider Azure (CAPZ) and Azure Service Operator (ASO). The tests validate each step of the deployment workflow.
+The test suite provides end-to-end coverage of CAPI-based cluster deployments, currently supporting ARO (CAPZ/ASO) and ROSA (CAPA) paths. The tests validate each step of the deployment workflow.
 
 ### Coverage Metrics Summary
 
