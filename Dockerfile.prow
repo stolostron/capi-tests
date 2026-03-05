@@ -41,10 +41,3 @@ RUN GOBIN=/usr/local/bin go install gotest.tools/gotestsum@${GOTESTSUM_VERSION}
 RUN curl -Lo /usr/local/bin/clusterctl "https://github.com/kubernetes-sigs/cluster-api/releases/download/${CLUSTERCTL_VERSION}/clusterctl-linux-amd64" && \
     echo "${CLUSTERCTL_SHA256}  /usr/local/bin/clusterctl" | sha256sum -c && \
     chmod +x /usr/local/bin/clusterctl
-
-# Copy repo source
-WORKDIR /go/src/github.com/stolostron/capi-tests
-COPY . .
-
-# Download Go dependencies
-RUN go mod download
