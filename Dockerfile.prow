@@ -9,8 +9,10 @@ ARG CLUSTERCTL_VERSION=v1.12.3
 ARG CLUSTERCTL_SHA256=9b75287b15656a62ece65c8ad7491412cebfd30c78e085a9d61396a50df17349
 ARG GOTESTSUM_VERSION=v1.13.0
 
-# Install tools needed for CAPZ tests
-RUN dnf install -y azure-cli jq && dnf clean all
+# Install Azure CLI from Microsoft RPM repo and other tools
+RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
+    dnf install -y https://packages.microsoft.com/config/rhel/9.0/packages-microsoft-prod.rpm && \
+    dnf install -y azure-cli jq && dnf clean all
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
