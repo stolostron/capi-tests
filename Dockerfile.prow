@@ -1,0 +1,23 @@
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.24-openshift-4.20
+
+# Install tools needed for CAPZ tests
+RUN dnf install -y azure-cli jq && dnf clean all
+
+# Install kind
+RUN curl -Lo /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64 && \
+    chmod +x /usr/local/bin/kind
+
+# Install kubectl
+RUN curl -Lo /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
+    chmod +x /usr/local/bin/kubectl
+
+# Install helm
+RUN curl -fsSL https://get.helm.sh/helm-v3.16.0-linux-amd64.tar.gz | tar xz -C /tmp && \
+    mv /tmp/linux-amd64/helm /usr/local/bin/helm && chmod +x /usr/local/bin/helm
+
+# Install gotestsum
+RUN GOBIN=/usr/local/bin go install gotest.tools/gotestsum@v1.13.0
+
+# Install clusterctl
+RUN curl -Lo /usr/local/bin/clusterctl "https://github.com/kubernetes-sigs/cluster-api/releases/latest/download/clusterctl-linux-amd64" && \
+    chmod +x /usr/local/bin/clusterctl
