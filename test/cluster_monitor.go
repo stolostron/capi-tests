@@ -341,22 +341,32 @@ func MonitorClusterUntilDeleted(t *testing.T, kubeContext, namespace, clusterNam
 
 	for {
 		elapsed := time.Since(startTime)
+		remaining := timeout - elapsed
+
 		if elapsed > timeout {
 			return fmt.Errorf("timeout waiting for cluster deletion after %v", elapsed.Round(time.Second))
 		}
 
 		iteration++
+
+		PrintToTTY("[%d] Checking deletion status...\n", iteration)
 		t.Logf("[%d] Checking if cluster is deleted (elapsed: %v)...", iteration, elapsed.Round(time.Second))
 
 		_, err := MonitorCluster(t, kubeContext, namespace, clusterName)
 		if err != nil {
 			// Cluster not found - deletion complete
+			PrintToTTY("[%d] ✅ Cluster resource deleted\n\n", iteration)
 			t.Logf("Cluster '%s' has been deleted after %v", clusterName, elapsed.Round(time.Second))
 			return nil
 		}
 
 		// Cluster still exists
+		PrintToTTY("[%d] ⏳ Cluster still exists, waiting for deletion...\n", iteration)
 		t.Logf("[%d] Cluster still exists, waiting for deletion...", iteration)
+
+		// Report progress
+		ReportProgress(t, iteration, elapsed, remaining, timeout)
+
 		time.Sleep(pollInterval)
 	}
 }

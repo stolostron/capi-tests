@@ -407,7 +407,15 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 			continue
 		}
 
-		PrintToTTY("[%d] Checking deployment status...\n", iteration)
+		// Check if cluster is being deleted - skip this test and let deletion tests handle it
+		if data.Cluster.Phase == "Deleting" || data.Cluster.Phase == "Deleted" {
+			PrintToTTY("\n⚠️  Cluster is in '%s' phase\n", data.Cluster.Phase)
+			PrintToTTY("Skipping deployment wait - cluster is being deleted.\n")
+			PrintToTTY("Deletion tests will handle the cleanup.\n\n")
+			t.Skipf("Cluster is in '%s' phase, skipping deployment wait", data.Cluster.Phase)
+		}
+
+		PrintToTTY("[%d] Checking deployment status... (phase: %s)\n", iteration, data.Cluster.Phase)
 
 		// Check ControlPlane ready status
 		if !controlPlaneReady {
