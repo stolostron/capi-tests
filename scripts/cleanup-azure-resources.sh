@@ -23,7 +23,6 @@
 #
 # Environment variables:
 #   CAPI_USER          Default prefix for resource names (e.g., 'rcap')
-#   CAPZ_USER          Deprecated alias for CAPI_USER (backward compatibility)
 #   AZURE_SUBSCRIPTION_ID  Azure subscription ID to search in
 #
 # Examples:
@@ -35,7 +34,7 @@
 set -euo pipefail
 
 # Default values
-PREFIX="${CAPI_USER:-${CAPZ_USER:-rcap}}"
+PREFIX="${CAPI_USER:-rcap}"
 RESOURCE_GROUP=""
 DRY_RUN=false
 FORCE=false

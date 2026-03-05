@@ -3,12 +3,7 @@
 # Default values
 # Extract CAPI_USER default from Go config to maintain single source of truth
 CAPI_USER_DEFAULT := $(shell grep 'DefaultCAPIUser = ' test/config.go | grep -o '"[^"]*"' | tr -d '"')
-# Support both CAPI_USER (preferred) and CAPZ_USER (deprecated) for backward compatibility
-ifdef CAPZ_USER
-  CAPI_USER ?= $(CAPZ_USER)
-else
-  CAPI_USER ?= $(CAPI_USER_DEFAULT)
-endif
+CAPI_USER ?= $(CAPI_USER_DEFAULT)
 DEPLOYMENT_ENV ?= stage
 REGION ?= uksouth
 INFRA_PROVIDER ?= aro

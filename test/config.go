@@ -203,13 +203,10 @@ func getDefaultRepoDir() string {
 	return defaultRepoDir
 }
 
-// getCAPIUser returns the user identifier, preferring CAPI_USER over the
-// deprecated CAPZ_USER env var, with DefaultCAPIUser as the final fallback.
+// getCAPIUser returns the user identifier from CAPI_USER env var,
+// falling back to DefaultCAPIUser.
 func getCAPIUser() string {
-	if v := os.Getenv("CAPI_USER"); v != "" {
-		return v
-	}
-	return GetEnvOrDefault("CAPZ_USER", DefaultCAPIUser)
+	return GetEnvOrDefault("CAPI_USER", DefaultCAPIUser)
 }
 
 // getWorkloadClusterNamespace returns the namespace for workload cluster resources.
@@ -275,7 +272,7 @@ type TestConfig struct {
 	Region                   string
 	AzureSubscriptionName    string // Azure subscription name (from AZURE_SUBSCRIPTION_NAME env var)
 	Environment              string
-	CAPIUser                 string // User identifier for CAPI resources (from CAPI_USER env var, with CAPZ_USER fallback)
+	CAPIUser                 string // User identifier for CAPI resources (from CAPI_USER env var)
 	WorkloadClusterNamespace string // Namespace for workload cluster resources on management cluster (unique per test run)
 	TestLabelPrefix          string // Provider-specific label prefix for test namespaces (e.g., "capz-test" for ARO, "capa-test" for ROSA)
 	CAPINamespace            string // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
@@ -370,7 +367,7 @@ func NewTestConfig() *TestConfig {
 		testLabelPrefix = "capz-test"
 	}
 
-	// Resolve CAPI_USER with backward-compatible CAPZ_USER fallback
+	// Resolve CAPI_USER
 	capiUser := getCAPIUser()
 
 	return &TestConfig{
