@@ -93,7 +93,7 @@ Tests are configured via environment variables:
 - `DEPLOYMENT_ENV` - Deployment environment (stage/prod) (default: `stage`)
 - `CAPZ_USER` - User identifier for domain prefix (default: `rcap`)
 - `WORKLOAD_CLUSTER_NAMESPACE` - Namespace for workload cluster resources (auto-generated if not set)
-- `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` - Prefix for auto-generated namespace (default: `capz-test`)
+- `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` - Prefix for auto-generated namespace (default: provider-specific — `capz-test` for ARO, `capa-test` for ROSA)
 
 ## Running Tests
 

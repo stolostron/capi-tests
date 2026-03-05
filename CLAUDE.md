@@ -289,8 +289,8 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 - `REGION` - Azure region (default: `uksouth`)
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`)
 - `CAPZ_USER` - User identifier for domain prefix (default: `rcap`). Must be short enough that `${CAPZ_USER}-${DEPLOYMENT_ENV}` does not exceed 15 characters.
-- `WORKLOAD_CLUSTER_NAMESPACE` - Namespace for workload cluster resources (CAPI CRs that create Azure resources). If set, uses the exact value provided (for resume scenarios). If not set, generates a unique namespace per test run using `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` format (e.g., `capz-test-20260202-135526`). This namespace is passed as `$NAMESPACE` to the YAML generation script.
-- `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` - Prefix for auto-generated workload cluster namespace (default: `capz-test`). Only used when `WORKLOAD_CLUSTER_NAMESPACE` is not set.
+- `WORKLOAD_CLUSTER_NAMESPACE` - Namespace for workload cluster resources (CAPI CRs that create cloud resources). If set, uses the exact value provided (for resume scenarios). If not set, generates a unique namespace per test run using `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` format (e.g., `capz-test-20260202-135526` for ARO, `capa-test-20260202-135526` for ROSA). This namespace is passed as `$NAMESPACE` to the YAML generation script.
+- `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` - Prefix for auto-generated workload cluster namespace (default: provider-specific — `capz-test` for ARO, `capa-test` for ROSA). Only used when `WORKLOAD_CLUSTER_NAMESPACE` is not set.
 
 ### Kind Mode
 - `USE_KIND` - Enable Kind deployment mode (default: `false`). When set to `true`:
