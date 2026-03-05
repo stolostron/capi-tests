@@ -1,6 +1,7 @@
 package test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,6 +12,67 @@ import (
 // detected (idempotency). Note: Verification tests now use file-based detection instead of this flag,
 // so they work correctly when run in separate test invocations.
 var infrastructureGenerationSucceeded bool
+
+// TestInfrastructure_01_ValidateCredentials validates provider-specific credentials before YAML generation.
+// This test ensures all required credentials are available before attempting to generate infrastructure.
+// Credentials are defined in the provider's YAMLGenCredentials configuration.
+func TestInfrastructure_01_ValidateCredentials(t *testing.T) {
+	config := NewTestConfig()
+
+	// Get the first provider (we only have one active at a time)
+	if len(config.InfraProviders) == 0 {
+		t.Skip("No infrastructure providers configured")
+	}
+
+	provider := config.InfraProviders[0]
+
+	if len(provider.YAMLGenCredentials) == 0 {
+		t.Skip("No YAML generation credentials configured for provider")
+	}
+
+	PrintTestHeader(t, "TestInfrastructure_01_ValidateCredentials",
+		fmt.Sprintf("Validate %s credentials required for YAML generation", provider.Name))
+
+	PrintToTTY("\n=== Validating %s credentials ===\n", provider.Name)
+
+	var missingVars []string
+
+	for _, envReq := range provider.YAMLGenCredentials {
+		val := os.Getenv(envReq.Name)
+		if val == "" {
+			missingVars = append(missingVars, envReq.Name)
+			PrintToTTY("  ❌ %s: NOT SET (%s)\n", envReq.Name, envReq.Desc)
+		} else {
+			// Mask sensitive values for display
+			displayVal := val
+			if envReq.Sensitive {
+				displayVal = "***"
+			} else if len(val) > 12 {
+				displayVal = val[:8] + "..." + val[len(val)-4:]
+			}
+			PrintToTTY("  ✅ %s: %s\n", envReq.Name, displayVal)
+		}
+	}
+
+	if len(missingVars) > 0 {
+		PrintToTTY("\n❌ %s credential validation FAILED\n", provider.Name)
+		PrintToTTY("Missing credentials: %v\n\n", missingVars)
+		PrintToTTY("Please set the following before running YAML generation:\n")
+		for _, envReq := range provider.YAMLGenCredentials {
+			for _, missing := range missingVars {
+				if envReq.Name == missing {
+					PrintToTTY("  export %s=<value>  # %s\n", envReq.Name, envReq.Desc)
+					break
+				}
+			}
+		}
+		PrintToTTY("\n")
+		t.Fatalf("%s credentials not configured: missing %v", provider.Name, missingVars)
+	}
+
+	PrintToTTY("\n✅ All %s credentials are configured\n\n", provider.Name)
+	t.Logf("%s credentials validation passed", provider.Name)
+}
 
 // TestInfrastructure_GenerateResources tests generating ARO infrastructure resources
 func TestInfrastructure_GenerateResources(t *testing.T) {

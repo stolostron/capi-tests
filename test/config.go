@@ -81,25 +81,32 @@ type WebhookDef struct {
 	Port        int    // service port (e.g., 443)
 }
 
+// EnvVarRequirement describes a required environment variable credential.
+type EnvVarRequirement struct {
+	Name      string // environment variable name (e.g., "AZURE_SUBSCRIPTION_ID")
+	Desc      string // human-readable description
+	Sensitive bool   // if true, value will be masked in output (e.g., secrets, passwords)
+}
+
 // CredentialSecretDef describes a provider's credential secret.
 type CredentialSecretDef struct {
-	Name            string   // secret name (e.g., "aso-controller-settings")
-	Namespace       string   // namespace containing the secret
-	RequiredFields  []string // fields that must be present and non-empty in the secret
-	RequiredEnvVars []string // env vars that must be set for this check to run (skip if missing)
+	Name           string   // secret name (e.g., "aso-controller-settings")
+	Namespace      string   // namespace containing the secret
+	RequiredFields []string // fields that must be present and non-empty in the secret
 }
 
 // InfraProvider defines an infrastructure provider's configuration.
 // Each provider has controllers, webhooks, and optionally a credential secret.
 type InfraProvider struct {
-	Name             string               // provider identifier (e.g., "aro", "rosa")
-	Controllers      []ControllerDef      // controllers to validate
-	Webhooks         []WebhookDef         // webhooks to validate
-	CredentialSecret *CredentialSecretDef // nil if no credential secret needed
-	DeploymentCharts []string             // chart args for deploy-charts.sh
-	MCEComponentName string               // MCE component name for this provider
-	RequiredTools    []string             // CLI tools required for this provider (e.g., "az" for ARO, "aws" for ROSA)
-	RequiredScripts  []string             // repo-relative scripts this provider needs (validated in Phase 2)
+	Name               string               // provider identifier (e.g., "aro", "rosa")
+	Controllers        []ControllerDef      // controllers to validate
+	Webhooks           []WebhookDef         // webhooks to validate
+	CredentialSecret   *CredentialSecretDef // nil if no credential secret needed
+	DeploymentCharts   []string             // chart args for deploy-charts.sh
+	MCEComponentName   string               // MCE component name for this provider
+	RequiredTools      []string             // CLI tools required for this provider (e.g., "az" for ARO, "aws" for ROSA)
+	RequiredScripts    []string             // repo-relative scripts this provider needs (validated in Phase 2)
+	YAMLGenCredentials []EnvVarRequirement  // credentials required for YAML generation (Phase 04)
 }
 
 // NewAzureProvider returns the InfraProvider configuration for Azure (CAPZ/ASO).
@@ -135,15 +142,19 @@ func NewAzureProvider(namespace string) InfraProvider {
 				"AZURE_CLIENT_ID",
 				"AZURE_CLIENT_SECRET",
 			},
-			RequiredEnvVars: []string{
-				"AZURE_CLIENT_ID",
-				"AZURE_CLIENT_SECRET",
-			},
 		},
 		DeploymentCharts: []string{"cluster-api-provider-azure"},
 		MCEComponentName: "cluster-api-provider-azure-preview",
 		RequiredTools:    []string{"az"},
 		RequiredScripts:  []string{"scripts/deploy-charts.sh", "scripts/aro-hcp/gen.sh"},
+		YAMLGenCredentials: []EnvVarRequirement{
+			{Name: "REGION", Desc: "Azure region for deployment", Sensitive: false},
+			{Name: "DEPLOYMENT_ENV", Desc: "Deployment environment identifier", Sensitive: false},
+			{Name: "AZURE_SUBSCRIPTION_ID", Desc: "Azure subscription ID", Sensitive: false},
+			{Name: "AZURE_TENANT_ID", Desc: "Azure tenant ID", Sensitive: false},
+			{Name: "AZURE_CLIENT_ID", Desc: "Azure service principal client ID", Sensitive: false},
+			{Name: "AZURE_CLIENT_SECRET", Desc: "Azure service principal client secret", Sensitive: true},
+		},
 	}
 }
 
@@ -165,15 +176,22 @@ func NewAWSProvider(namespace string) InfraProvider {
 			{DisplayName: "CAPA", Namespace: namespace, ServiceName: "capa-webhook-service", Port: 443},
 		},
 		CredentialSecret: &CredentialSecretDef{
-			Name:            "capa-manager-bootstrap-credentials",
-			Namespace:       namespace,
-			RequiredFields:  []string{"credentials"},
-			RequiredEnvVars: []string{"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"},
+			Name:           "capa-manager-bootstrap-credentials",
+			Namespace:      namespace,
+			RequiredFields: []string{"credentials"},
 		},
 		DeploymentCharts: []string{"cluster-api-provider-aws"},
 		MCEComponentName: "cluster-api-provider-aws",
 		RequiredTools:    []string{"aws"},
 		RequiredScripts:  []string{"scripts/deploy-charts.sh", "scripts/rosa-hcp/gen.sh"},
+		YAMLGenCredentials: []EnvVarRequirement{
+			{Name: "AWS_REGION", Desc: "AWS region for deployment", Sensitive: false},
+			{Name: "OCM_API_URL", Desc: "OpenShift Cluster Manager API URL", Sensitive: false},
+			{Name: "OCM_CLIENT_ID", Desc: "OCM OAuth client ID", Sensitive: false},
+			{Name: "AWS_ACCESS_KEY_ID", Desc: "AWS access key ID", Sensitive: false},
+			{Name: "AWS_SECRET_ACCESS_KEY", Desc: "AWS secret access key", Sensitive: true},
+			{Name: "OCM_CLIENT_SECRET", Desc: "OCM OAuth client secret", Sensitive: true},
+		},
 	}
 }
 

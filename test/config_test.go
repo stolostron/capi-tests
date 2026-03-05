@@ -322,14 +322,29 @@ func TestNewAWSProvider(t *testing.T) {
 	if p.CredentialSecret.RequiredFields[0] != "credentials" {
 		t.Errorf("Expected required field 'credentials', got %q", p.CredentialSecret.RequiredFields[0])
 	}
-	if len(p.CredentialSecret.RequiredEnvVars) != 2 {
-		t.Fatalf("Expected 2 required env vars, got %d", len(p.CredentialSecret.RequiredEnvVars))
+
+	// Verify YAML generation credentials
+	if len(p.YAMLGenCredentials) != 6 {
+		t.Fatalf("Expected 6 YAML gen credentials, got %d", len(p.YAMLGenCredentials))
 	}
-	if p.CredentialSecret.RequiredEnvVars[0] != "AWS_ACCESS_KEY_ID" {
-		t.Errorf("Expected first env var 'AWS_ACCESS_KEY_ID', got %q", p.CredentialSecret.RequiredEnvVars[0])
+	expectedCreds := []struct {
+		name      string
+		sensitive bool
+	}{
+		{"AWS_REGION", false},
+		{"OCM_API_URL", false},
+		{"OCM_CLIENT_ID", false},
+		{"AWS_ACCESS_KEY_ID", false},
+		{"AWS_SECRET_ACCESS_KEY", true},
+		{"OCM_CLIENT_SECRET", true},
 	}
-	if p.CredentialSecret.RequiredEnvVars[1] != "AWS_SECRET_ACCESS_KEY" {
-		t.Errorf("Expected second env var 'AWS_SECRET_ACCESS_KEY', got %q", p.CredentialSecret.RequiredEnvVars[1])
+	for i, expected := range expectedCreds {
+		if p.YAMLGenCredentials[i].Name != expected.name {
+			t.Errorf("Expected YAMLGenCredentials[%d].Name = %q, got %q", i, expected.name, p.YAMLGenCredentials[i].Name)
+		}
+		if p.YAMLGenCredentials[i].Sensitive != expected.sensitive {
+			t.Errorf("Expected YAMLGenCredentials[%d].Sensitive = %v, got %v", i, expected.sensitive, p.YAMLGenCredentials[i].Sensitive)
+		}
 	}
 
 	// Verify deployment charts
