@@ -359,72 +359,152 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	PrintTestHeader(t, "TestDeployment_WaitForControlPlane",
 		"Wait for control plane and machine pools to become ready")
 
-	PrintToTTY("\n=== Waiting for control plane to be ready ===\n")
+	// Wait for both to be ready (with configurable timeout)
+	timeout := config.DeploymentTimeout
+	pollInterval := 30 * time.Second
+	startTime := time.Now()
+
+	PrintToTTY("\n=== Waiting for control plane and machine pool to be ready ===\n")
 	PrintToTTY("Cluster: %s\n", provisionedClusterName)
 	PrintToTTY("Namespace: %s\n", config.WorkloadClusterNamespace)
 	PrintToTTY("Context: %s\n", context)
-	PrintToTTY("Timeout: %v\n\n", config.DeploymentTimeout)
+	PrintToTTY("Timeout: %v | Poll interval: %v\n\n", timeout, pollInterval)
+	t.Logf("Waiting for control plane and machine pool (namespace: %s, timeout: %v)...", config.WorkloadClusterNamespace, timeout)
 
-	// Wait for control plane using generic monitoring
-	data, err := MonitorControlPlaneUntilReady(t, context, config.WorkloadClusterNamespace, provisionedClusterName, config.DeploymentTimeout)
-	if err != nil {
-		PrintToTTY("\n❌ %v\n\n", err)
-		PrintToTTY("Troubleshooting steps:\n")
-		PrintToTTY("  1. Check control plane: kubectl -n %s get %s %s -o yaml\n",
-			config.WorkloadClusterNamespace, data.ControlPlane.Kind, data.ControlPlane.Name)
-		PrintToTTY("  2. Check cluster: kubectl -n %s get cluster %s -o yaml\n",
-			config.WorkloadClusterNamespace, provisionedClusterName)
-		PrintToTTY("  3. Check controller logs: kubectl -n %s logs -l control-plane=controller-manager --tail=100\n",
-			config.CAPZNamespace)
-		PrintToTTY("\nTo increase timeout: export DEPLOYMENT_TIMEOUT=60m\n\n")
-		t.Fatalf("Control plane failed to become ready: %v", err)
-	}
+	controlPlaneReady := false
+	machinePoolReady := false
 
-	// Display final status
-	PrintToTTY("\n✅ Control plane is ready!\n\n")
-	PrintToTTY("%s\n\n", data.FormatSummary())
+	iteration := 0
+	for {
+		elapsed := time.Since(startTime)
+		remaining := timeout - elapsed
 
-	// Show detailed component status
-	PrintToTTY("=== Component Details ===\n")
-	PrintToTTY("Control Plane: %s (ready: %v, replicas: %d/%d)\n",
-		data.ControlPlane.Kind,
-		data.ControlPlane.Ready,
-		data.ControlPlane.ReadyReplicas,
-		data.ControlPlane.Replicas)
-
-	if len(data.ControlPlane.Conditions) > 0 {
-		PrintToTTY("\nControl Plane Conditions:\n")
-		for _, cond := range data.ControlPlane.Conditions {
-			status := "✅"
-			if cond.Status != "True" {
-				status = "⏳"
-			}
-			PrintToTTY("  %s %s: %s\n", status, cond.Type, cond.Status)
-			if cond.Reason != "" {
-				PrintToTTY("     Reason: %s\n", cond.Reason)
-			}
+		if elapsed > timeout {
+			PrintToTTY("\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
+			t.Errorf("Timeout waiting for deployment after %v.\n"+
+				"Control plane ready: %v\n"+
+				"Machine pool ready: %v\n\n"+
+				"Troubleshooting steps:\n"+
+				"  1. Check cluster: kubectl --context %s -n %s get cluster %s -o yaml\n"+
+				"  2. Check controller logs: kubectl --context %s -n %s logs -l control-plane=controller-manager --tail=100\n\n"+
+				"To increase timeout: export DEPLOYMENT_TIMEOUT=60m",
+				elapsed.Round(time.Second),
+				controlPlaneReady, machinePoolReady,
+				context, config.WorkloadClusterNamespace, provisionedClusterName,
+				context, config.CAPZNamespace)
+			return
 		}
-	}
 
-	if len(data.MachinePools) > 0 {
-		PrintToTTY("\nMachine Pools:\n")
-		for _, mp := range data.MachinePools {
-			status := "✅"
-			if mp.ReadyReplicas < mp.Replicas {
-				status = "⏳"
+		iteration++
+
+		// Get cluster status using monitoring script
+		data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
+		if err != nil {
+			PrintToTTY("[%d] ⚠️  Failed to get cluster status: %v\n", iteration, err)
+			t.Logf("Failed to get cluster status (iteration %d): %v", iteration, err)
+			ReportProgress(t, iteration, elapsed, remaining, timeout)
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		PrintToTTY("[%d] Checking deployment status...\n", iteration)
+
+		// Check ControlPlane ready status
+		if !controlPlaneReady {
+			if data.ControlPlane.Ready {
+				controlPlaneReady = true
+				PrintToTTY("[%d] ✅ %s.Ready: true (took %v)\n", iteration, data.ControlPlane.Kind, elapsed.Round(time.Second))
+				t.Logf("%s.Ready=true (took %v)", data.ControlPlane.Kind, elapsed.Round(time.Second))
+			} else {
+				PrintToTTY("[%d] ⏳ %s.Ready: false\n", iteration, data.ControlPlane.Kind)
 			}
-			PrintToTTY("  %s %s: %d/%d replicas ready\n", status, mp.Name, mp.ReadyReplicas, mp.Replicas)
+		} else {
+			PrintToTTY("[%d] ✅ %s.Ready: true\n", iteration, data.ControlPlane.Kind)
+		}
+
+		// Check MachinePool status
+		if !machinePoolReady && len(data.MachinePools) > 0 {
+			// Check first machine pool (typically there's only one)
+			mp := data.MachinePools[0]
+
+			if mp.ReadyReplicas == mp.Replicas && mp.Replicas > 0 {
+				machinePoolReady = true
+				PrintToTTY("[%d] ✅ MachinePool: Running (replicas: %d/%d, took %v)\n",
+					iteration, mp.ReadyReplicas, mp.Replicas, elapsed.Round(time.Second))
+				t.Logf("MachinePool Running replicas=%d/%d (took %v)", mp.ReadyReplicas, mp.Replicas, elapsed.Round(time.Second))
+			} else {
+				PrintToTTY("[%d] ⏳ MachinePool: %s (replicas: %d/%d)\n",
+					iteration, mp.Name, mp.ReadyReplicas, mp.Replicas)
+			}
+
+			// Display infrastructure MachinePool status
 			if mp.Infrastructure != nil {
-				PrintToTTY("     Infrastructure: %s (ready: %v, state: %s)\n",
-					mp.Infrastructure.Kind,
-					mp.Infrastructure.Ready,
-					mp.Infrastructure.ProvisioningState)
+				if mp.Infrastructure.Ready {
+					PrintToTTY("[%d] ✅ %s: ready=%v provisioningState=%s\n",
+						iteration, mp.Infrastructure.Kind, mp.Infrastructure.Ready, mp.Infrastructure.ProvisioningState)
+				} else {
+					PrintToTTY("[%d] ⏳ %s: ready=%v provisioningState=%s\n",
+						iteration, mp.Infrastructure.Kind, mp.Infrastructure.Ready, mp.Infrastructure.ProvisioningState)
+				}
+			}
+		} else if machinePoolReady {
+			PrintToTTY("[%d] ✅ MachinePool: ready\n", iteration)
+		} else {
+			PrintToTTY("[%d] ⏳ MachinePool: not found yet\n", iteration)
+		}
+
+		// Both ready - done
+		if controlPlaneReady && machinePoolReady {
+			PrintToTTY("\n✅ Control plane and machine pool are ready! (took %v)\n\n", elapsed.Round(time.Second))
+			t.Logf("Both control plane and MachinePool ready (took %v)", elapsed.Round(time.Second))
+
+			// Display final ControlPlane conditions
+			if len(data.ControlPlane.Conditions) > 0 {
+				PrintToTTY("📋 Final %s conditions:\n", data.ControlPlane.Kind)
+				for _, cond := range data.ControlPlane.Conditions {
+					status := "⏳"
+					if cond.Status == "True" {
+						status = "✅"
+					}
+					PrintToTTY("  %s %s: %s", status, cond.Type, cond.Status)
+					if cond.Reason != "" {
+						PrintToTTY(" (reason: %s)", cond.Reason)
+					}
+					PrintToTTY("\n")
+				}
+				PrintToTTY("\n")
+			}
+
+			// Display final infrastructure status if available
+			if data.Infrastructure.Ready && len(data.ControlPlane.Resources) > 0 {
+				PrintToTTY("📦 Infrastructure resources: %d total\n", len(data.ControlPlane.Resources))
+				PrintToTTY("   %s infrastructure ready: %v\n\n", data.Infrastructure.Kind, data.Infrastructure.Ready)
+			}
+
+			return
+		}
+
+		// Fetch and display ControlPlane conditions for better visibility
+		if !controlPlaneReady && len(data.ControlPlane.Conditions) > 0 {
+			PrintToTTY("[%d] 📋 %s conditions:\n", iteration, data.ControlPlane.Kind)
+			for _, cond := range data.ControlPlane.Conditions {
+				status := "⏳"
+				if cond.Status == "True" {
+					status = "✅"
+				}
+				PrintToTTY("     %s %s: %s", status, cond.Type, cond.Status)
+				if cond.Reason != "" {
+					PrintToTTY(" (reason: %s)", cond.Reason)
+				}
+				PrintToTTY("\n")
 			}
 		}
-	}
 
-	PrintToTTY("\n")
-	t.Logf("Control plane ready: %s", data.FormatSummary())
+		// Report progress using helper function
+		ReportProgress(t, iteration, elapsed, remaining, timeout)
+
+		time.Sleep(pollInterval)
+	}
 }
 
 // TestDeployment_VerifyInfrastructureResources waits for AROCluster infrastructure to be fully ready.
