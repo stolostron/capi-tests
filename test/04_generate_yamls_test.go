@@ -181,6 +181,8 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	// Pass namespace as NAMESPACE env var for YAML generation script
 	// This namespace will be embedded in generated YAMLs for Azure resources
 	SetEnvVar(t, "NAMESPACE", config.WorkloadClusterNamespace)
+	// ROSA gen.sh uses CLUSTER_NAME instead of WORKLOAD_CLUSTER_NAME or CS_CLUSTER_NAME
+	SetEnvVar(t, "CLUSTER_NAME", config.WorkloadClusterName)
 
 	if config.AzureSubscriptionName != "" {
 		SetEnvVar(t, "AZURE_SUBSCRIPTION_NAME", config.AzureSubscriptionName)
