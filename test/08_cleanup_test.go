@@ -317,7 +317,7 @@ func TestCleanup_VerifyOrphanedResources(t *testing.T) {
 		return
 	}
 
-	prefix := config.CAPZUser
+	prefix := config.CAPIUser
 	PrintToTTY("Searching for resources with prefix '%s'...\n\n", prefix)
 
 	// Query for resources matching the prefix
@@ -358,7 +358,7 @@ func TestCleanup_VerifyADApplications(t *testing.T) {
 		t.Skip("Not logged in to Azure CLI")
 	}
 
-	prefix := config.CAPZUser
+	prefix := config.CAPIUser
 	PrintToTTY("Searching for AD Applications with prefix '%s'...\n\n", prefix)
 
 	// Search for AD apps with the prefix
@@ -399,7 +399,7 @@ func TestCleanup_VerifyServicePrincipals(t *testing.T) {
 		t.Skip("Not logged in to Azure CLI")
 	}
 
-	prefix := config.CAPZUser
+	prefix := config.CAPIUser
 	PrintToTTY("Searching for Service Principals with prefix '%s'...\n\n", prefix)
 
 	// Search for service principals with the prefix
@@ -508,7 +508,7 @@ func TestCleanup_DryRunMode(t *testing.T) {
 		t.Skip("Not logged in to Azure CLI")
 	}
 
-	prefix := config.CAPZUser
+	prefix := config.CAPIUser
 	PrintToTTY("Running cleanup script in dry-run mode...\n")
 	PrintToTTY("Prefix: %s\n\n", prefix)
 
@@ -630,7 +630,7 @@ func TestCleanup_ResourceDiscoveryPrefixMatching(t *testing.T) {
 		t.Skip("Not logged in to Azure CLI")
 	}
 
-	prefix := config.CAPZUser
+	prefix := config.CAPIUser
 
 	PrintToTTY("Testing prefix matching accuracy for '%s'...\n\n", prefix)
 
@@ -749,10 +749,10 @@ func TestCleanup_Summary(t *testing.T) {
 			}
 
 			// Check AD apps
-			filter := fmt.Sprintf("startswith(displayName, '%s')", config.CAPZUser)
+			filter := fmt.Sprintf("startswith(displayName, '%s')", config.CAPIUser)
 			output, _ := RunCommandQuiet(t, "az", "ad", "app", "list", "--filter", filter, "-o", "json")
 			if output != "" && output != "[]" {
-				PrintToTTY("  AD Apps:          Some exist with prefix '%s'\n", config.CAPZUser)
+				PrintToTTY("  AD Apps:          Some exist with prefix '%s'\n", config.CAPIUser)
 			} else {
 				PrintToTTY("  AD Apps:          CLEAN\n")
 			}

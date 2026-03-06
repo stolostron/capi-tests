@@ -786,7 +786,7 @@ func TestDeploymentState_Namespace(t *testing.T) {
 			WorkloadClusterName:      "test-workload",
 			WorkloadClusterNamespace: "capz-test-20260202-123456",
 			Region:                   "uksouth",
-			CAPZUser:                 "testuser",
+			CAPIUser:                 "testuser",
 			Environment:              "test",
 		}
 
@@ -1250,7 +1250,7 @@ func TestValidateRFC1123Name(t *testing.T) {
 		{
 			name:        "simple lowercase name",
 			value:       "rcap",
-			varName:     "CAPZ_USER",
+			varName:     "CAPI_USER",
 			expectError: false,
 		},
 		{
@@ -1268,7 +1268,7 @@ func TestValidateRFC1123Name(t *testing.T) {
 		{
 			name:        "single character",
 			value:       "a",
-			varName:     "CAPZ_USER",
+			varName:     "CAPI_USER",
 			expectError: false,
 		},
 		{
@@ -1294,7 +1294,7 @@ func TestValidateRFC1123Name(t *testing.T) {
 		{
 			name:        "contains uppercase - issue #288 case",
 			value:       "rcapXYZ",
-			varName:     "CAPZ_USER",
+			varName:     "CAPI_USER",
 			expectError: true,
 			errorMsgs:   []string{"not RFC 1123 compliant", "contains uppercase letters", "Suggested fix", "rcapxyz"},
 		},
@@ -1315,14 +1315,14 @@ func TestValidateRFC1123Name(t *testing.T) {
 		{
 			name:        "starts with hyphen",
 			value:       "-invalid",
-			varName:     "CAPZ_USER",
+			varName:     "CAPI_USER",
 			expectError: true,
 			errorMsgs:   []string{"must start with a lowercase alphanumeric character"},
 		},
 		{
 			name:        "ends with hyphen",
 			value:       "invalid-",
-			varName:     "CAPZ_USER",
+			varName:     "CAPI_USER",
 			expectError: true,
 			errorMsgs:   []string{"must end with a lowercase alphanumeric character"},
 		},
@@ -1350,7 +1350,7 @@ func TestValidateRFC1123Name(t *testing.T) {
 		{
 			name:        "empty string",
 			value:       "",
-			varName:     "CAPZ_USER",
+			varName:     "CAPI_USER",
 			expectError: true,
 			errorMsgs:   []string{"is empty", "non-empty RFC 1123 compliant"},
 		},
@@ -3103,7 +3103,7 @@ func TestFormatValidationResults(t *testing.T) {
 func TestValidateAllConfigurations(t *testing.T) {
 	// Create a valid config
 	config := &TestConfig{
-		CAPZUser:                 "rcap",
+		CAPIUser:                 "rcap",
 		Environment:              "stage",
 		ClusterNamePrefix:        "rcap-stage",
 		WorkloadClusterNamespace: "capz-test-20260101-120000",
@@ -3131,7 +3131,7 @@ func TestValidateAllConfigurations(t *testing.T) {
 func TestValidateAllConfigurations_InvalidConfig(t *testing.T) {
 	// Create an invalid config (RFC 1123 violation - uppercase)
 	config := &TestConfig{
-		CAPZUser:                 "RCAP", // Invalid - uppercase
+		CAPIUser:                 "RCAP", // Invalid - uppercase
 		Environment:              "stage",
 		ClusterNamePrefix:        "RCAP-stage", // Invalid - uppercase
 		WorkloadClusterNamespace: "capz-test-20260101-120000",
@@ -3373,7 +3373,7 @@ func TestFormatMismatchedClustersError(t *testing.T) {
 				"rcapb-stage",
 				"old-cluster",
 				"kubectl delete cluster --all -n test-ns",
-				"CAPZ_USER was changed",
+				"CAPI_USER was changed",
 			},
 		},
 	}
@@ -3421,8 +3421,8 @@ func TestFormatMismatchedClustersError_HasInstructions(t *testing.T) {
 	}
 
 	// Must provide context about why this happens
-	if !strings.Contains(result, "CAPZ_USER") {
-		t.Error("Error message should explain CAPZ_USER change scenario")
+	if !strings.Contains(result, "CAPI_USER") {
+		t.Error("Error message should explain CAPI_USER change scenario")
 	}
 }
 

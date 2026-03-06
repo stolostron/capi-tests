@@ -37,4 +37,4 @@
 - Highlights the difference between `startswith` (AD apps) and `contains` (Resource Graph)
 - `startswith` is more precise but not available for all Azure resource types
 - `contains` may return false positives if the prefix is common
-- This test validates the accuracy of both approaches for the given CAPZ_USER prefix
+- This test validates the accuracy of both approaches for the given CAPI_USER prefix

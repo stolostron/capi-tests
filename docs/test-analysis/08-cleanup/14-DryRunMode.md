@@ -39,4 +39,4 @@
 
 - Dry-run mode queries Azure but does **not** delete any resources
 - Still requires Azure authentication since it queries for existing resources
-- Uses `CAPZ_USER` as the prefix for resource discovery
+- Uses `CAPI_USER` as the prefix for resource discovery

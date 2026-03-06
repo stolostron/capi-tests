@@ -23,9 +23,9 @@ Kubernetes resource names must follow RFC 1123 subdomain naming:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `CAPZ_USER` | `rcap` | User identifier for domain prefix |
+| `CAPI_USER` | `rcap` | User identifier for domain prefix |
 | `DEPLOYMENT_ENV` | `stage` | Environment identifier |
-| `CS_CLUSTER_NAME` | `${CAPZ_USER}-${DEPLOYMENT_ENV}` | Cluster name prefix |
+| `CS_CLUSTER_NAME` | `${CAPI_USER}-${DEPLOYMENT_ENV}` | Cluster name prefix |
 | `WORKLOAD_CLUSTER_NAMESPACE` | _(auto-generated)_ | Namespace for workload cluster resources |
 
 ---
@@ -36,8 +36,8 @@ Kubernetes resource names must follow RFC 1123 subdomain naming:
 1. Load configuration:
    - config := NewTestConfig()
 
-2. Validate CAPZ_USER:
-   - ValidateRFC1123Name(config.CAPZUser, "CAPZ_USER")
+2. Validate CAPI_USER:
+   - ValidateRFC1123Name(config.CAPIUser, "CAPI_USER")
    - Pass/Fail with details
 
 3. Validate DEPLOYMENT_ENV:
@@ -89,8 +89,8 @@ This test catches naming issues in Phase 1 (seconds) instead of Phase 5 (45+ min
 ### Success
 ```
 === RUN   TestCheckDependencies_NamingCompliance
-=== RUN   TestCheckDependencies_NamingCompliance/CAPZ_USER
-    01_check_dependencies_test.go:577: CAPZ_USER 'rcap' is RFC 1123 compliant
+=== RUN   TestCheckDependencies_NamingCompliance/CAPI_USER
+    01_check_dependencies_test.go:577: CAPI_USER 'rcap' is RFC 1123 compliant
 === RUN   TestCheckDependencies_NamingCompliance/DEPLOYMENT_ENV
     01_check_dependencies_test.go:584: DEPLOYMENT_ENV 'stage' is RFC 1123 compliant
 === RUN   TestCheckDependencies_NamingCompliance/CS_CLUSTER_NAME
@@ -103,8 +103,8 @@ This test catches naming issues in Phase 1 (seconds) instead of Phase 5 (45+ min
 ### Failure (Uppercase)
 ```
 === RUN   TestCheckDependencies_NamingCompliance
-=== RUN   TestCheckDependencies_NamingCompliance/CAPZ_USER
-    01_check_dependencies_test.go:574: CAPZ_USER 'MyUser' contains invalid characters.
+=== RUN   TestCheckDependencies_NamingCompliance/CAPI_USER
+    01_check_dependencies_test.go:574: CAPI_USER 'MyUser' contains invalid characters.
 
 RFC 1123 subdomain naming requires:
   - Only lowercase alphanumeric characters and hyphens
@@ -114,7 +114,7 @@ Current value: 'MyUser'
 Suggested fix: 'myuser'
 
 To fix:
-  export CAPZ_USER=myuser
+  export CAPI_USER=myuser
 --- FAIL: TestCheckDependencies_NamingCompliance (0.00s)
 ```
 
@@ -124,13 +124,13 @@ To fix:
 
 ```bash
 # Check current values
-echo "CAPZ_USER=$CAPZ_USER"
+echo "CAPI_USER=$CAPI_USER"
 echo "DEPLOYMENT_ENV=$DEPLOYMENT_ENV"
 echo "CS_CLUSTER_NAME=$CS_CLUSTER_NAME"
 echo "WORKLOAD_CLUSTER_NAMESPACE=$WORKLOAD_CLUSTER_NAMESPACE"
 
 # Fix invalid values (convert to lowercase, replace invalid chars)
-export CAPZ_USER=$(echo "$CAPZ_USER" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+export CAPI_USER=$(echo "$CAPI_USER" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
 export DEPLOYMENT_ENV=$(echo "$DEPLOYMENT_ENV" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
 ```
 

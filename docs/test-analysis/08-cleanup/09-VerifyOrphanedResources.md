@@ -38,6 +38,6 @@
 
 - Uses Azure Resource Graph for cross-resource-group search
 - Requires the `resource-graph` extension (`az extension add --name resource-graph`)
-- Searches by CAPZ_USER prefix using `contains` (more permissive than `startswith`)
+- Searches by CAPI_USER prefix using `contains` (more permissive than `startswith`)
 - Limited to 10 results for efficiency
 - Some resources (Managed Identities, VNets, NSGs) can survive resource group deletion

@@ -45,7 +45,7 @@
 The Azure resource group name is derived from `CS_CLUSTER_NAME`:
 
 ```
-CS_CLUSTER_NAME = ${CAPZ_USER}-${DEPLOYMENT_ENV}
+CS_CLUSTER_NAME = ${CAPI_USER}-${DEPLOYMENT_ENV}
 Resource Group  = ${CS_CLUSTER_NAME}-resgroup
 
 Example: rcap-stage-resgroup

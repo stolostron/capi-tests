@@ -312,7 +312,7 @@ Use existing helpers from `test/helpers.go` instead of reimplementing:
 ### Naming Conventions
 
 **RFC 1123 Compliance**: These variables must be RFC 1123 compliant (lowercase alphanumeric and hyphens only, must start/end with alphanumeric):
-- `CAPZ_USER`
+- `CAPI_USER`
 - `CS_CLUSTER_NAME`
 - `DEPLOYMENT_ENV`
 - `WORKLOAD_CLUSTER_NAMESPACE`

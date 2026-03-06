@@ -1,9 +1,9 @@
 .PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crds _verify _delete _cleanup test-all _test-all-impl clean clean-all clean-azure help summary
 
 # Default values
-# Extract CAPZ_USER default from Go config to maintain single source of truth
-CAPZ_USER_DEFAULT := $(shell grep 'DefaultCAPZUser = ' test/config.go | grep -o '"[^"]*"' | tr -d '"')
-CAPZ_USER ?= $(CAPZ_USER_DEFAULT)
+# Extract CAPI_USER default from Go config to maintain single source of truth
+CAPI_USER_DEFAULT := $(shell grep 'DefaultCAPIUser = ' test/config.go | grep -o '"[^"]*"' | tr -d '"')
+CAPI_USER ?= $(CAPI_USER_DEFAULT)
 DEPLOYMENT_ENV ?= stage
 REGION ?= uksouth
 INFRA_PROVIDER ?= aro
@@ -12,7 +12,7 @@ MANAGEMENT_CLUSTER_NAME ?= capa-tests-stage
 else
 MANAGEMENT_CLUSTER_NAME ?= capz-tests-stage
 endif
-CS_CLUSTER_NAME ?= $(CAPZ_USER)-$(DEPLOYMENT_ENV)
+CS_CLUSTER_NAME ?= $(CAPI_USER)-$(DEPLOYMENT_ENV)
 AZURE_RESOURCE_GROUP ?= $(CS_CLUSTER_NAME)-resgroup
 
 # Deployment state file - written by tests to record actual deployed configuration
@@ -474,17 +474,17 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 		fi; \
 		echo ""; \
 		echo "--- Orphaned Azure Resources ---"; \
-		echo "These are resources with prefix '$(CAPZ_USER)' that may exist outside the resource group."; \
+		echo "These are resources with prefix '$(CAPI_USER)' that may exist outside the resource group."; \
 		echo ""; \
 		if ! command -v az >/dev/null 2>&1; then \
 			echo "⚠️  Azure CLI (az) not available - skipping orphaned resources cleanup"; \
 		elif ! az account show >/dev/null 2>&1; then \
 			echo "⚠️  Not logged in to Azure - skipping orphaned resources cleanup"; \
 		else \
-			read -p "Search for and delete orphaned Azure resources with prefix '$(CAPZ_USER)'? [y/N] " -n 1 -r; \
+			read -p "Search for and delete orphaned Azure resources with prefix '$(CAPI_USER)'? [y/N] " -n 1 -r; \
 			echo ""; \
 			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-				./scripts/cleanup-azure-resources.sh --prefix "$(CAPZ_USER)" || echo "Orphaned resources cleanup encountered an error"; \
+				./scripts/cleanup-azure-resources.sh --prefix "$(CAPI_USER)" || echo "Orphaned resources cleanup encountered an error"; \
 			else \
 				echo "Skipped orphaned resources cleanup."; \
 				echo "Tip: Run 'make clean-azure' to clean all Azure resources (including orphaned)."; \
@@ -566,15 +566,15 @@ clean-azure: ## Delete all Azure resources (resource group, orphaned resources, 
 		echo ""; \
 	fi
 	@if [ "$(FORCE)" = "1" ]; then \
-		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CAPZ_USER)" --force; \
+		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CAPI_USER)" --force; \
 	else \
-		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CAPZ_USER)"; \
+		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CAPI_USER)"; \
 	fi
 
 # Internal target: force delete all Azure resources without prompting
 .PHONY: _clean-azure-force
 _clean-azure-force:
-	@./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CAPZ_USER)" --force 2>/dev/null || true
+	@./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CAPI_USER)" --force 2>/dev/null || true
 
 setup-submodule: ## Add cluster-api-installer as a git submodule
 	git submodule add -b ARO-ASO https://github.com/RadekCap/cluster-api-installer.git vendor/cluster-api-installer || true

@@ -98,7 +98,7 @@ This document provides a comprehensive review of all public interfaces. These co
 | `OCP_VERSION` | ✅ Approved | Good | Matches cluster-api-installer variable. Renamed from `OPENSHIFT_VERSION` in v1.1 |
 | `REGION` | ✅ Approved | Good | Simple and clear |
 | `DEPLOYMENT_ENV` | ✅ Approved | Good | Clear abbreviation (ENV is well-known) |
-| `CAPZ_USER` | ✅ Approved | Good | Consistent with CAPZ terminology |
+| `CAPI_USER` | ✅ Approved | Good | Consistent with CAPZ terminology |
 | `WORKLOAD_CLUSTER_NAMESPACE` | ✅ Approved | Good | Clear, follows `WORKLOAD_CLUSTER_*` prefix. Replaces `TEST_NAMESPACE` from v1 |
 | `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` | ✅ Approved | Good | Consistent with `WORKLOAD_CLUSTER_*` family |
 | `DEPLOYMENT_TIMEOUT` | ✅ Approved | Good | Clear purpose, Go duration format |
@@ -164,7 +164,7 @@ type TestConfig struct {
     Region                   string  // ✅ Good - simple
     AzureSubscriptionName    string  // ✅ Good - clear (FIXED in v1)
     Environment              string  // ✅ Good - matches DEPLOYMENT_ENV
-    CAPZUser                 string  // ✅ Good - matches CAPZ_USER (FIXED in v1)
+    CAPIUser                 string  // ✅ Good - matches CAPI_USER (FIXED in v1)
     WorkloadClusterNamespace string  // ✅ Good - replaces TestNamespace (v1.1)
     CAPINamespace            string  // ✅ Good - clear
     CAPZNamespace            string  // ✅ Good - clear
@@ -378,7 +378,7 @@ Exit codes are consistent and follow Unix conventions.
 
 1. **CS_CLUSTER_NAME**: ✅ Documented as **C**luster **S**ervice in CLAUDE.md
 2. **TestConfig.AzureSubscription**: ✅ Renamed to `AzureSubscriptionName`
-3. **TestConfig.User**: ✅ Renamed to `CAPZUser`
+3. **TestConfig.User**: ✅ Renamed to `CAPIUser`
 
 ### Resolved in V1.1
 

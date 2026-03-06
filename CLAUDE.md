@@ -160,7 +160,7 @@ The `make clean` command is interactive by default and will prompt you to confir
 - Kubeconfig files
 - Results directory
 - Azure resource group (`${CS_CLUSTER_NAME}-resgroup`)
-- Orphaned Azure resources (resources with `${CAPZ_USER}` prefix that survive RG deletion)
+- Orphaned Azure resources (resources with `${CAPI_USER}` prefix that survive RG deletion)
 
 This prevents accidental deletion and allows selective cleanup.
 
@@ -187,11 +187,11 @@ FORCE=1 make clean-azure
 ./scripts/cleanup-azure-resources.sh --resource-group myapp-resgroup --prefix myapp --dry-run
 
 # Clean with custom prefix
-CAPZ_USER=myprefix make clean-azure
+CAPI_USER=myprefix make clean-azure
 ```
 
 Notes:
-- The resource group name is derived from `${CAPZ_USER}-${DEPLOYMENT_ENV}-resgroup` (default: `rcap-stage-resgroup`)
+- The resource group name is derived from `${CAPI_USER}-${DEPLOYMENT_ENV}-resgroup` (default: `rcap-stage-resgroup`)
 - Uses `az group delete --yes --no-wait` for non-blocking deletion
 - Gracefully skips Azure cleanup if Azure CLI is not installed or not authenticated
 
@@ -290,11 +290,11 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
   - **Note**: Tests automatically translate this to `KIND_CLUSTER_NAME` for the deployment script
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests-cluster` for ARO, `capa-tests-cluster` for ROSA)
-- `CS_CLUSTER_NAME` - **C**luster **S**ervice cluster name prefix used for YAML generation and Azure resource naming (default: `${CAPZ_USER}-${DEPLOYMENT_ENV}`). The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`. This prefix is also used for the ExternalAuth resource ID.
+- `CS_CLUSTER_NAME` - **C**luster **S**ervice cluster name prefix used for YAML generation and Azure resource naming (default: `${CAPI_USER}-${DEPLOYMENT_ENV}`). The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`. This prefix is also used for the ExternalAuth resource ID.
 - `OCP_VERSION` - OpenShift version (default: `4.21`)
 - `REGION` - Azure region (default: `uksouth`)
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`)
-- `CAPZ_USER` - User identifier for domain prefix (default: `rcap`). Must be short enough that `${CAPZ_USER}-${DEPLOYMENT_ENV}` does not exceed 15 characters.
+- `CAPI_USER` - User identifier for domain prefix (default: `rcap`). Must be short enough that `${CAPI_USER}-${DEPLOYMENT_ENV}` does not exceed 15 characters.
 - `WORKLOAD_CLUSTER_NAMESPACE` - Namespace for workload cluster resources (CAPI CRs that create cloud resources). If set, uses the exact value provided (for resume scenarios). If not set, generates a unique namespace per test run using `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` format (e.g., `capz-test-20260202-135526` for ARO, `capa-test-20260202-135526` for ROSA). This namespace is passed as `$NAMESPACE` to the YAML generation script.
 - `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` - Prefix for auto-generated workload cluster namespace (default: provider-specific — `capz-test` for ARO, `capa-test` for ROSA). Only used when `WORKLOAD_CLUSTER_NAMESPACE` is not set.
 
@@ -311,7 +311,7 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
   - Automatically sets `USE_K8S=true` for MCE namespace defaults (`multicluster-engine`)
 
 **RFC 1123 Naming Compliance**: The following variables must be RFC 1123 compliant (lowercase alphanumeric and hyphens only, must start/end with alphanumeric):
-- `CAPZ_USER`
+- `CAPI_USER`
 - `CS_CLUSTER_NAME`
 - `DEPLOYMENT_ENV`
 - `WORKLOAD_CLUSTER_NAMESPACE`

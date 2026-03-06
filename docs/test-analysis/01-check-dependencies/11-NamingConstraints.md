@@ -10,7 +10,7 @@
 
 | Constraint | Rule | Max Length |
 |------------|------|------------|
-| Domain Prefix | `${CAPZ_USER}-${DEPLOYMENT_ENV}` | 15 characters |
+| Domain Prefix | `${CAPI_USER}-${DEPLOYMENT_ENV}` | 15 characters |
 | ExternalAuth ID | `${CS_CLUSTER_NAME}-ea` | 15 characters |
 
 ---
@@ -27,7 +27,7 @@
    - config := NewTestConfig()
 
 3. Validate Domain Prefix:
-   - prefix = "${CAPZ_USER}-${DEPLOYMENT_ENV}"
+   - prefix = "${CAPI_USER}-${DEPLOYMENT_ENV}"
    - len(prefix) <= 15?
      - Yes -> PASS with prefix details
      - No  -> FAIL
@@ -57,9 +57,9 @@ This test catches the issue in Phase 1 (seconds), not Phase 5 (45+ minutes).
 
 | Variable | Default | Used In |
 |----------|---------|---------|
-| `CAPZ_USER` | `rcap` | Domain prefix |
+| `CAPI_USER` | `rcap` | Domain prefix |
 | `DEPLOYMENT_ENV` | `stage` | Domain prefix |
-| `CS_CLUSTER_NAME` | `${CAPZ_USER}-${DEPLOYMENT_ENV}` | ExternalAuth ID |
+| `CS_CLUSTER_NAME` | `${CAPI_USER}-${DEPLOYMENT_ENV}` | ExternalAuth ID |
 
 ---
 
@@ -82,11 +82,11 @@ This test catches the issue in Phase 1 (seconds), not Phase 5 (45+ minutes).
     01_check_dependencies_test.go:449: Domain prefix validation failed:
 Domain prefix 'longusername-production' is 23 characters, exceeds maximum of 15.
 
-The domain prefix is derived from CAPZ_USER and DEPLOYMENT_ENV:
-  Current: CAPZ_USER=longusername DEPLOYMENT_ENV=production
+The domain prefix is derived from CAPI_USER and DEPLOYMENT_ENV:
+  Current: CAPI_USER=longusername DEPLOYMENT_ENV=production
 
 To fix, shorten these values so their combined length (with hyphen) is <= 15:
-  export CAPZ_USER=<shorter-name>
+  export CAPI_USER=<shorter-name>
   export DEPLOYMENT_ENV=<shorter-env>
 --- FAIL: TestCheckDependencies_NamingConstraints (0.00s)
 ```
@@ -99,12 +99,12 @@ If domain prefix is too long:
 
 ```bash
 # Check current values
-echo "CAPZ_USER=$CAPZ_USER"
+echo "CAPI_USER=$CAPI_USER"
 echo "DEPLOYMENT_ENV=$DEPLOYMENT_ENV"
-echo "Combined: ${CAPZ_USER}-${DEPLOYMENT_ENV} ($(echo -n "${CAPZ_USER}-${DEPLOYMENT_ENV}" | wc -c) chars)"
+echo "Combined: ${CAPI_USER}-${DEPLOYMENT_ENV} ($(echo -n "${CAPI_USER}-${DEPLOYMENT_ENV}" | wc -c) chars)"
 
 # Fix by shortening
-export CAPZ_USER="usr"
+export CAPI_USER="usr"
 export DEPLOYMENT_ENV="stg"
 ```
 

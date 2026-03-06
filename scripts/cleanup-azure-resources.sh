@@ -15,26 +15,26 @@
 #   ./scripts/cleanup-azure-resources.sh [OPTIONS]
 #
 # Options:
-#   --prefix PREFIX        Resource name prefix to search for (default: from CAPZ_USER env var or 'rcap')
+#   --prefix PREFIX        Resource name prefix to search for (default: from CAPI_USER env var or 'rcap')
 #   --resource-group RG    Also delete this Azure resource group
 #   --dry-run              Show what would be deleted without actually deleting
 #   --force                Skip confirmation prompts
 #   --help                 Show this help message
 #
 # Environment variables:
-#   CAPZ_USER          Default prefix for resource names (e.g., 'rcap')
+#   CAPI_USER          Default prefix for resource names (e.g., 'rcap')
 #   AZURE_SUBSCRIPTION_ID  Azure subscription ID to search in
 #
 # Examples:
 #   ./scripts/cleanup-azure-resources.sh --dry-run
 #   ./scripts/cleanup-azure-resources.sh --prefix rcapd --force
 #   ./scripts/cleanup-azure-resources.sh --resource-group myapp-resgroup --prefix myapp
-#   CAPZ_USER=myuser ./scripts/cleanup-azure-resources.sh
+#   CAPI_USER=myuser ./scripts/cleanup-azure-resources.sh
 
 set -euo pipefail
 
 # Default values
-PREFIX="${CAPZ_USER:-rcap}"
+PREFIX="${CAPI_USER:-rcap}"
 RESOURCE_GROUP=""
 DRY_RUN=false
 FORCE=false

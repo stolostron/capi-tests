@@ -103,7 +103,7 @@ Verify all required tools are installed and properly configured before running t
 │  Tests 12-14: Naming Validations                                 │
 │  ├── Domain prefix + ExternalAuth ID length constraints          │
 │  ├── Docker credential helper availability (macOS)               │
-│  └── RFC 1123 compliance for CAPZ_USER, DEPLOYMENT_ENV, etc.    │
+│  └── RFC 1123 compliance for CAPI_USER, DEPLOYMENT_ENV, etc.    │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼

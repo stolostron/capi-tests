@@ -12,11 +12,11 @@ Example of a local diff for `test/config.go`:
 --- a/test/config.go
 +++ b/test/config.go
 @@ -30,7 +30,7 @@ const (
-        // DefaultCAPZUser is the default user identifier for CAPZ resources.
+        // DefaultCAPIUser is the default user identifier for CAPZ resources.
         // Used in ClusterNamePrefix (for resource group naming) and User field.
         // Extracted to a constant to ensure consistency across all usages.
--       DefaultCAPZUser = "rcapy"
-+       DefaultCAPZUser = "rcapv"
+-       DefaultCAPIUser = "rcapy"
++       DefaultCAPIUser = "rcapv"
 
         // DefaultDeploymentEnv is the default deployment environment identifier.
         // Used in ClusterNamePrefix and Environment field.

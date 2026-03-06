@@ -563,12 +563,12 @@ func TestCheckDependencies_NamingConstraints(t *testing.T) {
 		return
 	}
 
-	// Validate domain prefix: ${CAPZ_USER}-${DEPLOYMENT_ENV} ≤ 15 chars
+	// Validate domain prefix: ${CAPI_USER}-${DEPLOYMENT_ENV} ≤ 15 chars
 	t.Run("DomainPrefix", func(t *testing.T) {
-		if err := ValidateDomainPrefix(config.CAPZUser, config.Environment); err != nil {
+		if err := ValidateDomainPrefix(config.CAPIUser, config.Environment); err != nil {
 			t.Errorf("Domain prefix validation failed:\n%v", err)
 		} else {
-			prefix := GetDomainPrefix(config.CAPZUser, config.Environment)
+			prefix := GetDomainPrefix(config.CAPIUser, config.Environment)
 			t.Logf("Domain prefix '%s' (%d chars) is valid (max: %d)",
 				prefix, len(prefix), MaxDomainPrefixLength)
 		}
@@ -672,7 +672,7 @@ func TestCheckDependencies_DockerCredentialHelper(t *testing.T) {
 	}
 }
 
-// TestCheckDependencies_NamingCompliance validates that CAPZ_USER, CS_CLUSTER_NAME,
+// TestCheckDependencies_NamingCompliance validates that CAPI_USER, CS_CLUSTER_NAME,
 // and DEPLOYMENT_ENV are RFC 1123 compliant. This prevents late deployment failures
 // where generated Kubernetes resource names contain invalid characters (e.g., uppercase).
 //
@@ -688,13 +688,13 @@ func TestCheckDependencies_NamingCompliance(t *testing.T) {
 	// Track validation failures
 	var validationErrors []string
 
-	// Validate CAPZ_USER
-	t.Run("CAPZ_USER", func(t *testing.T) {
-		if err := ValidateRFC1123Name(config.CAPZUser, "CAPZ_USER"); err != nil {
+	// Validate CAPI_USER
+	t.Run("CAPI_USER", func(t *testing.T) {
+		if err := ValidateRFC1123Name(config.CAPIUser, "CAPI_USER"); err != nil {
 			validationErrors = append(validationErrors, err.Error())
 			t.Error(err)
 		} else {
-			t.Logf("CAPZ_USER '%s' is RFC 1123 compliant", config.CAPZUser)
+			t.Logf("CAPI_USER '%s' is RFC 1123 compliant", config.CAPIUser)
 		}
 	})
 
