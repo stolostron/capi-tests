@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crds _verify-workload-cluster _delete-workload-cluster _validate-cleanup test-all _test-all-impl clean clean-all clean-azure help summary
+.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _validate-cleanup test-all _test-all-impl clean clean-all clean-azure help summary
 
 # Default values
 # Extract CAPZ_USER default from Go config to maintain single source of truth
