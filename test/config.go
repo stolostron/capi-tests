@@ -356,6 +356,7 @@ func NewTestConfig() *TestConfig {
 	var defaultMgmtCluster string
 	var defaultWorkloadCluster string
 	var testLabelPrefix string
+	var defaultClusterPrefix string
 
 	switch infraProviderName {
 	case "rosa":
@@ -365,6 +366,8 @@ func NewTestConfig() *TestConfig {
 		defaultMgmtCluster = "capa-tests-stage"
 		defaultWorkloadCluster = "capa-tests-cluster"
 		testLabelPrefix = "capa-test"
+		// ROSA uses CAPA_USER for cluster prefix (not CAPZ_USER)
+		defaultClusterPrefix = fmt.Sprintf("%s-%s", GetEnvOrDefault("CAPA_USER", DefaultCAPAUser), GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv))
 	default: // "aro"
 		infraProviderName = "aro" // normalize unknown values
 		providerNamespace = getControllerNamespace("CAPZ_NAMESPACE", "capz-system")
@@ -379,6 +382,8 @@ func NewTestConfig() *TestConfig {
 		defaultMgmtCluster = "capz-tests-stage"
 		defaultWorkloadCluster = "capz-tests-cluster"
 		testLabelPrefix = "capz-test"
+		// ARO uses CAPZ_USER for cluster prefix
+		defaultClusterPrefix = fmt.Sprintf("%s-%s", GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser), GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv))
 	}
 
 	return &TestConfig{
@@ -390,7 +395,7 @@ func NewTestConfig() *TestConfig {
 		// Cluster defaults
 		ManagementClusterName:    GetEnvOrDefault("MANAGEMENT_CLUSTER_NAME", defaultMgmtCluster),
 		WorkloadClusterName:      GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", defaultWorkloadCluster),
-		ClusterNamePrefix:        GetEnvOrDefault("CS_CLUSTER_NAME", fmt.Sprintf("%s-%s", GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser), GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv))),
+		ClusterNamePrefix:        GetEnvOrDefault("CS_CLUSTER_NAME", defaultClusterPrefix),
 		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.20"),
 		Region:                   GetEnvOrDefault("REGION", "uksouth"),
 		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),

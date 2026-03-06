@@ -3233,9 +3233,9 @@ func FormatMismatchedClustersError(mismatched []string, expectedPrefix, namespac
 
 	fmt.Fprintf(&sb, "\nCurrent config expects cluster names starting with: %s\n\n", expectedPrefix)
 
-	sb.WriteString("This typically happens when CAPZ_USER was changed without cleaning up\n")
-	sb.WriteString("the previous cluster resources. Deploying new clusters alongside old ones\n")
-	sb.WriteString("can cause conflicts and unexpected behavior.\n\n")
+	sb.WriteString("This typically happens when configuration (CAPZ_USER/CAPA_USER) was changed\n")
+	sb.WriteString("without cleaning up previous cluster resources. Deploying new clusters\n")
+	sb.WriteString("alongside old ones can cause conflicts and unexpected behavior.\n\n")
 
 	sb.WriteString("TO CLEAN UP:\n\n")
 

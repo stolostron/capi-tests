@@ -70,6 +70,13 @@ func TestDeployment_01_CheckExistingClusters(t *testing.T) {
 
 	config := NewTestConfig()
 
+	// Skip for ROSA - ROSA cluster names don't include the user prefix
+	// ROSA cluster names come from WORKLOAD_CLUSTER_NAME (e.g., "capa-tests-cluster")
+	// while the user prefix (CAPA_USER) is used only for IAM roles and domain prefix
+	if config.HasProvider("rosa") {
+		t.Skip("Cluster name prefix check is ARO-specific (ARO uses CAPZ_USER in cluster names)")
+	}
+
 	// Set KUBECONFIG for external cluster mode
 	if config.IsExternalCluster() {
 		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
@@ -113,7 +120,7 @@ func TestDeployment_01_CheckExistingClusters(t *testing.T) {
 		errorMsg := FormatMismatchedClustersError(mismatched, config.ClusterNamePrefix, config.WorkloadClusterNamespace)
 		PrintToTTY("%s", errorMsg)
 
-		t.Fatalf("Mismatched Cluster CRs found. Clean up existing clusters before deploying with new CAPZ_USER.\n"+
+		t.Fatalf("Mismatched Cluster CRs found. Clean up existing clusters before deploying.\n"+
 			"Found %d cluster(s) not matching prefix '%s': %v",
 			len(mismatched), config.ClusterNamePrefix, mismatched)
 	}
@@ -167,7 +174,8 @@ func TestDeployment_ApplyResources(t *testing.T) {
 		// (cluster-scoped AWSClusterControllerIdentity, capa-system Secret, workload namespace Secret)
 		// and must be applied without the -n namespace flag
 		var err error
-		if file == "secrets.yaml" && config.HasProvider("rosa") {
+		isROSASecrets := file == "secrets.yaml" && config.HasProvider("rosa")
+		if isROSASecrets {
 			err = ApplyWithRetryMultiNamespace(t, context, filePath, DefaultApplyMaxRetries)
 		} else {
 			err = ApplyWithRetry(t, context, filePath, DefaultApplyMaxRetries)
@@ -176,6 +184,25 @@ func TestDeployment_ApplyResources(t *testing.T) {
 			PrintToTTY("❌ Failed to apply %s: %v\n", file, err)
 			t.Errorf("Failed to apply %s: %v", file, err)
 			continue
+		}
+
+		// Restart CAPA controller after applying ROSA secrets to pick up new credentials
+		// The AWS SDK caches credentials on startup and requires a restart to reload them
+		if isROSASecrets {
+			PrintToTTY("\n=== Restarting CAPA controller to load credentials ===\n")
+			t.Log("Restarting CAPA controller to pick up new AWS credentials")
+			if _, err := RunCommand(t, "kubectl", "--context", context, "rollout", "restart", "deployment/capa-controller-manager", "-n", "capa-system"); err != nil {
+				PrintToTTY("❌ Failed to restart CAPA controller: %v\n", err)
+				t.Errorf("Failed to restart CAPA controller: %v", err)
+				continue
+			}
+			PrintToTTY("Waiting for CAPA controller to be ready...\n")
+			if _, err := RunCommand(t, "kubectl", "--context", context, "rollout", "status", "deployment/capa-controller-manager", "-n", "capa-system", "--timeout=2m"); err != nil {
+				PrintToTTY("❌ CAPA controller failed to become ready: %v\n", err)
+				t.Errorf("CAPA controller failed to become ready: %v", err)
+				continue
+			}
+			PrintToTTY("✅ CAPA controller restarted and ready\n\n")
 		}
 	}
 
@@ -230,7 +257,8 @@ func TestDeployment_ApplyIndividualFiles(t *testing.T) {
 			// - rosa-creds-secret (workload cluster namespace)
 			// So we need to apply without -n flag
 			var err error
-			if file == "secrets.yaml" && config.HasProvider("rosa") {
+			isROSASecrets := file == "secrets.yaml" && config.HasProvider("rosa")
+			if isROSASecrets {
 				err = ApplyWithRetryMultiNamespace(t, context, filePath, DefaultApplyMaxRetries)
 			} else {
 				err = ApplyWithRetry(t, context, filePath, DefaultApplyMaxRetries)
@@ -239,6 +267,23 @@ func TestDeployment_ApplyIndividualFiles(t *testing.T) {
 			if err != nil {
 				t.Errorf("Failed to apply %s: %v", file, err)
 				return
+			}
+
+			// Restart CAPA controller after applying ROSA secrets to pick up new credentials
+			// The AWS SDK caches credentials on startup and requires a restart to reload them
+			if isROSASecrets {
+				PrintToTTY("\n=== Restarting CAPA controller to load credentials ===\n")
+				t.Log("Restarting CAPA controller to pick up new AWS credentials")
+				if _, err := RunCommand(t, "kubectl", "--context", context, "rollout", "restart", "deployment/capa-controller-manager", "-n", "capa-system"); err != nil {
+					t.Errorf("Failed to restart CAPA controller: %v", err)
+					return
+				}
+				PrintToTTY("Waiting for CAPA controller to be ready...\n")
+				if _, err := RunCommand(t, "kubectl", "--context", context, "rollout", "status", "deployment/capa-controller-manager", "-n", "capa-system", "--timeout=2m"); err != nil {
+					t.Errorf("CAPA controller failed to become ready: %v", err)
+					return
+				}
+				PrintToTTY("✅ CAPA controller restarted and ready\n")
 			}
 
 			PrintToTTY("\n")
@@ -497,6 +542,13 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 func TestDeployment_VerifyInfrastructureResources(t *testing.T) {
 	config := NewTestConfig()
 
+	// Skip for ROSA - NetworkInfrastructureReady is ARO-specific
+	// ROSA uses ROSACluster which doesn't have this condition
+	// ROSA readiness is verified via ROSAControlPlaneReady in TestDeployment_WaitForControlPlane
+	if config.HasProvider("rosa") {
+		t.Skip("NetworkInfrastructureReady check is ARO-specific, not applicable to ROSA")
+	}
+
 	// Set KUBECONFIG for external cluster mode
 	if config.IsExternalCluster() {
 		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
@@ -570,6 +622,11 @@ func TestDeployment_VerifyInfrastructureResources(t *testing.T) {
 // This follows AROControlPlane.Ready (step 8) in the deployment sequence.
 func TestDeployment_VerifyAROClusterReady(t *testing.T) {
 	config := NewTestConfig()
+
+	// Skip for ROSA - this test checks AROCluster.status.ready which doesn't exist for ROSA
+	if config.HasProvider("rosa") {
+		t.Skip("AROCluster verification is ARO-specific, not applicable to ROSA")
+	}
 
 	if config.IsExternalCluster() {
 		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)

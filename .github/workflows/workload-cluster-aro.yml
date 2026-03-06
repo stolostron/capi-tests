@@ -33,6 +33,13 @@ env:
   ARO_REPO_BRANCH: capi-tests
   ARO_REPO_DIR: /tmp/cluster-api-installer-aro
   USE_KIND: "true"
+  # Move Azure credentials to job-level to ensure they're available for all make targets
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  REGION: ${{ vars.REGION }}
+  DEPLOYMENT_ENV: ${{ vars.DEPLOYMENT_ENV }}
 
 jobs:
   management-cluster:
@@ -163,13 +170,7 @@ jobs:
         echo "DOCKER_SECRETS=${DOCKER_SECRETS}" >> $GITHUB_ENV
 
     - name: 'Run test-all'
-      env:
-        AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-        AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-        AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-        REGION: ${{ vars.REGION }}
-        DEPLOYMENT_ENV: ${{ vars.DEPLOYMENT_ENV }}
+      # Azure credentials and config are set at job level (see env: above)
       run: make test-all
       continue-on-error: true
       id: phase3
