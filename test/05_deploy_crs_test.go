@@ -163,8 +163,16 @@ func TestDeployment_ApplyResources(t *testing.T) {
 		PrintToTTY("Applying resource file: %s...\n", file)
 		t.Logf("Applying resource file: %s", file)
 
-		// Use ApplyWithRetry to handle transient connection issues
-		if err := ApplyWithRetry(t, context, filePath, DefaultApplyMaxRetries); err != nil {
+		// ROSA's secrets.yaml contains resources in multiple namespaces
+		// (cluster-scoped AWSClusterControllerIdentity, capa-system Secret, workload namespace Secret)
+		// and must be applied without the -n namespace flag
+		var err error
+		if file == "secrets.yaml" && config.HasProvider("rosa") {
+			err = ApplyWithRetryMultiNamespace(t, context, filePath, DefaultApplyMaxRetries)
+		} else {
+			err = ApplyWithRetry(t, context, filePath, DefaultApplyMaxRetries)
+		}
+		if err != nil {
 			PrintToTTY("❌ Failed to apply %s: %v\n", file, err)
 			t.Errorf("Failed to apply %s: %v", file, err)
 			continue
@@ -217,7 +225,7 @@ func TestDeployment_ApplyIndividualFiles(t *testing.T) {
 			}
 
 			// ROSA's secrets.yaml contains resources in multiple namespaces:
-			// - AWSClusterStaticIdentity (cluster-scoped)
+			// - AWSClusterControllerIdentity (cluster-scoped)
 			// - capa-manager-bootstrap-credentials (capa-system)
 			// - rosa-creds-secret (workload cluster namespace)
 			// So we need to apply without -n flag
