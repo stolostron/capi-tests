@@ -9,6 +9,14 @@ ARG CLUSTERCTL_VERSION=v1.12.3
 ARG CLUSTERCTL_SHA256=9b75287b15656a62ece65c8ad7491412cebfd30c78e085a9d61396a50df17349
 ARG GOTESTSUM_VERSION=v1.13.0
 
+# Install podman (docker alternative) and OpenShift CLI
+ARG OC_VERSION=latest
+RUN dnf install -y podman && dnf clean all
+RUN curl -fsSL "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/${OC_VERSION}/openshift-client-linux.tar.gz" -o /tmp/oc.tar.gz && \
+    tar xz -C /usr/local/bin -f /tmp/oc.tar.gz oc && \
+    chmod +x /usr/local/bin/oc && \
+    rm -f /tmp/oc.tar.gz
+
 # Install Azure CLI from Microsoft repo and other tools
 RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
     printf '%s\n' \
