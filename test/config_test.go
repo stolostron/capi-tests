@@ -187,16 +187,33 @@ func TestIsKindMode(t *testing.T) {
 }
 
 func TestGetExpectedFiles(t *testing.T) {
+	// Test ARO (default provider)
+	t.Setenv("INFRA_PROVIDER", "aro")
 	config := NewTestConfig()
 	files := config.GetExpectedFiles()
 
 	expected := []string{"credentials.yaml", "aro.yaml"}
 	if len(files) != len(expected) {
-		t.Fatalf("GetExpectedFiles() returned %d files, expected %d: %v", len(files), len(expected), files)
+		t.Fatalf("ARO: GetExpectedFiles() returned %d files, expected %d: %v", len(files), len(expected), files)
 	}
 	for i, file := range files {
 		if file != expected[i] {
-			t.Errorf("GetExpectedFiles()[%d] = %q, expected %q", i, file, expected[i])
+			t.Errorf("ARO: GetExpectedFiles()[%d] = %q, expected %q", i, file, expected[i])
+		}
+	}
+
+	// Test ROSA
+	t.Setenv("INFRA_PROVIDER", "rosa")
+	config = NewTestConfig()
+	files = config.GetExpectedFiles()
+
+	expectedROSA := []string{"secrets.yaml", "rosa.yaml", "is.yaml"}
+	if len(files) != len(expectedROSA) {
+		t.Fatalf("ROSA: GetExpectedFiles() returned %d files, expected %d: %v", len(files), len(expectedROSA), files)
+	}
+	for i, file := range files {
+		if file != expectedROSA[i] {
+			t.Errorf("ROSA: GetExpectedFiles()[%d] = %q, expected %q", i, file, expectedROSA[i])
 		}
 	}
 }
@@ -239,6 +256,17 @@ func TestNewAzureProvider(t *testing.T) {
 	// Verify credential secret is nil (ARO uses namespace-scoped AzureClusterIdentity)
 	if p.CredentialSecret != nil {
 		t.Errorf("Expected credential secret to be nil for ARO (uses namespace-scoped identity), got %+v", p.CredentialSecret)
+	}
+
+	// Verify expected files
+	expectedFiles := []string{"credentials.yaml", "aro.yaml"}
+	if len(p.ExpectedFiles) != len(expectedFiles) {
+		t.Fatalf("Expected %d files, got %d: %v", len(expectedFiles), len(p.ExpectedFiles), p.ExpectedFiles)
+	}
+	for i, file := range p.ExpectedFiles {
+		if file != expectedFiles[i] {
+			t.Errorf("ExpectedFiles[%d] = %q, expected %q", i, file, expectedFiles[i])
+		}
 	}
 
 	// Verify deployment charts
@@ -304,6 +332,17 @@ func TestNewAWSProvider(t *testing.T) {
 	// Verify credential secret is nil (ROSA uses namespace-scoped AWSClusterStaticIdentity)
 	if p.CredentialSecret != nil {
 		t.Errorf("Expected credential secret to be nil for ROSA (uses namespace-scoped identity), got %+v", p.CredentialSecret)
+	}
+
+	// Verify expected files
+	expectedFiles := []string{"secrets.yaml", "rosa.yaml", "is.yaml"}
+	if len(p.ExpectedFiles) != len(expectedFiles) {
+		t.Fatalf("Expected %d files, got %d: %v", len(expectedFiles), len(p.ExpectedFiles), p.ExpectedFiles)
+	}
+	for i, file := range p.ExpectedFiles {
+		if file != expectedFiles[i] {
+			t.Errorf("ExpectedFiles[%d] = %q, expected %q", i, file, expectedFiles[i])
+		}
 	}
 
 	// Verify YAML generation credentials
