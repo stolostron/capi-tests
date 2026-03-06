@@ -114,42 +114,76 @@ After pushing changes, CodeRabbit automatically triggers a review. Poll until it
 **On round 1**: Poll for CodeRabbit's initial review (may take longer).
 **On round 2+**: Poll for CodeRabbit's incremental re-review (triggered by pushed fixes).
 
-1. **Poll for CodeRabbit's review completion**:
+**IMPORTANT**: CodeRabbit posts in stages — first an "in progress" placeholder, then the completed summary, then inline review threads asynchronously. You must wait for ALL stages to finish before fetching findings.
+
+1. **Poll for CodeRabbit's COMPLETED review** (not just any comment):
 
    ```bash
-   MAX_ATTEMPTS=20
+   MAX_ATTEMPTS=30
    POLL_INTERVAL=30
    ATTEMPT=0
 
    while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
      ATTEMPT=$((ATTEMPT + 1))
-     echo "Polling for CodeRabbit review... (attempt $ATTEMPT/$MAX_ATTEMPTS)"
+     echo "Polling for completed CodeRabbit review... (attempt $ATTEMPT/$MAX_ATTEMPTS)"
 
-     # Check for CodeRabbit PR comment (walkthrough/summary)
-     CR_COMMENT=$(gh api "repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
-       --jq '[.[] | select(.user.login == "coderabbitai[bot]" or .user.login == "coderabbitai")] | length')
+     # Fetch the latest CodeRabbit comment body
+     CR_BODY=$(gh api "repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
+       --jq '[.[] | select(.user.login == "coderabbitai[bot]" or .user.login == "coderabbitai")] | .[-1].body // ""')
 
-     if [ "$CR_COMMENT" -gt 0 ]; then
-       echo "CodeRabbit review detected!"
+     # Check for COMPLETED review markers (not just "in progress" placeholder)
+     # A completed review contains "Walkthrough" or "actionable comments" or "No issues found"
+     if echo "$CR_BODY" | grep -qE "Walkthrough|actionable comments|No issues found|Files ignored|Changes approved"; then
+       echo "CodeRabbit review completed!"
        break
      fi
 
      if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
-       echo "WARNING: CodeRabbit review not detected after $((MAX_ATTEMPTS * POLL_INTERVAL / 60)) minutes."
+       echo "WARNING: CodeRabbit review not completed after $((MAX_ATTEMPTS * POLL_INTERVAL / 60)) minutes."
        echo "Proceeding to check for any existing review threads anyway."
        break
      fi
 
-     echo "No CodeRabbit review yet. Waiting ${POLL_INTERVAL}s..."
+     echo "Review not yet completed. Waiting ${POLL_INTERVAL}s..."
      sleep $POLL_INTERVAL
    done
    ```
 
-2. **Wait for thread posting to complete** (CodeRabbit posts the summary first, then individual threads):
+2. **Wait for thread posting to stabilize** (CodeRabbit posts inline threads AFTER the summary):
+
+   CodeRabbit posts its summary comment first, then creates individual review threads asynchronously. A static wait is unreliable. Instead, poll until the thread count stabilizes.
+
    ```bash
-   echo "Waiting 15s for CodeRabbit to finish posting review threads..."
-   sleep 15
+   echo "Waiting for CodeRabbit to finish posting review threads..."
+   PREV_THREAD_COUNT=-1
+   STABLE_CHECKS=0
+   REQUIRED_STABLE=2
+
+   for i in $(seq 1 10); do
+     sleep 10
+
+     # Count current CodeRabbit review threads
+     CURRENT_THREAD_COUNT=$(gh api graphql -f query="<thread query>" \
+       -F owner="$OWNER" -F repo="$REPO" -F pr="$PR_NUMBER" \
+       | <filter for CodeRabbit threads> | <count>)
+
+     if [ "$CURRENT_THREAD_COUNT" -eq "$PREV_THREAD_COUNT" ]; then
+       STABLE_CHECKS=$((STABLE_CHECKS + 1))
+       echo "Thread count stable at $CURRENT_THREAD_COUNT ($STABLE_CHECKS/$REQUIRED_STABLE)"
+       if [ "$STABLE_CHECKS" -ge "$REQUIRED_STABLE" ]; then
+         echo "Thread count stabilized. Proceeding."
+         break
+       fi
+     else
+       STABLE_CHECKS=0
+       echo "Thread count changed: $PREV_THREAD_COUNT -> $CURRENT_THREAD_COUNT"
+     fi
+
+     PREV_THREAD_COUNT=$CURRENT_THREAD_COUNT
+   done
    ```
+
+   **Why this works**: Instead of guessing with a fixed sleep, we check the thread count every 10 seconds. When it stays the same for 2 consecutive checks (20 seconds of stability), we know CodeRabbit is done posting. This handles both fast reviews (0 threads, stabilizes immediately) and large reviews (many threads, waits as long as needed).
 
 ### Step 4: Fetch and Filter CodeRabbit Findings
 
