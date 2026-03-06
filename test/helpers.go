@@ -1441,6 +1441,63 @@ func ApplyWithRetry(t *testing.T, kubeContext, yamlPath string, maxRetries int) 
 	return ApplyWithRetryInNamespace(t, kubeContext, config.WorkloadClusterNamespace, yamlPath, maxRetries)
 }
 
+// ApplyWithRetryMultiNamespace applies a YAML file with retry logic without specifying a namespace.
+// Use this for YAML files that contain resources in multiple namespaces or cluster-scoped resources.
+// For ROSA, this is needed for secrets.yaml which contains:
+//   - AWSClusterStaticIdentity (cluster-scoped)
+//   - capa-manager-bootstrap-credentials (capa-system namespace)
+//   - rosa-creds-secret (workload cluster namespace)
+func ApplyWithRetryMultiNamespace(t *testing.T, kubeContext, yamlPath string, maxRetries int) error {
+	t.Helper()
+
+	if maxRetries <= 0 {
+		maxRetries = DefaultApplyMaxRetries
+	}
+
+	baseDelay := DefaultApplyRetryDelay
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		PrintToTTY("[%d/%d] Applying %s (multi-namespace)...\n", attempt, maxRetries, yamlPath)
+		t.Logf("Applying %s (multi-namespace, attempt %d/%d)", yamlPath, attempt, maxRetries)
+
+		output, err := RunCommand(t, "kubectl", "--context", kubeContext, "apply", "--validate=warn", "-f", yamlPath)
+
+		// Check if apply was successful
+		if err == nil || IsKubectlApplySuccess(output) {
+			PrintToTTY("✅ Successfully applied %s\n", yamlPath)
+			t.Logf("Successfully applied %s", yamlPath)
+			return nil
+		}
+
+		// Determine if error is retryable
+		if !isRetryableKubectlError(output, err) {
+			PrintToTTY("❌ Non-retryable error applying %s: %v\n", yamlPath, err)
+			t.Logf("Non-retryable error applying %s: %v\nOutput: %s", yamlPath, err, output)
+			return fmt.Errorf("failed to apply %s: %w\nOutput: %s", yamlPath, err, output)
+		}
+
+		// Don't sleep after last attempt
+		if attempt < maxRetries {
+			delay := baseDelay * time.Duration(attempt)
+			if delay > 60*time.Second {
+				delay = 60 * time.Second
+			}
+
+			PrintToTTY("[%d/%d] ⚠️  Retryable error: %v\n", attempt, maxRetries, err)
+			PrintToTTY("[%d/%d] ⏳ Waiting %v before retry...\n", attempt, maxRetries, delay.Round(time.Second))
+			t.Logf("Apply failed (attempt %d/%d): %v, retrying in %v", attempt, maxRetries, err, delay.Round(time.Second))
+
+			time.Sleep(delay)
+		} else {
+			PrintToTTY("❌ Failed to apply %s after %d attempts: %v\n", yamlPath, maxRetries, err)
+			t.Logf("Failed to apply %s after %d attempts: %v\nOutput: %s", yamlPath, maxRetries, err, output)
+			return fmt.Errorf("failed to apply %s after %d attempts: %w\nOutput: %s", yamlPath, maxRetries, err, output)
+		}
+	}
+
+	return fmt.Errorf("failed to apply %s: max retries exhausted", yamlPath)
+}
+
 // ApplyWithRetryInNamespace applies a YAML file with retry logic to a specific namespace.
 // Parameters:
 //   - kubeContext: kubectl context to use

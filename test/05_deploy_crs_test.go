@@ -216,9 +216,19 @@ func TestDeployment_ApplyIndividualFiles(t *testing.T) {
 				return
 			}
 
-			// Use ApplyWithRetry to handle transient connection issues
-			// (ApplyWithRetry prints all output including success/failure)
-			if err := ApplyWithRetry(t, context, filePath, DefaultApplyMaxRetries); err != nil {
+			// ROSA's secrets.yaml contains resources in multiple namespaces:
+			// - AWSClusterStaticIdentity (cluster-scoped)
+			// - capa-manager-bootstrap-credentials (capa-system)
+			// - rosa-creds-secret (workload cluster namespace)
+			// So we need to apply without -n flag
+			var err error
+			if file == "secrets.yaml" && config.HasProvider("rosa") {
+				err = ApplyWithRetryMultiNamespace(t, context, filePath, DefaultApplyMaxRetries)
+			} else {
+				err = ApplyWithRetry(t, context, filePath, DefaultApplyMaxRetries)
+			}
+
+			if err != nil {
 				t.Errorf("Failed to apply %s: %v", file, err)
 				return
 			}
