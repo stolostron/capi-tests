@@ -329,9 +329,15 @@ func TestNewAWSProvider(t *testing.T) {
 		t.Errorf("Expected webhook port 443, got %d", p.Webhooks[0].Port)
 	}
 
-	// Verify credential secret is nil (ROSA uses namespace-scoped AWSClusterStaticIdentity)
-	if p.CredentialSecret != nil {
-		t.Errorf("Expected credential secret to be nil for ROSA (uses namespace-scoped identity), got %+v", p.CredentialSecret)
+	// Verify credential secret (ROSA uses cluster-scoped AWSClusterStaticIdentity in capa-system namespace)
+	if p.CredentialSecret == nil {
+		t.Fatal("Expected credential secret to be set for ROSA")
+	}
+	if p.CredentialSecret.Name != "capa-manager-bootstrap-credentials" {
+		t.Errorf("Expected ROSA credential secret name 'capa-manager-bootstrap-credentials', got %q", p.CredentialSecret.Name)
+	}
+	if p.CredentialSecret.Namespace != "capa-system" {
+		t.Errorf("Expected ROSA credential secret namespace 'capa-system', got %q", p.CredentialSecret.Namespace)
 	}
 
 	// Verify expected files

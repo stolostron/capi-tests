@@ -170,9 +170,12 @@ func NewAWSProvider(namespace string) InfraProvider {
 		Webhooks: []WebhookDef{
 			{DisplayName: "CAPA", Namespace: namespace, ServiceName: "capa-webhook-service", Port: 443},
 		},
-		// Note: ROSA uses namespace-scoped AWSClusterStaticIdentity with credentials
-		// created by gen.sh script (Phase 04), so no cluster-scoped credential secret needed
-		CredentialSecret: nil,
+		// Note: ROSA uses cluster-scoped AWSClusterStaticIdentity (unlike ARO's namespace-scoped approach)
+		// CAPA requires AWS credentials in capa-system namespace (controller namespace)
+		CredentialSecret: &CredentialSecretDef{
+			Name:      "capa-manager-bootstrap-credentials",
+			Namespace: namespace,
+		},
 		DeploymentCharts: []string{"cluster-api-provider-aws"},
 		MCEComponentName: "cluster-api-provider-aws",
 		RequiredTools:    []string{"aws"},
