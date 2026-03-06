@@ -448,49 +448,53 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 			echo "Results directory not found (already clean)."; \
 		fi; \
 		echo ""; \
-		echo "--- Azure Resources ---"; \
-		echo "Target resource group: $(CLEANUP_RESOURCE_GROUP)"; \
-		echo ""; \
-		if ! command -v az >/dev/null 2>&1; then \
-			echo "⚠️  Azure CLI (az) not available - skipping Azure cleanup"; \
-		elif ! az account show >/dev/null 2>&1; then \
-			echo "⚠️  Not logged in to Azure - skipping Azure cleanup"; \
-			echo "   Run 'az login' to authenticate"; \
-		elif az group show --name $(CLEANUP_RESOURCE_GROUP) >/dev/null 2>&1; then \
-			echo "Resource group '$(CLEANUP_RESOURCE_GROUP)' exists."; \
-			echo "⚠️  Warning: This will delete ALL resources in the resource group!"; \
+		if [ "$(INFRA_PROVIDER)" = "aro" ]; then \
+			echo "--- Azure Resources ---"; \
+			echo "Target resource group: $(CLEANUP_RESOURCE_GROUP)"; \
 			echo ""; \
-			read -p "Delete Azure resource group '$(CLEANUP_RESOURCE_GROUP)'? [y/N] " -n 1 -r; \
-			echo ""; \
-			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-				echo "Deleting Azure resource group (this may take several minutes)..."; \
-				az group delete --name $(CLEANUP_RESOURCE_GROUP) --yes --no-wait && \
-				echo "✅ Resource group deletion initiated (running in background)"; \
+			if ! command -v az >/dev/null 2>&1; then \
+				echo "⚠️  Azure CLI (az) not available - skipping Azure cleanup"; \
+			elif ! az account show >/dev/null 2>&1; then \
+				echo "⚠️  Not logged in to Azure - skipping Azure cleanup"; \
+				echo "   Run 'az login' to authenticate"; \
+			elif az group show --name $(CLEANUP_RESOURCE_GROUP) >/dev/null 2>&1; then \
+				echo "Resource group '$(CLEANUP_RESOURCE_GROUP)' exists."; \
+				echo "⚠️  Warning: This will delete ALL resources in the resource group!"; \
+				echo ""; \
+				read -p "Delete Azure resource group '$(CLEANUP_RESOURCE_GROUP)'? [y/N] " -n 1 -r; \
+				echo ""; \
+				if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+					echo "Deleting Azure resource group (this may take several minutes)..."; \
+					az group delete --name $(CLEANUP_RESOURCE_GROUP) --yes --no-wait && \
+					echo "✅ Resource group deletion initiated (running in background)"; \
+				else \
+					echo "Skipped Azure resource group deletion."; \
+				fi; \
 			else \
-				echo "Skipped Azure resource group deletion."; \
+				echo "Azure resource group '$(CLEANUP_RESOURCE_GROUP)' not found (already clean)."; \
 			fi; \
-		else \
-			echo "Azure resource group '$(CLEANUP_RESOURCE_GROUP)' not found (already clean)."; \
-		fi; \
-		echo ""; \
-		echo "--- Orphaned Azure Resources ---"; \
-		echo "These are resources with prefix '$(CAPZ_USER)' that may exist outside the resource group."; \
-		echo ""; \
-		if ! command -v az >/dev/null 2>&1; then \
-			echo "⚠️  Azure CLI (az) not available - skipping orphaned resources cleanup"; \
-		elif ! az account show >/dev/null 2>&1; then \
-			echo "⚠️  Not logged in to Azure - skipping orphaned resources cleanup"; \
-		else \
-			read -p "Search for and delete orphaned Azure resources with prefix '$(CAPZ_USER)'? [y/N] " -n 1 -r; \
 			echo ""; \
-			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-				./scripts/cleanup-azure-resources.sh --prefix "$(CAPZ_USER)" || echo "Orphaned resources cleanup encountered an error"; \
-			else \
-				echo "Skipped orphaned resources cleanup."; \
-				echo "Tip: Run 'make clean-azure' to clean all Azure resources (including orphaned)."; \
-			fi; \
 		fi; \
-		echo ""; \
+		if [ "$(INFRA_PROVIDER)" = "aro" ]; then \
+			echo "--- Orphaned Azure Resources ---"; \
+			echo "These are resources with prefix '$(CAPZ_USER)' that may exist outside the resource group."; \
+			echo ""; \
+			if ! command -v az >/dev/null 2>&1; then \
+				echo "⚠️  Azure CLI (az) not available - skipping orphaned resources cleanup"; \
+			elif ! az account show >/dev/null 2>&1; then \
+				echo "⚠️  Not logged in to Azure - skipping orphaned resources cleanup"; \
+			else \
+				read -p "Search for and delete orphaned Azure resources with prefix '$(CAPZ_USER)'? [y/N] " -n 1 -r; \
+				echo ""; \
+				if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+					./scripts/cleanup-azure-resources.sh --prefix "$(CAPZ_USER)" || echo "Orphaned resources cleanup encountered an error"; \
+				else \
+					echo "Skipped orphaned resources cleanup."; \
+					echo "Tip: Run 'make clean-azure' to clean all Azure resources (including orphaned)."; \
+				fi; \
+			fi; \
+			echo ""; \
+		fi; \
 		if [ -f "$(DEPLOYMENT_STATE_FILE)" ]; then \
 			echo "Removing deployment state file..."; \
 			rm -f "$(DEPLOYMENT_STATE_FILE)"; \

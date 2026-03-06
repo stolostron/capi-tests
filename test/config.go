@@ -32,6 +32,10 @@ const (
 	// Extracted to a constant to ensure consistency across all usages.
 	DefaultCAPZUser = "rcapd"
 
+	// DefaultCAPAUser is the default user identifier for CAPA resources.
+	// Used in domain prefix and role prefix for ROSA deployments.
+	DefaultCAPAUser = "rcapd"
+
 	// DefaultDeploymentEnv is the default deployment environment identifier.
 	// Used in ClusterNamePrefix and Environment field.
 	DefaultDeploymentEnv = "stage"
@@ -282,6 +286,7 @@ type TestConfig struct {
 	AzureSubscriptionName    string // Azure subscription name (from AZURE_SUBSCRIPTION_NAME env var)
 	Environment              string
 	CAPZUser                 string // User identifier for CAPZ resources (from CAPZ_USER env var)
+	CAPAUser                 string // User identifier for CAPA resources (from CAPA_USER env var)
 	WorkloadClusterNamespace string // Namespace for workload cluster resources on management cluster (unique per test run)
 	TestLabelPrefix          string // Provider-specific label prefix for test namespaces (e.g., "capz-test" for ARO, "capa-test" for ROSA)
 	CAPINamespace            string // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
@@ -391,6 +396,7 @@ func NewTestConfig() *TestConfig {
 		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),
 		Environment:              GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv),
 		CAPZUser:                 GetEnvOrDefault("CAPZ_USER", DefaultCAPZUser),
+		CAPAUser:                 GetEnvOrDefault("CAPA_USER", DefaultCAPAUser),
 		WorkloadClusterNamespace: getWorkloadClusterNamespace(testLabelPrefix),
 		TestLabelPrefix:          testLabelPrefix,
 		CAPINamespace:            getControllerNamespace("CAPI_NAMESPACE", "capi-system"),

@@ -5,7 +5,7 @@ name: Full Cluster Deployment (ARO)
 #
 # Manual-only trigger. Requires:
 #   - Environment (aro-stage) with:
-#     - Variables: AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID
+#     - Variables: AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, REGION, DEPLOYMENT_ENV
 #     - Secret: AZURE_CLIENT_SECRET
 #   - Repository secret: QUAY_AUTH
 #
@@ -50,6 +50,8 @@ jobs:
         AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
         AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
         AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        REGION: ${{ vars.REGION }}
+        DEPLOYMENT_ENV: ${{ vars.DEPLOYMENT_ENV }}
       run: |
         CONFIGURED=true
         missing=""
@@ -64,6 +66,8 @@ jobs:
         [ -z "$AZURE_SUBSCRIPTION_ID" ] && missing="$missing vars.AZURE_SUBSCRIPTION_ID"
         [ -z "$AZURE_CLIENT_ID" ] && missing="$missing vars.AZURE_CLIENT_ID"
         [ -z "$AZURE_CLIENT_SECRET" ] && missing="$missing secrets.AZURE_CLIENT_SECRET"
+        [ -z "$REGION" ] && missing="$missing vars.REGION"
+        [ -z "$DEPLOYMENT_ENV" ] && missing="$missing vars.DEPLOYMENT_ENV"
         if [ -n "$missing" ]; then
           echo "::warning::Missing required environment configuration:$missing"
           echo "Configure in Settings > Environments > ${{ inputs.environment }}"
@@ -164,6 +168,8 @@ jobs:
         AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
         AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
         AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        REGION: ${{ vars.REGION }}
+        DEPLOYMENT_ENV: ${{ vars.DEPLOYMENT_ENV }}
       run: make test-all
       continue-on-error: true
       id: phase3

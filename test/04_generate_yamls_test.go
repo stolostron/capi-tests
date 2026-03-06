@@ -173,7 +173,12 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 
 	// Set environment variables for the generation script
 	SetEnvVar(t, "DEPLOYMENT_ENV", config.Environment)
-	SetEnvVar(t, "USER", config.CAPZUser)
+	// Set USER env var based on provider (ARO uses CAPZUser, ROSA uses CAPAUser)
+	if config.HasProvider("rosa") {
+		SetEnvVar(t, "USER", config.CAPAUser)
+	} else {
+		SetEnvVar(t, "USER", config.CAPZUser)
+	}
 	SetEnvVar(t, "WORKLOAD_CLUSTER_NAME", config.WorkloadClusterName)
 	SetEnvVar(t, "REGION", config.Region)
 	SetEnvVar(t, "CS_CLUSTER_NAME", config.ClusterNamePrefix)
@@ -209,14 +214,14 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	PrintToTTY("\n=== Generating infrastructure resources ===\n")
 	PrintToTTY("Running infrastructure generation script: %s %s\n", genScriptPath, config.GetOutputDirName())
 	t.Log("Running infrastructure generation script...")
-	output, err := RunCommand(t, "bash", genScriptPath, config.GetOutputDirName())
+	_, err = RunCommandWithStreaming(t, "bash", genScriptPath, config.GetOutputDirName())
 	if err != nil {
-		// On error, show output for debugging (may contain sensitive info, but needed for troubleshooting)
-		t.Errorf("Failed to generate infrastructure resources: %v\nOutput: %s", err, output)
+		// Output already streamed, just report the error
+		t.Errorf("Failed to generate infrastructure resources: %v", err)
 		return
 	}
 
-	// Don't log full output as it may contain Azure resource IDs and other sensitive information
+	// Output already streamed during execution
 	PrintToTTY("✅ Infrastructure generation completed successfully\n")
 	t.Log("Infrastructure generation completed successfully")
 
