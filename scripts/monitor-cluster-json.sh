@@ -95,16 +95,19 @@ if [[ -n "$INFRA_KIND" ]] && [[ -n "$INFRA_NAME" ]]; then
     if [[ "$INFRA_JSON" != "{}" ]]; then
         INFRA_READY=$(echo "$INFRA_JSON" | jq -r '.status.ready // null')
         INFRA_CONDITIONS=$(echo "$INFRA_JSON" | jq '.status.conditions // []')
+        INFRA_RESOURCES=$(echo "$INFRA_JSON" | jq '.status.resources // []')
 
         OUTPUT=$(echo "$OUTPUT" | jq --arg kind "$INFRA_KIND" \
             --arg name "$INFRA_NAME" \
             --argjson ready "$INFRA_READY" \
             --argjson conditions "$INFRA_CONDITIONS" \
+            --argjson resources "$INFRA_RESOURCES" \
             '.infrastructure = {
                 kind: $kind,
                 name: $name,
                 ready: $ready,
-                conditions: $conditions
+                conditions: $conditions,
+                resources: $resources
             }')
     fi
 fi

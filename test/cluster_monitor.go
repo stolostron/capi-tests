@@ -42,6 +42,7 @@ type InfrastructureStatus struct {
 	Name       string         `json:"name"`
 	Ready      bool           `json:"ready"`
 	Conditions []K8sCondition `json:"conditions"`
+	Resources  []interface{}  `json:"resources"` // ASO/ACK resources array
 }
 
 // ControlPlaneStatus represents the control plane resource (AROControlPlane, ROSAControlPlane, etc.)
