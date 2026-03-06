@@ -1462,7 +1462,7 @@ func ApplyWithRetryInNamespace(t *testing.T, kubeContext, namespace, yamlPath st
 		PrintToTTY("[%d/%d] Applying %s to namespace %s...\n", attempt, maxRetries, yamlPath, namespace)
 		t.Logf("Applying %s to namespace %s (attempt %d/%d)", yamlPath, namespace, attempt, maxRetries)
 
-		output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "apply", "--validate=warn", "-f", yamlPath)
+		output, err := RunCommand(t, "kubectl", "--context", kubeContext, "-n", namespace, "apply", "--validate=warn", "-f", yamlPath)
 
 		// Check if apply was successful
 		if err == nil || IsKubectlApplySuccess(output) {

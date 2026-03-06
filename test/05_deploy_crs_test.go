@@ -217,13 +217,13 @@ func TestDeployment_ApplyIndividualFiles(t *testing.T) {
 			}
 
 			// Use ApplyWithRetry to handle transient connection issues
+			// (ApplyWithRetry prints all output including success/failure)
 			if err := ApplyWithRetry(t, context, filePath, DefaultApplyMaxRetries); err != nil {
-				PrintToTTY("❌ Failed to apply %s: %v\n\n", file, err)
 				t.Errorf("Failed to apply %s: %v", file, err)
 				return
 			}
 
-			PrintToTTY("✅ Successfully applied %s\n\n", file)
+			PrintToTTY("\n")
 		})
 	}
 }
@@ -282,7 +282,7 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 		}
 	}
 
-	if data.Nodes != nil && len(data.Nodes) > 0 {
+	if len(data.Nodes) > 0 {
 		PrintToTTY("\n=== Nodes (%d total, %d ready) ===\n", data.Summary.NodeCount, data.GetReadyNodeCount())
 		for _, node := range data.Nodes {
 			PrintToTTY("- %s: ready=%s, roles=%s, version=%s\n",
