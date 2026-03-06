@@ -236,15 +236,9 @@ func TestNewAzureProvider(t *testing.T) {
 		t.Errorf("Expected ASO webhook service, got %q", p.Webhooks[1].ServiceName)
 	}
 
-	// Verify credential secret
-	if p.CredentialSecret == nil {
-		t.Fatal("Expected credential secret to be defined")
-	}
-	if p.CredentialSecret.Name != "aso-controller-settings" {
-		t.Errorf("Expected aso-controller-settings, got %q", p.CredentialSecret.Name)
-	}
-	if len(p.CredentialSecret.RequiredFields) != 4 {
-		t.Errorf("Expected 4 required fields, got %d", len(p.CredentialSecret.RequiredFields))
+	// Verify credential secret is nil (ARO uses namespace-scoped AzureClusterIdentity)
+	if p.CredentialSecret != nil {
+		t.Errorf("Expected credential secret to be nil for ARO (uses namespace-scoped identity), got %+v", p.CredentialSecret)
 	}
 
 	// Verify deployment charts
@@ -272,9 +266,7 @@ func TestNewAzureProvider_Namespace(t *testing.T) {
 			t.Errorf("Webhook %s namespace = %q, expected 'custom-namespace'", wh.DisplayName, wh.Namespace)
 		}
 	}
-	if p.CredentialSecret.Namespace != "custom-namespace" {
-		t.Errorf("Credential secret namespace = %q, expected 'custom-namespace'", p.CredentialSecret.Namespace)
-	}
+	// Note: ARO uses namespace-scoped credentials, so no cluster-scoped credential secret
 }
 
 func TestNewAWSProvider(t *testing.T) {
@@ -309,18 +301,9 @@ func TestNewAWSProvider(t *testing.T) {
 		t.Errorf("Expected webhook port 443, got %d", p.Webhooks[0].Port)
 	}
 
-	// Verify credential secret
-	if p.CredentialSecret == nil {
-		t.Fatal("Expected credential secret to be defined")
-	}
-	if p.CredentialSecret.Name != "capa-manager-bootstrap-credentials" {
-		t.Errorf("Expected capa-manager-bootstrap-credentials, got %q", p.CredentialSecret.Name)
-	}
-	if len(p.CredentialSecret.RequiredFields) != 1 {
-		t.Fatalf("Expected 1 required field, got %d", len(p.CredentialSecret.RequiredFields))
-	}
-	if p.CredentialSecret.RequiredFields[0] != "credentials" {
-		t.Errorf("Expected required field 'credentials', got %q", p.CredentialSecret.RequiredFields[0])
+	// Verify credential secret is nil (ROSA uses namespace-scoped AWSClusterStaticIdentity)
+	if p.CredentialSecret != nil {
+		t.Errorf("Expected credential secret to be nil for ROSA (uses namespace-scoped identity), got %+v", p.CredentialSecret)
 	}
 
 	// Verify YAML generation credentials

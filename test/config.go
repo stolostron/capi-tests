@@ -133,16 +133,9 @@ func NewAzureProvider(namespace string) InfraProvider {
 			{DisplayName: "CAPZ", Namespace: namespace, ServiceName: "capz-webhook-service", Port: 443},
 			{DisplayName: "ASO", Namespace: namespace, ServiceName: "azureserviceoperator-webhook-service", Port: 443},
 		},
-		CredentialSecret: &CredentialSecretDef{
-			Name:      "aso-controller-settings",
-			Namespace: namespace,
-			RequiredFields: []string{
-				"AZURE_TENANT_ID",
-				"AZURE_SUBSCRIPTION_ID",
-				"AZURE_CLIENT_ID",
-				"AZURE_CLIENT_SECRET",
-			},
-		},
+		// Note: ARO uses namespace-scoped AzureClusterIdentity and aso-credential secret
+		// created by gen.sh script (Phase 04), so no cluster-scoped credential secret needed
+		CredentialSecret: nil,
 		DeploymentCharts: []string{"cluster-api-provider-azure"},
 		MCEComponentName: "cluster-api-provider-azure-preview",
 		RequiredTools:    []string{"az"},
@@ -175,11 +168,9 @@ func NewAWSProvider(namespace string) InfraProvider {
 		Webhooks: []WebhookDef{
 			{DisplayName: "CAPA", Namespace: namespace, ServiceName: "capa-webhook-service", Port: 443},
 		},
-		CredentialSecret: &CredentialSecretDef{
-			Name:           "capa-manager-bootstrap-credentials",
-			Namespace:      namespace,
-			RequiredFields: []string{"credentials"},
-		},
+		// Note: ROSA uses namespace-scoped AWSClusterStaticIdentity with credentials
+		// created by gen.sh script (Phase 04), so no cluster-scoped credential secret needed
+		CredentialSecret: nil,
 		DeploymentCharts: []string{"cluster-api-provider-aws"},
 		MCEComponentName: "cluster-api-provider-aws",
 		RequiredTools:    []string{"aws"},

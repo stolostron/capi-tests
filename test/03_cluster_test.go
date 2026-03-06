@@ -546,27 +546,9 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 			PrintToTTY("✅ AWS credentials available\n\n")
 		}
 
-		// Patch provider-specific credentials after deployment
-		if config.HasProvider("aro") {
-			PrintToTTY("=== Patching ASO credentials secret ===\n")
-			context := config.GetKubeContext()
-			if err := PatchASOCredentialsSecret(t, context); err != nil {
-				PrintToTTY("❌ Failed to patch ASO credentials: %v\n", err)
-				t.Errorf("Failed to patch ASO credentials secret: %v", err)
-				return
-			}
-			PrintToTTY("✅ ASO credentials secret patched successfully\n\n")
-		}
-		if config.HasProvider("rosa") {
-			PrintToTTY("=== Patching CAPA credentials secret ===\n")
-			context := config.GetKubeContext()
-			if err := PatchCAPACredentialsSecret(t, context); err != nil {
-				PrintToTTY("❌ Failed to patch CAPA credentials: %v\n", err)
-				t.Errorf("Failed to patch CAPA credentials secret: %v", err)
-				return
-			}
-			PrintToTTY("✅ CAPA credentials secret patched successfully\n\n")
-		}
+		// Note: Both ARO and ROSA use namespace-scoped identity with credentials
+		// created by their respective gen.sh scripts (Phase 04), so no cluster-scoped
+		// credential secret patching is needed here
 	} else {
 		PrintToTTY("✅ Kind cluster '%s' already exists\n\n", config.ManagementClusterName)
 		t.Logf("Kind cluster '%s' already exists", config.ManagementClusterName)
