@@ -341,7 +341,7 @@ _test-all-impl:
 	@$(MAKE) --no-print-directory _verify-workload-cluster RESULTS_DIR=$(RESULTS_DIR) || ( \
 		echo ""; \
 		echo "❌ ERROR: Workload cluster verification phase failed."; \
-		echo "   Previous stages completed successfully but final verification encountered issues."; \
+		echo "   Previous stages completed successfully but workload cluster verification encountered issues."; \
 		echo ""; \
 		exit 1 \
 	)
