@@ -40,6 +40,7 @@ env:
   AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
   REGION: ${{ vars.REGION }}
   DEPLOYMENT_ENV: ${{ vars.DEPLOYMENT_ENV }}
+  CAPZ_USER: mv2
 
 jobs:
   management-cluster:
