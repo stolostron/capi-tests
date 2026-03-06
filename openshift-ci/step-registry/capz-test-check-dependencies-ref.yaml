@@ -6,6 +6,7 @@ ref:
     requests:
       cpu: 100m
       memory: 200Mi
+  timeout: 10m
   documentation: |-
     Runs CAPZ test suite Phase 01 (check dependencies) to validate
     tool availability, authentication, and naming constraints.

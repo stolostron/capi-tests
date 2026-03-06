@@ -7,6 +7,7 @@ ref:
     requests:
       cpu: 100m
       memory: 200Mi
+  timeout: 30m
   documentation: |-
     Teardown safety net for CAPZ test suite. Always runs as a post step,
     even if test steps fail. Cleans up Kind cluster, cloned repository,
