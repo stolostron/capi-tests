@@ -49,8 +49,8 @@ RUN curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o 
 # Install gotestsum for JUnit XML output
 RUN GOFLAGS='' GOBIN=/usr/local/bin go install gotest.tools/gotestsum@${GOTESTSUM_VERSION}
 
-# Ensure Go cache is writable for arbitrary UIDs (OpenShift CI runs as random non-root user)
-RUN mkdir -p /go/.cache && chmod -R 777 /go/.cache
+# Ensure Go directories are writable for arbitrary UIDs (OpenShift CI runs as random non-root user)
+RUN chmod -R 777 /go
 
 # Install clusterctl (with checksum verification via hardcoded digest)
 RUN curl -Lo /usr/local/bin/clusterctl "https://github.com/kubernetes-sigs/cluster-api/releases/download/${CLUSTERCTL_VERSION}/clusterctl-linux-amd64" && \
