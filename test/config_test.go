@@ -207,7 +207,7 @@ func TestGetExpectedFiles(t *testing.T) {
 	config = NewTestConfig()
 	files = config.GetExpectedFiles()
 
-	expectedROSA := []string{"secrets.yaml", "rosa.yaml", "is.yaml"}
+	expectedROSA := []string{"secrets.yaml", "is.yaml", "rosa.yaml"}
 	if len(files) != len(expectedROSA) {
 		t.Fatalf("ROSA: GetExpectedFiles() returned %d files, expected %d: %v", len(files), len(expectedROSA), files)
 	}
@@ -335,7 +335,7 @@ func TestNewAWSProvider(t *testing.T) {
 	}
 
 	// Verify expected files
-	expectedFiles := []string{"secrets.yaml", "rosa.yaml", "is.yaml"}
+	expectedFiles := []string{"secrets.yaml", "is.yaml", "rosa.yaml"}
 	if len(p.ExpectedFiles) != len(expectedFiles) {
 		t.Fatalf("Expected %d files, got %d: %v", len(expectedFiles), len(p.ExpectedFiles), p.ExpectedFiles)
 	}

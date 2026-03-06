@@ -185,7 +185,7 @@ func NewAWSProvider(namespace string) InfraProvider {
 			{Name: "AWS_SECRET_ACCESS_KEY", Desc: "AWS secret access key", Sensitive: true},
 			{Name: "OCM_CLIENT_SECRET", Desc: "OCM OAuth client secret", Sensitive: true},
 		},
-		ExpectedFiles: []string{"secrets.yaml", "rosa.yaml", "is.yaml"},
+		ExpectedFiles: []string{"secrets.yaml", "is.yaml", "rosa.yaml"},
 	}
 }
 
