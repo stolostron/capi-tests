@@ -1,0 +1,12 @@
+ref:
+  as: capz-test-management-cluster
+  from: src
+  commands: capz-test-management-cluster-commands.sh
+  resources:
+    requests:
+      cpu: 100m
+      memory: 200Mi
+  timeout: 30m
+  documentation: |-
+    Runs CAPZ test suite Phase 03 (management cluster) to deploy a Kind
+    cluster with CAPI, CAPZ, and ASO controllers, or validate an external cluster.

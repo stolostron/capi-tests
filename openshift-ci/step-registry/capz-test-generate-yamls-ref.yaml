@@ -1,0 +1,12 @@
+ref:
+  as: capz-test-generate-yamls
+  from: src
+  commands: capz-test-generate-yamls-commands.sh
+  resources:
+    requests:
+      cpu: 100m
+      memory: 200Mi
+  timeout: 20m
+  documentation: |-
+    Runs CAPZ test suite Phase 04 (generate YAMLs) to produce
+    credential and cluster YAML manifests for deployment.

@@ -1,0 +1,12 @@
+ref:
+  as: capz-test-deploy-crs
+  from: src
+  commands: capz-test-deploy-crs-commands.sh
+  resources:
+    requests:
+      cpu: 100m
+      memory: 200Mi
+  timeout: 60m
+  documentation: |-
+    Runs CAPZ test suite Phase 05 (deploy CRs) to apply cluster
+    resources, monitor deployment, and wait for control plane readiness.

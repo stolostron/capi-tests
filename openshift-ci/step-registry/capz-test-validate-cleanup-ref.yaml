@@ -1,0 +1,13 @@
+ref:
+  as: capz-test-validate-cleanup
+  from: src
+  commands: capz-test-validate-cleanup-commands.sh
+  resources:
+    requests:
+      cpu: 100m
+      memory: 200Mi
+  timeout: 20m
+  documentation: |-
+    Runs CAPZ test suite Phase 08 (validate cleanup) to verify cleanup
+    operations for local resources and Azure resources. This phase is
+    informational and does not delete any resources.

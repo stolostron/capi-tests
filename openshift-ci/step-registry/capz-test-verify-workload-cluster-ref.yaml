@@ -1,0 +1,12 @@
+ref:
+  as: capz-test-verify-workload-cluster
+  from: src
+  commands: capz-test-verify-workload-cluster-commands.sh
+  resources:
+    requests:
+      cpu: 100m
+      memory: 200Mi
+  timeout: 20m
+  documentation: |-
+    Runs CAPZ test suite Phase 06 (verify workload cluster) to validate
+    nodes, cluster operators, and overall health of the deployed cluster.
