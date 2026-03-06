@@ -557,6 +557,16 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 			}
 			PrintToTTY("✅ ASO credentials secret patched successfully\n\n")
 		}
+		if config.HasProvider("rosa") {
+			PrintToTTY("=== Patching CAPA credentials secret ===\n")
+			context := config.GetKubeContext()
+			if err := PatchCAPACredentialsSecret(t, context); err != nil {
+				PrintToTTY("❌ Failed to patch CAPA credentials: %v\n", err)
+				t.Errorf("Failed to patch CAPA credentials secret: %v", err)
+				return
+			}
+			PrintToTTY("✅ CAPA credentials secret patched successfully\n\n")
+		}
 	} else {
 		PrintToTTY("✅ Kind cluster '%s' already exists\n\n", config.ManagementClusterName)
 		t.Logf("Kind cluster '%s' already exists", config.ManagementClusterName)

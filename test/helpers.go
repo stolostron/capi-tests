@@ -1,6 +1,7 @@
 package test
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -1149,6 +1150,65 @@ func PatchASOCredentialsSecret(t *testing.T, kubeContext string) error {
 	}
 
 	t.Log("Patched aso-controller-settings secret with Azure credentials")
+	return nil
+}
+
+// PatchCAPACredentialsSecret patches the CAPA manager bootstrap credentials secret
+// with AWS credentials from environment variables. This is required for CAPA to
+// authenticate with AWS to provision ROSA clusters.
+//
+// The secret format follows AWS credentials file format (INI-style) and is base64-encoded.
+// This matches the format created by the ROSA gen.sh script.
+//
+// Returns an error if credentials cannot be obtained or patching fails.
+func PatchCAPACredentialsSecret(t *testing.T, kubeContext string) error {
+	t.Helper()
+
+	// Ensure credentials are available
+	if err := EnsureAWSCredentialsSet(t); err != nil {
+		return fmt.Errorf("failed to ensure AWS credentials: %w", err)
+	}
+
+	accessKeyID := os.Getenv("AWS_ACCESS_KEY_ID")
+	secretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	region := os.Getenv("AWS_REGION")
+
+	if accessKeyID == "" || secretAccessKey == "" || region == "" {
+		return fmt.Errorf("AWS credentials are empty after validation")
+	}
+
+	// Format credentials in INI format (AWS credentials file format)
+	// This matches the format created by scripts/rosa-hcp/gen.sh
+	credentialsContent := fmt.Sprintf("[default]\naws_access_key_id = %s\naws_secret_access_key = %s\nregion = %s\n",
+		accessKeyID, secretAccessKey, region)
+
+	// Base64 encode the credentials
+	credentialsBase64 := base64.StdEncoding.EncodeToString([]byte(credentialsContent))
+
+	// Build the JSON patch to update the credentials field
+	patchJSON := fmt.Sprintf(`{"data":{"credentials":"%s"}}`, credentialsBase64)
+
+	// Get CAPA namespace from provider config
+	config := NewTestConfig()
+	var capaNamespace string
+	for _, provider := range config.InfraProviders {
+		if provider.Name == "rosa" && len(provider.Controllers) > 0 {
+			capaNamespace = provider.Controllers[0].Namespace
+			break
+		}
+	}
+	if capaNamespace == "" {
+		return fmt.Errorf("could not determine CAPA namespace from provider config")
+	}
+
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+		"-n", capaNamespace, "patch", "secret", "capa-manager-bootstrap-credentials",
+		"--type=merge", "-p", patchJSON)
+	if err != nil {
+		return fmt.Errorf("failed to patch capa-manager-bootstrap-credentials secret: %w\nOutput: %s", err, output)
+	}
+
+	t.Log("Patched capa-manager-bootstrap-credentials secret with AWS credentials")
 	return nil
 }
 
