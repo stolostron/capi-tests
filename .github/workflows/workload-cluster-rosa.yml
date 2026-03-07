@@ -33,7 +33,6 @@ env:
   ARO_REPO_BRANCH: capi-tests
   ARO_REPO_DIR: /tmp/cluster-api-installer-aro
   USE_KIND: "true"
-  DEPLOYMENT_ENV: stage
   # Move AWS credentials to job-level to ensure they're available for all make targets
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
