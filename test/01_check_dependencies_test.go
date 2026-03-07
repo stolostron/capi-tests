@@ -23,6 +23,7 @@ func TestCheckDependencies_ToolAvailable(t *testing.T) {
 		"git",
 		"kubectl",
 		"go",
+		"xmllint",
 	}
 
 	// Add provider-specific tools (e.g., "az" for ARO, "aws" for ROSA)
@@ -896,6 +897,10 @@ func getToolInstallInstructions(tool string) string {
 			"  macOS: brew install go\n" +
 			"  Linux: Download from https://go.dev/dl/ and extract to /usr/local\n" +
 			"  All: https://go.dev/doc/install",
+		"xmllint": "Install xmllint (used by generate-summary.sh for JUnit XML parsing):\n" +
+			"  macOS: Pre-installed (part of libxml2)\n" +
+			"  Debian/Ubuntu: sudo apt-get install libxml2-utils\n" +
+			"  Fedora/RHEL: sudo dnf install libxml2",
 		"aws": "Install AWS CLI:\n" +
 			"  macOS: brew install awscli\n" +
 			"  Linux: curl \"https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip\" -o \"awscliv2.zip\" && unzip awscliv2.zip && sudo ./aws/install\n" +
