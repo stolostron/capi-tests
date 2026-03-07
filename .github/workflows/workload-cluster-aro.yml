@@ -19,8 +19,9 @@ on:
         description: 'Environment to deploy to'
         required: true
         type: choice
-        default: 'aro-stage'
+        default: 'aro-int'
         options:
+          - aro-int
           - aro-stage
 
 permissions:
