@@ -127,6 +127,25 @@ func TestVerification_ClusterNodes(t *testing.T) {
 	config := NewTestConfig()
 	kubeconfigPath := getKubeconfigPath(config)
 
+	// Set KUBECONFIG for external cluster mode to check cluster phase
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	}
+
+	context := config.GetKubeContext()
+	provisionedClusterName := config.GetProvisionedClusterName()
+
+	// Check cluster phase before attempting node verification
+	clusterPhase, err := GetClusterPhase(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
+	if err != nil {
+		t.Skipf("Cannot determine cluster phase: %v (cluster resource may not exist)", err)
+	}
+
+	if clusterPhase != ClusterPhaseProvisioned {
+		t.Skipf("Cluster is not ready (current phase: %s), skipping node verification. "+
+			"Wait for cluster provisioning to complete first.", clusterPhase)
+	}
+
 	if !FileExists(kubeconfigPath) {
 		t.Skipf("Kubeconfig not available at %s, run TestVerification_RetrieveKubeconfig first", kubeconfigPath)
 	}
@@ -199,6 +218,24 @@ func TestVerification_ClusterVersion(t *testing.T) {
 	config := NewTestConfig()
 	kubeconfigPath := getKubeconfigPath(config)
 
+	// Set KUBECONFIG for external cluster mode to check cluster phase
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	}
+
+	context := config.GetKubeContext()
+	provisionedClusterName := config.GetProvisionedClusterName()
+
+	// Check cluster phase before attempting version check
+	clusterPhase, err := GetClusterPhase(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
+	if err != nil {
+		t.Skipf("Cannot determine cluster phase: %v (cluster resource may not exist)", err)
+	}
+
+	if clusterPhase != ClusterPhaseProvisioned {
+		t.Skipf("Cluster is not ready (current phase: %s), skipping version check", clusterPhase)
+	}
+
 	if !FileExists(kubeconfigPath) {
 		t.Skipf("Kubeconfig not available at %s, run TestVerification_RetrieveKubeconfig first", kubeconfigPath)
 	}
@@ -222,6 +259,24 @@ func TestVerification_ClusterOperators(t *testing.T) {
 	config := NewTestConfig()
 	kubeconfigPath := getKubeconfigPath(config)
 
+	// Set KUBECONFIG for external cluster mode to check cluster phase
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	}
+
+	context := config.GetKubeContext()
+	provisionedClusterName := config.GetProvisionedClusterName()
+
+	// Check cluster phase before attempting operator check
+	clusterPhase, err := GetClusterPhase(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
+	if err != nil {
+		t.Skipf("Cannot determine cluster phase: %v (cluster resource may not exist)", err)
+	}
+
+	if clusterPhase != ClusterPhaseProvisioned {
+		t.Skipf("Cluster is not ready (current phase: %s), skipping operator check", clusterPhase)
+	}
+
 	if !FileExists(kubeconfigPath) {
 		t.Skipf("Kubeconfig not available at %s, run TestVerification_RetrieveKubeconfig first", kubeconfigPath)
 	}
@@ -244,6 +299,24 @@ func TestVerification_ClusterHealth(t *testing.T) {
 
 	config := NewTestConfig()
 	kubeconfigPath := getKubeconfigPath(config)
+
+	// Set KUBECONFIG for external cluster mode to check cluster phase
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	}
+
+	context := config.GetKubeContext()
+	provisionedClusterName := config.GetProvisionedClusterName()
+
+	// Check cluster phase before attempting health check
+	clusterPhase, err := GetClusterPhase(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
+	if err != nil {
+		t.Skipf("Cannot determine cluster phase: %v (cluster resource may not exist)", err)
+	}
+
+	if clusterPhase != ClusterPhaseProvisioned {
+		t.Skipf("Cluster is not ready (current phase: %s), skipping health check", clusterPhase)
+	}
 
 	if !FileExists(kubeconfigPath) {
 		t.Skipf("Kubeconfig not available at %s, run TestVerification_RetrieveKubeconfig first", kubeconfigPath)

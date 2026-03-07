@@ -187,16 +187,33 @@ func TestIsKindMode(t *testing.T) {
 }
 
 func TestGetExpectedFiles(t *testing.T) {
+	// Test ARO (default provider)
+	t.Setenv("INFRA_PROVIDER", "aro")
 	config := NewTestConfig()
 	files := config.GetExpectedFiles()
 
 	expected := []string{"credentials.yaml", "aro.yaml"}
 	if len(files) != len(expected) {
-		t.Fatalf("GetExpectedFiles() returned %d files, expected %d: %v", len(files), len(expected), files)
+		t.Fatalf("ARO: GetExpectedFiles() returned %d files, expected %d: %v", len(files), len(expected), files)
 	}
 	for i, file := range files {
 		if file != expected[i] {
-			t.Errorf("GetExpectedFiles()[%d] = %q, expected %q", i, file, expected[i])
+			t.Errorf("ARO: GetExpectedFiles()[%d] = %q, expected %q", i, file, expected[i])
+		}
+	}
+
+	// Test ROSA
+	t.Setenv("INFRA_PROVIDER", "rosa")
+	config = NewTestConfig()
+	files = config.GetExpectedFiles()
+
+	expectedROSA := []string{"secrets.yaml", "is.yaml", "rosa.yaml"}
+	if len(files) != len(expectedROSA) {
+		t.Fatalf("ROSA: GetExpectedFiles() returned %d files, expected %d: %v", len(files), len(expectedROSA), files)
+	}
+	for i, file := range files {
+		if file != expectedROSA[i] {
+			t.Errorf("ROSA: GetExpectedFiles()[%d] = %q, expected %q", i, file, expectedROSA[i])
 		}
 	}
 }
@@ -236,15 +253,20 @@ func TestNewAzureProvider(t *testing.T) {
 		t.Errorf("Expected ASO webhook service, got %q", p.Webhooks[1].ServiceName)
 	}
 
-	// Verify credential secret
-	if p.CredentialSecret == nil {
-		t.Fatal("Expected credential secret to be defined")
+	// Verify credential secret is nil (ARO uses namespace-scoped AzureClusterIdentity)
+	if p.CredentialSecret != nil {
+		t.Errorf("Expected credential secret to be nil for ARO (uses namespace-scoped identity), got %+v", p.CredentialSecret)
 	}
-	if p.CredentialSecret.Name != "aso-controller-settings" {
-		t.Errorf("Expected aso-controller-settings, got %q", p.CredentialSecret.Name)
+
+	// Verify expected files
+	expectedFiles := []string{"credentials.yaml", "aro.yaml"}
+	if len(p.ExpectedFiles) != len(expectedFiles) {
+		t.Fatalf("Expected %d files, got %d: %v", len(expectedFiles), len(p.ExpectedFiles), p.ExpectedFiles)
 	}
-	if len(p.CredentialSecret.RequiredFields) != 4 {
-		t.Errorf("Expected 4 required fields, got %d", len(p.CredentialSecret.RequiredFields))
+	for i, file := range p.ExpectedFiles {
+		if file != expectedFiles[i] {
+			t.Errorf("ExpectedFiles[%d] = %q, expected %q", i, file, expectedFiles[i])
+		}
 	}
 
 	// Verify deployment charts
@@ -272,9 +294,7 @@ func TestNewAzureProvider_Namespace(t *testing.T) {
 			t.Errorf("Webhook %s namespace = %q, expected 'custom-namespace'", wh.DisplayName, wh.Namespace)
 		}
 	}
-	if p.CredentialSecret.Namespace != "custom-namespace" {
-		t.Errorf("Credential secret namespace = %q, expected 'custom-namespace'", p.CredentialSecret.Namespace)
-	}
+	// Note: ARO uses namespace-scoped credentials, so no cluster-scoped credential secret
 }
 
 func TestNewAWSProvider(t *testing.T) {
@@ -309,27 +329,50 @@ func TestNewAWSProvider(t *testing.T) {
 		t.Errorf("Expected webhook port 443, got %d", p.Webhooks[0].Port)
 	}
 
-	// Verify credential secret
+	// Verify credential secret (ROSA uses cluster-scoped AWSClusterStaticIdentity in capa-system namespace)
 	if p.CredentialSecret == nil {
-		t.Fatal("Expected credential secret to be defined")
+		t.Fatal("Expected credential secret to be set for ROSA")
 	}
 	if p.CredentialSecret.Name != "capa-manager-bootstrap-credentials" {
-		t.Errorf("Expected capa-manager-bootstrap-credentials, got %q", p.CredentialSecret.Name)
+		t.Errorf("Expected ROSA credential secret name 'capa-manager-bootstrap-credentials', got %q", p.CredentialSecret.Name)
 	}
-	if len(p.CredentialSecret.RequiredFields) != 1 {
-		t.Fatalf("Expected 1 required field, got %d", len(p.CredentialSecret.RequiredFields))
+	if p.CredentialSecret.Namespace != "capa-system" {
+		t.Errorf("Expected ROSA credential secret namespace 'capa-system', got %q", p.CredentialSecret.Namespace)
 	}
-	if p.CredentialSecret.RequiredFields[0] != "credentials" {
-		t.Errorf("Expected required field 'credentials', got %q", p.CredentialSecret.RequiredFields[0])
+
+	// Verify expected files
+	expectedFiles := []string{"secrets.yaml", "is.yaml", "rosa.yaml"}
+	if len(p.ExpectedFiles) != len(expectedFiles) {
+		t.Fatalf("Expected %d files, got %d: %v", len(expectedFiles), len(p.ExpectedFiles), p.ExpectedFiles)
 	}
-	if len(p.CredentialSecret.RequiredEnvVars) != 2 {
-		t.Fatalf("Expected 2 required env vars, got %d", len(p.CredentialSecret.RequiredEnvVars))
+	for i, file := range p.ExpectedFiles {
+		if file != expectedFiles[i] {
+			t.Errorf("ExpectedFiles[%d] = %q, expected %q", i, file, expectedFiles[i])
+		}
 	}
-	if p.CredentialSecret.RequiredEnvVars[0] != "AWS_ACCESS_KEY_ID" {
-		t.Errorf("Expected first env var 'AWS_ACCESS_KEY_ID', got %q", p.CredentialSecret.RequiredEnvVars[0])
+
+	// Verify YAML generation credentials
+	if len(p.YAMLGenCredentials) != 6 {
+		t.Fatalf("Expected 6 YAML gen credentials, got %d", len(p.YAMLGenCredentials))
 	}
-	if p.CredentialSecret.RequiredEnvVars[1] != "AWS_SECRET_ACCESS_KEY" {
-		t.Errorf("Expected second env var 'AWS_SECRET_ACCESS_KEY', got %q", p.CredentialSecret.RequiredEnvVars[1])
+	expectedCreds := []struct {
+		name      string
+		sensitive bool
+	}{
+		{"AWS_REGION", false},
+		{"OCM_API_URL", false},
+		{"OCM_CLIENT_ID", false},
+		{"AWS_ACCESS_KEY_ID", false},
+		{"AWS_SECRET_ACCESS_KEY", true},
+		{"OCM_CLIENT_SECRET", true},
+	}
+	for i, expected := range expectedCreds {
+		if p.YAMLGenCredentials[i].Name != expected.name {
+			t.Errorf("Expected YAMLGenCredentials[%d].Name = %q, got %q", i, expected.name, p.YAMLGenCredentials[i].Name)
+		}
+		if p.YAMLGenCredentials[i].Sensitive != expected.sensitive {
+			t.Errorf("Expected YAMLGenCredentials[%d].Sensitive = %v, got %v", i, expected.sensitive, p.YAMLGenCredentials[i].Sensitive)
+		}
 	}
 
 	// Verify deployment charts

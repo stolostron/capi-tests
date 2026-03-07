@@ -1,6 +1,7 @@
 package test
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -1152,6 +1153,65 @@ func PatchASOCredentialsSecret(t *testing.T, kubeContext string) error {
 	return nil
 }
 
+// PatchCAPACredentialsSecret patches the CAPA manager bootstrap credentials secret
+// with AWS credentials from environment variables. This is required for CAPA to
+// authenticate with AWS to provision ROSA clusters.
+//
+// The secret format follows AWS credentials file format (INI-style) and is base64-encoded.
+// This matches the format created by the ROSA gen.sh script.
+//
+// Returns an error if credentials cannot be obtained or patching fails.
+func PatchCAPACredentialsSecret(t *testing.T, kubeContext string) error {
+	t.Helper()
+
+	// Ensure credentials are available
+	if err := EnsureAWSCredentialsSet(t); err != nil {
+		return fmt.Errorf("failed to ensure AWS credentials: %w", err)
+	}
+
+	accessKeyID := os.Getenv("AWS_ACCESS_KEY_ID")
+	secretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	region := os.Getenv("AWS_REGION")
+
+	if accessKeyID == "" || secretAccessKey == "" || region == "" {
+		return fmt.Errorf("AWS credentials are empty after validation")
+	}
+
+	// Format credentials in INI format (AWS credentials file format)
+	// This matches the format created by scripts/rosa-hcp/gen.sh
+	credentialsContent := fmt.Sprintf("[default]\naws_access_key_id = %s\naws_secret_access_key = %s\nregion = %s\n",
+		accessKeyID, secretAccessKey, region)
+
+	// Base64 encode the credentials
+	credentialsBase64 := base64.StdEncoding.EncodeToString([]byte(credentialsContent))
+
+	// Build the JSON patch to update the credentials field
+	patchJSON := fmt.Sprintf(`{"data":{"credentials":"%s"}}`, credentialsBase64)
+
+	// Get CAPA namespace from provider config
+	config := NewTestConfig()
+	var capaNamespace string
+	for _, provider := range config.InfraProviders {
+		if provider.Name == "rosa" && len(provider.Controllers) > 0 {
+			capaNamespace = provider.Controllers[0].Namespace
+			break
+		}
+	}
+	if capaNamespace == "" {
+		return fmt.Errorf("could not determine CAPA namespace from provider config")
+	}
+
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+		"-n", capaNamespace, "patch", "secret", "capa-manager-bootstrap-credentials",
+		"--type=merge", "-p", patchJSON)
+	if err != nil {
+		return fmt.Errorf("failed to patch capa-manager-bootstrap-credentials secret: %w\nOutput: %s", err, output)
+	}
+
+	t.Log("Patched capa-manager-bootstrap-credentials secret with AWS credentials")
+	return nil
+}
+
 // MaxDomainPrefixLength is the maximum allowed length for ARO domain prefix.
 // Azure/ARO enforces this limit on the AROControlPlane spec.domainPrefix field.
 const MaxDomainPrefixLength = 15
@@ -1381,6 +1441,63 @@ func ApplyWithRetry(t *testing.T, kubeContext, yamlPath string, maxRetries int) 
 	return ApplyWithRetryInNamespace(t, kubeContext, config.WorkloadClusterNamespace, yamlPath, maxRetries)
 }
 
+// ApplyWithRetryMultiNamespace applies a YAML file with retry logic without specifying a namespace.
+// Use this for YAML files that contain resources in multiple namespaces or cluster-scoped resources.
+// For ROSA, this is needed for secrets.yaml which contains:
+//   - AWSClusterStaticIdentity (cluster-scoped)
+//   - capa-manager-bootstrap-credentials (capa-system namespace)
+//   - rosa-creds-secret (workload cluster namespace)
+func ApplyWithRetryMultiNamespace(t *testing.T, kubeContext, yamlPath string, maxRetries int) error {
+	t.Helper()
+
+	if maxRetries <= 0 {
+		maxRetries = DefaultApplyMaxRetries
+	}
+
+	baseDelay := DefaultApplyRetryDelay
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		PrintToTTY("[%d/%d] Applying %s (multi-namespace)...\n", attempt, maxRetries, yamlPath)
+		t.Logf("Applying %s (multi-namespace, attempt %d/%d)", yamlPath, attempt, maxRetries)
+
+		output, err := RunCommand(t, "kubectl", "--context", kubeContext, "apply", "--validate=warn", "-f", yamlPath)
+
+		// Check if apply was successful
+		if err == nil || IsKubectlApplySuccess(output) {
+			PrintToTTY("✅ Successfully applied %s\n", yamlPath)
+			t.Logf("Successfully applied %s", yamlPath)
+			return nil
+		}
+
+		// Determine if error is retryable
+		if !isRetryableKubectlError(output, err) {
+			PrintToTTY("❌ Non-retryable error applying %s: %v\n", yamlPath, err)
+			t.Logf("Non-retryable error applying %s: %v\nOutput: %s", yamlPath, err, output)
+			return fmt.Errorf("failed to apply %s: %w\nOutput: %s", yamlPath, err, output)
+		}
+
+		// Don't sleep after last attempt
+		if attempt < maxRetries {
+			delay := baseDelay * time.Duration(attempt)
+			if delay > 60*time.Second {
+				delay = 60 * time.Second
+			}
+
+			PrintToTTY("[%d/%d] ⚠️  Retryable error: %v\n", attempt, maxRetries, err)
+			PrintToTTY("[%d/%d] ⏳ Waiting %v before retry...\n", attempt, maxRetries, delay.Round(time.Second))
+			t.Logf("Apply failed (attempt %d/%d): %v, retrying in %v", attempt, maxRetries, err, delay.Round(time.Second))
+
+			time.Sleep(delay)
+		} else {
+			PrintToTTY("❌ Failed to apply %s after %d attempts: %v\n", yamlPath, maxRetries, err)
+			t.Logf("Failed to apply %s after %d attempts: %v\nOutput: %s", yamlPath, maxRetries, err, output)
+			return fmt.Errorf("failed to apply %s after %d attempts: %w\nOutput: %s", yamlPath, maxRetries, err, output)
+		}
+	}
+
+	return fmt.Errorf("failed to apply %s: max retries exhausted", yamlPath)
+}
+
 // ApplyWithRetryInNamespace applies a YAML file with retry logic to a specific namespace.
 // Parameters:
 //   - kubeContext: kubectl context to use
@@ -1402,7 +1519,7 @@ func ApplyWithRetryInNamespace(t *testing.T, kubeContext, namespace, yamlPath st
 		PrintToTTY("[%d/%d] Applying %s to namespace %s...\n", attempt, maxRetries, yamlPath, namespace)
 		t.Logf("Applying %s to namespace %s (attempt %d/%d)", yamlPath, namespace, attempt, maxRetries)
 
-		output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "apply", "--validate=warn", "-f", yamlPath)
+		output, err := RunCommand(t, "kubectl", "--context", kubeContext, "-n", namespace, "apply", "--validate=warn", "-f", yamlPath)
 
 		// Check if apply was successful
 		if err == nil || IsKubectlApplySuccess(output) {
@@ -3116,9 +3233,9 @@ func FormatMismatchedClustersError(mismatched []string, expectedPrefix, namespac
 
 	fmt.Fprintf(&sb, "\nCurrent config expects cluster names starting with: %s\n\n", expectedPrefix)
 
-	sb.WriteString("This typically happens when CAPZ_USER was changed without cleaning up\n")
-	sb.WriteString("the previous cluster resources. Deploying new clusters alongside old ones\n")
-	sb.WriteString("can cause conflicts and unexpected behavior.\n\n")
+	sb.WriteString("This typically happens when configuration (CAPZ_USER/CAPA_USER) was changed\n")
+	sb.WriteString("without cleaning up previous cluster resources. Deploying new clusters\n")
+	sb.WriteString("alongside old ones can cause conflicts and unexpected behavior.\n\n")
 
 	sb.WriteString("TO CLEAN UP:\n\n")
 

@@ -9,6 +9,64 @@ import (
 	"time"
 )
 
+// TestCluster_01_ValidateKubeconfig validates external cluster kubeconfig if provided.
+// This test runs before cluster creation to validate cluster access credentials.
+func TestCluster_01_ValidateKubeconfig(t *testing.T) {
+	config := NewTestConfig()
+
+	if !config.IsExternalCluster() {
+		t.Skip("Not using external cluster (USE_KUBECONFIG not set)")
+	}
+
+	PrintTestHeader(t, "TestCluster_01_ValidateKubeconfig",
+		"Validate external cluster kubeconfig and connectivity")
+
+	// Set KUBECONFIG for kubectl
+	SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	context := config.GetKubeContext()
+
+	PrintToTTY("\n=== Validating external cluster credentials ===\n")
+	PrintToTTY("Kubeconfig: %s\n", config.UseKubeconfig)
+	PrintToTTY("Context: %s\n\n", context)
+
+	output, err := RunCommand(t, "kubectl", "--context", context, "get", "nodes")
+	if err != nil {
+		PrintToTTY("❌ Failed to connect to external cluster: %v\n", err)
+		t.Fatalf("Cannot connect to external cluster: %v", err)
+	}
+
+	PrintToTTY("✅ External cluster nodes:\n%s\n\n", output)
+	t.Logf("External cluster nodes:\n%s", output)
+}
+
+// TestCluster_02_ValidateQuayAuth validates QUAY_AUTH for Kind cluster creation.
+// This test runs before Kind cluster creation to ensure private image pull will work.
+func TestCluster_02_ValidateQuayAuth(t *testing.T) {
+	config := NewTestConfig()
+
+	// Only run for Kind mode
+	if !config.IsKindMode() {
+		t.Skip("Not using Kind mode (USE_KIND not set)")
+	}
+
+	PrintTestHeader(t, "TestCluster_02_ValidateQuayAuth",
+		"Validate QUAY_AUTH for private image pulls in Kind cluster")
+
+	quayAuth := os.Getenv("QUAY_AUTH")
+	if quayAuth == "" {
+		PrintToTTY("\n⚠️  QUAY_AUTH is not set\n")
+		PrintToTTY("Kind cluster will be created without Quay registry credentials.\n")
+		PrintToTTY("Private image pulls (e.g., quay.io/acm-d/) may fail with ErrImagePull.\n\n")
+		PrintToTTY("To set QUAY_AUTH:\n")
+		PrintToTTY("  export QUAY_AUTH=<your-quay-auth-token>\n\n")
+		t.Log("Warning: QUAY_AUTH not set - private image pulls may fail")
+	} else {
+		PrintToTTY("\n✅ QUAY_AUTH is set\n")
+		PrintToTTY("Kind cluster will have access to private Quay registries.\n\n")
+		t.Log("QUAY_AUTH is configured")
+	}
+}
+
 // TestExternalCluster_01_Connectivity validates the external cluster is reachable.
 // This test runs only when USE_KUBECONFIG is set, validating pre-installed controllers.
 func TestExternalCluster_01_Connectivity(t *testing.T) {
@@ -488,17 +546,9 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 			PrintToTTY("✅ AWS credentials available\n\n")
 		}
 
-		// Patch provider-specific credentials after deployment
-		if config.HasProvider("aro") {
-			PrintToTTY("=== Patching ASO credentials secret ===\n")
-			context := config.GetKubeContext()
-			if err := PatchASOCredentialsSecret(t, context); err != nil {
-				PrintToTTY("❌ Failed to patch ASO credentials: %v\n", err)
-				t.Errorf("Failed to patch ASO credentials secret: %v", err)
-				return
-			}
-			PrintToTTY("✅ ASO credentials secret patched successfully\n\n")
-		}
+		// Note: Both ARO and ROSA use namespace-scoped identity with credentials
+		// created by their respective gen.sh scripts (Phase 04), so no cluster-scoped
+		// credential secret patching is needed here
 	} else {
 		PrintToTTY("✅ Kind cluster '%s' already exists\n\n", config.ManagementClusterName)
 		t.Logf("Kind cluster '%s' already exists", config.ManagementClusterName)
@@ -791,9 +841,10 @@ func TestKindCluster_ProviderCredentialsConfigured(t *testing.T) {
 
 		t.Run(provider.Name, func(t *testing.T) {
 			// Skip if required environment variables are not set
-			for _, envVar := range cred.RequiredEnvVars {
-				if os.Getenv(envVar) == "" {
-					t.Skipf("Skipped: required env var %s not set", envVar)
+			// Check YAMLGenCredentials which contains the env vars needed for deployment
+			for _, envReq := range provider.YAMLGenCredentials {
+				if os.Getenv(envReq.Name) == "" {
+					t.Skipf("Skipped: required env var %s not set", envReq.Name)
 				}
 			}
 
