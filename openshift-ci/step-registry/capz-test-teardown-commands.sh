@@ -7,4 +7,5 @@ set -o xtrace
 # Deletes Kind cluster, cloned repository, kubeconfig files, and Azure resources.
 # Uses best_effort so cleanup failures do not mask test failures.
 # Does NOT delete ${ARTIFACT_DIR} - only the local results/ directory.
+export ARO_REPO_DIR="${SHARED_DIR}/cluster-api-installer-aro"
 FORCE=1 make clean-all || true

@@ -8,4 +8,5 @@ set -o xtrace
 # Clones cluster-api-installer repository and verifies scripts.
 # Produces JUnit XML in ${ARTIFACT_DIR} for Prow to collect.
 export TEST_RESULTS_DIR="${ARTIFACT_DIR}"
+export ARO_REPO_DIR="${SHARED_DIR}/cluster-api-installer-aro"
 make _setup RESULTS_DIR="${ARTIFACT_DIR}"
