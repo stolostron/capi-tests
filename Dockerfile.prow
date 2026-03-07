@@ -9,9 +9,10 @@ ARG CLUSTERCTL_VERSION=v1.12.3
 ARG CLUSTERCTL_SHA256=9b75287b15656a62ece65c8ad7491412cebfd30c78e085a9d61396a50df17349
 ARG GOTESTSUM_VERSION=v1.13.0
 
-# Install podman (docker alternative) and OpenShift CLI
+# Install Docker CE (required by Kind for nested container creation) and OpenShift CLI
 ARG OC_VERSION=latest
-RUN dnf install -y podman && dnf clean all
+RUN dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo && \
+    dnf install -y docker-ce docker-ce-cli containerd.io && dnf clean all
 RUN curl -fsSL "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/${OC_VERSION}/openshift-client-linux.tar.gz" -o /tmp/oc.tar.gz && \
     tar xz -C /usr/local/bin -f /tmp/oc.tar.gz oc && \
     chmod +x /usr/local/bin/oc && \
