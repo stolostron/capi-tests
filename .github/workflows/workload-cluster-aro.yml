@@ -42,6 +42,7 @@ env:
   REGION: ${{ vars.REGION }}
   DEPLOYMENT_ENV: ${{ vars.DEPLOYMENT_ENV }}
   CAPZ_USER: mv2
+  QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
 
 jobs:
   management-cluster:
@@ -53,14 +54,6 @@ jobs:
     steps:
     - name: Validate Azure credentials
       id: secrets
-      env:
-        QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
-        AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-        AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-        AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-        REGION: ${{ vars.REGION }}
-        DEPLOYMENT_ENV: ${{ vars.DEPLOYMENT_ENV }}
       run: |
         CONFIGURED=true
         missing=""
@@ -100,7 +93,9 @@ jobs:
         cache: true
 
     - name: Install dependencies
-      run: go mod download
+      run: |
+        sudo apt-get update && sudo apt-get install -y libxml2-utils
+        go mod download
 
     - name: Install OpenShift CLI
       run: |

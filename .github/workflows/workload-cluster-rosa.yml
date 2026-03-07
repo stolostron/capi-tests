@@ -33,6 +33,7 @@ env:
   ARO_REPO_BRANCH: capi-tests
   ARO_REPO_DIR: /tmp/cluster-api-installer-aro
   USE_KIND: "true"
+  DEPLOYMENT_ENV: stage
   # Move AWS credentials to job-level to ensure they're available for all make targets
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -40,6 +41,9 @@ env:
   OCM_API_URL: ${{ vars.OCM_API_URL }}
   OCM_CLIENT_ID: ${{ vars.OCM_CLIENT_ID }}
   OCM_CLIENT_SECRET: ${{ secrets.OCM_CLIENT_SECRET }}
+  DEPLOYMENT_ENV: ${{ vars.DEPLOYMENT_ENV }}
+  CAPA_USER: mv2
+  QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
 
 jobs:
   management-cluster:
@@ -51,14 +55,6 @@ jobs:
     steps:
     - name: Validate AWS secrets/variables
       id: secrets
-      env:
-        QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ vars.AWS_REGION }}
-        OCM_API_URL: ${{ vars.OCM_API_URL }}
-        OCM_CLIENT_ID: ${{ vars.OCM_CLIENT_ID }}
-        OCM_CLIENT_SECRET: ${{ secrets.OCM_CLIENT_SECRET }}
       run: |
         CONFIGURED=true
         missing=""
@@ -98,7 +94,9 @@ jobs:
         cache: true
 
     - name: Install dependencies
-      run: go mod download
+      run: |
+        sudo apt-get update && sudo apt-get install -y libxml2-utils
+        go mod download
 
     - name: Install OpenShift CLI
       run: |
