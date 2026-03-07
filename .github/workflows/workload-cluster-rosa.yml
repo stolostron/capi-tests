@@ -48,7 +48,7 @@ jobs:
   management-cluster:
     name: Full Cluster (ROSA/CAPA)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     environment: ${{ inputs.environment }}
 
     steps:
