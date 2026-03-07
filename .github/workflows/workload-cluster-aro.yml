@@ -5,7 +5,7 @@ name: Full Cluster Deployment (ARO)
 #
 # Manual-only trigger. Requires:
 #   - Environment (aro-stage) with:
-#     - Variables: AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID
+#     - Variables: AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, REGION, DEPLOYMENT_ENV
 #     - Secret: AZURE_CLIENT_SECRET
 #   - Repository secret: QUAY_AUTH
 #
@@ -19,8 +19,9 @@ on:
         description: 'Environment to deploy to'
         required: true
         type: choice
-        default: 'aro-stage'
+        default: 'aro-int'
         options:
+          - aro-int
           - aro-stage
 
 permissions:
@@ -33,6 +34,15 @@ env:
   ARO_REPO_BRANCH: capi-tests
   ARO_REPO_DIR: /tmp/cluster-api-installer-aro
   USE_KIND: "true"
+  # Move Azure credentials to job-level to ensure they're available for all make targets
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  REGION: ${{ vars.REGION }}
+  DEPLOYMENT_ENV: ${{ vars.DEPLOYMENT_ENV }}
+  CAPZ_USER: mv2
+  QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
 
 jobs:
   management-cluster:
@@ -44,12 +54,6 @@ jobs:
     steps:
     - name: Validate Azure credentials
       id: secrets
-      env:
-        QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
-        AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-        AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-        AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       run: |
         CONFIGURED=true
         missing=""
@@ -64,6 +68,8 @@ jobs:
         [ -z "$AZURE_SUBSCRIPTION_ID" ] && missing="$missing vars.AZURE_SUBSCRIPTION_ID"
         [ -z "$AZURE_CLIENT_ID" ] && missing="$missing vars.AZURE_CLIENT_ID"
         [ -z "$AZURE_CLIENT_SECRET" ] && missing="$missing secrets.AZURE_CLIENT_SECRET"
+        [ -z "$REGION" ] && missing="$missing vars.REGION"
+        [ -z "$DEPLOYMENT_ENV" ] && missing="$missing vars.DEPLOYMENT_ENV"
         if [ -n "$missing" ]; then
           echo "::warning::Missing required environment configuration:$missing"
           echo "Configure in Settings > Environments > ${{ inputs.environment }}"
@@ -87,7 +93,9 @@ jobs:
         cache: true
 
     - name: Install dependencies
-      run: go mod download
+      run: |
+        sudo apt-get update && sudo apt-get install -y libxml2-utils
+        go mod download
 
     - name: Install OpenShift CLI
       run: |
@@ -159,11 +167,7 @@ jobs:
         echo "DOCKER_SECRETS=${DOCKER_SECRETS}" >> $GITHUB_ENV
 
     - name: 'Run test-all'
-      env:
-        AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-        AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-        AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      # Azure credentials and config are set at job level (see env: above)
       run: make test-all
       continue-on-error: true
       id: phase3
