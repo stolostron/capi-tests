@@ -1,0 +1,15 @@
+workflow:
+  as: capz-test-e2e
+  steps:
+    pre:
+    - ref: ipi-conf
+    - ref: ipi-conf-azure
+    - ref: ipi-install
+    - ref: capz-test-install-controllers
+    test:
+    - ref: capz-test-e2e
+    post:
+    - ref: ipi-deprovision-deprovision
+  documentation: |-
+    Provisions an Azure IPI cluster, installs CAPI/CAPZ/ASO controllers,
+    runs the full CAPZ e2e test suite, then deprovisions the cluster.

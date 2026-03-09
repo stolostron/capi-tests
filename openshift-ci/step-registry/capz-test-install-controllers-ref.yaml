@@ -1,0 +1,12 @@
+ref:
+  as: capz-test-install-controllers
+  from: src
+  commands: capz-test-install-controllers-commands.sh
+  resources:
+    requests:
+      cpu: 100m
+      memory: 200Mi
+  documentation: |-
+    Installs CAPI/CAPZ/ASO controllers on the CI-provisioned cluster
+    using the cluster-api-installer deploy-charts.sh script.
+    Prepares the cluster as a CAPI management cluster for e2e tests.
