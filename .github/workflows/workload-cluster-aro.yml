@@ -5,7 +5,7 @@ name: Full Cluster Deployment (ARO)
 #
 # Manual-only trigger. Requires:
 #   - Environment (aro-stage) with:
-#     - Variables: AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID
+#     - Variables: AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, REGION, DEPLOYMENT_ENV
 #     - Secret: AZURE_CLIENT_SECRET
 #   - Repository secret: QUAY_AUTH
 #
@@ -21,6 +21,7 @@ on:
         type: choice
         default: 'aro-stage'
         options:
+          - aro-int
           - aro-stage
 
 permissions:
@@ -33,23 +34,29 @@ env:
   ARO_REPO_BRANCH: capi-tests
   ARO_REPO_DIR: /tmp/cluster-api-installer-aro
   USE_KIND: "true"
+  TEST_TIMEOUT_MINUTES: 120
+  # Global variables (not environment-specific)
+  QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
+  CAPI_USER: mv2
 
 jobs:
   management-cluster:
     name: Full Cluster (ARO/CAPZ)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 240  # 2x TEST_TIMEOUT_MINUTES (120m * 2)
     environment: ${{ inputs.environment }}
+    env:
+      # Environment-specific Azure credentials and config
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      REGION: ${{ vars.REGION }}
+      DEPLOYMENT_ENV: ${{ vars.DEPLOYMENT_ENV }}
 
     steps:
     - name: Validate Azure credentials
       id: secrets
-      env:
-        QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
-        AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-        AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-        AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       run: |
         CONFIGURED=true
         missing=""
@@ -64,6 +71,8 @@ jobs:
         [ -z "$AZURE_SUBSCRIPTION_ID" ] && missing="$missing vars.AZURE_SUBSCRIPTION_ID"
         [ -z "$AZURE_CLIENT_ID" ] && missing="$missing vars.AZURE_CLIENT_ID"
         [ -z "$AZURE_CLIENT_SECRET" ] && missing="$missing secrets.AZURE_CLIENT_SECRET"
+        [ -z "$REGION" ] && missing="$missing vars.REGION"
+        [ -z "$DEPLOYMENT_ENV" ] && missing="$missing vars.DEPLOYMENT_ENV"
         if [ -n "$missing" ]; then
           echo "::warning::Missing required environment configuration:$missing"
           echo "Configure in Settings > Environments > ${{ inputs.environment }}"
@@ -93,6 +102,7 @@ jobs:
 
     - name: Install OpenShift CLI
       run: |
+        rm -f openshift-client-linux.tar.gz sha256sum.txt
         wget -q https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz
         wget -q https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/sha256sum.txt
         grep 'openshift-client-linux.tar.gz$' sha256sum.txt | sha256sum -c -
@@ -134,8 +144,6 @@ jobs:
         version: 'v3.16.0'
 
     - name: 'Setup Docker pull secrets for Kind'
-      env:
-        QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
       run: |
         # Create secure temporary directory for Docker config
         DOCKER_SECRETS=$(mktemp -d)
@@ -161,11 +169,9 @@ jobs:
         echo "DOCKER_SECRETS=${DOCKER_SECRETS}" >> $GITHUB_ENV
 
     - name: 'Run test-all'
+      # Azure credentials and config are set at job level (see env: above)
       env:
-        AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-        AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-        AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        DEPLOYMENT_TIMEOUT: "${{ env.TEST_TIMEOUT_MINUTES }}m"
       run: make test-all
       continue-on-error: true
       id: phase3
@@ -358,3 +364,8 @@ jobs:
           EXIT=1
         fi
         exit $EXIT
+
+    - name: 'Cleanup resources'
+      if: always()
+      run: FORCE=1 make clean-all
+      continue-on-error: true

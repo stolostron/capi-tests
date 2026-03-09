@@ -451,9 +451,10 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 			echo "Results directory not found (already clean)."; \
 		fi; \
 		echo ""; \
-		echo "--- Azure Resources ---"; \
-		echo "Target resource group: $(CLEANUP_RESOURCE_GROUP)"; \
-		echo ""; \
+		if [ "$(INFRA_PROVIDER)" = "aro" ]; then \
+			echo "--- Azure Resources ---"; \
+			echo "Target resource group: $(CLEANUP_RESOURCE_GROUP)"; \
+			echo ""; \
 		if ! command -v az >/dev/null 2>&1; then \
 			echo "⚠️  Azure CLI (az) not available - skipping Azure cleanup"; \
 		elif ! az account show >/dev/null 2>&1; then \
@@ -493,6 +494,9 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 				echo "Tip: Run 'make clean-azure' to clean all Azure resources (including orphaned)."; \
 			fi; \
 		fi; \
+		else \
+			echo "Skipping Azure cleanup (INFRA_PROVIDER=$(INFRA_PROVIDER), not aro)"; \
+		fi; \
 		echo ""; \
 		if [ -f "$(DEPLOYMENT_STATE_FILE)" ]; then \
 			echo "Removing deployment state file..."; \
@@ -516,8 +520,8 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 	fi
 	@echo "Deleting all test resources without prompts..."
 	@echo ""
-	@# Delete all Azure resources (resource group + orphaned resources + AD apps + SPs)
-	@$(MAKE) --no-print-directory _clean-azure-force
+	@# Delete all Azure resources (resource group + orphaned resources + AD apps + SPs) - only for ARO
+	@$(MAKE) --no-print-directory _clean-azure-conditional
 	@echo ""
 	@# Delete management cluster
 	@if kind get clusters 2>/dev/null | grep -q "^$(CLEANUP_MANAGEMENT_CLUSTER)$$"; then \
@@ -578,6 +582,15 @@ clean-azure: ## Delete all Azure resources (resource group, orphaned resources, 
 .PHONY: _clean-azure-force
 _clean-azure-force:
 	@./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CAPI_USER)" --force 2>/dev/null || true
+
+# Internal target: conditionally clean Azure resources (only for ARO)
+.PHONY: _clean-azure-conditional
+_clean-azure-conditional:
+	@if [ "$(INFRA_PROVIDER)" = "aro" ]; then \
+		$(MAKE) --no-print-directory _clean-azure-force; \
+	else \
+		echo "Skipping Azure cleanup (INFRA_PROVIDER=$(INFRA_PROVIDER), not aro)"; \
+	fi
 
 setup-submodule: ## Add cluster-api-installer as a git submodule
 	git submodule add -b ARO-ASO https://github.com/RadekCap/cluster-api-installer.git vendor/cluster-api-installer || true
