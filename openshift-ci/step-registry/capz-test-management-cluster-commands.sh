@@ -7,6 +7,7 @@ set -o xtrace
 source openshift-ci/capz-test-env.sh
 
 # Phase 03: Management Cluster
-# With USE_KUBECONFIG set, skips Kind creation and validates the external cluster.
+# With USE_KUBECONFIG set, skips Kind creation and validates the external cluster
+# with pre-installed CAPI/CAPZ/ASO controllers (installed by capz-test-install-controllers).
 export TEST_RESULTS_DIR="${ARTIFACT_DIR}"
 make _management_cluster RESULTS_DIR="${ARTIFACT_DIR}"

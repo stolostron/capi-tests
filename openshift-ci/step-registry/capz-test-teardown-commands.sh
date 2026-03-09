@@ -6,7 +6,7 @@ set -o xtrace
 source openshift-ci/capz-test-env.sh
 
 # Teardown: Safety net cleanup (post step - always runs)
-# Deletes Kind cluster, cloned repository, kubeconfig files, and Azure resources.
+# Cleans up Azure resources created by the test suite (workload cluster, resource groups).
+# The management cluster itself is deprovisioned by the ipi-azure-post chain.
 # Uses best_effort so cleanup failures do not mask test failures.
-# Does NOT delete ${ARTIFACT_DIR} - only the local results/ directory.
-FORCE=1 make clean-all || true
+FORCE=1 make clean-azure || true

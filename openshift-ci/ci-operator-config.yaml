@@ -22,8 +22,8 @@ tests:
     - ref: capz-test-install-controllers
     - ref: capz-test-check-dependencies
     - ref: capz-test-setup
-    test:
     - ref: capz-test-management-cluster
+    test:
     - ref: capz-test-generate-yamls
     - ref: capz-test-deploy-crs
     - ref: capz-test-verify-workload-cluster

@@ -21,4 +21,3 @@ export ARO_REPO_DIR="/tmp/cluster-api-installer-aro"
 if [[ -n "${SHARED_DIR:-}" ]]; then
   export USE_KUBECONFIG="${SHARED_DIR}/kubeconfig"
 fi
-export USE_K8S=false

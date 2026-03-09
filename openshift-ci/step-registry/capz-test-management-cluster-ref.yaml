@@ -6,7 +6,7 @@ ref:
     requests:
       cpu: 100m
       memory: 200Mi
-  timeout: 30m
+  timeout: 45m
   documentation: |-
-    Runs CAPZ test suite Phase 03 (management cluster) to validate the
-    external IPI-provisioned cluster with pre-installed CAPI/CAPZ/ASO controllers.
+    Validates the IPI-provisioned cluster with pre-installed CAPI/CAPZ/ASO
+    controllers. Controllers are installed by the capz-test-install-controllers step.
