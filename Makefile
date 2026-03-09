@@ -474,17 +474,17 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 		fi; \
 		echo ""; \
 		echo "--- Orphaned Azure Resources ---"; \
-		echo "These are resources with prefix '$(CAPZ_USER)' that may exist outside the resource group."; \
+		echo "These are resources with prefix '$(CS_CLUSTER_NAME)' that may exist outside the resource group."; \
 		echo ""; \
 		if ! command -v az >/dev/null 2>&1; then \
 			echo "⚠️  Azure CLI (az) not available - skipping orphaned resources cleanup"; \
 		elif ! az account show >/dev/null 2>&1; then \
 			echo "⚠️  Not logged in to Azure - skipping orphaned resources cleanup"; \
 		else \
-			read -p "Search for and delete orphaned Azure resources with prefix '$(CAPZ_USER)'? [y/N] " -n 1 -r; \
+			read -p "Search for and delete orphaned Azure resources with prefix '$(CS_CLUSTER_NAME)'? [y/N] " -n 1 -r; \
 			echo ""; \
 			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-				./scripts/cleanup-azure-resources.sh --prefix "$(CAPZ_USER)" || echo "Orphaned resources cleanup encountered an error"; \
+				./scripts/cleanup-azure-resources.sh --prefix "$(CS_CLUSTER_NAME)" || echo "Orphaned resources cleanup encountered an error"; \
 			else \
 				echo "Skipped orphaned resources cleanup."; \
 				echo "Tip: Run 'make clean-azure' to clean all Azure resources (including orphaned)."; \
@@ -566,15 +566,15 @@ clean-azure: ## Delete all Azure resources (resource group, orphaned resources, 
 		echo ""; \
 	fi
 	@if [ "$(FORCE)" = "1" ]; then \
-		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CAPZ_USER)" --force; \
+		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CS_CLUSTER_NAME)" --force; \
 	else \
-		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CAPZ_USER)"; \
+		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CS_CLUSTER_NAME)"; \
 	fi
 
 # Internal target: force delete all Azure resources without prompting
 .PHONY: _clean-azure-force
 _clean-azure-force:
-	@./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CAPZ_USER)" --force 2>/dev/null || true
+	@./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CS_CLUSTER_NAME)" --force 2>/dev/null || true
 
 setup-submodule: ## Add cluster-api-installer as a git submodule
 	git submodule add -b ARO-ASO https://github.com/RadekCap/cluster-api-installer.git vendor/cluster-api-installer || true

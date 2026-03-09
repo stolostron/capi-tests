@@ -15,27 +15,40 @@
 #   ./scripts/cleanup-azure-resources.sh [OPTIONS]
 #
 # Options:
-#   --prefix PREFIX        Resource name prefix to search for (default: from CAPZ_USER env var or 'rcap')
+#   --prefix PREFIX        Resource name prefix to search for (default: CS_CLUSTER_NAME or CAPZ_USER-DEPLOYMENT_ENV)
 #   --resource-group RG    Also delete this Azure resource group
+#   --match-mode MODE      How to match resource names: 'startswith' (default, safer) or 'contains' (broader)
 #   --dry-run              Show what would be deleted without actually deleting
 #   --force                Skip confirmation prompts
 #   --help                 Show this help message
 #
 # Environment variables:
-#   CAPZ_USER          Default prefix for resource names (e.g., 'rcap')
+#   CS_CLUSTER_NAME    Full cluster name prefix (e.g., 'rcapd-stage') - preferred, most specific
+#   CAPZ_USER          User prefix for resource names (e.g., 'rcapd') - fallback if CS_CLUSTER_NAME not set
+#   DEPLOYMENT_ENV     Deployment environment (default: 'stage') - combined with CAPZ_USER as fallback
 #   AZURE_SUBSCRIPTION_ID  Azure subscription ID to search in
 #
 # Examples:
 #   ./scripts/cleanup-azure-resources.sh --dry-run
-#   ./scripts/cleanup-azure-resources.sh --prefix rcapd --force
+#   ./scripts/cleanup-azure-resources.sh --prefix rcapd-stage --force
 #   ./scripts/cleanup-azure-resources.sh --resource-group myapp-resgroup --prefix myapp
-#   CAPZ_USER=myuser ./scripts/cleanup-azure-resources.sh
+#   CS_CLUSTER_NAME=rcapd-stage ./scripts/cleanup-azure-resources.sh
+#   ./scripts/cleanup-azure-resources.sh --prefix rcapd --match-mode contains  # broader search
 
 set -euo pipefail
 
 # Default values
-PREFIX="${CAPZ_USER:-rcap}"
+# Prefer CS_CLUSTER_NAME (e.g., rcapd-stage) for more specific matching.
+# Fall back to CAPZ_USER-DEPLOYMENT_ENV, then just CAPZ_USER.
+if [[ -n "${CS_CLUSTER_NAME:-}" ]]; then
+    PREFIX="${CS_CLUSTER_NAME}"
+elif [[ -n "${CAPZ_USER:-}" ]]; then
+    PREFIX="${CAPZ_USER}-${DEPLOYMENT_ENV:-stage}"
+else
+    PREFIX="rcap"
+fi
 RESOURCE_GROUP=""
+MATCH_MODE="startswith"
 DRY_RUN=false
 FORCE=false
 
@@ -54,7 +67,7 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Show usage
 usage() {
-    head -35 "$0" | grep '^#' | sed 's/^# \?//'
+    head -36 "$0" | grep '^#' | sed 's/^# \?//'
     exit 0
 }
 
@@ -67,6 +80,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --resource-group)
             RESOURCE_GROUP="$2"
+            shift 2
+            ;;
+        --match-mode)
+            MATCH_MODE="$2"
+            if [[ "$MATCH_MODE" != "startswith" && "$MATCH_MODE" != "contains" ]]; then
+                print_error "Invalid match mode '${MATCH_MODE}': must be 'startswith' or 'contains'"
+                exit 1
+            fi
             shift 2
             ;;
         --dry-run)
@@ -166,16 +187,17 @@ delete_resource_group() {
 find_resources() {
     local prefix="$1"
 
-    print_info "Searching for Azure resources with prefix '${prefix}'..." >&2
+    print_info "Searching for Azure resources with prefix '${prefix}' (mode: ${MATCH_MODE})..." >&2
 
-    # Query Azure Resource Graph for resources matching the pattern
-    # We search for:
-    # 1. Resources with names starting with the prefix (e.g., rcapa, rcapb, rcapc, etc.)
-    # 2. Resources with names containing the prefix pattern
-
-    # Build the query to find resources with the naming pattern
-    # The pattern is: prefix followed by optional suffix (e.g., rcapa, rcapb, rcap-stage, etc.)
-    local query="Resources | where name contains '${prefix}' | project id, name, type, resourceGroup, subscriptionId | order by type asc, name asc"
+    # Build the query based on match mode:
+    # - startswith (default): safer, only matches resources whose names begin with the prefix
+    # - contains: broader, matches resources whose names contain the prefix anywhere
+    local query
+    if [[ "$MATCH_MODE" == "startswith" ]]; then
+        query="Resources | where name startswith '${prefix}' | project id, name, type, resourceGroup, subscriptionId | order by type asc, name asc"
+    else
+        query="Resources | where name contains '${prefix}' | project id, name, type, resourceGroup, subscriptionId | order by type asc, name asc"
+    fi
 
     local resources_json
     resources_json=$(az graph query -q "$query" -o json 2>/dev/null)
@@ -544,6 +566,7 @@ main() {
     echo "========================================"
     echo ""
     print_info "Resource prefix: ${PREFIX}"
+    print_info "Match mode: ${MATCH_MODE}"
     if [[ -n "$RESOURCE_GROUP" ]]; then
         print_info "Resource group: ${RESOURCE_GROUP}"
     fi
