@@ -17,9 +17,8 @@ tests:
   cluster_profile: azure4
   steps:
     pre:
-    - ref: ipi-conf
-    - ref: ipi-conf-azure
-    - ref: ipi-install
+    - chain: ipi-conf-azure
+    - chain: ipi-install
     - ref: capz-test-install-controllers
     - ref: capz-test-check-dependencies
     - ref: capz-test-setup
