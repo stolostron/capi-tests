@@ -8,5 +8,5 @@ ref:
       memory: 200Mi
   timeout: 30m
   documentation: |-
-    Runs CAPZ test suite Phase 03 (management cluster) to deploy a Kind
-    cluster with CAPI, CAPZ, and ASO controllers, or validate an external cluster.
+    Runs CAPZ test suite Phase 03 (management cluster) to validate the
+    external IPI-provisioned cluster with pre-installed CAPI/CAPZ/ASO controllers.

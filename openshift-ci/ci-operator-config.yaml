@@ -21,9 +21,17 @@ tests:
     - ref: ipi-conf-azure
     - ref: ipi-install
     - ref: capz-test-install-controllers
+    - ref: capz-test-check-dependencies
+    - ref: capz-test-setup
     test:
-    - ref: capz-test-e2e
+    - ref: capz-test-management-cluster
+    - ref: capz-test-generate-yamls
+    - ref: capz-test-deploy-crs
+    - ref: capz-test-verify-workload-cluster
+    - ref: capz-test-delete-workload-cluster
+    - ref: capz-test-validate-cleanup
     post:
+    - ref: capz-test-teardown
     - ref: ipi-deprovision-deprovision
   timeout: 4h0m0s
 zz_generated_metadata:
