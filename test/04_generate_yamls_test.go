@@ -209,6 +209,8 @@ func copyYAMLsToResultsDir(t *testing.T, outputDir string, expectedFiles []strin
 	t.Helper()
 
 	resultsDir := GetResultsDir()
+	latestDir := "results/latest"
+	copyToLatest := resultsDir != latestDir && DirExists(latestDir)
 
 	for _, file := range expectedFiles {
 		srcPath := filepath.Join(outputDir, file)
@@ -229,23 +231,13 @@ func copyYAMLsToResultsDir(t *testing.T, outputDir string, expectedFiles []strin
 		} else {
 			t.Logf("Copied %s to results directory: %s", file, destPath)
 		}
-	}
 
-	// Also copy to results/latest if it exists and differs from resultsDir
-	latestDir := "results/latest"
-	if resultsDir != latestDir && DirExists(latestDir) {
-		for _, file := range expectedFiles {
-			srcPath := filepath.Join(outputDir, file)
-			if !FileExists(srcPath) {
-				continue
+		// Also copy to results/latest if it differs from resultsDir
+		if copyToLatest {
+			latestPath := filepath.Join(latestDir, file)
+			if err := os.WriteFile(latestPath, data, 0600); err != nil {
+				t.Logf("Warning: failed to copy %s to latest: %v", file, err)
 			}
-			// #nosec G304 -- path constructed from trusted outputDir and expected file names
-			data, err := os.ReadFile(srcPath)
-			if err != nil {
-				continue
-			}
-			destPath := filepath.Join(latestDir, file)
-			_ = os.WriteFile(destPath, data, 0600)
 		}
 	}
 }
