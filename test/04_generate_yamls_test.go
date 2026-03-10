@@ -3,7 +3,10 @@ package test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // infrastructureGenerationSucceeded tracks whether TestInfrastructure_GenerateResources completed successfully
@@ -202,17 +205,11 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	}
 }
 
-// sensitiveFiles lists YAML files that contain secrets and must not be copied to the results
-// directory. These files contain Kubernetes Secrets with credentials (e.g., Azure service
-// principal credentials) and must stay in the generation output directory only.
-var sensitiveFiles = map[string]bool{
-	"credentials.yaml": true,
-}
-
 // copyYAMLsToResultsDir copies generated YAML files to the results directory for visibility.
 // This ensures generated infrastructure definitions are available alongside other test artifacts
 // (controller logs, test summaries) in the results directory.
-// Files listed in sensitiveFiles are skipped to avoid leaking secrets into artifacts.
+// Secrets are redacted before writing — any Kubernetes Secret resource has its data/stringData
+// values replaced with "***REDACTED***".
 func copyYAMLsToResultsDir(t *testing.T, outputDir string, expectedFiles []string) {
 	t.Helper()
 
@@ -221,11 +218,6 @@ func copyYAMLsToResultsDir(t *testing.T, outputDir string, expectedFiles []strin
 	copyToLatest := resultsDir != latestDir && DirExists(latestDir)
 
 	for _, file := range expectedFiles {
-		if sensitiveFiles[file] {
-			t.Logf("Skipping %s (contains secrets)", file)
-			continue
-		}
-
 		srcPath := filepath.Join(outputDir, file)
 		if !FileExists(srcPath) {
 			continue
@@ -238,8 +230,13 @@ func copyYAMLsToResultsDir(t *testing.T, outputDir string, expectedFiles []strin
 			continue
 		}
 
+		redacted, didRedact := redactSecrets(data)
+		if didRedact {
+			t.Logf("Redacted secrets from %s before copying to results", file)
+		}
+
 		destPath := filepath.Join(resultsDir, file)
-		if err := os.WriteFile(destPath, data, 0600); err != nil {
+		if err := os.WriteFile(destPath, redacted, 0600); err != nil {
 			t.Logf("Warning: failed to copy %s to results: %v", file, err)
 		} else {
 			t.Logf("Copied %s to results directory: %s", file, destPath)
@@ -248,11 +245,66 @@ func copyYAMLsToResultsDir(t *testing.T, outputDir string, expectedFiles []strin
 		// Also copy to results/latest if it differs from resultsDir
 		if copyToLatest {
 			latestPath := filepath.Join(latestDir, file)
-			if err := os.WriteFile(latestPath, data, 0600); err != nil {
+			if err := os.WriteFile(latestPath, redacted, 0600); err != nil {
 				t.Logf("Warning: failed to copy %s to latest: %v", file, err)
 			}
 		}
 	}
+}
+
+// redactSecrets processes multi-document YAML content and redacts sensitive values.
+// For Kubernetes Secret resources (kind: Secret), all values in data and stringData
+// are replaced with "***REDACTED***". Other document types are passed through unchanged.
+// Returns the redacted content and whether any redaction was performed.
+func redactSecrets(content []byte) ([]byte, bool) {
+	docs := strings.Split(string(content), "---")
+	redacted := false
+	var result []string
+
+	for _, doc := range docs {
+		trimmed := strings.TrimSpace(doc)
+		if trimmed == "" {
+			result = append(result, doc)
+			continue
+		}
+
+		var parsed map[string]any
+		if err := yaml.Unmarshal([]byte(trimmed), &parsed); err != nil {
+			result = append(result, doc)
+			continue
+		}
+
+		kind, _ := parsed["kind"].(string)
+		if kind != "Secret" {
+			result = append(result, doc)
+			continue
+		}
+
+		// Redact data values
+		if data, ok := parsed["data"].(map[string]any); ok {
+			for key := range data {
+				data[key] = "***REDACTED***"
+			}
+			redacted = true
+		}
+
+		// Redact stringData values
+		if stringData, ok := parsed["stringData"].(map[string]any); ok {
+			for key := range stringData {
+				stringData[key] = "***REDACTED***"
+			}
+			redacted = true
+		}
+
+		out, err := yaml.Marshal(parsed)
+		if err != nil {
+			result = append(result, doc)
+			continue
+		}
+		result = append(result, "\n"+string(out))
+	}
+
+	return []byte(strings.Join(result, "---")), redacted
 }
 
 // TestInfrastructure_VerifyCredentialsYAML verifies credentials.yaml exists and is valid
