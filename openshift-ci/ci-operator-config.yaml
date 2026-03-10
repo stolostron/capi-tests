@@ -26,6 +26,8 @@ tests:
 - as: capz-e2e
   cluster_profile: azure4
   steps:
+    dependencies:
+      RELEASE_IMAGE_LATEST: release:latest
     pre:
     - chain: ipi-conf-azure
     - chain: ipi-install
