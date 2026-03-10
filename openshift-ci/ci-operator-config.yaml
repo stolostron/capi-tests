@@ -4,10 +4,15 @@ build_root:
     namespace: ocp
     tag: rhel-9-golang-1.24-openshift-4.20
 releases:
+  initial:
+    integration:
+      name: "4.19"
+      namespace: ocp
   latest:
-    release:
-      channel: stable
-      version: "4.19"
+    integration:
+      include_built_images: true
+      name: "4.19"
+      namespace: ocp
 resources:
   '*':
     requests:
