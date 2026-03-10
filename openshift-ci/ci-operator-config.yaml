@@ -30,10 +30,11 @@ tests:
     - ref: capz-test-management-cluster
     test:
     - ref: capz-test-generate-yamls
-    - ref: capz-test-deploy-crs
-    - ref: capz-test-verify-workload-cluster
-    - ref: capz-test-delete-workload-cluster
-    - ref: capz-test-validate-cleanup
+    # TODO: Re-enable once Azure subscription capacity is available
+    # - ref: capz-test-deploy-crs
+    # - ref: capz-test-verify-workload-cluster
+    # - ref: capz-test-delete-workload-cluster
+    # - ref: capz-test-validate-cleanup
     post:
     - ref: capz-test-teardown
     - ref: ipi-deprovision-deprovision
