@@ -17,20 +17,20 @@ LEVEL 0 - YAML Inputs (no dependencies, applied by kubectl)
 ├── Secret/aso-credential                    (credentials.yaml)
 ├── Secret/cluster-identity-secret           (credentials.yaml)
 ├── AzureClusterIdentity/cluster-identity    (credentials.yaml)
-├── ResourceGroup/rcape-stage-resgroup       (aro.yaml - AROCluster.spec.resources[])
-└── Cluster/rcape-stage                      (aro.yaml - top-level CAPI resource)
+├── ResourceGroup/catee-stage-resgroup       (aro.yaml - AROCluster.spec.resources[])
+└── Cluster/catee-stage                      (aro.yaml - top-level CAPI resource)
 
 LEVEL 1 - Direct children of Cluster or ResourceGroup
 │
-├─── owned by Cluster/rcape-stage:
-│    ├── AROCluster/rcape-stage                    (infrastructure ref)
-│    ├── AROControlPlane/rcape-stage-control-plane  (control plane ref)
-│    └── MachinePool/rcape-stage-mp-0              (worker pool)
+├─── owned by Cluster/catee-stage:
+│    ├── AROCluster/catee-stage                    (infrastructure ref)
+│    ├── AROControlPlane/catee-stage-control-plane  (control plane ref)
+│    └── MachinePool/catee-stage-mp-0              (worker pool)
 │
-└─── owned by ResourceGroup/rcape-stage-resgroup:
-     ├── VirtualNetwork/rcape-stage-vnet
-     ├── NetworkSecurityGroup/rcape-stage-nsg
-     ├── Vault/rcape-stage-kv
+└─── owned by ResourceGroup/catee-stage-resgroup:
+     ├── VirtualNetwork/catee-stage-vnet
+     ├── NetworkSecurityGroup/catee-stage-nsg
+     ├── Vault/catee-stage-kv
      └── UserAssignedIdentity (x13):
           ├── cp-control-plane
           ├── cp-cluster-api-azure
@@ -49,10 +49,10 @@ LEVEL 1 - Direct children of Cluster or ResourceGroup
 LEVEL 2 - Children of Level 1 resources
 │
 ├─── owned by VirtualNetwork:
-│    └── VirtualNetworksSubnet/rcape-stage-vnet-rcape-stage-subnet
+│    └── VirtualNetworksSubnet/catee-stage-vnet-catee-stage-subnet
 │
 ├─── owned by MachinePool:
-│    └── AROMachinePool/rcape-stage-mp-0
+│    └── AROMachinePool/catee-stage-mp-0
 │
 ├─── RoleAssignments on NSG (owned by NetworkSecurityGroup, x5):
 │    ├── cloudcontrollermanagerroleid-nsg
@@ -95,7 +95,7 @@ LEVEL 3 - Children of Level 2 resources
 │    └── hcpservicemanagedidentityroleid-subnet
 │
 └─── owned by AROControlPlane + ResourceGroup:
-     └── HcpOpenShiftCluster/rcape-stage    (the actual Azure HCP cluster)
+     └── HcpOpenShiftCluster/catee-stage    (the actual Azure HCP cluster)
 
 LEVEL 4 - Final resources (depend on HCP cluster)
 │
@@ -105,7 +105,7 @@ LEVEL 4 - Final resources (depend on HCP cluster)
 LEVEL 5 - Controller-generated (identity mappings, kubeconfig)
 │
 ├── ConfigMap/identity-map-* (x13)   - one per managed identity
-└── Secret/rcape-stage-kubeconfig    - workload cluster access
+└── Secret/catee-stage-kubeconfig    - workload cluster access
 ```
 
 ### Summary of dependency chain:
@@ -135,11 +135,11 @@ ResourceGroup ──┬── VNet ──→ Subnet ──→ RoleAssignments (x
 | Secret | aso-credential |
 | Secret | cluster-identity-secret |
 | AzureClusterIdentity | cluster-identity |
-| ResourceGroup | rcape-stage-resgroup |
-| NetworkSecurityGroup | rcape-stage-nsg |
-| VirtualNetwork | rcape-stage-vnet |
-| VirtualNetworksSubnet | rcape-stage-vnet-rcape-stage-subnet |
-| Vault | rcape-stage-kv |
+| ResourceGroup | catee-stage-resgroup |
+| NetworkSecurityGroup | catee-stage-nsg |
+| VirtualNetwork | catee-stage-vnet |
+| VirtualNetworksSubnet | catee-stage-vnet-catee-stage-subnet |
+| Vault | catee-stage-kv |
 | UserAssignedIdentity | cp-cluster-api-azure |
 | UserAssignedIdentity | cp-control-plane |
 
@@ -147,11 +147,11 @@ ResourceGroup ──┬── VNet ──→ Subnet ──→ RoleAssignments (x
 
 | Resource | Name |
 |----------|------|
-| Cluster | rcape-stage |
-| AROCluster | rcape-stage |
-| AROControlPlane | rcape-stage-control-plane |
-| MachinePool | rcape-stage-mp-0 |
-| AROMachinePool | rcape-stage-mp-0 |
+| Cluster | catee-stage |
+| AROCluster | catee-stage |
+| AROControlPlane | catee-stage-control-plane |
+| MachinePool | catee-stage-mp-0 |
+| AROMachinePool | catee-stage-mp-0 |
 | UserAssignedIdentity (x11) | remaining managed identities |
 | RoleAssignment (x28) | all role assignments |
 
@@ -183,8 +183,8 @@ ResourceGroup ──┬── VNet ──→ Subnet ──→ RoleAssignments (x
 | Time | Event |
 |------|-------|
 | T+112s | RoleAssignmentReady = True |
-| T+112s | HcpOpenShiftCluster/rcape-stage created |
-| T+113s | Secret/rcape-stage-kubeconfig generated |
+| T+112s | HcpOpenShiftCluster/catee-stage created |
+| T+113s | Secret/catee-stage-kubeconfig generated |
 
 ### T+10m+ (18:03:28) - HCP cluster ready
 

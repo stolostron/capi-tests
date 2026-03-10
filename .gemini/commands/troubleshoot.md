@@ -119,7 +119,7 @@ make test-<phase>
 For deployment/infrastructure failures:
 
 ```bash
-# Check resource group exists (name is ${CS_CLUSTER_NAME}-resgroup, e.g., rcap-stage-resgroup)
+# Check resource group exists (name is ${CS_CLUSTER_NAME}-resgroup, e.g., cate-stage-resgroup)
 az group show --name <CS_CLUSTER_NAME>-resgroup
 
 # Check for conflicting resources

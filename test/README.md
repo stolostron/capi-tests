@@ -95,7 +95,7 @@ Tests are configured via environment variables:
 - `REGION` - Azure region (default: `uksouth`)
 - `AZURE_SUBSCRIPTION_NAME` - Azure subscription ID
 - `DEPLOYMENT_ENV` - Deployment environment (stage/prod) (default: `stage`)
-- `CAPI_USER` - User identifier for domain prefix (default: `rcap`)
+- `CAPI_USER` - User identifier for domain prefix (default: `cate`)
 - `WORKLOAD_CLUSTER_NAMESPACE` - Namespace for workload cluster resources (auto-generated if not set)
 - `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` - Prefix for auto-generated namespace (default: provider-specific — `capz-test` for ARO, `capa-test` for ROSA)
 

@@ -98,7 +98,7 @@ Tests are configured via environment variables:
 - `REGION` - Azure region (default: `uksouth`)
 - `AZURE_SUBSCRIPTION_NAME` - Azure subscription ID
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`)
-- `CAPI_USER` - User identifier for domain prefix (default: `rcap`)
+- `CAPI_USER` - User identifier for domain prefix (default: `cate`)
 - `WORKLOAD_CLUSTER_NAMESPACE` - Namespace for workload cluster resources. If set, uses the exact value provided (for resume scenarios). If not set, auto-generates a unique namespace per test run using `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` format.
 - `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` - Prefix for auto-generated namespace (default: provider-specific — `capz-test` for ARO, `capa-test` for ROSA). Only used when `WORKLOAD_CLUSTER_NAMESPACE` is not set.
 
@@ -118,9 +118,9 @@ The following variables must be **RFC 1123 compliant** to avoid deployment failu
 
 **Example valid values:**
 ```bash
-export CAPI_USER=rcap        # Valid
+export CAPI_USER=cate        # Valid
 export DEPLOYMENT_ENV=stage  # Valid
-export CS_CLUSTER_NAME=rcap-stage  # Valid
+export CS_CLUSTER_NAME=cate-stage  # Valid
 ```
 
 **Example invalid values:**
@@ -352,7 +352,7 @@ The `make clean` command will interactively ask you to confirm deletion of:
 - Cluster-api-installer repository clone in `/tmp`
 - Kubeconfig files in `/tmp`
 - Results directory
-- **Azure resource group** (`${CS_CLUSTER_NAME}-resgroup`, e.g., `rcap-stage-resgroup`)
+- **Azure resource group** (`${CS_CLUSTER_NAME}-resgroup`, e.g., `cate-stage-resgroup`)
 
 This allows you to selectively clean up resources while preserving anything you want to keep.
 
@@ -364,7 +364,7 @@ For automated workflows (CI/CD, scripts) or quick full resets, use:
 - Uses `--no-wait` for non-blocking deletion (deletion continues in background)
 - Gracefully skips if Azure CLI is not installed or not logged in
 - Checks if resource group exists before attempting deletion
-- The resource group name is derived from `${CAPI_USER}-${DEPLOYMENT_ENV}-resgroup` (default: `rcap-stage-resgroup`)
+- The resource group name is derived from `${CAPI_USER}-${DEPLOYMENT_ENV}-resgroup` (default: `cate-stage-resgroup`)
 
 ## Integration with cluster-api-installer
 

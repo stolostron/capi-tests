@@ -131,7 +131,7 @@ To actually clean up resources, use:
 |----------|---------|-------------|
 | `MANAGEMENT_CLUSTER_NAME` | `capz-tests-stage` (ARO) / `capa-tests-stage` (ROSA) | Kind cluster name to check |
 | `ARO_REPO_DIR` | `/tmp/cluster-api-installer-aro` | Repository path to check |
-| `CAPI_USER` | `rcap` | Prefix for Azure resource discovery |
+| `CAPI_USER` | `cate` | Prefix for Azure resource discovery |
 | `CS_CLUSTER_NAME` | `${CAPI_USER}-${DEPLOYMENT_ENV}` | Resource group name prefix |
 
 ---

@@ -82,15 +82,15 @@ Common causes:
 
 ```
 === RUN   TestDeletion_WaitForClusterDeletion
-Waiting for cluster 'rcap-stage' to be deleted...
+Waiting for cluster 'cate-stage' to be deleted...
 Namespace: <namespace> | Timeout: 45m0s | Poll interval: 30s
-Azure Resource Group: rcap-stage-resgroup
+Azure Resource Group: cate-stage-resgroup
 
 [1] Cluster: exists | AROControlPlane: deleting | MachinePool: deleting | RG: exists
 [2] Cluster: exists | AROControlPlane: deleted | MachinePool: deleting | RG: exists
 ...
 [15] Cluster: deleted
 
-Cluster 'rcap-stage' has been deleted (took 7m30s)
+Cluster 'cate-stage' has been deleted (took 7m30s)
 --- PASS: TestDeletion_WaitForClusterDeletion (450.12s)
 ```

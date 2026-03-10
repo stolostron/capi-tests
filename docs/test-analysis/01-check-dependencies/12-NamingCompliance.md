@@ -23,7 +23,7 @@ Kubernetes resource names must follow RFC 1123 subdomain naming:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `CAPI_USER` | `rcap` | User identifier for domain prefix |
+| `CAPI_USER` | `cate` | User identifier for domain prefix |
 | `DEPLOYMENT_ENV` | `stage` | Environment identifier |
 | `CS_CLUSTER_NAME` | `${CAPI_USER}-${DEPLOYMENT_ENV}` | Cluster name prefix |
 | `WORKLOAD_CLUSTER_NAMESPACE` | _(auto-generated)_ | Namespace for workload cluster resources |
@@ -90,11 +90,11 @@ This test catches naming issues in Phase 1 (seconds) instead of Phase 5 (45+ min
 ```
 === RUN   TestCheckDependencies_NamingCompliance
 === RUN   TestCheckDependencies_NamingCompliance/CAPI_USER
-    01_check_dependencies_test.go:577: CAPI_USER 'rcap' is RFC 1123 compliant
+    01_check_dependencies_test.go:577: CAPI_USER 'cate' is RFC 1123 compliant
 === RUN   TestCheckDependencies_NamingCompliance/DEPLOYMENT_ENV
     01_check_dependencies_test.go:584: DEPLOYMENT_ENV 'stage' is RFC 1123 compliant
 === RUN   TestCheckDependencies_NamingCompliance/CS_CLUSTER_NAME
-    01_check_dependencies_test.go:591: CS_CLUSTER_NAME 'rcap-stage' is RFC 1123 compliant
+    01_check_dependencies_test.go:591: CS_CLUSTER_NAME 'cate-stage' is RFC 1123 compliant
 === RUN   TestCheckDependencies_NamingCompliance/WORKLOAD_CLUSTER_NAMESPACE
     01_check_dependencies_test.go:607: WORKLOAD_CLUSTER_NAMESPACE 'capz-test-20260203-140812' is RFC 1123 compliant
 --- PASS: TestCheckDependencies_NamingCompliance (0.00s)

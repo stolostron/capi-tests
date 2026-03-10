@@ -48,7 +48,7 @@ The Azure resource group name is derived from `CS_CLUSTER_NAME`:
 CS_CLUSTER_NAME = ${CAPI_USER}-${DEPLOYMENT_ENV}
 Resource Group  = ${CS_CLUSTER_NAME}-resgroup
 
-Example: rcap-stage-resgroup
+Example: cate-stage-resgroup
 ```
 
 ---
@@ -65,7 +65,7 @@ Example: rcap-stage-resgroup
 
 ```
 === RUN   TestDeletion_VerifyAzureResourcesDeletion
-    Checking Azure resource group 'rcap-stage-resgroup'...
-    Resource group 'rcap-stage-resgroup' has been deleted
+    Checking Azure resource group 'cate-stage-resgroup'...
+    Resource group 'cate-stage-resgroup' has been deleted
 --- PASS: TestDeletion_VerifyAzureResourcesDeletion (1.23s)
 ```

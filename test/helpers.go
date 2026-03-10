@@ -645,7 +645,7 @@ func CheckYAMLConfigMatch(t *testing.T, aroYAMLPath, expectedPrefix string) (mat
 	}
 
 	// Compare the extracted cluster name with expected prefix
-	// The cluster name in aro.yaml should match the ClusterNamePrefix (e.g., "rcapu-stage")
+	// The cluster name in aro.yaml should match the ClusterNamePrefix (e.g., "cate-stage")
 	if clusterName == expectedPrefix {
 		return true, clusterName
 	}

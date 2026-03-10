@@ -339,7 +339,7 @@ func TestCheckYAMLConfigMatch(t *testing.T) {
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
 metadata:
-  name: rcapu-stage
+  name: cate-stage
   namespace: default
 `)
 				if err := os.WriteFile(path, content, 0644); err != nil {
@@ -347,9 +347,9 @@ metadata:
 				}
 				return path
 			},
-			expectedPrefix: "rcapu-stage",
+			expectedPrefix: "cate-stage",
 			wantMatch:      true,
-			wantExisting:   "rcapu-stage",
+			wantExisting:   "cate-stage",
 		},
 		{
 			name: "mismatched prefix",
@@ -359,7 +359,7 @@ metadata:
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
 metadata:
-  name: rcapb-stage
+  name: cateb-stage
   namespace: default
 `)
 				if err := os.WriteFile(path, content, 0644); err != nil {
@@ -367,16 +367,16 @@ metadata:
 				}
 				return path
 			},
-			expectedPrefix: "rcapu-stage",
+			expectedPrefix: "cate-stage",
 			wantMatch:      false,
-			wantExisting:   "rcapb-stage",
+			wantExisting:   "cateb-stage",
 		},
 		{
 			name: "missing file returns false",
 			setupFile: func(t *testing.T) string {
 				return filepath.Join(tmpDir, "nonexistent.yaml")
 			},
-			expectedPrefix: "rcapu-stage",
+			expectedPrefix: "cateu-stage",
 			wantMatch:      false,
 			wantExisting:   "",
 		},
@@ -395,7 +395,7 @@ metadata:
 				}
 				return path
 			},
-			expectedPrefix: "rcapu-stage",
+			expectedPrefix: "cateu-stage",
 			wantMatch:      false,
 			wantExisting:   "",
 		},
@@ -407,7 +407,7 @@ metadata:
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
 metadata:
-  name: rcapu-prod
+  name: cateu-prod
   namespace: default
 `)
 				if err := os.WriteFile(path, content, 0644); err != nil {
@@ -415,9 +415,9 @@ metadata:
 				}
 				return path
 			},
-			expectedPrefix: "rcapu-stage",
+			expectedPrefix: "cateu-stage",
 			wantMatch:      false,
-			wantExisting:   "rcapu-prod",
+			wantExisting:   "cateu-prod",
 		},
 	}
 
@@ -1249,7 +1249,7 @@ func TestValidateRFC1123Name(t *testing.T) {
 		// Valid cases - RFC 1123 compliant names
 		{
 			name:        "simple lowercase name",
-			value:       "rcap",
+			value:       "cate",
 			varName:     "CAPI_USER",
 			expectError: false,
 		},
@@ -1293,10 +1293,10 @@ func TestValidateRFC1123Name(t *testing.T) {
 		// Invalid cases - RFC 1123 non-compliant names
 		{
 			name:        "contains uppercase - issue #288 case",
-			value:       "rcapXYZ",
+			value:       "cateXYZ",
 			varName:     "CAPI_USER",
 			expectError: true,
-			errorMsgs:   []string{"not RFC 1123 compliant", "contains uppercase letters", "Suggested fix", "rcapxyz"},
+			errorMsgs:   []string{"not RFC 1123 compliant", "contains uppercase letters", "Suggested fix", "catexyz"},
 		},
 		{
 			name:        "all uppercase",
@@ -1402,7 +1402,7 @@ func TestRFC1123NameRegex(t *testing.T) {
 		"ab", "a1", "1a", "12",
 		"abc", "a-b", "a1b", "1a2",
 		"my-cluster", "cluster-123", "a-b-c-d",
-		"rcap-stage", "dev", "prod",
+		"cate-stage", "dev", "prod",
 	}
 
 	invalidNames := []string{
@@ -1433,8 +1433,8 @@ func TestGetExternalAuthID(t *testing.T) {
 	}{
 		{
 			name:              "short prefix",
-			clusterNamePrefix: "rcap-stage",
-			expected:          "rcap-stage-ea",
+			clusterNamePrefix: "cate-stage",
+			expected:          "cate-stage-ea",
 		},
 		{
 			name:              "exactly 12 chars prefix",
@@ -1443,8 +1443,8 @@ func TestGetExternalAuthID(t *testing.T) {
 		},
 		{
 			name:              "long prefix",
-			clusterNamePrefix: "rcapxyz-stage",
-			expected:          "rcapxyz-stage-ea",
+			clusterNamePrefix: "catexyz-stage",
+			expected:          "catexyz-stage-ea",
 		},
 		{
 			name:              "empty prefix",
@@ -1484,8 +1484,8 @@ func TestValidateExternalAuthID(t *testing.T) {
 		},
 		{
 			name:              "short prefix - 10 chars",
-			clusterNamePrefix: "rcap-stage",
-			expectError:       false, // "rcap-stage-ea" = 13 chars
+			clusterNamePrefix: "cate-stage",
+			expectError:       false, // "cate-stage-ea" = 13 chars
 		},
 		{
 			name:              "single char prefix",
@@ -1506,10 +1506,10 @@ func TestValidateExternalAuthID(t *testing.T) {
 			errorMsgs:         []string{"exceeds maximum length", "16 chars", "15"},
 		},
 		{
-			name:              "original failing case - rcapxyz-stage",
-			clusterNamePrefix: "rcapxyz-stage",
-			expectError:       true, // "rcapxyz-stage-ea" = 16 chars
-			errorMsgs:         []string{"exceeds maximum length", "16 chars", "rcapxyz-stage-ea", "Suggestion"},
+			name:              "original failing case - catexyz-stage",
+			clusterNamePrefix: "catexyz-stage",
+			expectError:       true, // "catexyz-stage-ea" = 16 chars
+			errorMsgs:         []string{"exceeds maximum length", "16 chars", "catexyz-stage-ea", "Suggestion"},
 		},
 		{
 			name:              "very long prefix",
@@ -2154,7 +2154,7 @@ func TestDetectAzureError(t *testing.T) {
 		// Insufficient privileges error (from issue #223)
 		{
 			name: "insufficient privileges - service principal creation",
-			output: `Creating SP for RBAC with name rcap-sp-149357424, with role Custom-Owner (Block Billing and Subscription deletion) and in scopes /subscriptions/b23756f7-4594-40a3-980f-10bb6168fc20
+			output: `Creating SP for RBAC with name cate-sp-149357424, with role Custom-Owner (Block Billing and Subscription deletion) and in scopes /subscriptions/b23756f7-4594-40a3-980f-10bb6168fc20
 Insufficient privileges to complete the operation.`,
 			expectedType:   "insufficient_privileges",
 			expectNil:      false,
@@ -3103,9 +3103,9 @@ func TestFormatValidationResults(t *testing.T) {
 func TestValidateAllConfigurations(t *testing.T) {
 	// Create a valid config
 	config := &TestConfig{
-		CAPIUser:                 "rcap",
+		CAPIUser:                 "cate",
 		Environment:              "stage",
-		ClusterNamePrefix:        "rcap-stage",
+		ClusterNamePrefix:        "cate-stage",
 		WorkloadClusterNamespace: "capz-test-20260101-120000",
 		Region:                   "uksouth",
 		DeploymentTimeout:        45 * time.Minute,
@@ -3202,37 +3202,37 @@ func TestCheckForMismatchedClusters_Logic(t *testing.T) {
 		{
 			name:             "no clusters - no mismatch",
 			existingClusters: []string{},
-			expectedPrefix:   "rcapk-stage",
+			expectedPrefix:   "catek-stage",
 			wantMismatched:   nil,
 		},
 		{
 			name:             "all match prefix",
-			existingClusters: []string{"rcapk-stage", "rcapk-stage-2"},
-			expectedPrefix:   "rcapk-stage",
+			existingClusters: []string{"catek-stage", "catek-stage-2"},
+			expectedPrefix:   "catek-stage",
 			wantMismatched:   nil,
 		},
 		{
 			name:             "one mismatch",
-			existingClusters: []string{"rcapb-stage", "rcapk-stage"},
-			expectedPrefix:   "rcapk-stage",
-			wantMismatched:   []string{"rcapb-stage"},
+			existingClusters: []string{"cateb-stage", "catek-stage"},
+			expectedPrefix:   "catek-stage",
+			wantMismatched:   []string{"cateb-stage"},
 		},
 		{
 			name:             "all mismatch",
-			existingClusters: []string{"rcapb-stage", "other-cluster"},
-			expectedPrefix:   "rcapk-stage",
-			wantMismatched:   []string{"rcapb-stage", "other-cluster"},
+			existingClusters: []string{"cateb-stage", "other-cluster"},
+			expectedPrefix:   "catek-stage",
+			wantMismatched:   []string{"cateb-stage", "other-cluster"},
 		},
 		{
 			name:             "similar but not matching prefix",
-			existingClusters: []string{"rcapk", "rcapk-prod"},
-			expectedPrefix:   "rcapk-stage",
-			wantMismatched:   []string{"rcapk", "rcapk-prod"},
+			existingClusters: []string{"catek", "catek-prod"},
+			expectedPrefix:   "catek-stage",
+			wantMismatched:   []string{"catek", "catek-prod"},
 		},
 		{
 			name:             "exact match only",
-			existingClusters: []string{"rcapk-stage"},
-			expectedPrefix:   "rcapk-stage",
+			existingClusters: []string{"catek-stage"},
+			expectedPrefix:   "catek-stage",
 			wantMismatched:   nil,
 		},
 	}
@@ -3274,13 +3274,13 @@ func TestGetExistingClusterNames_WarningFiltering(t *testing.T) {
 	}{
 		{
 			name:      "clean output - no warnings",
-			output:    "rcapv-stage",
-			wantNames: []string{"rcapv-stage"},
+			output:    "catev-stage",
+			wantNames: []string{"catev-stage"},
 		},
 		{
 			name:      "v1beta1 deprecation warning with cluster name",
-			output:    "Warning: cluster.x-k8s.io/v1beta1 Cluster is deprecated; use cluster.x-k8s.io/v1beta2 Cluster\nrcapv-stage",
-			wantNames: []string{"rcapv-stage"},
+			output:    "Warning: cluster.x-k8s.io/v1beta1 Cluster is deprecated; use cluster.x-k8s.io/v1beta2 Cluster\ncatev-stage",
+			wantNames: []string{"catev-stage"},
 		},
 		{
 			name:      "multiple warnings",
@@ -3353,24 +3353,24 @@ func TestFormatMismatchedClustersError(t *testing.T) {
 	}{
 		{
 			name:           "single cluster",
-			mismatched:     []string{"rcapb-stage"},
-			expectedPrefix: "rcapk-stage",
+			mismatched:     []string{"cateb-stage"},
+			expectedPrefix: "catek-stage",
 			namespace:      "default",
 			wantContains: []string{
 				"EXISTING CLUSTER RESOURCES DETECTED",
-				"rcapb-stage",
-				"rcapk-stage",
-				"kubectl delete cluster rcapb-stage -n default",
+				"cateb-stage",
+				"catek-stage",
+				"kubectl delete cluster cateb-stage -n default",
 				"make clean",
 			},
 		},
 		{
 			name:           "multiple clusters",
-			mismatched:     []string{"rcapb-stage", "old-cluster"},
-			expectedPrefix: "rcapk-stage",
+			mismatched:     []string{"cateb-stage", "old-cluster"},
+			expectedPrefix: "catek-stage",
 			namespace:      "test-ns",
 			wantContains: []string{
-				"rcapb-stage",
+				"cateb-stage",
 				"old-cluster",
 				"kubectl delete cluster --all -n test-ns",
 				"CAPI_USER was changed",

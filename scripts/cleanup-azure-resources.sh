@@ -15,26 +15,26 @@
 #   ./scripts/cleanup-azure-resources.sh [OPTIONS]
 #
 # Options:
-#   --prefix PREFIX        Resource name prefix to search for (default: from CAPI_USER env var or 'rcap')
+#   --prefix PREFIX        Resource name prefix to search for (default: from CAPI_USER env var or 'cate')
 #   --resource-group RG    Also delete this Azure resource group
 #   --dry-run              Show what would be deleted without actually deleting
 #   --force                Skip confirmation prompts
 #   --help                 Show this help message
 #
 # Environment variables:
-#   CAPI_USER          Default prefix for resource names (e.g., 'rcap')
+#   CAPI_USER          Default prefix for resource names (e.g., 'cate')
 #   AZURE_SUBSCRIPTION_ID  Azure subscription ID to search in
 #
 # Examples:
 #   ./scripts/cleanup-azure-resources.sh --dry-run
-#   ./scripts/cleanup-azure-resources.sh --prefix rcapd --force
+#   ./scripts/cleanup-azure-resources.sh --prefix cated --force
 #   ./scripts/cleanup-azure-resources.sh --resource-group myapp-resgroup --prefix myapp
 #   CAPI_USER=myuser ./scripts/cleanup-azure-resources.sh
 
 set -euo pipefail
 
 # Default values
-PREFIX="${CAPI_USER:-rcap}"
+PREFIX="${CAPI_USER:-cate}"
 RESOURCE_GROUP=""
 DRY_RUN=false
 FORCE=false
@@ -170,11 +170,11 @@ find_resources() {
 
     # Query Azure Resource Graph for resources matching the pattern
     # We search for:
-    # 1. Resources with names starting with the prefix (e.g., rcapa, rcapb, rcapc, etc.)
+    # 1. Resources with names starting with the prefix (e.g., catea, cateb, catec, etc.)
     # 2. Resources with names containing the prefix pattern
 
     # Build the query to find resources with the naming pattern
-    # The pattern is: prefix followed by optional suffix (e.g., rcapa, rcapb, rcap-stage, etc.)
+    # The pattern is: prefix followed by optional suffix (e.g., catea, cateb, cate-stage, etc.)
     local query="Resources | where name contains '${prefix}' | project id, name, type, resourceGroup, subscriptionId | order by type asc, name asc"
 
     local resources_json

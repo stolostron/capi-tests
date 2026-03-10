@@ -57,7 +57,7 @@ This test catches the issue in Phase 1 (seconds), not Phase 5 (45+ minutes).
 
 | Variable | Default | Used In |
 |----------|---------|---------|
-| `CAPI_USER` | `rcap` | Domain prefix |
+| `CAPI_USER` | `cate` | Domain prefix |
 | `DEPLOYMENT_ENV` | `stage` | Domain prefix |
 | `CS_CLUSTER_NAME` | `${CAPI_USER}-${DEPLOYMENT_ENV}` | ExternalAuth ID |
 
@@ -69,9 +69,9 @@ This test catches the issue in Phase 1 (seconds), not Phase 5 (45+ minutes).
 ```
 === RUN   TestCheckDependencies_NamingConstraints
 === RUN   TestCheckDependencies_NamingConstraints/DomainPrefix
-    01_check_dependencies_test.go:452: Domain prefix 'rcap-stage' (10 chars) is valid (max: 15)
+    01_check_dependencies_test.go:452: Domain prefix 'cate-stage' (10 chars) is valid (max: 15)
 === RUN   TestCheckDependencies_NamingConstraints/ExternalAuthID
-    01_check_dependencies_test.go:463: ExternalAuth ID 'rcap-stage-ea' (13 chars) is valid (max: 15)
+    01_check_dependencies_test.go:463: ExternalAuth ID 'cate-stage-ea' (13 chars) is valid (max: 15)
 --- PASS: TestCheckDependencies_NamingConstraints (0.00s)
 ```
 

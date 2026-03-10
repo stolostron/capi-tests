@@ -30,7 +30,7 @@ const (
 	// DefaultCAPIUser is the default user identifier for CAPI resources.
 	// Used in ClusterNamePrefix (for resource group naming) and User field.
 	// Extracted to a constant to ensure consistency across all usages.
-	DefaultCAPIUser = "rcapd"
+	DefaultCAPIUser = "cate"
 
 	// DefaultDeploymentEnv is the default deployment environment identifier.
 	// Used in ClusterNamePrefix and Environment field.

@@ -16,7 +16,7 @@ FORCE=1 make clean-azure-resources
 # Dry-run to see what would be deleted without making changes
 ./scripts/cleanup-azure-resources.sh --dry-run
 
-# Custom prefix (default uses CAPI_USER env var or 'rcap')
+# Custom prefix (default uses CAPI_USER env var or 'cate')
 ./scripts/cleanup-azure-resources.sh --prefix myprefix
 ```
 
@@ -63,7 +63,7 @@ az graph query -q "Resources | where resourceGroup =~ '<RESOURCE_GROUP_NAME>' | 
 
 Example with JSON output:
 ```bash
-az graph query -q "Resources | where resourceGroup =~ 'rcap-stage-resgroup' | project name, type" \
+az graph query -q "Resources | where resourceGroup =~ 'cate-stage-resgroup' | project name, type" \
   -o json | jq -r '.data[] | "\(.name) | \(.type)"'
 ```
 
@@ -80,20 +80,20 @@ If the resource exists, you'll see its details. If deleted, you'll get `Resource
 ## Example Output
 
 ```bash
-$ az group show --name rcap-stage-resgroup -o table
-ERROR: (ResourceGroupNotFound) Resource group 'rcap-stage-resgroup' could not be found.
+$ az group show --name cate-stage-resgroup -o table
+ERROR: (ResourceGroupNotFound) Resource group 'cate-stage-resgroup' could not be found.
 
-$ az graph query -q "Resources | where resourceGroup =~ 'rcap-stage-resgroup' | project name, type" \
+$ az graph query -q "Resources | where resourceGroup =~ 'cate-stage-resgroup' | project name, type" \
     -o json | jq -r '.data[] | "\(.name) | \(.type)"'
-rcap-<prefix>-cp-cloud-network-config-<hash> | microsoft.managedidentity/userassignedidentities
-rcap-<prefix>-cp-cluster-api-azure-<hash> | microsoft.managedidentity/userassignedidentities
-rcap-<prefix>-cp-control-plane-<hash> | microsoft.managedidentity/userassignedidentities
-rcap-<prefix>-cp-disk-csi-driver-<hash> | microsoft.managedidentity/userassignedidentities
-rcap-<prefix>-cp-file-csi-driver-<hash> | microsoft.managedidentity/userassignedidentities
-rcap-<prefix>-cp-image-registry-<hash> | microsoft.managedidentity/userassignedidentities
-rcap-<prefix>-cp-kms-<hash> | microsoft.managedidentity/userassignedidentities
-rcap-<prefix>-dp-disk-csi-driver-<hash> | microsoft.managedidentity/userassignedidentities
-rcap-<prefix>-dp-file-csi-driver-<hash> | microsoft.managedidentity/userassignedidentities
+cate-<prefix>-cp-cloud-network-config-<hash> | microsoft.managedidentity/userassignedidentities
+cate-<prefix>-cp-cluster-api-azure-<hash> | microsoft.managedidentity/userassignedidentities
+cate-<prefix>-cp-control-plane-<hash> | microsoft.managedidentity/userassignedidentities
+cate-<prefix>-cp-disk-csi-driver-<hash> | microsoft.managedidentity/userassignedidentities
+cate-<prefix>-cp-file-csi-driver-<hash> | microsoft.managedidentity/userassignedidentities
+cate-<prefix>-cp-image-registry-<hash> | microsoft.managedidentity/userassignedidentities
+cate-<prefix>-cp-kms-<hash> | microsoft.managedidentity/userassignedidentities
+cate-<prefix>-dp-disk-csi-driver-<hash> | microsoft.managedidentity/userassignedidentities
+cate-<prefix>-dp-file-csi-driver-<hash> | microsoft.managedidentity/userassignedidentities
 <prefix>-nsg | microsoft.network/networksecuritygroups
 <prefix>-vnet | microsoft.network/virtualnetworks
 ```

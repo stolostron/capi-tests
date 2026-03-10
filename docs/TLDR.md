@@ -15,8 +15,8 @@ Example of a local diff for `test/config.go`:
         // DefaultCAPIUser is the default user identifier for CAPZ resources.
         // Used in ClusterNamePrefix (for resource group naming) and User field.
         // Extracted to a constant to ensure consistency across all usages.
--       DefaultCAPIUser = "rcapy"
-+       DefaultCAPIUser = "rcapv"
+-       DefaultCAPIUser = "catey"
++       DefaultCAPIUser = "catev"
 
         // DefaultDeploymentEnv is the default deployment environment identifier.
         // Used in ClusterNamePrefix and Environment field.

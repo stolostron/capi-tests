@@ -51,7 +51,7 @@
 
 ```
 === RUN   TestDeletion_DeleteCluster
-    07_deletion_test.go:39: Deleting cluster 'rcap-stage' from namespace '<namespace>'
-    07_deletion_test.go:53: Cluster deletion initiated: cluster.cluster.x-k8s.io "rcap-stage" deleted
+    07_deletion_test.go:39: Deleting cluster 'cate-stage' from namespace '<namespace>'
+    07_deletion_test.go:53: Cluster deletion initiated: cluster.cluster.x-k8s.io "cate-stage" deleted
 --- PASS: TestDeletion_DeleteCluster (0.25s)
 ```

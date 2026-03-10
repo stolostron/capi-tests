@@ -37,7 +37,7 @@ This situation causes resource conflicts and confusing errors.
 
 ## Key Notes
 
-- Checks cluster name prefix against `CS_CLUSTER_NAME` (e.g., `rcap-stage`)
+- Checks cluster name prefix against `CS_CLUSTER_NAME` (e.g., `cate-stage`)
 - Provides specific cleanup commands in the error message
 - Non-fatal if the check itself fails (e.g., CAPI not installed yet)
 - Uses `FormatMismatchedClustersError()` for clear, actionable error messages
