@@ -1,6 +1,16 @@
 build_root:
   project_image:
     dockerfile_path: Dockerfile.prow
+releases:
+  initial:
+    integration:
+      name: "4.19"
+      namespace: ocp
+  latest:
+    integration:
+      include_built_images: true
+      name: "4.19"
+      namespace: ocp
 resources:
   '*':
     requests:
@@ -8,15 +18,21 @@ resources:
       memory: 200Mi
 tests:
 - as: capz-e2e
-  commands: |
-    source openshift-ci/capz-test-env.sh
-    export TEST_RESULTS_DIR="${ARTIFACT_DIR}"
-    gotestsum --junitfile="${ARTIFACT_DIR}/junit-e2e.xml" -- \
-      -v ./test -count=1 -timeout 30m \
-      -run "TestCheckDependencies|TestSetup|TestManagementCluster|TestInfrastructure"
-  container:
-    from: src
-  timeout: 30m0s
+  cluster_profile: azure4
+  steps:
+    pre:
+    - chain: ipi-azure-pre
+    - ref: capz-test-install-controllers
+    - ref: capz-test-check-dependencies
+    - ref: capz-test-setup
+    test:
+    - ref: capz-test-management-cluster
+    - ref: capz-test-generate-yamls
+    post:
+    - ref: capz-test-teardown
+    - chain: ipi-azure-post
+    workflow: openshift-e2e-azure
+  timeout: 4h0m0s
 zz_generated_metadata:
   branch: configure-prow
   org: stolostron
