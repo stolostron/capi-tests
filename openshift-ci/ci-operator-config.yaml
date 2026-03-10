@@ -1,52 +1,23 @@
 build_root:
-  image_stream_tag:
-    name: builder
-    namespace: ocp
-    tag: rhel-9-golang-1.24-openshift-4.20
-releases:
-  initial:
-    integration:
-      name: "4.19"
-      namespace: ocp
-  latest:
-    integration:
-      include_built_images: true
-      name: "4.19"
-      namespace: ocp
+  project_image:
+    dockerfile_path: Dockerfile.prow
 resources:
   '*':
     requests:
       cpu: 100m
       memory: 200Mi
 tests:
-- as: check-dependencies
-  steps:
-    test:
-    - ref: capz-test-check-dependencies
 - as: capz-e2e
-  cluster_profile: azure4
-  steps:
-    dependencies:
-      RELEASE_IMAGE_LATEST: release:latest
-    pre:
-    - chain: ipi-conf-azure
-    - chain: ipi-install
-    - ref: capz-test-install-controllers
-    - ref: capz-test-check-dependencies
-    - ref: capz-test-setup
-    - ref: capz-test-management-cluster
-    test:
-    - ref: capz-test-generate-yamls
-    # TODO: Re-enable once Azure subscription capacity is available
-    # - ref: capz-test-deploy-crs
-    # - ref: capz-test-verify-workload-cluster
-    # - ref: capz-test-delete-workload-cluster
-    # - ref: capz-test-validate-cleanup
-    post:
-    - ref: capz-test-teardown
-    - ref: ipi-deprovision-deprovision
-  timeout: 4h0m0s
+  commands: |
+    source openshift-ci/capz-test-env.sh
+    export TEST_RESULTS_DIR="${ARTIFACT_DIR}"
+    gotestsum --junitfile="${ARTIFACT_DIR}/junit-e2e.xml" -- \
+      -v ./test -count=1 -timeout 30m \
+      -run "TestCheckDependencies|TestSetup|TestManagementCluster|TestInfrastructure"
+  container:
+    from: src
+  timeout: 30m0s
 zz_generated_metadata:
-  branch: main
+  branch: configure-prow
   org: stolostron
   repo: capi-tests
