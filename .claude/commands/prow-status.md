@@ -13,10 +13,25 @@ Check the status of the Prow CI rehearsal for the openshift/release PR.
    - URL pattern: `https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/test-platform-results/pr-logs/pull/openshift_release/75733/rehearse-75733-pull-ci-stolostron-capi-tests-configure-prow-capz-e2e/<BUILD_ID>/artifacts/`
    - Key files to check: `junit_operator.xml`, `ci-operator.log`
 
-4. Display results as a CAPZ pipeline status table. Map junit results to our pipeline steps and show this table:
+4. Display results as a full pipeline status table. The table must include ALL steps — both IPI infrastructure chain steps and our custom CAPZ test steps. Map junit test names to each step.
 
    | Step | Lifecycle | Status |
    |------|-----------|--------|
+   | ipi-conf | pre (ipi-azure-pre) | ? |
+   | ipi-conf-azure | pre (ipi-azure-pre) | ? |
+   | ipi-conf-telemetry | pre (ipi-azure-pre) | ? |
+   | rhcos-conf-osstream | pre (ipi-azure-pre) | ? |
+   | ipi-azure-rbac | pre (ipi-azure-pre) | ? |
+   | azure-provision-service-principal | pre (ipi-azure-pre) | ? |
+   | azure-provision-custom-role | pre (ipi-azure-pre) | ? |
+   | ipi-install-rbac | pre (ipi-azure-pre) | ? |
+   | ipi-install-install | pre (ipi-azure-pre) | ? |
+   | ipi-install-monitoringpvc | pre (ipi-azure-pre) | ? |
+   | ipi-install-hosted-loki | pre (ipi-azure-pre) | ? |
+   | ipi-install-times-collection | pre (ipi-azure-pre) | ? |
+   | openshift-cluster-bot-rbac | pre (ipi-azure-pre) | ? |
+   | multiarch-validate-nodes | pre (ipi-azure-pre) | ? |
+   | nodes-readiness | pre (ipi-azure-pre) | ? |
    | capz-test-check-dependencies | pre | ? |
    | capz-test-setup | pre | ? |
    | capz-test-install-controllers | pre | ? |
@@ -27,6 +42,12 @@ Check the status of the Prow CI rehearsal for the openshift/release PR.
    | capz-test-delete-workload-cluster | test | ? |
    | capz-test-validate-cleanup | test | ? |
    | capz-test-teardown | post | ? |
+   | gather-must-gather | post (ipi-azure-post) | ? |
+   | gather-extra | post (ipi-azure-post) | ? |
+   | gather-audit-logs | post (ipi-azure-post) | ? |
+   | gather-azure-cli | post (ipi-azure-post) | ? |
+   | azure-deprovision-sp-and-custom-role | post (ipi-azure-post) | ? |
+   | ipi-deprovision-deprovision | post (ipi-azure-post) | ? |
 
    Status values:
    - **PASSED** — step ran and succeeded
@@ -35,9 +56,11 @@ Check the status of the Prow CI rehearsal for the openshift/release PR.
    - **NOT WIRED** — step ref exists but is not yet included in the CI config
    - **NOT CREATED** — step ref does not exist yet in the step registry
 
-   To determine status: match junit test names containing each step name (e.g. "capz-test-check-dependencies").
+   To determine status: match junit test names containing each step name (e.g. "capz-test-check-dependencies", "ipi-install-install").
    Steps that are NOT WIRED: `capz-test-deploy-crs`, `capz-test-delete-workload-cluster`
    Steps that are NOT CREATED: `capz-test-verify-workload-cluster`, `capz-test-validate-cleanup`
+
+   If a step appears in the junit XML, use its result. If it doesn't appear and a prior step failed, mark it NOT REACHED.
 
 5. After the table, provide:
    - Link to the Prow job page
