@@ -6,12 +6,14 @@ Onboard `stolostron/capi-tests` to OpenShift CI via PR https://github.com/opensh
 Branch in capi-tests: `configure-prow`
 Branch in openshift/release fork (RadekCap/release): `stolostron-capi-tests-ci`
 
-## Current State (as of 2026-03-11)
+## Current State (as of 2026-03-11 17:15 UTC)
 
-- **Latest commit pushed to capi-tests**: `624c3b5` — "fix: skip docker/kind checks in external cluster mode"
+- **Latest commit pushed to capi-tests**: `bc9ae78` — "docs: update Prow session notes with 2026-03-11 findings"
 - **Latest commit on openshift/release PR**: `088afa2e3c` — "ci: temporarily disable e2e steps beyond generate-yamls"
-- **Last rehearsal result (build `2031737114856525824`)**: IPI cluster provisioned successfully (58m39s). Failed at `capz-test-check-dependencies` (docker/kind not in image). **Fix committed and pushed** — awaiting next rehearsal.
-- **Rehearsal triggered**: 2026-03-11 15:43 UTC, awaiting results
+- **Previous rehearsal (build `2031737114856525824`)**: IPI cluster provisioned successfully (58m39s). Failed at `capz-test-check-dependencies` (docker/kind not in image). **Fix committed in `624c3b5`**.
+- **Current rehearsal (build `2031767535971471360`)**: PENDING since 16:21 UTC. IPI provisioning in progress (~59min expected). This run includes the docker/kind fix. **Check this result first when resuming.**
+- **PR description updated**: Added `capz-test-install-controllers` step, updated descriptions to reflect IPI (not Kind) mode
+- **What to do when resuming**: Check build `2031767535971471360` result. If still pending, wait. If failed, parse ci-operator.log for the failing step. Expected next failure point: `capz-test-setup` or `capz-test-install-controllers`.
 
 ## CI Config File
 
