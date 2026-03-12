@@ -1,22 +1,34 @@
 # Prow CI Onboarding — Session Notes
 
+## Quick Status (updated 2026-03-12 evening)
+
+**Where we are**: 4 out of 6 wired steps are passing. `capz-test-install-controllers` is now FIXED. The latest fix (`USE_K8S=false`) targets `capz-test-management-cluster` namespace mismatch. A rehearsal (build `2032109621262422016`) is running with this fix — check its result first.
+
+**What failed last**: `capz-test-management-cluster` looked for controllers in `multicluster-engine` namespace instead of `capi-system`/`capz-system`, because `USE_KUBECONFIG` being set triggered the Go test suite to assume MCE mode (`USE_K8S=true`).
+
+**What to do next**: Check rehearsal result (see "Next Session" section below).
+
 ## Goal
 
 Onboard `stolostron/capi-tests` to OpenShift CI via PR https://github.com/openshift/release/pull/75733
 Branch in capi-tests: `configure-prow`
 Branch in openshift/release fork (RadekCap/release): `stolostron-capi-tests-ci`
 
-## Current State (as of 2026-03-12)
+## Current State (as of 2026-03-12 evening)
 
-- **Latest commit pushed to capi-tests**: `51f549d` — "fix: propagate ARO_REPO_URL and ARO_REPO_BRANCH via capz-test-env.sh"
-- **Latest commit on openshift/release PR**: `3ebe92ab46d` — "fix: source shared env in install-controllers step"
-- **Previous rehearsal (build `2031822848447746048`)**: FAILED at `capz-test-install-controllers`. `check-dependencies` and `setup` both passed. Install-controllers failed because: (1) wrong repo/branch defaults (RadekCap/ARO-ASO instead of marek-veber/capi-tests), (2) `deploy-charts.sh` uses hardcoded `--context=crc-admin` which doesn't exist on the IPI cluster. **Repo/branch fix committed. Context issue still open.**
-- **Current rehearsal**: Triggered 2026-03-12. This run includes the repo/branch fix. **Expected to fail on the `crc-admin` context issue.**
-- **What to do when resuming**: Check rehearsal result. Confirm repo/branch fix works (should clone correct repo). Then fix the `crc-admin` kube context issue in `deploy-charts.sh`.
+- **Latest commits pushed to capi-tests** (branch `configure-prow`):
+  - `610f1f7` — "fix(ci): set USE_K8S=false for standard controller namespaces"
+  - `0764b4c` — "fix: remove redundant azure-service-operator chart argument"
+  - `002ed5d` — "fix(ci): set OCP_CONTEXT for deploy-charts.sh on IPI clusters (#577)"
+- **Latest commits on openshift/release PR** (branch `stolostron-capi-tests-ci`):
+  - `76050f32d` — "fix: remove redundant azure-service-operator chart argument"
+  - `7077d5c3e` — "fix: use correct repo/branch and auto-detect kube context"
+- **Latest rehearsal**: Build `2032109621262422016` — triggered ~15:02 UTC on 2026-03-12. Contains all fixes including USE_K8S=false. **Result pending.**
+- **Previous rehearsal** (build `2032079063358640128`): `capz-test-install-controllers` PASSED (OCP_CONTEXT fix confirmed working). `capz-test-management-cluster` FAILED — namespace mismatch (USE_K8S issue).
 
 ## CI Config File
 
-Located at: `~/git/release/ci-operator/config/stolostron/capi-tests/stolostron-capi-tests-configure-prow.yaml`
+Located at: `~/git/github/openshift/release/ci-operator/config/stolostron/capi-tests/stolostron-capi-tests-configure-prow.yaml`
 
 Current content in the PR:
 ```yaml
@@ -59,13 +71,13 @@ tests:
 
 ## Step Registry Refs
 
-All under `~/git/release/ci-operator/step-registry/capz/test/`:
+All under `~/git/github/openshift/release/ci-operator/step-registry/capz/test/`:
 
 | Ref | Script | Wired in Config |
 |-----|--------|-----------------|
 | `capz-test-check-dependencies` | Sources `openshift-ci/capz-test-env.sh`, runs `make _check-dep` | Yes (pre) |
 | `capz-test-setup` | Sources env, runs `make _setup` | Yes (pre) |
-| `capz-test-install-controllers` | Clones cluster-api-installer, runs `deploy-charts.sh`, patches ASO secret | Yes (pre) |
+| `capz-test-install-controllers` | Sources env, clones cluster-api-installer, runs `deploy-charts.sh`, patches ASO secret | Yes (pre) |
 | `capz-test-management-cluster` | Sources env, runs `make _management_cluster` | Yes (test) |
 | `capz-test-generate-yamls` | Sources env, runs `make _generate-yamls` | Yes (test) |
 | `capz-test-deploy-crs` | Sources env, runs `make _deploy-crs` | Created, **not wired** |
@@ -94,35 +106,28 @@ post:
   12. ipi-azure-post (chain)       — Deprovision IPI cluster
 ```
 
-## Latest Run Results (2026-03-12, build `2031822848447746048`)
+## Latest Run Results (2026-03-12, build `2032079063358640128`)
 
 | Step | Lifecycle | Status |
 |------|-----------|--------|
-| ipi-azure-pre (15 substeps) | pre | All passed (IPI cluster created in ~64min) |
-| `capz-test-check-dependencies` | pre | Passed (11s) ✅ |
-| `capz-test-setup` | pre | Passed (11s) ✅ |
-| `capz-test-install-controllers` | pre | Failed (1s) ❌ — wrong repo/branch + crc-admin context |
-| `capz-test-management-cluster` | test | Not reached |
+| ipi-azure-pre (15 substeps) | pre | All passed (IPI cluster created) |
+| `capz-test-check-dependencies` | pre | Passed ✅ |
+| `capz-test-setup` | pre | Passed ✅ |
+| `capz-test-install-controllers` | pre | Passed ✅ (OCP_CONTEXT fix worked!) |
+| `capz-test-management-cluster` | test | Failed ❌ — namespace mismatch (looked in `multicluster-engine` instead of `capi-system`) |
 | `capz-test-generate-yamls` | test | Not reached |
-| `capz-test-teardown` | post | Passed (6s) |
-| ipi-azure-post (deprovisioning) | post | Passed (~9min) |
+| `capz-test-teardown` | post | Passed |
+| ipi-azure-post (deprovisioning) | post | Passed |
 
-**Total run time**: ~1h41m
+### Previous Runs
 
-### Previous Run (2026-03-11, build `2031737114856525824`)
-
-| Step | Lifecycle | Status |
-|------|-----------|--------|
-| ipi-azure-pre (15 substeps) | pre | All passed (IPI cluster created in 58m39s) |
-| `capz-test-check-dependencies` | pre | Failed (1m4s) — docker/kind not in image |
-| `capz-test-setup` | pre | Skipped (blocked by above) |
-| `capz-test-install-controllers` | pre | Skipped (blocked by above) |
-| `capz-test-management-cluster` | test | Skipped |
-| `capz-test-generate-yamls` | test | Skipped |
-| `capz-test-teardown` | post | Passed (1m27s) |
-| ipi-azure-post (deprovisioning) | post | Passed (19m25s) |
-
-**Total run time**: 1h38m54s
+| Build | Date | Failed At | Root Cause |
+|-------|------|-----------|------------|
+| `2032079063358640128` | 2026-03-12 | `capz-test-management-cluster` | USE_K8S namespace mismatch |
+| `2032058857164902400` | 2026-03-12 | ABORTED | Prow killed job when new commit pushed |
+| `2031995518237806592` | 2026-03-12 | `capz-test-install-controllers` | crc-admin context (repo/branch fix worked) |
+| `2031822848447746048` | 2026-03-12 | `capz-test-install-controllers` | Wrong repo/branch + crc-admin context |
+| `2031737114856525824` | 2026-03-11 | `capz-test-check-dependencies` | docker/kind not in image |
 
 ## Issues Found and Fixed
 
@@ -175,13 +180,68 @@ post:
 - It was the only step that didn't source `openshift-ci/capz-test-env.sh`
 - Fix: Refactored to source `capz-test-env.sh` (like all other steps), added `ARO_REPO_URL` and `ARO_REPO_BRANCH` exports to the env file
 
-#### 9. `deploy-charts.sh` hardcodes `--context=crc-admin` (OPEN)
-- `deploy-charts.sh` in `cluster-api-installer` sets `KUBE_CONTEXT=--context=crc-admin`
-- On the IPI-provisioned cluster, this context does not exist
+#### 9. `deploy-charts.sh` hardcodes `--context=crc-admin` (FIXED — commit `002ed5d` in capi-tests, `7077d5c3e` in release)
+- `deploy-charts.sh` in `cluster-api-installer` sets `OCP_CONTEXT=${OCP_CONTEXT:-crc-admin}`
+- On the IPI-provisioned cluster, `crc-admin` context does not exist
 - Error: `error: context "crc-admin" does not exist`
-- Also: `!!!!!!!!! SKIP DEPLOY: charts/azure-service-operator` — ASO is being skipped
-- **Fix needed**: Either set `KUBE_CONTEXT` env var before calling the script, or patch `deploy-charts.sh` to use current context by default
-- This is in the `marek-veber/cluster-api-installer` repo (branch `capi-tests`), not in capi-tests or openshift/release
+- Fix: Set `export OCP_CONTEXT=$(kubectl config current-context)` in `capz-test-install-controllers-commands.sh` before calling `deploy-charts.sh`
+- **Why it works locally**: In `USE_KUBECONFIG` mode, the Go test suite skips Kind creation AND deploy-charts.sh entirely — controllers are pre-installed via MCE. So the crc-admin default was never hit locally.
+- Confirmed working in build `2032079063358640128`
+
+#### 10. Redundant `azure-service-operator` chart argument (FIXED — commit `0764b4c` in capi-tests, `76050f32d` in release)
+- `capz-test-install-controllers` was calling: `bash scripts/deploy-charts.sh cluster-api cluster-api-provider-azure azure-service-operator`
+- `deploy-charts.sh` skipped it: `!!!!!!!!! SKIP DEPLOY: charts/azure-service-operator` (no such chart directory)
+- ASO is bundled INSIDE the `cluster-api-provider-azure` chart (see deploy-charts.sh line 45: `DEPLOYMENTS[$NAMESPACE]="${T}-controller-manager azureserviceoperator-controller-manager"`)
+- Fix: Removed `azure-service-operator` from the deploy-charts.sh arguments — now just `cluster-api cluster-api-provider-azure`
+
+#### 11. USE_K8S namespace mismatch in management-cluster step (FIXED — commit `610f1f7` in capi-tests, pending sync to release PR)
+- `capz-test-install-controllers` passed, but `capz-test-management-cluster` failed
+- The Go test suite (via `config.go`) sets `USE_K8S=true` when `USE_KUBECONFIG` is set, causing it to look for controllers in `multicluster-engine` namespace
+- But `deploy-charts.sh` with `USE_K8S=false` installs controllers into standard namespaces (`capi-system`, `capz-system`)
+- Fix: Added `export USE_K8S=false` to `openshift-ci/capz-test-env.sh`
+- The `USE_K8S=false` override ensures the Go test suite checks standard namespaces, matching where deploy-charts.sh actually installed the controllers
+- **Awaiting confirmation** in build `2032109621262422016`
+
+## Key Technical Insights
+
+### Two deployment paths — understanding the architecture
+
+| Mode | How controllers are installed | Where controllers live | Who calls deploy-charts.sh |
+|------|------------------------------|----------------------|---------------------------|
+| **Local (USE_KUBECONFIG + MCE)** | MCE auto-enablement in Go test suite | `multicluster-engine` namespace | Nobody — MCE manages them |
+| **Local (USE_KIND)** | Go test suite calls deploy-charts.sh | `capi-system`/`capz-system` | Go test suite (03_cluster_test.go) |
+| **Prow CI (IPI cluster)** | `capz-test-install-controllers` step calls deploy-charts.sh | `capi-system`/`capz-system` | Prow step script |
+
+This is why issues #9 and #11 were never caught locally — the Prow CI path (IPI + deploy-charts.sh without Kind) is a new combination.
+
+### Step registry file duplication
+
+Step scripts exist in TWO places:
+1. `capi-tests/openshift-ci/step-registry/` — source of truth (in capi-tests repo)
+2. `openshift/release/ci-operator/step-registry/capz/test/` — what Prow actually executes (in release PR)
+
+Pushing to capi-tests does NOT update the release PR. Both must be updated manually and kept in sync.
+
+### deploy-charts.sh context logic
+
+```bash
+if [ "$USE_KIND" = true -o "$USE_K8S" = true ] ; then
+    KUBE_CONTEXT="--context=kind-$KIND_CLUSTER_NAME"    # Kind mode
+else
+    OCP_CONTEXT=${OCP_CONTEXT:-crc-admin}               # OCP mode (defaults to crc-admin!)
+    KUBE_CONTEXT="--context=$OCP_CONTEXT"
+fi
+```
+
+For Prow CI, we set `OCP_CONTEXT` before calling deploy-charts.sh to override the `crc-admin` default.
+
+### IPI Azure cluster defaults
+
+The IPI-provisioned cluster uses:
+- VM size: `Standard_D4s_v3` (4 vCPUs, 16 GB RAM)
+- 3 master + 3 worker nodes (6 total)
+- Provisioning time: ~60 minutes
+- Defined in the `ipi-conf-azure` step (step registry, not configurable from our CI config)
 
 ## Key Debugging Insights
 
@@ -228,38 +288,42 @@ Parse `ci-operator-step-graph.json`, find the `capz-e2e` substeps, and check `sp
 - Rehearsal triggers sometimes fail with `failed to submit all rehearsal jobs` — retrying usually works
 - If a run is stuck as PENDING, abort it and retrigger
 - Lease renewal 502 warnings are transient and harmless
+- Prow kills running jobs when new commits are pushed — must retrigger manually
 
 ## Local Repos
 
 - **capi-tests**: `~/git/github/stolostron/capi-tests` (branch: `configure-prow`)
   - Remote `origin`: `https://github.com/RadekCap/capi-tests.git`
   - Remote `upstream`: `https://github.com/stolostron/capi-tests.git`
-- **openshift/release fork**: `~/git/release` (branch: `stolostron-capi-tests-ci`)
+- **openshift/release fork**: `~/git/github/openshift/release` (branch: `stolostron-capi-tests-ci`)
   - Remote `origin`: `https://github.com/RadekCap/release.git`
   - Remote `upstream`: `https://github.com/openshift/release.git`
 
 ## Next Session — What To Do
 
-### Step 1: Check rehearsal result
+### Step 1: Check rehearsal result (build `2032109621262422016`)
 
-A rehearsal was triggered on 2026-03-12 with the repo/branch fix. Check the result:
 ```bash
 gh pr view 75733 --repo openshift/release --json statusCheckRollup \
   --jq '.statusCheckRollup[] | select(.context | test("capz")) | "\(.state) | \(.targetUrl)"'
 ```
 
-**Expected outcome**: The repo/branch fix should work (correct clone of `marek-veber/cluster-api-installer` branch `capi-tests`). The run should still fail at `capz-test-install-controllers` due to the `crc-admin` kube context issue (issue #9 above).
+Or use the `/prow-status` slash command.
 
-### Step 2: Fix `deploy-charts.sh` kube context
+**Expected outcome**: With USE_K8S=false, `capz-test-management-cluster` should now find controllers in `capi-system`/`capz-system` and pass. If it passes, `capz-test-generate-yamls` will run next (first time!).
 
-The `deploy-charts.sh` script in `marek-veber/cluster-api-installer` (branch `capi-tests`) hardcodes `KUBE_CONTEXT=--context=crc-admin`. Options:
-1. **Set `KUBE_CONTEXT` env var** in the install-controllers step before calling `deploy-charts.sh` — e.g., `export KUBE_CONTEXT="--context=$(kubectl config current-context)"`
-2. **Patch `deploy-charts.sh`** in `cluster-api-installer` to default to current context when env var is not set
-3. **Investigate ASO skip** — `charts/azure-service-operator` is being skipped, which will be needed
+**NOTE**: The USE_K8S=false fix is in capi-tests (`610f1f7`) but the openshift/release PR step scripts may need updating too. Check if `capz-test-management-cluster-commands.sh` in the release PR sources `capz-test-env.sh` — if yes, it picks up USE_K8S=false automatically from the capi-tests source code. If not, update the release PR copy.
+
+### Step 2: If management-cluster passes, debug generate-yamls
+
+`capz-test-generate-yamls` runs `make _generate-yamls` which calls the cluster-api-installer's `gen.sh` script. Potential issues:
+- Missing env vars for YAML generation (AZURE_SUBSCRIPTION_ID, etc.)
+- Script path differences between Kind and IPI modes
+- Check if `gen.sh` needs additional env vars not in `capz-test-env.sh`
 
 ### Step 3: Wire remaining test steps
 
-Once the first 6 steps pass, add the remaining steps to the config in the openshift/release PR:
+Once the first 6 steps pass, add the remaining steps to the CI config in the openshift/release PR:
 ```yaml
     test:
     - ref: capz-test-management-cluster
