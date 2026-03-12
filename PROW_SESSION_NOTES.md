@@ -1,12 +1,12 @@
 # Prow CI Onboarding — Session Notes
 
-## Quick Status (updated 2026-03-12 evening)
+## Quick Status (updated 2026-03-13)
 
-**Where we are**: 4 out of 6 wired steps are passing. `capz-test-install-controllers` is now FIXED. The latest fix (`USE_K8S=false`) targets `capz-test-management-cluster` namespace mismatch. A rehearsal (build `2032109621262422016`) is running with this fix — check its result first.
+**Where we are**: 4 out of 6 wired steps pass. `capz-test-management-cluster` still FAILS — controller pods can't pull images from `quay.io/acm-d/` (private registry, no credentials on IPI cluster). cert-manager fix confirmed working (v1.20.0 installs successfully).
 
-**What failed last**: `capz-test-management-cluster` looked for controllers in `multicluster-engine` namespace instead of `capi-system`/`capz-system`, because `USE_KUBECONFIG` being set triggered the Go test suite to assume MCE mode (`USE_K8S=true`).
+**What failed last**: `capi-controller-manager` deployment in `capi-system` stays `Available: False` for 10+ minutes. Root cause: image pull failure — the Helm charts use private `quay.io/acm-d/` images and the IPI cluster has no pull credentials for that registry.
 
-**What to do next**: Check rehearsal result (see "Next Session" section below).
+**What to do next**: Implement namespace-scoped imagePullSecrets for `quay.io/acm-d/` using CI vault credentials. See "Next Session" section below for full instructions.
 
 ## Goal
 
@@ -14,21 +14,23 @@ Onboard `stolostron/capi-tests` to OpenShift CI via PR https://github.com/opensh
 Branch in capi-tests: `configure-prow`
 Branch in openshift/release fork (RadekCap/release): `stolostron-capi-tests-ci`
 
-## Current State (as of 2026-03-12 evening)
+## Current State (as of 2026-03-13)
 
 - **Latest commits pushed to capi-tests** (branch `configure-prow`):
+  - `d1f264c` — "fix(ci): install cert-manager before deploying CAPI controllers"
   - `610f1f7` — "fix(ci): set USE_K8S=false for standard controller namespaces"
   - `0764b4c` — "fix: remove redundant azure-service-operator chart argument"
   - `002ed5d` — "fix(ci): set OCP_CONTEXT for deploy-charts.sh on IPI clusters (#577)"
 - **Latest commits on openshift/release PR** (branch `stolostron-capi-tests-ci`):
+  - `ba7cc11fbe9` — "fix: install cert-manager and sync install-controllers with capi-tests"
   - `76050f32d` — "fix: remove redundant azure-service-operator chart argument"
   - `7077d5c3e` — "fix: use correct repo/branch and auto-detect kube context"
-- **Latest rehearsal**: Build `2032109621262422016` — triggered ~15:02 UTC on 2026-03-12. Contains all fixes including USE_K8S=false. **Result pending.**
-- **Previous rehearsal** (build `2032079063358640128`): `capz-test-install-controllers` PASSED (OCP_CONTEXT fix confirmed working). `capz-test-management-cluster` FAILED — namespace mismatch (USE_K8S issue).
+- **Latest rehearsal**: Build `2032171032898441216` — FAILED. cert-manager installed OK, but controller images can't be pulled (quay.io/acm-d/ auth issue).
+- **Previous rehearsal** (build `2032109621262422016`): Same failure — `capi-controller-manager` Available: False (before cert-manager fix, same root cause).
 
 ## CI Config File
 
-Located at: `~/git/github/openshift/release/ci-operator/config/stolostron/capi-tests/stolostron-capi-tests-configure-prow.yaml`
+Located at: `~/git/release/ci-operator/config/stolostron/capi-tests/stolostron-capi-tests-configure-prow.yaml`
 
 Current content in the PR:
 ```yaml
@@ -71,13 +73,13 @@ tests:
 
 ## Step Registry Refs
 
-All under `~/git/github/openshift/release/ci-operator/step-registry/capz/test/`:
+All under `~/git/release/ci-operator/step-registry/capz/test/`:
 
 | Ref | Script | Wired in Config |
 |-----|--------|-----------------|
 | `capz-test-check-dependencies` | Sources `openshift-ci/capz-test-env.sh`, runs `make _check-dep` | Yes (pre) |
 | `capz-test-setup` | Sources env, runs `make _setup` | Yes (pre) |
-| `capz-test-install-controllers` | Sources env, clones cluster-api-installer, runs `deploy-charts.sh`, patches ASO secret | Yes (pre) |
+| `capz-test-install-controllers` | Sources env, installs cert-manager, clones cluster-api-installer, runs `deploy-charts.sh`, patches ASO secret | Yes (pre) |
 | `capz-test-management-cluster` | Sources env, runs `make _management_cluster` | Yes (test) |
 | `capz-test-generate-yamls` | Sources env, runs `make _generate-yamls` | Yes (test) |
 | `capz-test-deploy-crs` | Sources env, runs `make _deploy-crs` | Created, **not wired** |
@@ -93,7 +95,7 @@ pre:
   1. ipi-azure-pre (chain)         — Provision IPI OpenShift cluster (~59min)
   2. capz-test-check-dependencies  — Validate tools, auth, naming
   3. capz-test-setup               — Clone repository, verify scripts
-  4. capz-test-install-controllers — Install CAPI/CAPZ/ASO on the IPI cluster
+  4. capz-test-install-controllers — Install cert-manager, CAPI/CAPZ/ASO on the IPI cluster
 test:
   5. capz-test-management-cluster  — Validate external cluster with controllers
   6. capz-test-generate-yamls      — Generate YAML manifests
@@ -106,23 +108,25 @@ post:
   12. ipi-azure-post (chain)       — Deprovision IPI cluster
 ```
 
-## Latest Run Results (2026-03-12, build `2032079063358640128`)
+## Latest Run Results (2026-03-13, build `2032171032898441216`)
 
 | Step | Lifecycle | Status |
 |------|-----------|--------|
-| ipi-azure-pre (15 substeps) | pre | All passed (IPI cluster created) |
-| `capz-test-check-dependencies` | pre | Passed ✅ |
-| `capz-test-setup` | pre | Passed ✅ |
-| `capz-test-install-controllers` | pre | Passed ✅ (OCP_CONTEXT fix worked!) |
-| `capz-test-management-cluster` | test | Failed ❌ — namespace mismatch (looked in `multicluster-engine` instead of `capi-system`) |
+| ipi-azure-pre (15 substeps) | pre | All passed (IPI cluster created, 1h6m36s) |
+| `capz-test-check-dependencies` | pre | Passed |
+| `capz-test-setup` | pre | Passed |
+| `capz-test-install-controllers` | pre | Passed (cert-manager v1.20.0 installed, charts deployed) |
+| `capz-test-management-cluster` | test | Failed — `capi-controller-manager` Available: False (image pull issue) |
 | `capz-test-generate-yamls` | test | Not reached |
 | `capz-test-teardown` | post | Passed |
-| ipi-azure-post (deprovisioning) | post | Passed |
+| ipi-azure-post (deprovisioning) | post | All passed |
 
 ### Previous Runs
 
 | Build | Date | Failed At | Root Cause |
 |-------|------|-----------|------------|
+| `2032171032898441216` | 2026-03-13 | `capz-test-management-cluster` | quay.io/acm-d/ image pull — no credentials |
+| `2032109621262422016` | 2026-03-12 | `capz-test-management-cluster` | Same (cert-manager was missing too, but image pull is the real blocker) |
 | `2032079063358640128` | 2026-03-12 | `capz-test-management-cluster` | USE_K8S namespace mismatch |
 | `2032058857164902400` | 2026-03-12 | ABORTED | Prow killed job when new commit pushed |
 | `2031995518237806592` | 2026-03-12 | `capz-test-install-controllers` | crc-admin context (repo/branch fix worked) |
@@ -194,13 +198,31 @@ post:
 - ASO is bundled INSIDE the `cluster-api-provider-azure` chart (see deploy-charts.sh line 45: `DEPLOYMENTS[$NAMESPACE]="${T}-controller-manager azureserviceoperator-controller-manager"`)
 - Fix: Removed `azure-service-operator` from the deploy-charts.sh arguments — now just `cluster-api cluster-api-provider-azure`
 
-#### 11. USE_K8S namespace mismatch in management-cluster step (FIXED — commit `610f1f7` in capi-tests, pending sync to release PR)
+#### 11. USE_K8S namespace mismatch in management-cluster step (FIXED — commit `610f1f7` in capi-tests, synced to release PR)
 - `capz-test-install-controllers` passed, but `capz-test-management-cluster` failed
 - The Go test suite (via `config.go`) sets `USE_K8S=true` when `USE_KUBECONFIG` is set, causing it to look for controllers in `multicluster-engine` namespace
 - But `deploy-charts.sh` with `USE_K8S=false` installs controllers into standard namespaces (`capi-system`, `capz-system`)
 - Fix: Added `export USE_K8S=false` to `openshift-ci/capz-test-env.sh`
-- The `USE_K8S=false` override ensures the Go test suite checks standard namespaces, matching where deploy-charts.sh actually installed the controllers
-- **Awaiting confirmation** in build `2032109621262422016`
+- Confirmed: test now checks `capi-system` namespace correctly
+
+#### 12. cert-manager not installed on IPI cluster (FIXED — commit `d1f264c` in capi-tests, `ba7cc11fbe9` in release)
+- In Kind mode, `setup-kind-cluster.sh` installs cert-manager, but Prow CI path sets `DO_INIT_KIND=false` and skips it
+- CAPI/CAPZ controllers depend on cert-manager for webhook TLS certificates
+- Fix: Added cert-manager Helm installation to `capz-test-install-controllers-commands.sh` before `deploy-charts.sh`
+- Confirmed: cert-manager v1.20.0 installs successfully in build `2032171032898441216`
+- **Why not needed on MCE clusters**: MCE uses OpenShift's built-in service-ca operator for webhook TLS, not cert-manager
+
+#### 13. quay.io/acm-d/ image pull credentials missing (CURRENT BLOCKER)
+- cert-manager installs fine, charts are deployed, but controller pods can't pull images
+- The `replace-params` file in cluster-api-installer sets private image URLs:
+  - `quay.io/acm-d/ose-cluster-api-rhel9` (CAPI)
+  - `quay.io/acm-d/mce-capi-webhook-config-rhel9` (MCE webhook)
+  - `quay.io/acm-d/cluster-api-provider-azure-rhel9` (CAPZ)
+  - `quay.io/mveber/azureserviceoperator` (ASO)
+- The IPI cluster has no pull credentials for `quay.io/acm-d/`
+- Controllers never become Available, `capz-test-management-cluster` times out after 10 minutes
+- **Why not an issue locally**: On MCE clusters, images are already present (MCE manages them). On Kind, the `DOCKER_SECRETS` env var mounts local Docker credentials into Kind nodes.
+- **Fix planned**: Use namespace-scoped imagePullSecrets (see Next Session below)
 
 ## Key Technical Insights
 
@@ -212,7 +234,40 @@ post:
 | **Local (USE_KIND)** | Go test suite calls deploy-charts.sh | `capi-system`/`capz-system` | Go test suite (03_cluster_test.go) |
 | **Prow CI (IPI cluster)** | `capz-test-install-controllers` step calls deploy-charts.sh | `capi-system`/`capz-system` | Prow step script |
 
-This is why issues #9 and #11 were never caught locally — the Prow CI path (IPI + deploy-charts.sh without Kind) is a new combination.
+This is why issues #9, #11, #12, #13 were never caught locally — the Prow CI path (IPI + deploy-charts.sh without Kind) is a new combination.
+
+### cert-manager: when it's needed vs not
+
+| Mode | cert-manager needed? | Who handles TLS for webhooks? |
+|------|---------------------|------------------------------|
+| **Kind** (vanilla K8s) | Yes — installed by `setup-kind-cluster.sh` | cert-manager |
+| **MCE** (OpenShift) | No — MCE manages controllers differently | OpenShift service-ca operator |
+| **Prow IPI** (clean OpenShift) | Yes — installed by our step script | cert-manager |
+
+### quay.io/acm-d/ credential mechanism in OpenShift CI
+
+The `hypershift-mce-install` step uses CI vault credentials to access `quay.io/acm-d`:
+
+**Step ref YAML** declares credentials:
+```yaml
+credentials:
+- mount_path: /etc/acm-d-mce-quay-pull-credentials
+  name: acm-d-mce-quay-credentials
+  namespace: test-credentials
+```
+
+**Script** reads them and merges into global pull secret:
+```bash
+QUAY_USERNAME=$(cat /etc/acm-d-mce-quay-pull-credentials/acm_d_mce_quay_username)
+QUAY_PASSWORD=$(cat /etc/acm-d-mce-quay-pull-credentials/acm_d_mce_quay_pullsecret)
+QUAY_AUTH=$(echo -n "${QUAY_USERNAME}:${QUAY_PASSWORD}" | base64 -w 0)
+oc get secret pull-secret -n openshift-config -o json | jq -r '.data.".dockerconfigjson"' | base64 -d > /tmp/global-pull-secret.json
+jq --arg QUAY_AUTH "$QUAY_AUTH" '.auths += {"quay.io:443": {"auth":$QUAY_AUTH}}' /tmp/global-pull-secret.json > /tmp/global-pull-secret.json.tmp
+oc set data secret/pull-secret -n openshift-config --from-file=.dockerconfigjson=/tmp/global-pull-secret.json.tmp
+# Then wait for MCP rollout: oc wait mcp master worker --for condition=updated --timeout=30m
+```
+
+**We will NOT use the global pull secret approach** because it triggers a machine config pool rollout (~10-15 min). Instead, we'll use namespace-scoped imagePullSecrets.
 
 ### Step registry file duplication
 
@@ -234,6 +289,16 @@ fi
 ```
 
 For Prow CI, we set `OCP_CONTEXT` before calling deploy-charts.sh to override the `crc-admin` default.
+
+### deploy-charts.sh image configuration
+
+The `replace-params` file in cluster-api-installer (sourced by deploy-charts.sh) sets:
+```bash
+declare -A helm_add_args_a=(
+  [capi]="--set manager.image.url=quay.io/acm-d/ose-cluster-api-rhel9 --set webhook.image.url=quay.io/acm-d/mce-capi-webhook-config-rhel9"
+  [capz]="--set manager.image.url=quay.io/acm-d/cluster-api-provider-azure-rhel9 --set aso.image.url=quay.io/mveber/azureserviceoperator --set manager.image.tag=2.11.0-141b78f --set aso.image.tag=v2.13.0-hcpclusters.3"
+)
+```
 
 ### IPI Azure cluster defaults
 
@@ -257,6 +322,9 @@ gh pr view 75733 --repo openshift/release --json statusCheckRollup \
 # Raw ci-operator log:
 # https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/test-platform-results/pr-logs/pull/openshift_release/75733/rehearse-75733-pull-ci-stolostron-capi-tests-configure-prow-capz-e2e/<BUILD_ID>/artifacts/ci-operator.log
 
+# Step-specific build log (console output):
+# https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/test-platform-results/pr-logs/pull/openshift_release/75733/rehearse-75733-pull-ci-stolostron-capi-tests-configure-prow-capz-e2e/<BUILD_ID>/artifacts/capz-e2e/<step-name>/build-log.txt
+
 # Step results summary:
 curl -sL "<ci-operator.log URL>" | grep -E '"msg":"(Step |Running step|Some steps)' | sed 's/.*"msg":"//;s/".*//'
 ```
@@ -267,7 +335,7 @@ curl -sL "<ci-operator.log URL>" | grep -E '"msg":"(Step |Running step|Some step
 gh pr comment 75733 --repo openshift/release --body "/pj-rehearse pull-ci-stolostron-capi-tests-configure-prow-capz-e2e"
 
 # Abort
-gh pr comment 75733 --repo openshift/release --body "/abort rehearse-75733-pull-ci-stolostron-capi-tests-configure-prow-capz-e2e"
+gh pr comment 75733 --repo openshift/release --body "/pj-rehearse abort"
 ```
 
 ### How to verify env var injection
@@ -276,6 +344,7 @@ Parse `ci-operator-step-graph.json`, find the `capz-e2e` substeps, and check `sp
 ### Reference configs that work
 - `kata-containers/kata-containers` — uses `ipi-azure-pre` chain + `workflow: openshift-e2e-azure` with `cluster_profile` INSIDE `steps:`
 - `openshift-priv/azure-disk-csi-driver` — overrides pre/test/post without workflow, `cluster_profile` INSIDE `steps:`
+- `hypershift-mce-install` — reference for `quay.io/acm-d` credentials via CI vault
 
 ### ci-operator env var injection rules
 - `RELEASE_IMAGE_LATEST` — injected when `releases.latest` is defined AND `cluster_profile` is properly inside `steps:`
@@ -289,39 +358,80 @@ Parse `ci-operator-step-graph.json`, find the `capz-e2e` substeps, and check `sp
 - If a run is stuck as PENDING, abort it and retrigger
 - Lease renewal 502 warnings are transient and harmless
 - Prow kills running jobs when new commits are pushed — must retrigger manually
+- Azure lease queue can cause jobs to be PENDING for hours (seen 3+ hours)
 
 ## Local Repos
 
-- **capi-tests**: `~/git/github/stolostron/capi-tests` (branch: `configure-prow`)
+- **capi-tests**: `~/git/capi-tests` (branch: `configure-prow`)
   - Remote `origin`: `https://github.com/RadekCap/capi-tests.git`
   - Remote `upstream`: `https://github.com/stolostron/capi-tests.git`
-- **openshift/release fork**: `~/git/github/openshift/release` (branch: `stolostron-capi-tests-ci`)
+  - Always push to `upstream`, not `origin`
+- **openshift/release fork**: `~/git/release` (branch: `stolostron-capi-tests-ci`)
   - Remote `origin`: `https://github.com/RadekCap/release.git`
   - Remote `upstream`: `https://github.com/openshift/release.git`
 
 ## Next Session — What To Do
 
-### Step 1: Check rehearsal result (build `2032109621262422016`)
+### Context: Why we need imagePullSecrets
 
-```bash
-gh pr view 75733 --repo openshift/release --json statusCheckRollup \
-  --jq '.statusCheckRollup[] | select(.context | test("capz")) | "\(.state) | \(.targetUrl)"'
-```
+The `capz-test-install-controllers` step deploys CAPI/CAPZ controllers via Helm charts. The charts use private images from `quay.io/acm-d/` (set by the `replace-params` file in cluster-api-installer). The IPI-provisioned OpenShift cluster has no credentials for this registry, so controller pods are stuck in ImagePullBackOff and never become Available.
 
-Or use the `/prow-status` slash command.
+We chose **namespace-scoped imagePullSecrets** (not global pull secret) to avoid triggering a machine config pool rollout (~10-15 min wait).
 
-**Expected outcome**: With USE_K8S=false, `capz-test-management-cluster` should now find controllers in `capi-system`/`capz-system` and pass. If it passes, `capz-test-generate-yamls` will run next (first time!).
+### Step 1: Implement namespace-scoped imagePullSecrets
 
-**NOTE**: The USE_K8S=false fix is in capi-tests (`610f1f7`) but the openshift/release PR step scripts may need updating too. Check if `capz-test-management-cluster-commands.sh` in the release PR sources `capz-test-env.sh` — if yes, it picks up USE_K8S=false automatically from the capi-tests source code. If not, update the release PR copy.
+Add to `capz-test-install-controllers-commands.sh` (and its release PR copy):
 
-### Step 2: If management-cluster passes, debug generate-yamls
+1. **Declare CI vault credentials** in `capz-test-install-controllers-ref.yaml`:
+   ```yaml
+   credentials:
+   - mount_path: /etc/acm-d-mce-quay-pull-credentials
+     name: acm-d-mce-quay-credentials
+     namespace: test-credentials
+   ```
+   This is the same credential used by `hypershift-mce-install` step (file: `~/git/release/ci-operator/step-registry/hypershift/mce/install/hypershift-mce-install-ref.yaml`).
+
+2. **Create imagePullSecret in each controller namespace** (in the shell script, AFTER deploying charts since deploy-charts.sh creates the namespaces):
+   ```bash
+   QUAY_USERNAME=$(cat /etc/acm-d-mce-quay-pull-credentials/acm_d_mce_quay_username)
+   QUAY_PASSWORD=$(cat /etc/acm-d-mce-quay-pull-credentials/acm_d_mce_quay_pullsecret)
+
+   for NS in capi-system capz-system; do
+     kubectl create secret docker-registry acm-d-pull-secret \
+       --namespace "$NS" \
+       --docker-server=quay.io \
+       --docker-username="$QUAY_USERNAME" \
+       --docker-password="$QUAY_PASSWORD" \
+       --dry-run=client -o yaml | kubectl apply -f -
+     # Patch the default ServiceAccount to use the pull secret
+     kubectl patch serviceaccount default -n "$NS" \
+       -p '{"imagePullSecrets": [{"name": "acm-d-pull-secret"}]}'
+   done
+   ```
+
+3. **Also patch the controller-specific ServiceAccounts** if the deployments use them (check `capi-manager`, `capz-manager`, `azureserviceoperator-default` from the install log).
+
+4. **Restart deployments** to pick up the new pull secrets:
+   ```bash
+   kubectl rollout restart deployment -n capi-system
+   kubectl rollout restart deployment -n capz-system
+   ```
+
+### Step 2: Update both repos
+
+1. Edit `capi-tests/openshift-ci/step-registry/capz-test-install-controllers-commands.sh`
+2. Edit `capi-tests/openshift-ci/step-registry/capz-test-install-controllers-ref.yaml` (add credentials block)
+3. Copy both to `release/ci-operator/step-registry/capz/test/install-controllers/`
+4. Commit and push both repos
+5. Trigger rehearsal
+
+### Step 3: If management-cluster passes, debug generate-yamls
 
 `capz-test-generate-yamls` runs `make _generate-yamls` which calls the cluster-api-installer's `gen.sh` script. Potential issues:
 - Missing env vars for YAML generation (AZURE_SUBSCRIPTION_ID, etc.)
 - Script path differences between Kind and IPI modes
-- Check if `gen.sh` needs additional env vars not in `capz-test-env.sh`
 
-### Step 3: Wire remaining test steps
+### Step 4: Wire remaining test steps
 
 Once the first 6 steps pass, add the remaining steps to the CI config in the openshift/release PR:
 ```yaml
@@ -334,6 +444,6 @@ Once the first 6 steps pass, add the remaining steps to the CI config in the ope
     - ref: capz-test-validate-cleanup         # ADD
 ```
 
-### Step 4: Update this file
+### Step 5: Update PROW_SESSION_NOTES.md
 
-After each session, update `PROW_SESSION_NOTES.md` with new findings and push to `upstream/configure-prow`.
+After each session, update this file and push to `upstream/configure-prow`.
