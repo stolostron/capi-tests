@@ -6,14 +6,13 @@ Onboard `stolostron/capi-tests` to OpenShift CI via PR https://github.com/opensh
 Branch in capi-tests: `configure-prow`
 Branch in openshift/release fork (RadekCap/release): `stolostron-capi-tests-ci`
 
-## Current State (as of 2026-03-11 17:15 UTC)
+## Current State (as of 2026-03-12)
 
-- **Latest commit pushed to capi-tests**: `bc9ae78` — "docs: update Prow session notes with 2026-03-11 findings"
-- **Latest commit on openshift/release PR**: `088afa2e3c` — "ci: temporarily disable e2e steps beyond generate-yamls"
-- **Previous rehearsal (build `2031737114856525824`)**: IPI cluster provisioned successfully (58m39s). Failed at `capz-test-check-dependencies` (docker/kind not in image). **Fix committed in `624c3b5`**.
-- **Current rehearsal (build `2031767535971471360`)**: PENDING since 16:21 UTC. IPI provisioning in progress (~59min expected). This run includes the docker/kind fix. **Check this result first when resuming.**
-- **PR description updated**: Added `capz-test-install-controllers` step, updated descriptions to reflect IPI (not Kind) mode
-- **What to do when resuming**: Check build `2031767535971471360` result. If still pending, wait. If failed, parse ci-operator.log for the failing step. Expected next failure point: `capz-test-setup` or `capz-test-install-controllers`.
+- **Latest commit pushed to capi-tests**: `51f549d` — "fix: propagate ARO_REPO_URL and ARO_REPO_BRANCH via capz-test-env.sh"
+- **Latest commit on openshift/release PR**: `3ebe92ab46d` — "fix: source shared env in install-controllers step"
+- **Previous rehearsal (build `2031822848447746048`)**: FAILED at `capz-test-install-controllers`. `check-dependencies` and `setup` both passed. Install-controllers failed because: (1) wrong repo/branch defaults (RadekCap/ARO-ASO instead of marek-veber/capi-tests), (2) `deploy-charts.sh` uses hardcoded `--context=crc-admin` which doesn't exist on the IPI cluster. **Repo/branch fix committed. Context issue still open.**
+- **Current rehearsal**: Triggered 2026-03-12. This run includes the repo/branch fix. **Expected to fail on the `crc-admin` context issue.**
+- **What to do when resuming**: Check rehearsal result. Confirm repo/branch fix works (should clone correct repo). Then fix the `crc-admin` kube context issue in `deploy-charts.sh`.
 
 ## CI Config File
 
@@ -95,7 +94,22 @@ post:
   12. ipi-azure-post (chain)       — Deprovision IPI cluster
 ```
 
-## Latest Run Results (2026-03-11, build `2031737114856525824`)
+## Latest Run Results (2026-03-12, build `2031822848447746048`)
+
+| Step | Lifecycle | Status |
+|------|-----------|--------|
+| ipi-azure-pre (15 substeps) | pre | All passed (IPI cluster created in ~64min) |
+| `capz-test-check-dependencies` | pre | Passed (11s) ✅ |
+| `capz-test-setup` | pre | Passed (11s) ✅ |
+| `capz-test-install-controllers` | pre | Failed (1s) ❌ — wrong repo/branch + crc-admin context |
+| `capz-test-management-cluster` | test | Not reached |
+| `capz-test-generate-yamls` | test | Not reached |
+| `capz-test-teardown` | post | Passed (6s) |
+| ipi-azure-post (deprovisioning) | post | Passed (~9min) |
+
+**Total run time**: ~1h41m
+
+### Previous Run (2026-03-11, build `2031737114856525824`)
 
 | Step | Lifecycle | Status |
 |------|-----------|--------|
@@ -141,7 +155,7 @@ post:
 
 ### Session 2 (2026-03-11)
 
-#### 6. docker/kind check fails in external cluster mode (FIXED — commit `624c3b5`)
+#### 6. docker/kind check fails in external cluster mode (FIXED — commit `624c3b5` in capi-tests)
 - IPI cluster provisioned successfully, but `capz-test-check-dependencies` failed
 - `TestCheckDependencies_ToolAvailable` unconditionally checked for `docker` and `kind`
 - In external cluster mode (`USE_KUBECONFIG`), these tools are not needed
@@ -153,6 +167,21 @@ post:
 - That run tested `main` branch which used old repo defaults (`RadekCap/cluster-api-installer`, branch `ARO-ASO`)
 - `configure-prow` branch already has correct defaults (`marek-veber/cluster-api-installer`, branch `capi-tests`)
 - `gen.sh` exists in `marek-veber/cluster-api-installer` on the `capi-tests` branch
+
+### Session 3 (2026-03-12)
+
+#### 8. install-controllers used wrong repo/branch defaults (FIXED — commit `51f549d` in capi-tests, `3ebe92ab46d` in release)
+- `capz-test-install-controllers` step had inline defaults: `RadekCap/cluster-api-installer` branch `ARO-ASO`
+- It was the only step that didn't source `openshift-ci/capz-test-env.sh`
+- Fix: Refactored to source `capz-test-env.sh` (like all other steps), added `ARO_REPO_URL` and `ARO_REPO_BRANCH` exports to the env file
+
+#### 9. `deploy-charts.sh` hardcodes `--context=crc-admin` (OPEN)
+- `deploy-charts.sh` in `cluster-api-installer` sets `KUBE_CONTEXT=--context=crc-admin`
+- On the IPI-provisioned cluster, this context does not exist
+- Error: `error: context "crc-admin" does not exist`
+- Also: `!!!!!!!!! SKIP DEPLOY: charts/azure-service-operator` — ASO is being skipped
+- **Fix needed**: Either set `KUBE_CONTEXT` env var before calling the script, or patch `deploy-charts.sh` to use current context by default
+- This is in the `marek-veber/cluster-api-installer` repo (branch `capi-tests`), not in capi-tests or openshift/release
 
 ## Key Debugging Insights
 
@@ -213,20 +242,20 @@ Parse `ci-operator-step-graph.json`, find the `capz-e2e` substeps, and check `sp
 
 ### Step 1: Check rehearsal result
 
-The docker/kind fix has been pushed. A rehearsal was triggered at 15:43 UTC on 2026-03-11. Check the result:
+A rehearsal was triggered on 2026-03-12 with the repo/branch fix. Check the result:
 ```bash
 gh pr view 75733 --repo openshift/release --json statusCheckRollup \
   --jq '.statusCheckRollup[] | select(.context | test("capz")) | "\(.state) | \(.targetUrl)"'
 ```
 
-### Step 2: Debug next failure
+**Expected outcome**: The repo/branch fix should work (correct clone of `marek-veber/cluster-api-installer` branch `capi-tests`). The run should still fail at `capz-test-install-controllers` due to the `crc-admin` kube context issue (issue #9 above).
 
-Expected progression after docker/kind fix:
-1. `capz-test-check-dependencies` — should now pass (docker/kind skipped in external cluster mode)
-2. `capz-test-setup` — clones `marek-veber/cluster-api-installer` (branch `capi-tests`), verifies scripts
-3. `capz-test-install-controllers` — deploys CAPI/CAPZ/ASO via Helm charts onto the IPI cluster
-4. `capz-test-management-cluster` — validates controllers are running
-5. `capz-test-generate-yamls` — generates YAML manifests
+### Step 2: Fix `deploy-charts.sh` kube context
+
+The `deploy-charts.sh` script in `marek-veber/cluster-api-installer` (branch `capi-tests`) hardcodes `KUBE_CONTEXT=--context=crc-admin`. Options:
+1. **Set `KUBE_CONTEXT` env var** in the install-controllers step before calling `deploy-charts.sh` — e.g., `export KUBE_CONTEXT="--context=$(kubectl config current-context)"`
+2. **Patch `deploy-charts.sh`** in `cluster-api-installer` to default to current context when env var is not set
+3. **Investigate ASO skip** — `charts/azure-service-operator` is being skipped, which will be needed
 
 ### Step 3: Wire remaining test steps
 
