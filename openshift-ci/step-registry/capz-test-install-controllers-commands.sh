@@ -24,6 +24,13 @@ export DO_DEPLOY=true
 export DO_CHECK=false
 
 cd "${ARO_REPO_DIR}"
+
+# Set OCP_CONTEXT so deploy-charts.sh uses the current kubeconfig context
+# instead of defaulting to "crc-admin" (which doesn't exist on IPI clusters).
+export OCP_CONTEXT
+OCP_CONTEXT=$(kubectl config current-context)
+echo "Using kube context: ${OCP_CONTEXT}"
+
 echo "Deploying CAPI/CAPZ/ASO controllers..."
 bash scripts/deploy-charts.sh cluster-api cluster-api-provider-azure azure-service-operator
 
