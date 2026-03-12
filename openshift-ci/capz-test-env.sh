@@ -15,6 +15,8 @@ fi
 export INFRA_PROVIDER=aro
 export CAPI_USER=prow
 export DEPLOYMENT_ENV=ci
+export ARO_REPO_URL="https://github.com/marek-veber/cluster-api-installer.git"
+export ARO_REPO_BRANCH="capi-tests"
 export ARO_REPO_DIR="/tmp/cluster-api-installer-aro"
 
 # Use the IPI-provisioned cluster kubeconfig (when available).

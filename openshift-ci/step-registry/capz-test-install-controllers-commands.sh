@@ -4,23 +4,16 @@ set -o nounset
 set -o pipefail
 set -o xtrace
 
-# Source Azure credentials from the CI cluster profile
-AZURE_CLIENT_ID=$(jq -r .clientId "${CLUSTER_PROFILE_DIR}/osServicePrincipal.json")
-AZURE_CLIENT_SECRET=$(jq -r .clientSecret "${CLUSTER_PROFILE_DIR}/osServicePrincipal.json")
-AZURE_TENANT_ID=$(jq -r .tenantId "${CLUSTER_PROFILE_DIR}/osServicePrincipal.json")
-AZURE_SUBSCRIPTION_ID=$(jq -r .subscriptionId "${CLUSTER_PROFILE_DIR}/osServicePrincipal.json")
-export AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID
+# Source shared environment (Azure creds, kubeconfig, repo config)
+source openshift-ci/capz-test-env.sh
 
-# Use the CI-provisioned cluster kubeconfig
-export KUBECONFIG="${SHARED_DIR}/kubeconfig"
-
-# Clone the cluster-api-installer repository
-ARO_REPO_URL="${ARO_REPO_URL:-https://github.com/RadekCap/cluster-api-installer.git}"
-ARO_REPO_BRANCH="${ARO_REPO_BRANCH:-ARO-ASO}"
-ARO_REPO_DIR="/tmp/cluster-api-installer-aro"
-
-echo "Cloning cluster-api-installer (branch: ${ARO_REPO_BRANCH})..."
-git clone --branch "${ARO_REPO_BRANCH}" --depth 1 "${ARO_REPO_URL}" "${ARO_REPO_DIR}"
+# Clone the cluster-api-installer repository if not already present
+if [[ -d "${ARO_REPO_DIR}" ]]; then
+  echo "Repository already cloned at ${ARO_REPO_DIR}, skipping clone."
+else
+  echo "Cloning cluster-api-installer (branch: ${ARO_REPO_BRANCH})..."
+  git clone --branch "${ARO_REPO_BRANCH}" --depth 1 "${ARO_REPO_URL}" "${ARO_REPO_DIR}"
+fi
 
 # Deploy CAPI/CAPZ/ASO controllers to the existing cluster
 # DO_INIT_KIND=false - do NOT create a Kind cluster (we use CI-provisioned cluster)
