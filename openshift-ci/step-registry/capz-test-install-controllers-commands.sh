@@ -31,8 +31,8 @@ export OCP_CONTEXT
 OCP_CONTEXT=$(kubectl config current-context)
 echo "Using kube context: ${OCP_CONTEXT}"
 
-echo "Deploying CAPI/CAPZ/ASO controllers..."
-bash scripts/deploy-charts.sh cluster-api cluster-api-provider-azure azure-service-operator
+echo "Deploying CAPI/CAPZ controllers..."
+bash scripts/deploy-charts.sh cluster-api cluster-api-provider-azure
 
 # Patch ASO credentials secret with the Azure SP credentials
 echo "Patching ASO credentials secret..."
