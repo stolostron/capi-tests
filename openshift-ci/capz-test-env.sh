@@ -23,3 +23,7 @@ export ARO_REPO_DIR="/tmp/cluster-api-installer-aro"
 if [[ -n "${SHARED_DIR:-}" ]]; then
   export USE_KUBECONFIG="${SHARED_DIR}/kubeconfig"
 fi
+
+# Controllers are installed via deploy-charts.sh into standard namespaces
+# (capi-system, capz-system), not MCE's multicluster-engine namespace.
+export USE_K8S=false
