@@ -31,6 +31,19 @@ export OCP_CONTEXT
 OCP_CONTEXT=$(kubectl config current-context)
 echo "Using kube context: ${OCP_CONTEXT}"
 
+# Install cert-manager (required by CAPI/CAPZ controllers for webhook TLS certificates).
+# In Kind mode, setup-kind-cluster.sh handles this, but we skip Kind setup (DO_INIT_KIND=false)
+# so we must install cert-manager ourselves on the IPI cluster.
+HELM_INSTALL_TIMEOUT=${HELM_INSTALL_TIMEOUT:-10m}
+echo "Installing cert-manager..."
+helm repo add jetstack https://charts.jetstack.io --force-update
+helm repo update
+helm upgrade --install cert-manager jetstack/cert-manager \
+  --namespace cert-manager --create-namespace \
+  --set crds.enabled=true \
+  --wait --timeout "${HELM_INSTALL_TIMEOUT}"
+echo "cert-manager installed successfully."
+
 echo "Deploying CAPI/CAPZ controllers..."
 bash scripts/deploy-charts.sh cluster-api cluster-api-provider-azure
 
