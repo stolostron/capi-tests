@@ -140,6 +140,8 @@ func MonitorCluster(t *testing.T, kubeContext, namespace, clusterName string) (*
 	scriptPath := "../scripts/monitor-cluster-json.sh"
 
 	// Run the monitoring script with --context parameter
+	// #nosec G204 -- scriptPath is hardcoded, and kubeContext/namespace/clusterName are passed as
+	// separate arguments (not interpolated), making shell injection impossible
 	cmd := exec.Command("bash", scriptPath, "--context", kubeContext, namespace, clusterName)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
