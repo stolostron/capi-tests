@@ -6,6 +6,10 @@ ref:
     requests:
       cpu: 100m
       memory: 200Mi
+  credentials:
+  - mount_path: /etc/quay-pull-credentials
+    name: stolostron-capi-tests-quay-credentials
+    namespace: test-credentials
   documentation: |-
     Installs CAPI/CAPZ/ASO controllers on the CI-provisioned cluster
     using the cluster-api-installer deploy-charts.sh script.

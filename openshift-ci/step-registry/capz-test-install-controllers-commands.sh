@@ -51,4 +51,34 @@ stringData:
   AZURE_CLIENT_SECRET: "${AZURE_CLIENT_SECRET}"
 EOF
 
+# Create imagePullSecrets for quay.io/acm-d/ private registry
+# The credentials are mounted from the CI vault by the step ref YAML
+echo "Creating imagePullSecrets for quay.io/acm-d/..."
+QUAY_AUTH=$(cat /etc/quay-pull-credentials/auth)
+
+for NS in capi-system capz-system; do
+  cat <<EOSECRET | kubectl apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: acm-d-pull-secret
+  namespace: ${NS}
+type: kubernetes.io/dockerconfigjson
+stringData:
+  .dockerconfigjson: '{"auths":{"quay.io":{"auth":"${QUAY_AUTH}"}}}'
+EOSECRET
+done
+
+# Patch the controller-specific ServiceAccounts to use the pull secret
+PATCH='{"imagePullSecrets": [{"name": "acm-d-pull-secret"}]}'
+kubectl patch serviceaccount capi-manager -n capi-system -p "$PATCH"
+kubectl patch serviceaccount mce-labeling-manager -n capi-system -p "$PATCH"
+kubectl patch serviceaccount capz-manager -n capz-system -p "$PATCH"
+kubectl patch serviceaccount azureserviceoperator-default -n capz-system -p "$PATCH"
+
+# Restart deployments to pick up the new pull secrets
+echo "Restarting controller deployments..."
+kubectl rollout restart deployment -n capi-system
+kubectl rollout restart deployment -n capz-system
+
 echo "Controllers installed successfully."
