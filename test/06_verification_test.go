@@ -131,7 +131,13 @@ func TestVerification_ClusterNodes(t *testing.T) {
 		t.Skipf("Kubeconfig not available at %s, run TestVerification_RetrieveKubeconfig first", kubeconfigPath)
 	}
 
-	SetEnvVar(t, "KUBECONFIG", kubeconfigPath)
+	// Set KUBECONFIG for external cluster mode (management cluster)
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	}
+
+	context := config.GetKubeContext()
+	provisionedClusterName := config.GetProvisionedClusterName()
 
 	timeout := DefaultNodeReadyTimeout
 	pollInterval := 30 * time.Second
@@ -163,29 +169,47 @@ func TestVerification_ClusterNodes(t *testing.T) {
 		iteration++
 		PrintToTTY("[%d] Checking cluster nodes...\n", iteration)
 
-		output, err := RunCommand(t, "kubectl", "get", "nodes")
+		// Use monitor script to get cluster status (including nodes)
+		data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 		if err != nil {
-			PrintToTTY("[%d] ⚠️  Failed to get nodes: %v\n", iteration, err)
-			t.Logf("Failed to get nodes (attempt %d): %v", iteration, err)
-		} else {
-			lines := strings.Split(strings.TrimSpace(output), "\n")
-			// Filter out empty lines
-			nodeCount := 0
-			for _, line := range lines {
-				if strings.TrimSpace(line) != "" && !strings.HasPrefix(line, "NAME") {
-					nodeCount++
-				}
-			}
+			PrintToTTY("[%d] ⚠️  Failed to monitor cluster: %v\n", iteration, err)
+			t.Logf("Failed to monitor cluster (attempt %d): %v", iteration, err)
+			ReportProgress(t, iteration, elapsed, remaining, timeout)
+			time.Sleep(pollInterval)
+			continue
+		}
 
-			if nodeCount > 0 {
-				PrintToTTY("\n✅ Cluster nodes available! (took %v)\n", elapsed.Round(time.Second))
+		// Check if there's an error connecting to the workload cluster
+		if data.NodesError != nil && *data.NodesError != "" {
+			PrintToTTY("[%d] ⚠️  Unable to connect to cluster: %s\n", iteration, *data.NodesError)
+			t.Logf("Unable to connect to cluster (attempt %d): %s", iteration, *data.NodesError)
+		}
+
+		// Check nodes
+		nodeCount := len(data.Nodes)
+		if nodeCount > 0 {
+			PrintToTTY("\n✅ Cluster nodes available! (took %v)\n", elapsed.Round(time.Second))
+			t.Logf("Cluster has %d node(s)", nodeCount)
+
+			// Print node details using workload cluster kubeconfig
+			PrintToTTY("Running: kubectl get nodes\n\n")
+			// Temporarily set KUBECONFIG to workload cluster for this command
+			oldKubeconfig := os.Getenv("KUBECONFIG")
+			os.Setenv("KUBECONFIG", kubeconfigPath)
+			output, err := RunCommand(t, "kubectl", "get", "nodes")
+			os.Setenv("KUBECONFIG", oldKubeconfig)
+
+			if err == nil {
 				PrintToTTY("%s\n\n", output)
 				t.Logf("Cluster nodes:\n%s", output)
-				t.Logf("Cluster has %d node(s)", nodeCount)
-				return
 			}
+			return
+		}
 
-			PrintToTTY("[%d] No nodes found yet\n", iteration)
+		if nodeCount == 0 {
+			if data.NodesError == nil || *data.NodesError == "" {
+				PrintToTTY("[%d] ⏳ No nodes found yet\n", iteration)
+			}
 		}
 
 		ReportProgress(t, iteration, elapsed, remaining, timeout)

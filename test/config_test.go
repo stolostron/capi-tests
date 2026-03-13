@@ -309,27 +309,60 @@ func TestNewAWSProvider(t *testing.T) {
 		t.Errorf("Expected webhook port 443, got %d", p.Webhooks[0].Port)
 	}
 
-	// Verify credential secret
+	// Verify credential secret (ROSA uses cluster-scoped AWSClusterStaticIdentity with secret in CAPA namespace)
 	if p.CredentialSecret == nil {
-		t.Fatal("Expected credential secret to be defined")
+		t.Fatal("Expected credential secret to be set for ROSA")
 	}
-	if p.CredentialSecret.Name != "capa-manager-bootstrap-credentials" {
-		t.Errorf("Expected capa-manager-bootstrap-credentials, got %q", p.CredentialSecret.Name)
+	if p.CredentialSecret.Name != "{WORKLOAD_CLUSTER_NAME}-account-creds" {
+		t.Errorf("Expected ROSA credential secret name '{WORKLOAD_CLUSTER_NAME}-account-creds', got %q", p.CredentialSecret.Name)
 	}
-	if len(p.CredentialSecret.RequiredFields) != 1 {
-		t.Fatalf("Expected 1 required field, got %d", len(p.CredentialSecret.RequiredFields))
+	if p.CredentialSecret.Namespace != "{INFRA_PROVIDER_NAMESPACE}" {
+		t.Errorf("Expected ROSA credential secret namespace '{INFRA_PROVIDER_NAMESPACE}', got %q", p.CredentialSecret.Namespace)
 	}
-	if p.CredentialSecret.RequiredFields[0] != "credentials" {
-		t.Errorf("Expected required field 'credentials', got %q", p.CredentialSecret.RequiredFields[0])
+	// Verify required fields (both individual fields for CAPA and INI format for ROSA SDK)
+	expectedFields := []string{"AccessKeyID", "SecretAccessKey", "credentials"}
+	if len(p.CredentialSecret.RequiredFields) != len(expectedFields) {
+		t.Fatalf("Expected %d required fields, got %d", len(expectedFields), len(p.CredentialSecret.RequiredFields))
 	}
-	if len(p.CredentialSecret.RequiredEnvVars) != 2 {
-		t.Fatalf("Expected 2 required env vars, got %d", len(p.CredentialSecret.RequiredEnvVars))
+	for i, field := range expectedFields {
+		if p.CredentialSecret.RequiredFields[i] != field {
+			t.Errorf("RequiredFields[%d] = %q, expected %q", i, p.CredentialSecret.RequiredFields[i], field)
+		}
 	}
-	if p.CredentialSecret.RequiredEnvVars[0] != "AWS_ACCESS_KEY_ID" {
-		t.Errorf("Expected first env var 'AWS_ACCESS_KEY_ID', got %q", p.CredentialSecret.RequiredEnvVars[0])
+
+	// Verify expected files
+	expectedFiles := []string{"secrets.yaml", "is.yaml", "rosa.yaml"}
+	if len(p.ExpectedFiles) != len(expectedFiles) {
+		t.Fatalf("Expected %d files, got %d: %v", len(expectedFiles), len(p.ExpectedFiles), p.ExpectedFiles)
 	}
-	if p.CredentialSecret.RequiredEnvVars[1] != "AWS_SECRET_ACCESS_KEY" {
-		t.Errorf("Expected second env var 'AWS_SECRET_ACCESS_KEY', got %q", p.CredentialSecret.RequiredEnvVars[1])
+	for i, file := range p.ExpectedFiles {
+		if file != expectedFiles[i] {
+			t.Errorf("ExpectedFiles[%d] = %q, expected %q", i, file, expectedFiles[i])
+		}
+	}
+
+	// Verify YAML generation credentials
+	if len(p.YAMLGenCredentials) != 6 {
+		t.Fatalf("Expected 6 YAML gen credentials, got %d", len(p.YAMLGenCredentials))
+	}
+	expectedCreds := []struct {
+		name      string
+		sensitive bool
+	}{
+		{"AWS_REGION", false},
+		{"OCM_API_URL", false},
+		{"OCM_CLIENT_ID", false},
+		{"AWS_ACCESS_KEY_ID", false},
+		{"AWS_SECRET_ACCESS_KEY", true},
+		{"OCM_CLIENT_SECRET", true},
+	}
+	for i, expected := range expectedCreds {
+		if p.YAMLGenCredentials[i].Name != expected.name {
+			t.Errorf("Expected YAMLGenCredentials[%d].Name = %q, got %q", i, expected.name, p.YAMLGenCredentials[i].Name)
+		}
+		if p.YAMLGenCredentials[i].Sensitive != expected.sensitive {
+			t.Errorf("Expected YAMLGenCredentials[%d].Sensitive = %v, got %v", i, expected.sensitive, p.YAMLGenCredentials[i].Sensitive)
+		}
 	}
 
 	// Verify deployment charts
@@ -346,15 +379,17 @@ func TestNewAWSProvider(t *testing.T) {
 func TestNewAWSProvider_Namespace(t *testing.T) {
 	p := NewAWSProvider("custom-namespace")
 
-	// Verify namespace propagates to controller, webhook, and credential secret
+	// Verify namespace propagates to controller and webhook
 	if p.Controllers[0].Namespace != "custom-namespace" {
 		t.Errorf("Controller namespace = %q, expected 'custom-namespace'", p.Controllers[0].Namespace)
 	}
 	if p.Webhooks[0].Namespace != "custom-namespace" {
 		t.Errorf("Webhook namespace = %q, expected 'custom-namespace'", p.Webhooks[0].Namespace)
 	}
-	if p.CredentialSecret.Namespace != "custom-namespace" {
-		t.Errorf("Credential secret namespace = %q, expected 'custom-namespace'", p.CredentialSecret.Namespace)
+	// Note: ROSA credential secret namespace uses placeholder {INFRA_PROVIDER_NAMESPACE}
+	// which resolves to the CAPA controller namespace (not the workload cluster namespace)
+	if p.CredentialSecret.Namespace != "{INFRA_PROVIDER_NAMESPACE}" {
+		t.Errorf("Credential secret namespace = %q, expected '{INFRA_PROVIDER_NAMESPACE}'", p.CredentialSecret.Namespace)
 	}
 }
 

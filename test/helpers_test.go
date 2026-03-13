@@ -855,7 +855,7 @@ func TestDeploymentState_Namespace(t *testing.T) {
 	})
 }
 
-func TestFormatAROControlPlaneConditions(t *testing.T) {
+func TestFormatControlPlaneConditions(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -973,11 +973,11 @@ func TestFormatAROControlPlaneConditions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := FormatAROControlPlaneConditions(tt.input)
+			result := FormatControlPlaneConditions(tt.input)
 
 			for _, substr := range tt.contains {
 				if !strings.Contains(result, substr) {
-					t.Errorf("FormatAROControlPlaneConditions() result = %q, expected to contain %q", result, substr)
+					t.Errorf("FormatControlPlaneConditions() result = %q, expected to contain %q", result, substr)
 				}
 			}
 		})
@@ -987,13 +987,13 @@ func TestFormatAROControlPlaneConditions(t *testing.T) {
 func TestIsWaitingCondition(t *testing.T) {
 	tests := []struct {
 		name            string
-		condition       AROControlPlaneCondition
+		condition       ControlPlaneCondition
 		expectedWaiting bool
 		expectedDesc    string
 	}{
 		{
 			name: "True status - never waiting",
-			condition: AROControlPlaneCondition{
+			condition: ControlPlaneCondition{
 				Type:    "Ready",
 				Status:  "True",
 				Message: "requires at least one ready machine pool",
@@ -1003,7 +1003,7 @@ func TestIsWaitingCondition(t *testing.T) {
 		},
 		{
 			name: "False with machine pool message",
-			condition: AROControlPlaneCondition{
+			condition: ControlPlaneCondition{
 				Type:    "ExternalAuthReady",
 				Status:  "False",
 				Reason:  "ReconciliationFailed",
@@ -1014,7 +1014,7 @@ func TestIsWaitingCondition(t *testing.T) {
 		},
 		{
 			name: "False with requeue message",
-			condition: AROControlPlaneCondition{
+			condition: ControlPlaneCondition{
 				Type:    "SomeCondition",
 				Status:  "False",
 				Reason:  "SomeReason",
@@ -1025,7 +1025,7 @@ func TestIsWaitingCondition(t *testing.T) {
 		},
 		{
 			name: "False with not found message",
-			condition: AROControlPlaneCondition{
+			condition: ControlPlaneCondition{
 				Type:    "ResourceReady",
 				Status:  "False",
 				Reason:  "Error",
@@ -1036,7 +1036,7 @@ func TestIsWaitingCondition(t *testing.T) {
 		},
 		{
 			name: "False without waiting pattern",
-			condition: AROControlPlaneCondition{
+			condition: ControlPlaneCondition{
 				Type:    "Ready",
 				Status:  "False",
 				Reason:  "Error",
@@ -1047,7 +1047,7 @@ func TestIsWaitingCondition(t *testing.T) {
 		},
 		{
 			name: "False with empty message",
-			condition: AROControlPlaneCondition{
+			condition: ControlPlaneCondition{
 				Type:   "Ready",
 				Status: "False",
 				Reason: "Error",
@@ -1057,7 +1057,7 @@ func TestIsWaitingCondition(t *testing.T) {
 		},
 		{
 			name: "Case insensitive matching",
-			condition: AROControlPlaneCondition{
+			condition: ControlPlaneCondition{
 				Type:    "SomeCondition",
 				Status:  "False",
 				Reason:  "Error",

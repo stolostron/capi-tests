@@ -290,7 +290,7 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 - `MANAGEMENT_CLUSTER_NAME` - Management cluster name (default: `capz-tests-stage` for ARO, `capa-tests-stage` for ROSA)
   - **Note**: Tests automatically translate this to `KIND_CLUSTER_NAME` for the deployment script
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
-- `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests-cluster` for ARO, `capa-tests-cluster` for ROSA)
+- `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests` for ARO, `capa-tests` for ROSA). Keep short as cloud providers may have length limits (e.g., Azure node pools max 15 chars including suffixes)
 - `CS_CLUSTER_NAME` - **C**luster **S**ervice cluster name prefix used for YAML generation and Azure resource naming (default: `${CAPI_USER}-${DEPLOYMENT_ENV}`). The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`. This prefix is also used for the ExternalAuth resource ID.
 - `OCP_VERSION` - OpenShift version (default: `4.21`)
 - `REGION` - Azure region (default: `uksouth`)

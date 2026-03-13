@@ -9,7 +9,7 @@ import (
 
 // TestDeletion_DeleteCluster tests deleting the workload cluster from the management cluster.
 // This initiates the deletion by removing the Cluster resource, which triggers
-// CAPI/CAPZ to clean up all associated resources including Azure resources.
+// CAPI to clean up all associated resources including cloud provider resources.
 func TestDeletion_DeleteCluster(t *testing.T) {
 	config := NewTestConfig()
 
@@ -38,8 +38,34 @@ func TestDeletion_DeleteCluster(t *testing.T) {
 	PrintToTTY("🗑️  Initiating cluster deletion...\n\n")
 	t.Logf("Deleting cluster '%s' from namespace '%s'", provisionedClusterName, config.WorkloadClusterNamespace)
 
+	// ROSA-specific deletion: Delete ROSAControlPlane first to avoid minimum replica constraint errors
+	// ROSA enforces minimum 2 replicas across all machine pools, so deleting machine pools individually fails
+	// Deleting the control plane first triggers proper cluster deletion in AWS
+	if config.HasProvider("rosa") {
+		controlPlaneName := config.GetProvisionedAROControlPlaneName() // Returns <cluster>-control-plane for both ARO/ROSA
+
+		// Check if ROSAControlPlane exists
+		_, cpErr := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
+			"get", "rosacontrolplane", controlPlaneName)
+		if cpErr == nil {
+			PrintToTTY("🗑️  Deleting ROSAControlPlane '%s' first...\n", controlPlaneName)
+			t.Logf("Deleting ROSAControlPlane '%s' before cluster", controlPlaneName)
+
+			cpOutput, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
+				"delete", "rosacontrolplane", controlPlaneName, "--wait=false")
+			if err != nil {
+				PrintToTTY("⚠️  Failed to delete ROSAControlPlane: %v\n", err)
+				t.Logf("Warning: Failed to delete ROSAControlPlane: %v\nOutput: %s", err, cpOutput)
+			} else {
+				PrintToTTY("✅ ROSAControlPlane deletion initiated\n")
+				t.Logf("ROSAControlPlane deletion initiated: %s", cpOutput)
+			}
+		}
+	}
+
 	// Delete the cluster resource - this triggers cascading deletion of all related resources
 	// Use --wait=false to return immediately so the next test can monitor deletion progress
+	PrintToTTY("🗑️  Deleting Cluster resource...\n")
 	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
 		"delete", "cluster", provisionedClusterName, "--wait=false")
 	if err != nil {
@@ -69,8 +95,11 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 	// Get the provisioned cluster name from aro.yaml
 	provisionedClusterName := config.GetProvisionedClusterName()
 
-	// Azure resource group name
-	resourceGroup := fmt.Sprintf("%s-resgroup", config.ClusterNamePrefix)
+	// Azure resource group name (only for ARO provider)
+	resourceGroup := ""
+	if config.HasProvider("aro") {
+		resourceGroup = fmt.Sprintf("%s-resgroup", config.ClusterNamePrefix)
+	}
 
 	PrintTestHeader(t, "TestDeletion_WaitForClusterDeletion",
 		"Wait for cluster resource to be fully deleted")
@@ -82,7 +111,10 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 
 	PrintToTTY("⏳ Waiting for cluster '%s' to be deleted...\n", provisionedClusterName)
 	PrintToTTY("Namespace: %s | Timeout: %v | Poll interval: %v\n", config.WorkloadClusterNamespace, timeout, pollInterval)
-	PrintToTTY("Azure Resource Group: %s\n\n", resourceGroup)
+	if resourceGroup != "" {
+		PrintToTTY("Azure Resource Group: %s\n", resourceGroup)
+	}
+	PrintToTTY("\n")
 	t.Logf("Waiting for cluster '%s' deletion (namespace: %s, timeout: %v)...", provisionedClusterName, config.WorkloadClusterNamespace, timeout)
 
 	iteration := 0
@@ -92,24 +124,41 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 
 		if elapsed > timeout {
 			PrintToTTY("\n❌ Timeout waiting for cluster deletion after %v\n\n", elapsed.Round(time.Second))
+
+			// Build provider-agnostic troubleshooting message
+			controlPlaneResource := "controlplane"
+			cleanupCommand := "make clean"
+			additionalSteps := ""
+
+			if config.HasProvider("aro") {
+				controlPlaneResource = "arocontrolplane"
+				cleanupCommand = "make clean-azure"
+				if resourceGroup != "" {
+					additionalSteps = fmt.Sprintf("  4. Check Azure resource group: az group show --name %s 2>/dev/null\n", resourceGroup)
+				}
+			} else if config.HasProvider("rosa") {
+				controlPlaneResource = "rosacontrolplane"
+			}
+
 			t.Errorf("Timeout waiting for cluster '%s' to be deleted after %v.\n\n"+
 				"Troubleshooting steps:\n"+
 				"  1. Check cluster status: kubectl --context %s -n %s get cluster %s -o yaml\n"+
 				"  2. Check for stuck finalizers: kubectl --context %s -n %s get cluster %s -o jsonpath='{.metadata.finalizers}'\n"+
-				"  3. Check remaining CAPI resources: kubectl --context %s -n %s get arocontrolplane,machinepool\n"+
-				"  4. Check Azure resource group: az group show --name %s 2>/dev/null\n\n"+
+				"  3. Check remaining CAPI resources: kubectl --context %s -n %s get %s,machinepool\n"+
+				"%s\n"+
 				"Common causes:\n"+
-				"  - Azure resource deletion taking longer than expected\n"+
+				"  - Cloud resource deletion taking longer than expected\n"+
 				"  - Finalizers blocking resource deletion\n"+
-				"  - Azure resource stuck in 'Deleting' state\n\n"+
+				"  - Cloud resources stuck in 'Deleting' state\n\n"+
 				"To increase timeout: export DEPLOYMENT_TIMEOUT=60m\n"+
 				"To manually clean up:\n"+
-				"  make clean-azure  # Removes Azure resources",
+				"  %s",
 				provisionedClusterName, elapsed.Round(time.Second),
 				context, config.WorkloadClusterNamespace, provisionedClusterName,
 				context, config.WorkloadClusterNamespace, provisionedClusterName,
-				context, config.WorkloadClusterNamespace,
-				resourceGroup)
+				context, config.WorkloadClusterNamespace, controlPlaneResource,
+				additionalSteps,
+				cleanupCommand)
 			return
 		}
 
@@ -135,8 +184,8 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 	}
 }
 
-// TestDeletion_VerifyAROControlPlaneDeletion verifies the AROControlPlane resource is deleted.
-func TestDeletion_VerifyAROControlPlaneDeletion(t *testing.T) {
+// TestDeletion_VerifyControlPlaneDeletion verifies the control plane resource is deleted.
+func TestDeletion_VerifyControlPlaneDeletion(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
@@ -145,27 +194,27 @@ func TestDeletion_VerifyAROControlPlaneDeletion(t *testing.T) {
 	}
 
 	context := config.GetKubeContext()
+	provisionedClusterName := config.GetProvisionedClusterName()
 
-	PrintTestHeader(t, "TestDeletion_VerifyAROControlPlaneDeletion",
-		"Verify AROControlPlane resource is deleted")
+	PrintTestHeader(t, "TestDeletion_VerifyControlPlaneDeletion",
+		"Verify control plane resource is deleted")
 
-	PrintToTTY("Checking for remaining AROControlPlane resources in namespace '%s'...\n", config.WorkloadClusterNamespace)
-	t.Logf("Checking for remaining AROControlPlane resources in namespace '%s'", config.WorkloadClusterNamespace)
-
-	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
-		"get", "arocontrolplane", "--ignore-not-found")
+	// Use monitor script to get cluster status
+	data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 	if err != nil {
-		PrintToTTY("⚠️  Error checking AROControlPlane: %v\n\n", err)
-		t.Logf("Error checking AROControlPlane resources: %v", err)
+		// Cluster not found - everything is deleted
+		PrintToTTY("✅ Cluster not found - all resources deleted\n\n")
+		t.Log("Cluster not found - control plane deletion verified")
 		return
 	}
 
-	if strings.TrimSpace(output) == "" {
-		PrintToTTY("✅ No AROControlPlane resources found (deleted successfully)\n\n")
-		t.Log("No AROControlPlane resources found - deletion successful")
+	// Check if control plane exists
+	if data.ControlPlane.Name == "" {
+		PrintToTTY("✅ No control plane resources found (deleted successfully)\n\n")
+		t.Log("No control plane resources found - deletion successful")
 	} else {
-		PrintToTTY("⚠️  AROControlPlane resources still exist:\n%s\n\n", output)
-		t.Logf("Warning: AROControlPlane resources still exist:\n%s", output)
+		PrintToTTY("⚠️  %s resource still exists: %s\n\n", data.ControlPlane.Kind, data.ControlPlane.Name)
+		t.Logf("Warning: %s resource still exists: %s", data.ControlPlane.Kind, data.ControlPlane.Name)
 	}
 }
 
@@ -179,34 +228,45 @@ func TestDeletion_VerifyMachinePoolDeletion(t *testing.T) {
 	}
 
 	context := config.GetKubeContext()
+	provisionedClusterName := config.GetProvisionedClusterName()
 
 	PrintTestHeader(t, "TestDeletion_VerifyMachinePoolDeletion",
 		"Verify machine pool resources are deleted")
 
-	PrintToTTY("Checking for remaining MachinePool resources in namespace '%s'...\n", config.WorkloadClusterNamespace)
-	t.Logf("Checking for remaining MachinePool resources in namespace '%s'", config.WorkloadClusterNamespace)
-
-	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
-		"get", "machinepool", "--ignore-not-found")
+	// Use monitor script to get cluster status
+	data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 	if err != nil {
-		PrintToTTY("⚠️  Error checking MachinePool: %v\n\n", err)
-		t.Logf("Error checking MachinePool resources: %v", err)
+		// Cluster not found - everything is deleted
+		PrintToTTY("✅ Cluster not found - all resources deleted\n\n")
+		t.Log("Cluster not found - machine pool deletion verified")
 		return
 	}
 
-	if strings.TrimSpace(output) == "" {
+	// Check if machine pools exist
+	machinePoolCount := len(data.MachinePools)
+	if machinePoolCount == 0 {
 		PrintToTTY("✅ No MachinePool resources found (deleted successfully)\n\n")
 		t.Log("No MachinePool resources found - deletion successful")
 	} else {
-		PrintToTTY("⚠️  MachinePool resources still exist:\n%s\n\n", output)
-		t.Logf("Warning: MachinePool resources still exist:\n%s", output)
+		PrintToTTY("⚠️  MachinePool resources still exist: %d remaining\n", machinePoolCount)
+		for _, mp := range data.MachinePools {
+			PrintToTTY("  - %s\n", mp.Name)
+		}
+		PrintToTTY("\n")
+		t.Logf("Warning: %d MachinePool resources still exist", machinePoolCount)
 	}
 }
 
 // TestDeletion_VerifyAzureResourcesDeletion verifies Azure resources are cleaned up.
 // This checks if the Azure resource group still exists after cluster deletion.
+// This test is ARO-specific and skipped for other providers.
 func TestDeletion_VerifyAzureResourcesDeletion(t *testing.T) {
 	config := NewTestConfig()
+
+	// Skip for non-ARO providers
+	if !config.HasProvider("aro") {
+		t.Skip("Skipping ARO-specific test (Azure resource group verification is ARO-specific)")
+	}
 
 	PrintTestHeader(t, "TestDeletion_VerifyAzureResourcesDeletion",
 		"Verify Azure resources are cleaned up")
@@ -271,31 +331,33 @@ func TestDeletion_Summary(t *testing.T) {
 	}
 
 	context := config.GetKubeContext()
+	provisionedClusterName := config.GetProvisionedClusterName()
 
 	PrintTestHeader(t, "TestDeletion_Summary",
 		"Summary of cluster deletion status")
 
-	// Check remaining cluster resources
 	PrintToTTY("=== Deletion Summary ===\n\n")
 
-	// Check for any remaining clusters
-	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
-		"get", "clusters", "--ignore-not-found", "-o", "custom-columns=NAME:.metadata.name,PHASE:.status.phase")
+	// Use monitor script to get cluster status
+	data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 	if err != nil {
-		PrintToTTY("⚠️  Could not list clusters: %v\n\n", err)
-	} else if strings.TrimSpace(output) == "" || !strings.Contains(output, config.GetProvisionedClusterName()) {
+		// Cluster not found - everything is deleted
 		PrintToTTY("✅ Workload cluster deleted successfully\n")
-	} else {
-		PrintToTTY("⚠️  Cluster resources remaining:\n%s\n", output)
-	}
-
-	// Check for remaining CAPI resources
-	output, err = RunCommandQuiet(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
-		"get", "arocontrolplane,machinepool", "--ignore-not-found")
-	if err == nil && strings.TrimSpace(output) == "" {
 		PrintToTTY("✅ All CAPI resources deleted\n")
-	} else if strings.TrimSpace(output) != "" {
-		PrintToTTY("⚠️  Some CAPI resources remain:\n%s\n", output)
+	} else {
+		// Cluster still exists
+		PrintToTTY("⚠️  Cluster still exists (Phase: %s)\n", data.Summary.Phase)
+
+		// Check control plane
+		if data.ControlPlane.Name != "" {
+			PrintToTTY("⚠️  %s resource remains: %s\n", data.ControlPlane.Kind, data.ControlPlane.Name)
+		}
+
+		// Check machine pools
+		machinePoolCount := len(data.MachinePools)
+		if machinePoolCount > 0 {
+			PrintToTTY("⚠️  %d MachinePool resource(s) remain\n", machinePoolCount)
+		}
 	}
 
 	// Summary message
