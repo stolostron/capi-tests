@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -186,11 +187,11 @@ func NewAWSProvider(namespace string) InfraProvider {
 		// Secret namespace is CAPA controller namespace (capa-system for Kind, multicluster-engine for MCE)
 		CredentialSecret: &CredentialSecretDef{
 			Name:      "{WORKLOAD_CLUSTER_NAME}-account-creds",
-			Namespace: "{INFRA_PROVIDER_NAMESPACE}",  // CAPA controller namespace, not workload cluster namespace
+			Namespace: "{INFRA_PROVIDER_NAMESPACE}", // CAPA controller namespace, not workload cluster namespace
 			RequiredFields: []string{
-				"AccessKeyID",      // Required by CAPA for AWS session creation
-				"SecretAccessKey",  // Required by CAPA for AWS session creation
-				"credentials",      // Required by ROSA SDK (INI format with region)
+				"AccessKeyID",     // Required by CAPA for AWS session creation
+				"SecretAccessKey", // Required by CAPA for AWS session creation
+				"credentials",     // Required by ROSA SDK (INI format with region)
 			},
 		},
 		DeploymentCharts: []string{"cluster-api-provider-aws"},
@@ -620,7 +621,21 @@ func (c *TestConfig) GetProvisionedMachinePoolName() string {
 // GetClusterYAMLPath returns the path to the generated cluster YAML file.
 // For ARO: {outputDir}/aro.yaml, for ROSA: {outputDir}/rosa.yaml
 func (c *TestConfig) GetClusterYAMLPath() string {
-	return fmt.Sprintf("%s/%s/%s", c.RepoDir, c.GetOutputDirName(), c.ClusterYAML)
+	path := fmt.Sprintf("%s/%s/%s", c.RepoDir, c.GetOutputDirName(), c.ClusterYAML)
+	// Validate the path stays within the expected directory to prevent path traversal
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return path // fallback to original
+	}
+	absRepo, err := filepath.Abs(c.RepoDir)
+	if err != nil {
+		return path
+	}
+	if !strings.HasPrefix(absPath, absRepo) {
+		// Path traversal detected - return safe default
+		return fmt.Sprintf("%s/%s/cluster.yaml", c.RepoDir, c.GetOutputDirName())
+	}
+	return path
 }
 
 // IsExternalCluster returns true when using an external kubeconfig file

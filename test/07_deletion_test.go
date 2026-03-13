@@ -44,21 +44,27 @@ func TestDeletion_DeleteCluster(t *testing.T) {
 	if config.HasProvider("rosa") {
 		controlPlaneName := config.GetProvisionedControlPlaneName()
 
-		// Check if ROSAControlPlane exists
-		_, cpErr := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
-			"get", "rosacontrolplane", controlPlaneName)
+		// Check if ROSAControlPlane exists and whether it's already being deleted
+		output, cpErr := RunCommandQuiet(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
+			"get", "rosacontrolplane", controlPlaneName, "-o", "jsonpath={.metadata.deletionTimestamp}")
 		if cpErr == nil {
-			PrintToTTY("🗑️  Deleting ROSAControlPlane '%s' first...\n", controlPlaneName)
-			t.Logf("Deleting ROSAControlPlane '%s' before cluster", controlPlaneName)
-
-			cpOutput, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
-				"delete", "rosacontrolplane", controlPlaneName, "--wait=false")
-			if err != nil {
-				PrintToTTY("⚠️  Failed to delete ROSAControlPlane: %v\n", err)
-				t.Logf("Warning: Failed to delete ROSAControlPlane: %v\nOutput: %s", err, cpOutput)
+			if strings.TrimSpace(output) != "" {
+				PrintToTTY("⏳ ROSAControlPlane '%s' already being deleted (deletionTimestamp set)\n", controlPlaneName)
+				t.Logf("ROSAControlPlane '%s' already has deletionTimestamp, skipping delete", controlPlaneName)
 			} else {
-				PrintToTTY("✅ ROSAControlPlane deletion initiated\n")
-				t.Logf("ROSAControlPlane deletion initiated: %s", cpOutput)
+				// Not deleting yet, initiate deletion
+				PrintToTTY("🗑️  Deleting ROSAControlPlane '%s' first...\n", controlPlaneName)
+				t.Logf("Deleting ROSAControlPlane '%s' before cluster", controlPlaneName)
+
+				cpOutput, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
+					"delete", "rosacontrolplane", controlPlaneName, "--wait=false")
+				if err != nil {
+					PrintToTTY("⚠️  Failed to delete ROSAControlPlane: %v\n", err)
+					t.Logf("Warning: Failed to delete ROSAControlPlane: %v\nOutput: %s", err, cpOutput)
+				} else {
+					PrintToTTY("✅ ROSAControlPlane deletion initiated\n")
+					t.Logf("ROSAControlPlane deletion initiated: %s", cpOutput)
+				}
 			}
 		}
 	}

@@ -18,12 +18,12 @@ type ClusterMonitorStatus struct {
 		ClusterName string `json:"clusterName"`
 	} `json:"metadata"`
 	Cluster struct {
-		Name                 string        `json:"name"`
-		Namespace            string        `json:"namespace"`
-		Phase                string        `json:"phase"`
-		InfrastructureReady  interface{}   `json:"infrastructureReady"` // can be bool or null
-		ControlPlaneReady    interface{}   `json:"controlPlaneReady"`   // can be bool or null
-		Conditions           []interface{} `json:"conditions"`
+		Name                string        `json:"name"`
+		Namespace           string        `json:"namespace"`
+		Phase               string        `json:"phase"`
+		InfrastructureReady interface{}   `json:"infrastructureReady"` // can be bool or null
+		ControlPlaneReady   interface{}   `json:"controlPlaneReady"`   // can be bool or null
+		Conditions          []interface{} `json:"conditions"`
 	} `json:"cluster"`
 	Infrastructure struct {
 		Kind       string        `json:"kind"`
@@ -43,10 +43,10 @@ type ClusterMonitorStatus struct {
 		Resources     []interface{} `json:"resources"`
 	} `json:"controlPlane"`
 	MachinePools []struct {
-		Name              string `json:"name"`
-		Replicas          int    `json:"replicas"`
-		ReadyReplicas     int    `json:"readyReplicas"`
-		AvailableReplicas int    `json:"availableReplicas"`
+		Name              string        `json:"name"`
+		Replicas          int           `json:"replicas"`
+		ReadyReplicas     int           `json:"readyReplicas"`
+		AvailableReplicas int           `json:"availableReplicas"`
 		Conditions        []interface{} `json:"conditions"`
 		Infrastructure    *struct {
 			Kind              string        `json:"kind"`
@@ -348,8 +348,14 @@ func TestDeployment_ProviderCredentialsConfigured(t *testing.T) {
 
 		// Resolve dynamic placeholders in secret name and namespace
 		secretName := strings.ReplaceAll(cred.Name, "{WORKLOAD_CLUSTER_NAME}", config.WorkloadClusterName)
+		if err := ValidateRFC1123Name(secretName, "credential secret name"); err != nil {
+			t.Fatalf("Invalid credential secret name after substitution: %v", err)
+		}
 		secretNamespace := strings.ReplaceAll(cred.Namespace, "{WORKLOAD_CLUSTER_NAMESPACE}", config.WorkloadClusterNamespace)
 		secretNamespace = strings.ReplaceAll(secretNamespace, "{INFRA_PROVIDER_NAMESPACE}", provider.Controllers[0].Namespace)
+		if err := ValidateRFC1123Name(secretNamespace, "credential secret namespace"); err != nil {
+			t.Fatalf("Invalid credential secret namespace after substitution: %v", err)
+		}
 
 		t.Run(provider.Name, func(t *testing.T) {
 			PrintToTTY("\n=== Validating %s credentials configuration ===\n", provider.Name)

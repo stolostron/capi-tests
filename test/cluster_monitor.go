@@ -11,14 +11,14 @@ import (
 
 // ClusterMonitorData represents the full JSON output from monitor-cluster-json.sh
 type ClusterMonitorData struct {
-	Metadata      ClusterMetadata      `json:"metadata"`
-	Cluster       ClusterStatus        `json:"cluster"`
+	Metadata       ClusterMetadata      `json:"metadata"`
+	Cluster        ClusterStatus        `json:"cluster"`
 	Infrastructure InfrastructureStatus `json:"infrastructure"`
-	ControlPlane  ControlPlaneStatus   `json:"controlPlane"`
-	MachinePools  []MachinePoolStatus  `json:"machinePools"`
-	Nodes         []NodeStatus         `json:"nodes"`
-	NodesError    *string              `json:"nodesError"` // Error message when failing to connect to workload cluster
-	Summary       ClusterSummary       `json:"summary"`
+	ControlPlane   ControlPlaneStatus   `json:"controlPlane"`
+	MachinePools   []MachinePoolStatus  `json:"machinePools"`
+	Nodes          []NodeStatus         `json:"nodes"`
+	NodesError     *string              `json:"nodesError"` // Error message when failing to connect to workload cluster
+	Summary        ClusterSummary       `json:"summary"`
 }
 
 // ClusterMetadata contains metadata about the monitoring snapshot
@@ -62,12 +62,12 @@ type ControlPlaneStatus struct {
 
 // MachinePoolStatus represents a MachinePool and its infrastructure counterpart
 type MachinePoolStatus struct {
-	Name              string                        `json:"name"`
-	Replicas          int                           `json:"replicas"`
-	ReadyReplicas     int                           `json:"readyReplicas"`
-	AvailableReplicas int                           `json:"availableReplicas"`
-	Conditions        []K8sCondition                `json:"conditions"`
-	Infrastructure    *MachinePoolInfrastructure    `json:"infrastructure"`
+	Name              string                     `json:"name"`
+	Replicas          int                        `json:"replicas"`
+	ReadyReplicas     int                        `json:"readyReplicas"`
+	AvailableReplicas int                        `json:"availableReplicas"`
+	Conditions        []K8sCondition             `json:"conditions"`
+	Infrastructure    *MachinePoolInfrastructure `json:"infrastructure"`
 }
 
 // MachinePoolInfrastructure represents the infrastructure-specific MachinePool (AROMachinePool, ROSAMachinePool)
@@ -103,14 +103,14 @@ type K8sCondition struct {
 
 // ClusterSummary provides a high-level summary of cluster status
 type ClusterSummary struct {
-	ClusterName         string               `json:"clusterName"`
-	Namespace           string               `json:"namespace"`
-	Phase               string               `json:"phase"`
-	InfrastructureReady bool                 `json:"infrastructureReady"`
-	ControlPlaneReady   bool                 `json:"controlPlaneReady"`
-	MachinePoolCount    int                  `json:"machinePoolCount"`
-	NodeCount           int                  `json:"nodeCount"`
-	Conditions          ConditionsSummary    `json:"conditions"`
+	ClusterName         string            `json:"clusterName"`
+	Namespace           string            `json:"namespace"`
+	Phase               string            `json:"phase"`
+	InfrastructureReady bool              `json:"infrastructureReady"`
+	ControlPlaneReady   bool              `json:"controlPlaneReady"`
+	MachinePoolCount    int               `json:"machinePoolCount"`
+	NodeCount           int               `json:"nodeCount"`
+	Conditions          ConditionsSummary `json:"conditions"`
 }
 
 // ConditionsSummary summarizes condition status
@@ -135,13 +135,21 @@ type ConditionsSummary struct {
 func MonitorCluster(t *testing.T, kubeContext, namespace, clusterName string) (*ClusterMonitorData, error) {
 	t.Helper()
 
+	// Validate inputs don't contain shell metacharacters
+	if err := ValidateRFC1123Name(namespace, "namespace"); err != nil {
+		return nil, fmt.Errorf("invalid namespace: %w", err)
+	}
+	if err := ValidateRFC1123Name(clusterName, "cluster name"); err != nil {
+		return nil, fmt.Errorf("invalid cluster name: %w", err)
+	}
+
 	// When running tests with 'go test ./test', the working directory is the test/ package directory
 	// So we need to go up one level to find scripts/
 	scriptPath := "../scripts/monitor-cluster-json.sh"
 
 	// Run the monitoring script with --context parameter
-	// #nosec G204 -- scriptPath is hardcoded, and kubeContext/namespace/clusterName are passed as
-	// separate arguments (not interpolated), making shell injection impossible
+	// #nosec G204 -- scriptPath is hardcoded, and kubeContext/namespace/clusterName are validated
+	// as RFC 1123 compliant (alphanumeric + hyphens only), making shell injection impossible
 	cmd := exec.Command("bash", scriptPath, "--context", kubeContext, namespace, clusterName)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -363,8 +371,10 @@ func MonitorClusterUntilDeleted(t *testing.T, kubeContext, namespace, clusterNam
 		if err != nil {
 			// Check if this is "not found" (deletion complete) vs. a real error
 			errMsg := err.Error()
-			if strings.Contains(strings.ToLower(errMsg), "not found") ||
-				strings.Contains(strings.ToLower(errMsg), "notfound") {
+			// Check for kubectl-specific "not found" errors
+			if strings.Contains(errMsg, "NotFound") ||
+				strings.Contains(errMsg, "(NotFound)") ||
+				(strings.Contains(errMsg, "not found") && strings.Contains(errMsg, "cluster")) {
 				// Cluster not found - deletion complete
 				PrintToTTY("[%d] ✅ Cluster resource deleted\n\n", iteration)
 				t.Logf("Cluster '%s' has been deleted after %v", clusterName, elapsed.Round(time.Second))
