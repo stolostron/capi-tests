@@ -202,9 +202,18 @@ func TestDeletion_VerifyControlPlaneDeletion(t *testing.T) {
 	// Use monitor script to get cluster status
 	data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 	if err != nil {
-		// Cluster not found - everything is deleted
-		PrintToTTY("✅ Cluster not found - all resources deleted\n\n")
-		t.Log("Cluster not found - control plane deletion verified")
+		// Check if this is "not found" (deletion complete) vs. a real error
+		errMsg := err.Error()
+		if strings.Contains(strings.ToLower(errMsg), "not found") ||
+			strings.Contains(strings.ToLower(errMsg), "notfound") {
+			// Cluster not found - deletion complete
+			PrintToTTY("✅ Cluster not found - all resources deleted\n\n")
+			t.Log("Cluster not found - control plane deletion verified")
+			return
+		}
+		// Real error - not just "not found"
+		PrintToTTY("⚠️  Error checking cluster status: %v\n\n", err)
+		t.Logf("Warning: Could not verify control plane deletion: %v", err)
 		return
 	}
 
@@ -236,9 +245,18 @@ func TestDeletion_VerifyMachinePoolDeletion(t *testing.T) {
 	// Use monitor script to get cluster status
 	data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 	if err != nil {
-		// Cluster not found - everything is deleted
-		PrintToTTY("✅ Cluster not found - all resources deleted\n\n")
-		t.Log("Cluster not found - machine pool deletion verified")
+		// Check if this is "not found" (deletion complete) vs. a real error
+		errMsg := err.Error()
+		if strings.Contains(strings.ToLower(errMsg), "not found") ||
+			strings.Contains(strings.ToLower(errMsg), "notfound") {
+			// Cluster not found - deletion complete
+			PrintToTTY("✅ Cluster not found - all resources deleted\n\n")
+			t.Log("Cluster not found - machine pool deletion verified")
+			return
+		}
+		// Real error - not just "not found"
+		PrintToTTY("⚠️  Error checking cluster status: %v\n\n", err)
+		t.Logf("Warning: Could not verify machine pool deletion: %v", err)
 		return
 	}
 
@@ -341,9 +359,18 @@ func TestDeletion_Summary(t *testing.T) {
 	// Use monitor script to get cluster status
 	data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 	if err != nil {
-		// Cluster not found - everything is deleted
-		PrintToTTY("✅ Workload cluster deleted successfully\n")
-		PrintToTTY("✅ All CAPI resources deleted\n")
+		// Check if this is "not found" (deletion complete) vs. a real error
+		errMsg := err.Error()
+		if strings.Contains(strings.ToLower(errMsg), "not found") ||
+			strings.Contains(strings.ToLower(errMsg), "notfound") {
+			// Cluster not found - deletion complete
+			PrintToTTY("✅ Workload cluster deleted successfully\n")
+			PrintToTTY("✅ All CAPI resources deleted\n")
+		} else {
+			// Real error - not just "not found"
+			PrintToTTY("⚠️  Could not verify deletion status: %v\n", err)
+			t.Logf("Warning: Could not verify deletion status: %v", err)
+		}
 	} else {
 		// Cluster still exists
 		PrintToTTY("⚠️  Cluster still exists (Phase: %s)\n", data.Summary.Phase)
