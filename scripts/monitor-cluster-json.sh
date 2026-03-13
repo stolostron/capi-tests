@@ -20,16 +20,16 @@ if [[ -z "$NAMESPACE" ]] || [[ -z "$CLUSTER_NAME" ]]; then
     exit 1
 fi
 
-# Build kubectl command with optional context
-KUBECTL_CMD="kubectl"
+# Build kubectl command with optional context (use array to prevent shell injection)
+KUBECTL_CMD=(kubectl)
 if [[ -n "$KUBECTL_CONTEXT" ]]; then
-    KUBECTL_CMD="kubectl --context $KUBECTL_CONTEXT"
+    KUBECTL_CMD=(kubectl --context "$KUBECTL_CONTEXT")
 fi
 
 # Get Cluster
 # Capture both stdout and stderr separately to distinguish errors
 KUBECTL_STDERR=$(mktemp)
-CLUSTER_JSON=$($KUBECTL_CMD get cluster "$CLUSTER_NAME" -n "$NAMESPACE" -o json 2>"$KUBECTL_STDERR")
+CLUSTER_JSON=$("${KUBECTL_CMD[@]}" get cluster "$CLUSTER_NAME" -n "$NAMESPACE" -o json 2>"$KUBECTL_STDERR")
 KUBECTL_EXIT_CODE=$?
 KUBECTL_ERROR=$(cat "$KUBECTL_STDERR")
 rm -f "$KUBECTL_STDERR"
@@ -112,7 +112,7 @@ INFRA_NAME=$(echo "$INFRA_REF" | jq -r '.name // ""')
 
 if [[ -n "$INFRA_KIND" ]] && [[ -n "$INFRA_NAME" ]]; then
     INFRA_RESOURCE=$(echo "$INFRA_KIND" | tr '[:upper:]' '[:lower:]')s
-    INFRA_JSON=$($KUBECTL_CMD get "$INFRA_RESOURCE" "$INFRA_NAME" -n "$NAMESPACE" -o json 2>/dev/null || echo '{}')
+    INFRA_JSON=$("${KUBECTL_CMD[@]}" get "$INFRA_RESOURCE" "$INFRA_NAME" -n "$NAMESPACE" -o json 2>/dev/null || echo '{}')
 
     if [[ "$INFRA_JSON" != "{}" ]]; then
         INFRA_READY=$(echo "$INFRA_JSON" | jq -r '.status.ready // null')
@@ -141,7 +141,7 @@ CP_NAME=$(echo "$CP_REF" | jq -r '.name // ""')
 
 if [[ -n "$CP_KIND" ]] && [[ -n "$CP_NAME" ]]; then
     CP_RESOURCE=$(echo "$CP_KIND" | tr '[:upper:]' '[:lower:]')s
-    CP_JSON=$($KUBECTL_CMD get "$CP_RESOURCE" "$CP_NAME" -n "$NAMESPACE" -o json 2>/dev/null || echo '{}')
+    CP_JSON=$("${KUBECTL_CMD[@]}" get "$CP_RESOURCE" "$CP_NAME" -n "$NAMESPACE" -o json 2>/dev/null || echo '{}')
 
     if [[ "$CP_JSON" != "{}" ]]; then
         CP_READY=$(echo "$CP_JSON" | jq '.status.ready')
@@ -176,7 +176,7 @@ if [[ -n "$CP_KIND" ]] && [[ -n "$CP_NAME" ]]; then
 fi
 
 # Process Machine Pools
-MP_JSON=$($KUBECTL_CMD get machinepool -n "$NAMESPACE" -l cluster.x-k8s.io/cluster-name="$CLUSTER_NAME" -o json 2>/dev/null || echo '{"items":[]}')
+MP_JSON=$("${KUBECTL_CMD[@]}" get machinepool -n "$NAMESPACE" -l cluster.x-k8s.io/cluster-name="$CLUSTER_NAME" -o json 2>/dev/null || echo '{"items":[]}')
 MP_COUNT=$(echo "$MP_JSON" | jq '.items | length')
 
 if [[ "$MP_COUNT" -gt 0 ]]; then
@@ -197,7 +197,7 @@ if [[ "$MP_COUNT" -gt 0 ]]; then
         INFRA_MP_DATA='null'
         if [[ -n "$INFRA_MP_KIND" ]] && [[ -n "$INFRA_MP_NAME" ]]; then
             INFRA_MP_RESOURCE=$(echo "$INFRA_MP_KIND" | tr '[:upper:]' '[:lower:]')s
-            INFRA_MP_JSON=$($KUBECTL_CMD get "$INFRA_MP_RESOURCE" "$INFRA_MP_NAME" -n "$NAMESPACE" -o json 2>/dev/null || echo '{}')
+            INFRA_MP_JSON=$("${KUBECTL_CMD[@]}" get "$INFRA_MP_RESOURCE" "$INFRA_MP_NAME" -n "$NAMESPACE" -o json 2>/dev/null || echo '{}')
 
             if [[ "$INFRA_MP_JSON" != "{}" ]]; then
                 INFRA_MP_READY=$(echo "$INFRA_MP_JSON" | jq '.status.ready')
@@ -321,10 +321,10 @@ fi
 # Process Nodes
 KUBECONFIG_SECRET="${CLUSTER_NAME}-kubeconfig"
 NODES_ERROR=""
-if $KUBECTL_CMD get secret "$KUBECONFIG_SECRET" -n "$NAMESPACE" &>/dev/null; then
+if "${KUBECTL_CMD[@]}" get secret "$KUBECONFIG_SECRET" -n "$NAMESPACE" &>/dev/null; then
     # Try to get nodes, capturing both stdout and stderr
     # Note: Use plain 'kubectl' without context since we're using the workload cluster's kubeconfig via stdin
-    NODES_RESULT=$($KUBECTL_CMD get secret "$KUBECONFIG_SECRET" -n "$NAMESPACE" -o jsonpath='{.data.value}' 2>/dev/null | base64 -d | \
+    NODES_RESULT=$("${KUBECTL_CMD[@]}" get secret "$KUBECONFIG_SECRET" -n "$NAMESPACE" -o jsonpath='{.data.value}' 2>/dev/null | base64 -d | \
         KUBECONFIG=/dev/stdin kubectl get nodes -o json 2>&1)
     NODES_EXIT_CODE=$?
 
