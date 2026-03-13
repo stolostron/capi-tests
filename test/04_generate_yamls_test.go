@@ -54,11 +54,8 @@ func TestInfrastructure_01_ValidateCredentials(t *testing.T) {
 					PrintToTTY("     (%s)\n", envReq.Desc)
 				}
 			} else {
-				if envReq.Sensitive {
-					PrintToTTY("  ✅ %s: ****** (set, value masked)\n", envReq.Name)
-				} else {
-					PrintToTTY("  ✅ %s: %s\n", envReq.Name, value)
-				}
+				// Never print credential values to logs - only indicate they're set
+				PrintToTTY("  ✅ %s: (set)\n", envReq.Name)
 				if envReq.Desc != "" {
 					PrintToTTY("     (%s)\n", envReq.Desc)
 				}
