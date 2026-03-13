@@ -38,6 +38,7 @@ type ClusterMonitorStatus struct {
 		Ready         interface{}   `json:"ready"` // can be bool or null
 		Replicas      int           `json:"replicas"`
 		ReadyReplicas int           `json:"readyReplicas"`
+		State         *string       `json:"state"` // Control plane state (validating, installing, etc.)
 		Conditions    []interface{} `json:"conditions"`
 		Resources     []interface{} `json:"resources"`
 	} `json:"controlPlane"`
@@ -580,15 +581,24 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 		if !controlPlaneReady {
 			cpKind := status.ControlPlane.Kind
 			cpReady := status.ControlPlane.Ready
+			cpState := status.ControlPlane.State
 
 			if cpReady == nil {
-				PrintToTTY("[%d] ⏳ %s.Ready: null\n", iteration, cpKind)
+				if cpState != nil && *cpState != "" {
+					PrintToTTY("[%d] ⏳ %s.Ready: null (state: %s)\n", iteration, cpKind, *cpState)
+				} else {
+					PrintToTTY("[%d] ⏳ %s.Ready: null\n", iteration, cpKind)
+				}
 			} else if cpReadyBool, ok := cpReady.(bool); ok && cpReadyBool {
 				controlPlaneReady = true
 				PrintToTTY("[%d] ✅ %s.Ready: true (took %v)\n", iteration, cpKind, elapsed.Round(time.Second))
 				t.Logf("%s.Ready=true (took %v)", cpKind, elapsed.Round(time.Second))
 			} else {
-				PrintToTTY("[%d] ⏳ %s.Ready: %v\n", iteration, cpKind, cpReady)
+				if cpState != nil && *cpState != "" {
+					PrintToTTY("[%d] ⏳ %s.Ready: %v (state: %s)\n", iteration, cpKind, cpReady, *cpState)
+				} else {
+					PrintToTTY("[%d] ⏳ %s.Ready: %v\n", iteration, cpKind, cpReady)
+				}
 			}
 		} else {
 			PrintToTTY("[%d] ✅ %s.Ready: true\n", iteration, status.ControlPlane.Kind)
