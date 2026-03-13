@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 )
@@ -357,10 +358,19 @@ func MonitorClusterUntilDeleted(t *testing.T, kubeContext, namespace, clusterNam
 
 		_, err := MonitorCluster(t, kubeContext, namespace, clusterName)
 		if err != nil {
-			// Cluster not found - deletion complete
-			PrintToTTY("[%d] ✅ Cluster resource deleted\n\n", iteration)
-			t.Logf("Cluster '%s' has been deleted after %v", clusterName, elapsed.Round(time.Second))
-			return nil
+			// Check if this is "not found" (deletion complete) vs. a real error
+			errMsg := err.Error()
+			if strings.Contains(strings.ToLower(errMsg), "not found") ||
+				strings.Contains(strings.ToLower(errMsg), "notfound") {
+				// Cluster not found - deletion complete
+				PrintToTTY("[%d] ✅ Cluster resource deleted\n\n", iteration)
+				t.Logf("Cluster '%s' has been deleted after %v", clusterName, elapsed.Round(time.Second))
+				return nil
+			}
+			// Real error - not just "not found"
+			PrintToTTY("[%d] ⚠️  Error checking cluster status: %v\n", iteration, err)
+			t.Logf("[%d] Warning: Error checking cluster status (continuing...): %v", iteration, err)
+			// Continue waiting - the error might be transient
 		}
 
 		// Cluster still exists

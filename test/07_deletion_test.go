@@ -20,7 +20,7 @@ func TestDeletion_DeleteCluster(t *testing.T) {
 
 	context := config.GetKubeContext()
 
-	// Get the provisioned cluster name from aro.yaml
+	// Get the provisioned cluster name from the cluster YAML
 	provisionedClusterName := config.GetProvisionedClusterName()
 
 	PrintTestHeader(t, "TestDeletion_DeleteCluster",
@@ -42,7 +42,7 @@ func TestDeletion_DeleteCluster(t *testing.T) {
 	// ROSA enforces minimum 2 replicas across all machine pools, so deleting machine pools individually fails
 	// Deleting the control plane first triggers proper cluster deletion in AWS
 	if config.HasProvider("rosa") {
-		controlPlaneName := config.GetProvisionedAROControlPlaneName() // Returns <cluster>-control-plane for both ARO/ROSA
+		controlPlaneName := config.GetProvisionedControlPlaneName()
 
 		// Check if ROSAControlPlane exists
 		_, cpErr := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
@@ -92,7 +92,7 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 
 	context := config.GetKubeContext()
 
-	// Get the provisioned cluster name from aro.yaml
+	// Get the provisioned cluster name from the cluster YAML
 	provisionedClusterName := config.GetProvisionedClusterName()
 
 	// Azure resource group name (only for ARO provider)

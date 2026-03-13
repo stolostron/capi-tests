@@ -30,7 +30,7 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 
 	context := config.GetKubeContext()
 
-	// Use the provisioned cluster name from aro.yaml
+	// Use the provisioned cluster name from the cluster YAML
 	provisionedClusterName := config.GetProvisionedClusterName()
 
 	// Check cluster phase before attempting kubeconfig retrieval (fixes #275)

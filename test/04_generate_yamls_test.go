@@ -126,10 +126,10 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 		}
 		if allFilesExist {
 			// Check if existing YAMLs match current config before skipping
-			aroYAMLPath := filepath.Join(outputDir, "aro.yaml")
+			clusterYAMLPath := filepath.Join(outputDir, config.ClusterYAML)
 
 			// Check 1: Prefix mismatch (e.g., CAPI_USER changed)
-			prefixMatches, existingPrefix := CheckYAMLConfigMatch(t, aroYAMLPath, config.ClusterNamePrefix)
+			prefixMatches, existingPrefix := CheckYAMLConfigMatch(t, clusterYAMLPath, config.ClusterNamePrefix)
 			if !prefixMatches {
 				PrintToTTY("\n⚠️  Configuration prefix mismatch detected!\n")
 				PrintToTTY("Existing YAMLs use prefix: %s\n", existingPrefix)
@@ -140,7 +140,7 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 				// Fall through to regeneration (don't return)
 			} else {
 				// Check 2: Namespace mismatch (new test run with unique namespace)
-				existingNamespace, err := ExtractNamespaceFromYAML(aroYAMLPath)
+				existingNamespace, err := ExtractNamespaceFromYAML(clusterYAMLPath)
 				if err != nil {
 					PrintToTTY("\n⚠️  Cannot read namespace from existing YAML: %v\n", err)
 					PrintToTTY("Will regenerate infrastructure...\n\n")
@@ -197,7 +197,7 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	SetEnvVar(t, "DEPLOYMENT_ENV", config.Environment)
 	SetEnvVar(t, "USER", config.CAPIUser)
 	SetEnvVar(t, "WORKLOAD_CLUSTER_NAME", config.WorkloadClusterName)
-	SetEnvVar(t, "REGION", config.Region)
+	SetEnvVar(t, config.RegionEnvVar, config.Region) // Provider-specific: REGION for ARO, AWS_REGION for ROSA
 	SetEnvVar(t, "CS_CLUSTER_NAME", config.ClusterNamePrefix)
 	SetEnvVar(t, "OCP_VERSION", config.OCPVersion)
 	// Pass namespace as NAMESPACE env var for YAML generation script

@@ -27,10 +27,27 @@ if [[ -n "$KUBECTL_CONTEXT" ]]; then
 fi
 
 # Get Cluster
-CLUSTER_JSON=$($KUBECTL_CMD get cluster "$CLUSTER_NAME" -n "$NAMESPACE" -o json 2>/dev/null || echo '{}')
+# Capture both stdout and stderr separately to distinguish errors
+KUBECTL_STDERR=$(mktemp)
+CLUSTER_JSON=$($KUBECTL_CMD get cluster "$CLUSTER_NAME" -n "$NAMESPACE" -o json 2>"$KUBECTL_STDERR")
+KUBECTL_EXIT_CODE=$?
+KUBECTL_ERROR=$(cat "$KUBECTL_STDERR")
+rm -f "$KUBECTL_STDERR"
 
-if [[ "$CLUSTER_JSON" == "{}" ]]; then
-    echo '{"error": "Cluster not found", "namespace": "'"$NAMESPACE"'", "name": "'"$CLUSTER_NAME"'"}' | jq .
+if [[ $KUBECTL_EXIT_CODE -ne 0 ]]; then
+    # kubectl failed - emit error details in JSON
+    jq -n \
+        --arg namespace "$NAMESPACE" \
+        --arg name "$CLUSTER_NAME" \
+        --arg error "$KUBECTL_ERROR" \
+        --argjson exitCode "$KUBECTL_EXIT_CODE" \
+        '{
+            error: "kubectl get cluster failed",
+            namespace: $namespace,
+            name: $name,
+            details: $error,
+            exitCode: $exitCode
+        }'
     exit 1
 fi
 
@@ -289,6 +306,9 @@ else
             # Add synthetic MachinePool to output
             MACHINE_POOLS=$(jq -n --argjson mp "$SYNTHETIC_MP" '[$mp]')
             OUTPUT=$(echo "$OUTPUT" | jq --argjson mps "$MACHINE_POOLS" '.machinePools = $mps')
+
+            # Update MP_COUNT to reflect the synthetic pool
+            MP_COUNT=1
         fi
     fi
 fi

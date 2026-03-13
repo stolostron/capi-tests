@@ -450,7 +450,7 @@ func IsKubectlApplySuccess(output string) bool {
 // ExtractClusterNameFromYAML extracts the cluster name from a multi-document YAML file.
 // It looks for a document with kind: Cluster (cluster.x-k8s.io/v1beta2) and returns
 // its metadata.name field. This is used to get the actual provisioned cluster name
-// from the generated aro.yaml file, which may differ from WORKLOAD_CLUSTER_NAME.
+// from the generated cluster YAML file, which may differ from WORKLOAD_CLUSTER_NAME.
 //
 // Example YAML:
 //
@@ -519,9 +519,70 @@ func ExtractClusterNameFromYAML(filePath string) (string, error) {
 	return "", fmt.Errorf("no Cluster resource found in %s", filePath)
 }
 
+// ExtractControlPlaneRefFromYAML extracts the control plane reference name from the Cluster resource.
+// It reads the Cluster resource's spec.controlPlaneRef.name field, which works for both
+// ARO (AROControlPlane) and ROSA (ROSAControlPlane).
+func ExtractControlPlaneRefFromYAML(filePath string) (string, error) {
+	if _, err := os.Stat(filePath); err != nil {
+		return "", fmt.Errorf("file not accessible: %w", err)
+	}
+
+	// #nosec G304 - filePath comes from test configuration
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %w", err)
+	}
+
+	docs := strings.Split(string(data), "---")
+	for _, doc := range docs {
+		doc = strings.TrimSpace(doc)
+		if doc == "" {
+			continue
+		}
+
+		var content map[string]interface{}
+		if err := yaml.Unmarshal([]byte(doc), &content); err != nil {
+			continue
+		}
+
+		// Check if this is a Cluster resource
+		kind, ok := content["kind"].(string)
+		if !ok || kind != "Cluster" {
+			continue
+		}
+
+		// Verify it's the CAPI Cluster type
+		apiVersion, ok := content["apiVersion"].(string)
+		if !ok || !strings.HasPrefix(apiVersion, "cluster.x-k8s.io/") {
+			continue
+		}
+
+		// Extract spec.controlPlaneRef.name
+		spec, ok := content["spec"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		controlPlaneRef, ok := spec["controlPlaneRef"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, ok := controlPlaneRef["name"].(string)
+		if !ok || name == "" {
+			continue
+		}
+
+		return name, nil
+	}
+
+	return "", fmt.Errorf("no Cluster resource with controlPlaneRef found in %s", filePath)
+}
+
 // ExtractAROControlPlaneNameFromYAML extracts the AROControlPlane resource name from a YAML file.
 // It looks for a resource with kind "AROControlPlane" and apiVersion starting with
 // "controlplane.cluster.x-k8s.io/" and returns its metadata.name.
+// DEPRECATED: Use ExtractControlPlaneRefFromYAML instead which works for both ARO and ROSA.
 func ExtractAROControlPlaneNameFromYAML(filePath string) (string, error) {
 	if _, err := os.Stat(filePath); err != nil {
 		return "", fmt.Errorf("file not accessible: %w", err)
@@ -624,7 +685,7 @@ func ExtractMachinePoolNameFromYAML(filePath string) (string, error) {
 }
 
 // CheckYAMLConfigMatch verifies that existing YAML files match the current configuration.
-// It extracts the cluster name from the aro.yaml file and compares it with the expected
+// It extracts the cluster name from the cluster YAML file and compares it with the expected
 // cluster name prefix. This is used to detect configuration mismatches that would cause
 // the test to use stale YAML files with outdated values.
 //
@@ -633,19 +694,19 @@ func ExtractMachinePoolNameFromYAML(filePath string) (string, error) {
 //   - existingPrefix: the cluster name extracted from the existing YAML file
 //
 // If the file doesn't exist or cannot be parsed, returns (false, "") to trigger regeneration.
-func CheckYAMLConfigMatch(t *testing.T, aroYAMLPath, expectedPrefix string) (matches bool, existingPrefix string) {
+func CheckYAMLConfigMatch(t *testing.T, clusterYAMLPath, expectedPrefix string) (matches bool, existingPrefix string) {
 	t.Helper()
 
-	// Extract cluster name from existing aro.yaml
-	clusterName, err := ExtractClusterNameFromYAML(aroYAMLPath)
+	// Extract cluster name from existing cluster YAML
+	clusterName, err := ExtractClusterNameFromYAML(clusterYAMLPath)
 	if err != nil {
 		// File doesn't exist or can't be parsed - needs regeneration
-		t.Logf("Could not extract cluster name from %s: %v", aroYAMLPath, err)
+		t.Logf("Could not extract cluster name from %s: %v", clusterYAMLPath, err)
 		return false, ""
 	}
 
 	// Compare the extracted cluster name with expected prefix
-	// The cluster name in aro.yaml should match the ClusterNamePrefix (e.g., "cate-stage")
+	// The cluster name should match the ClusterNamePrefix (e.g., "rcapu-stage")
 	if clusterName == expectedPrefix {
 		return true, clusterName
 	}
@@ -2602,8 +2663,18 @@ func GetDeletionResourceStatus(t *testing.T, kubeContext, namespace, clusterName
 	// Use MonitorCluster to get cluster status via JSON monitoring script
 	data, err := MonitorCluster(t, kubeContext, namespace, clusterName)
 	if err != nil {
-		// Cluster not found - it's been deleted
-		status.ClusterExists = false
+		// Check if this is "not found" (deletion complete) vs. a real error
+		errMsg := err.Error()
+		if strings.Contains(strings.ToLower(errMsg), "not found") ||
+			strings.Contains(strings.ToLower(errMsg), "notfound") {
+			// Cluster not found - it's been deleted
+			status.ClusterExists = false
+		} else {
+			// Real error (network, auth, etc.) - be conservative and assume cluster still exists
+			// This prevents false "deletion complete" on transient errors
+			t.Logf("Warning: Error querying cluster status (will retry): %v", err)
+			status.ClusterExists = true // Conservative: treat errors as "still exists"
+		}
 	} else {
 		status.ClusterExists = true
 		status.ClusterPhase = data.Summary.Phase

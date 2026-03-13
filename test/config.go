@@ -340,6 +340,12 @@ type TestConfig struct {
 	// Each provider defines its controllers, webhooks, and credential secrets.
 	// Initialized based on INFRA_PROVIDER env var: "aro" (CAPZ/ASO) or "rosa" (CAPA).
 	InfraProviders []InfraProvider
+	// ClusterYAML is the provider-specific main YAML filename.
+	// For ARO: "aro.yaml", for ROSA: "rosa.yaml"
+	ClusterYAML string
+	// RegionEnvVar is the provider-specific region environment variable name.
+	// For ARO: "REGION", for ROSA: "AWS_REGION"
+	RegionEnvVar string
 
 	// MCE (MultiClusterEngine) configuration
 	// MCEAutoEnable controls whether to automatically enable MCE CAPI/CAPZ components
@@ -374,6 +380,9 @@ func NewTestConfig() *TestConfig {
 	var defaultMgmtCluster string
 	var defaultWorkloadCluster string
 	var testLabelPrefix string
+	var clusterYAML string
+	var defaultRegion string
+	var regionEnvVar string
 
 	switch infraProviderName {
 	case "rosa":
@@ -383,6 +392,9 @@ func NewTestConfig() *TestConfig {
 		defaultMgmtCluster = "capa-tests-stage"
 		defaultWorkloadCluster = "capa-tests"
 		testLabelPrefix = "capa-test"
+		clusterYAML = "rosa.yaml"
+		regionEnvVar = "AWS_REGION"
+		defaultRegion = "us-east-1"
 	default: // "aro"
 		infraProviderName = "aro" // normalize unknown values
 		providerNamespace = getControllerNamespace("CAPZ_NAMESPACE", "capz-system")
@@ -397,6 +409,9 @@ func NewTestConfig() *TestConfig {
 		defaultMgmtCluster = "capz-tests-stage"
 		defaultWorkloadCluster = "capz-tests"
 		testLabelPrefix = "capz-test"
+		clusterYAML = "aro.yaml"
+		regionEnvVar = "REGION"
+		defaultRegion = "uksouth"
 	}
 
 	// Resolve CAPI_USER
@@ -413,7 +428,7 @@ func NewTestConfig() *TestConfig {
 		WorkloadClusterName:      GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", defaultWorkloadCluster),
 		ClusterNamePrefix:        GetEnvOrDefault("CS_CLUSTER_NAME", fmt.Sprintf("%s-%s", capiUser, GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv))),
 		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.20"),
-		Region:                   GetEnvOrDefault("REGION", "uksouth"),
+		Region:                   GetEnvOrDefault(regionEnvVar, defaultRegion),
 		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),
 		Environment:              GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv),
 		CAPIUser:                 capiUser,
@@ -441,6 +456,8 @@ func NewTestConfig() *TestConfig {
 		// Infrastructure providers
 		InfraProviderName: infraProviderName,
 		InfraProviders:    infraProviders,
+		ClusterYAML:       clusterYAML,
+		RegionEnvVar:      regionEnvVar,
 
 		// MCE configuration
 		MCEAutoEnable:        parseMCEAutoEnable(useKubeconfig),
@@ -550,19 +567,19 @@ func (c *TestConfig) GetOutputDirName() string {
 	return fmt.Sprintf("%s-%s", c.WorkloadClusterName, c.Environment)
 }
 
-// GetProvisionedClusterName returns the actual cluster name from the generated aro.yaml file.
+// GetProvisionedClusterName returns the actual cluster name from the generated cluster YAML file.
 // This is the name defined in the Cluster resource's metadata.name field, which may differ
 // from WorkloadClusterName (the local configuration). Use this when interacting with
 // the provisioned cluster via kubectl commands.
 //
-// Returns the extracted cluster name or WorkloadClusterName as fallback if aro.yaml
+// Returns the extracted cluster name or WorkloadClusterName as fallback if cluster YAML
 // doesn't exist yet (e.g., before YAML generation phase).
 func (c *TestConfig) GetProvisionedClusterName() string {
-	aroYAMLPath := fmt.Sprintf("%s/%s/aro.yaml", c.RepoDir, c.GetOutputDirName())
+	clusterYAMLPath := fmt.Sprintf("%s/%s/%s", c.RepoDir, c.GetOutputDirName(), c.ClusterYAML)
 
-	name, err := ExtractClusterNameFromYAML(aroYAMLPath)
+	name, err := ExtractClusterNameFromYAML(clusterYAMLPath)
 	if err != nil {
-		// Fall back to WorkloadClusterName if aro.yaml doesn't exist or can't be parsed
+		// Fall back to WorkloadClusterName if cluster YAML doesn't exist or can't be parsed
 		// This allows earlier phases (before YAML generation) to still work
 		return c.WorkloadClusterName
 	}
@@ -570,13 +587,15 @@ func (c *TestConfig) GetProvisionedClusterName() string {
 	return name
 }
 
-// GetProvisionedAROControlPlaneName returns the actual AROControlPlane resource name
-// from the generated aro.yaml file. Falls back to GetProvisionedClusterName() + "-control-plane"
-// if aro.yaml doesn't exist or doesn't contain an AROControlPlane resource.
-func (c *TestConfig) GetProvisionedAROControlPlaneName() string {
-	aroYAMLPath := fmt.Sprintf("%s/%s/aro.yaml", c.RepoDir, c.GetOutputDirName())
+// GetProvisionedControlPlaneName returns the actual control plane resource name
+// from the generated cluster YAML file by reading the Cluster's spec.controlPlaneRef.name.
+// This works for both ARO (AROControlPlane) and ROSA (ROSAControlPlane).
+// Falls back to GetProvisionedClusterName() + "-control-plane" if cluster YAML
+// doesn't exist or doesn't contain a controlPlaneRef.
+func (c *TestConfig) GetProvisionedControlPlaneName() string {
+	clusterYAMLPath := fmt.Sprintf("%s/%s/%s", c.RepoDir, c.GetOutputDirName(), c.ClusterYAML)
 
-	name, err := ExtractAROControlPlaneNameFromYAML(aroYAMLPath)
+	name, err := ExtractControlPlaneRefFromYAML(clusterYAMLPath)
 	if err != nil {
 		return c.GetProvisionedClusterName() + "-control-plane"
 	}
@@ -585,12 +604,12 @@ func (c *TestConfig) GetProvisionedAROControlPlaneName() string {
 }
 
 // GetProvisionedMachinePoolName returns the actual MachinePool resource name
-// from the generated aro.yaml file. Falls back to GetProvisionedClusterName() + "-pool"
-// if aro.yaml doesn't exist or doesn't contain a MachinePool resource.
+// from the generated cluster YAML file. Falls back to GetProvisionedClusterName() + "-pool"
+// if cluster YAML doesn't exist or doesn't contain a MachinePool resource.
 func (c *TestConfig) GetProvisionedMachinePoolName() string {
-	aroYAMLPath := fmt.Sprintf("%s/%s/aro.yaml", c.RepoDir, c.GetOutputDirName())
+	clusterYAMLPath := fmt.Sprintf("%s/%s/%s", c.RepoDir, c.GetOutputDirName(), c.ClusterYAML)
 
-	name, err := ExtractMachinePoolNameFromYAML(aroYAMLPath)
+	name, err := ExtractMachinePoolNameFromYAML(clusterYAMLPath)
 	if err != nil {
 		return c.GetProvisionedClusterName() + "-pool"
 	}
@@ -598,9 +617,10 @@ func (c *TestConfig) GetProvisionedMachinePoolName() string {
 	return name
 }
 
-// GetAROYAMLPath returns the path to the generated aro.yaml file
-func (c *TestConfig) GetAROYAMLPath() string {
-	return fmt.Sprintf("%s/%s/aro.yaml", c.RepoDir, c.GetOutputDirName())
+// GetClusterYAMLPath returns the path to the generated cluster YAML file.
+// For ARO: {outputDir}/aro.yaml, for ROSA: {outputDir}/rosa.yaml
+func (c *TestConfig) GetClusterYAMLPath() string {
+	return fmt.Sprintf("%s/%s/%s", c.RepoDir, c.GetOutputDirName(), c.ClusterYAML)
 }
 
 // IsExternalCluster returns true when using an external kubeconfig file

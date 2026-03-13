@@ -208,7 +208,7 @@ func TestDeployment_ApplyResources(t *testing.T) {
 
 	PrintToTTY("\n=== Applying Kubernetes resources ===\n")
 
-	// Get files to apply (credentials.yaml and aro.yaml)
+	// Get files to apply (provider-specific YAML files)
 	expectedFiles := config.GetExpectedFiles()
 
 	// Set kubectl context
@@ -439,7 +439,7 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 	SetEnvVar(t, "KUBECONFIG", fmt.Sprintf("%s/.kube/config", os.Getenv("HOME")))
 
 	// First, check if cluster resource exists
-	// Use the provisioned cluster name from aro.yaml, not WORKLOAD_CLUSTER_NAME
+	// Use the provisioned cluster name from the cluster YAML, not WORKLOAD_CLUSTER_NAME
 	provisionedClusterName := config.GetProvisionedClusterName()
 	PrintToTTY("\n=== Monitoring cluster deployment ===\n")
 	PrintToTTY("Cluster: %s\n", provisionedClusterName)
@@ -497,7 +497,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	// Get the specific resource names for the cluster being deployed
 	// This prevents checking the wrong resources when multiple clusters exist (issue #355)
 	provisionedClusterName := config.GetProvisionedClusterName()
-	aroControlPlaneName := config.GetProvisionedAROControlPlaneName()
+	controlPlaneName := config.GetProvisionedControlPlaneName()
 	machinePoolName := config.GetProvisionedMachinePoolName()
 
 	// Wait for both to be ready (with configurable timeout)
@@ -510,10 +510,11 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	initialJSON, _ := RunCommandQuiet(t, monitorScript, "--context", context, config.WorkloadClusterNamespace, provisionedClusterName)
 	var initialStatus ClusterMonitorStatus
 	controlPlaneKind := "ControlPlane" // fallback if we can't determine
-	controlPlaneName := aroControlPlaneName
 	if err := json.Unmarshal([]byte(initialJSON), &initialStatus); err == nil {
 		controlPlaneKind = initialStatus.ControlPlane.Kind
-		controlPlaneName = initialStatus.ControlPlane.Name
+		if initialStatus.ControlPlane.Name != "" {
+			controlPlaneName = initialStatus.ControlPlane.Name
+		}
 	}
 
 	// Print to stderr for immediate visibility (unbuffered)
@@ -536,17 +537,17 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 		if elapsed > timeout {
 			PrintToTTY("\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
 			t.Errorf("Timeout waiting for deployment after %v.\n"+
-				"  AROControlPlane ready: %v\n"+
+				"  ControlPlane ready: %v\n"+
 				"  MachinePool ready: %v\n\n"+
 				"Troubleshooting steps:\n"+
-				"  1. Check AROControlPlane status: kubectl --context %s -n %s get arocontrolplane %s -o yaml\n"+
+				"  1. Check ControlPlane status: kubectl --context %s -n %s get %s %s -o yaml\n"+
 				"  2. Check MachinePool status: kubectl --context %s -n %s get machinepool %s -o yaml\n"+
 				"  3. Check cluster conditions: kubectl --context %s -n %s get cluster %s -o yaml\n"+
 				"  4. Check controller logs: kubectl --context %s -n capz-system logs -l control-plane=controller-manager --tail=100\n\n"+
 				"To increase timeout: export DEPLOYMENT_TIMEOUT=60m",
 				elapsed.Round(time.Second),
 				controlPlaneReady, machinePoolReady,
-				context, config.WorkloadClusterNamespace, aroControlPlaneName,
+				context, config.WorkloadClusterNamespace, strings.ToLower(controlPlaneKind), controlPlaneName,
 				context, config.WorkloadClusterNamespace, machinePoolName,
 				context, config.WorkloadClusterNamespace, provisionedClusterName,
 				context)
@@ -849,9 +850,9 @@ func TestDeployment_VerifyAROClusterReady(t *testing.T) {
 	startTime := time.Now()
 
 	// Get initial status to determine infrastructure kind
-	initialData, _ := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
+	initialData, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 	infraKind := "Infrastructure" // fallback
-	if initialData.Infrastructure.Kind != "" {
+	if err == nil && initialData.Infrastructure.Kind != "" {
 		infraKind = initialData.Infrastructure.Kind
 	}
 	infraResourceType := strings.ToLower(infraKind) + "s"
