@@ -901,7 +901,7 @@ type AROClusterResourceStatus struct {
 
 // AROClusterStatus represents the status section of the AROCluster resource
 type AROClusterStatus struct {
-	Conditions []ControlPlaneCondition `json:"conditions"`
+	Conditions []ControlPlaneCondition    `json:"conditions"`
 	Resources  []AROClusterResourceStatus `json:"resources"`
 	Ready      bool                       `json:"ready"`
 }
