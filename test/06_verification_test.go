@@ -195,9 +195,17 @@ func TestVerification_ClusterNodes(t *testing.T) {
 			PrintToTTY("Running: kubectl get nodes\n\n")
 			// Temporarily set KUBECONFIG to workload cluster for this command
 			oldKubeconfig := os.Getenv("KUBECONFIG")
-			os.Setenv("KUBECONFIG", kubeconfigPath)
+			if err := os.Setenv("KUBECONFIG", kubeconfigPath); err != nil {
+				t.Fatalf("Failed to set KUBECONFIG: %v", err)
+			}
+			defer func() {
+				if oldKubeconfig == "" {
+					os.Unsetenv("KUBECONFIG")
+				} else {
+					os.Setenv("KUBECONFIG", oldKubeconfig)
+				}
+			}()
 			output, err := RunCommand(t, "kubectl", "get", "nodes")
-			os.Setenv("KUBECONFIG", oldKubeconfig)
 
 			if err == nil {
 				PrintToTTY("%s\n\n", output)
