@@ -1,6 +1,7 @@
 package test
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -27,7 +28,14 @@ func TestMonitorCluster(t *testing.T) {
 		// Get a single snapshot of cluster status
 		data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, clusterName)
 		if err != nil {
-			t.Skipf("Could not monitor cluster (may not exist yet): %v", err)
+			// Only skip if cluster doesn't exist - fail on monitor regressions
+			errMsg := err.Error()
+			if strings.Contains(strings.ToLower(errMsg), "not found") ||
+				strings.Contains(strings.ToLower(errMsg), "notfound") {
+				t.Skipf("Cluster not found (may not exist yet): %v", err)
+			}
+			// Script breakage, auth failure, JSON parsing error - these should fail
+			t.Fatalf("Monitor script failed: %v", err)
 		}
 
 		// Display the summary
