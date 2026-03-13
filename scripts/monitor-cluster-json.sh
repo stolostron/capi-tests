@@ -87,16 +87,21 @@ if [[ "$CLUSTER_CONTROL_PLANE_READY" == "null" ]]; then
     [[ -z "$CLUSTER_CONTROL_PLANE_READY" ]] && CLUSTER_CONTROL_PLANE_READY="null"
 fi
 
+# Extract initialization.infrastructureProvisioned (CAPI cluster deployment gate)
+CLUSTER_INFRA_PROVISIONED=$(echo "$CLUSTER_JSON" | jq -r '.status.initialization.infrastructureProvisioned // null')
+
 OUTPUT=$(echo "$OUTPUT" | jq --argjson conditions "$CLUSTER_CONDITIONS" \
     --arg phase "$CLUSTER_PHASE" \
     --argjson infraReady "$CLUSTER_INFRA_READY" \
     --argjson cpReady "$CLUSTER_CONTROL_PLANE_READY" \
+    --argjson infraProvisioned "$CLUSTER_INFRA_PROVISIONED" \
     '.cluster = {
         name: .metadata.clusterName,
         namespace: .metadata.namespace,
         phase: $phase,
         infrastructureReady: $infraReady,
         controlPlaneReady: $cpReady,
+        infrastructureProvisioned: $infraProvisioned,
         conditions: $conditions
     }')
 

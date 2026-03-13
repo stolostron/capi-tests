@@ -332,7 +332,7 @@ func TestDeployment_ProviderCredentialsConfigured(t *testing.T) {
 		}
 	}
 	if !hasCredentials {
-		t.Skip("No provider credential secrets to validate")
+		t.Skipf("No provider credential secrets to validate")
 	}
 
 	PrintTestHeader(t, "TestDeployment_ProviderCredentialsConfigured",
@@ -740,7 +740,7 @@ func TestDeployment_VerifyInfrastructureResources(t *testing.T) {
 
 	// Skip for non-ARO providers (NetworkInfrastructureReady and .status.resources[] are ARO-specific)
 	if !config.HasProvider("aro") {
-		t.Skip("Skipping ARO-specific test (NetworkInfrastructureReady condition and infrastructure resource tracking is ARO-specific)")
+		t.Skipf("Skipping ARO-specific test (NetworkInfrastructureReady condition and infrastructure resource tracking is ARO-specific)")
 	}
 
 	// Set KUBECONFIG for external cluster mode
@@ -835,7 +835,7 @@ func TestDeployment_VerifyAROClusterReady(t *testing.T) {
 
 	// Skip for non-ARO providers (AROCluster.Ready is ARO-specific)
 	if !config.HasProvider("aro") {
-		t.Skip("Skipping ARO-specific test (AROCluster resource is not used by this provider)")
+		t.Skipf("Skipping ARO-specific test (AROCluster resource is not used by this provider)")
 	}
 
 	if config.IsExternalCluster() {
@@ -929,7 +929,7 @@ func TestDeployment_VerifyClusterProvisioned(t *testing.T) {
 		data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 		var provisioned bool
 		var status string
-		if err == nil && data.Summary.InfrastructureReady {
+		if err == nil && data.Cluster.InfrastructureProvisioned {
 			provisioned = true
 			status = "true"
 		} else if err == nil {

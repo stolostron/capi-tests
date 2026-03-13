@@ -32,7 +32,7 @@ func TestInfrastructure_01_ValidateCredentials(t *testing.T) {
 		}
 	}
 	if !hasCredentials {
-		t.Skip("No provider credential environment variables to validate")
+		t.Skipf("No provider credential environment variables to validate")
 	}
 
 	var allMissing []EnvVarRequirement
@@ -397,7 +397,7 @@ func TestInfrastructure_VerifyGeneratedYAMLs(t *testing.T) {
 
 	expectedFiles := config.GetExpectedFiles()
 	if len(expectedFiles) == 0 {
-		t.Skip("No expected files configured for provider")
+		t.Skipf("No expected files configured for provider")
 	}
 
 	t.Logf("Verifying %d YAML files for provider '%s'", len(expectedFiles), config.InfraProviderName)

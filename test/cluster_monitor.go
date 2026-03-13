@@ -30,12 +30,13 @@ type ClusterMetadata struct {
 
 // ClusterStatus represents the CAPI Cluster resource status
 type ClusterStatus struct {
-	Name                 string              `json:"name"`
-	Namespace            string              `json:"namespace"`
-	Phase                string              `json:"phase"`
-	InfrastructureReady  bool                `json:"infrastructureReady"`
-	ControlPlaneReady    bool                `json:"controlPlaneReady"`
-	Conditions           []K8sCondition      `json:"conditions"`
+	Name                      string         `json:"name"`
+	Namespace                 string         `json:"namespace"`
+	Phase                     string         `json:"phase"`
+	InfrastructureReady       bool           `json:"infrastructureReady"`
+	ControlPlaneReady         bool           `json:"controlPlaneReady"`
+	InfrastructureProvisioned bool           `json:"infrastructureProvisioned"` // cluster.status.initialization.infrastructureProvisioned
+	Conditions                []K8sCondition `json:"conditions"`
 }
 
 // InfrastructureStatus represents the infrastructure cluster (AROCluster, ROSACluster, etc.)
