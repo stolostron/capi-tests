@@ -54,12 +54,35 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 	// Method 1: Using kubectl to get secret
 	secretName := fmt.Sprintf("%s-kubeconfig", provisionedClusterName)
 
-	t.Logf("Attempting Method 1: kubectl --context %s -n %s get secret %s -o jsonpath={.data.value}", context, config.WorkloadClusterNamespace, secretName)
-	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace, "get", "secret",
-		secretName, "-o", "jsonpath={.data.value}")
+	// Wait for kubeconfig secret to exist (with retry)
+	// There can be a brief delay between cluster reaching "Provisioned" phase and secret creation,
+	// especially for ROSA clusters
+	maxRetries := 12 // 12 retries * 5 seconds = 1 minute max wait
+	retryDelay := 5 * time.Second
+	var output string
+	var secretErr error
 
-	if err != nil {
-		t.Logf("Method 1 (kubectl get secret) failed: %v", err)
+	t.Logf("Waiting for kubeconfig secret '%s' to be created...", secretName)
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		t.Logf("Attempt %d/%d: kubectl --context %s -n %s get secret %s -o jsonpath={.data.value}",
+			attempt, maxRetries, context, config.WorkloadClusterNamespace, secretName)
+
+		output, secretErr = RunCommandQuiet(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace, "get", "secret",
+			secretName, "-o", "jsonpath={.data.value}")
+
+		if secretErr == nil && strings.TrimSpace(output) != "" {
+			t.Logf("Kubeconfig secret found on attempt %d", attempt)
+			break
+		}
+
+		if attempt < maxRetries {
+			t.Logf("Secret not ready yet, waiting %v before retry %d/%d...", retryDelay, attempt+1, maxRetries)
+			time.Sleep(retryDelay)
+		}
+	}
+
+	if secretErr != nil {
+		t.Logf("Method 1 (kubectl get secret) failed after %d retries: %v", maxRetries, secretErr)
 
 		// Method 2: Try using clusterctl
 		clusterctlPath := filepath.Join(config.RepoDir, config.ClusterctlBinPath)
