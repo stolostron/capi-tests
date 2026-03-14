@@ -30,7 +30,7 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 
 	context := config.GetKubeContext()
 
-	// Use the provisioned cluster name from aro.yaml
+	// Use the provisioned cluster name from the cluster YAML
 	provisionedClusterName := config.GetProvisionedClusterName()
 
 	// Check cluster phase before attempting kubeconfig retrieval (fixes #275)
@@ -54,12 +54,35 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 	// Method 1: Using kubectl to get secret
 	secretName := fmt.Sprintf("%s-kubeconfig", provisionedClusterName)
 
-	t.Logf("Attempting Method 1: kubectl --context %s -n %s get secret %s -o jsonpath={.data.value}", context, config.WorkloadClusterNamespace, secretName)
-	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace, "get", "secret",
-		secretName, "-o", "jsonpath={.data.value}")
+	// Wait for kubeconfig secret to exist (with retry)
+	// There can be a brief delay between cluster reaching "Provisioned" phase and secret creation,
+	// especially for ROSA clusters
+	maxRetries := 12 // 12 retries * 5 seconds = 1 minute max wait
+	retryDelay := 5 * time.Second
+	var output string
+	var secretErr error
 
-	if err != nil {
-		t.Logf("Method 1 (kubectl get secret) failed: %v", err)
+	t.Logf("Waiting for kubeconfig secret '%s' to be created...", secretName)
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		t.Logf("Attempt %d/%d: kubectl --context %s -n %s get secret %s -o jsonpath={.data.value}",
+			attempt, maxRetries, context, config.WorkloadClusterNamespace, secretName)
+
+		output, secretErr = RunCommandQuiet(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace, "get", "secret",
+			secretName, "-o", "jsonpath={.data.value}")
+
+		if secretErr == nil && strings.TrimSpace(output) != "" {
+			t.Logf("Kubeconfig secret found on attempt %d", attempt)
+			break
+		}
+
+		if attempt < maxRetries {
+			t.Logf("Secret not ready yet, waiting %v before retry %d/%d...", retryDelay, attempt+1, maxRetries)
+			time.Sleep(retryDelay)
+		}
+	}
+
+	if secretErr != nil {
+		t.Logf("Method 1 (kubectl get secret) failed after %d retries: %v", maxRetries, secretErr)
 
 		// Method 2: Try using clusterctl
 		clusterctlPath := filepath.Join(config.RepoDir, config.ClusterctlBinPath)
@@ -131,7 +154,13 @@ func TestVerification_ClusterNodes(t *testing.T) {
 		t.Skipf("Kubeconfig not available at %s, run TestVerification_RetrieveKubeconfig first", kubeconfigPath)
 	}
 
-	SetEnvVar(t, "KUBECONFIG", kubeconfigPath)
+	// Set KUBECONFIG for external cluster mode (management cluster)
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	}
+
+	context := config.GetKubeContext()
+	provisionedClusterName := config.GetProvisionedClusterName()
 
 	timeout := DefaultNodeReadyTimeout
 	pollInterval := 30 * time.Second
@@ -163,29 +192,55 @@ func TestVerification_ClusterNodes(t *testing.T) {
 		iteration++
 		PrintToTTY("[%d] Checking cluster nodes...\n", iteration)
 
-		output, err := RunCommand(t, "kubectl", "get", "nodes")
+		// Use monitor script to get cluster status (including nodes)
+		data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 		if err != nil {
-			PrintToTTY("[%d] ⚠️  Failed to get nodes: %v\n", iteration, err)
-			t.Logf("Failed to get nodes (attempt %d): %v", iteration, err)
-		} else {
-			lines := strings.Split(strings.TrimSpace(output), "\n")
-			// Filter out empty lines
-			nodeCount := 0
-			for _, line := range lines {
-				if strings.TrimSpace(line) != "" && !strings.HasPrefix(line, "NAME") {
-					nodeCount++
-				}
-			}
+			PrintToTTY("[%d] ⚠️  Failed to monitor cluster: %v\n", iteration, err)
+			t.Logf("Failed to monitor cluster (attempt %d): %v", iteration, err)
+			ReportProgress(t, iteration, elapsed, remaining, timeout)
+			time.Sleep(pollInterval)
+			continue
+		}
 
-			if nodeCount > 0 {
-				PrintToTTY("\n✅ Cluster nodes available! (took %v)\n", elapsed.Round(time.Second))
+		// Check if there's an error connecting to the workload cluster
+		if data.NodesError != nil && *data.NodesError != "" {
+			PrintToTTY("[%d] ⚠️  Unable to connect to cluster: %s\n", iteration, *data.NodesError)
+			t.Logf("Unable to connect to cluster (attempt %d): %s", iteration, *data.NodesError)
+		}
+
+		// Check nodes
+		nodeCount := len(data.Nodes)
+		if nodeCount > 0 {
+			PrintToTTY("\n✅ Cluster nodes available! (took %v)\n", elapsed.Round(time.Second))
+			t.Logf("Cluster has %d node(s)", nodeCount)
+
+			// Print node details using workload cluster kubeconfig
+			PrintToTTY("Running: kubectl get nodes\n\n")
+			// Temporarily set KUBECONFIG to workload cluster for this command
+			oldKubeconfig := os.Getenv("KUBECONFIG")
+			if err := os.Setenv("KUBECONFIG", kubeconfigPath); err != nil {
+				t.Fatalf("Failed to set KUBECONFIG: %v", err)
+			}
+			defer func() {
+				if oldKubeconfig == "" {
+					os.Unsetenv("KUBECONFIG")
+				} else {
+					os.Setenv("KUBECONFIG", oldKubeconfig)
+				}
+			}()
+			output, err := RunCommand(t, "kubectl", "get", "nodes")
+
+			if err == nil {
 				PrintToTTY("%s\n\n", output)
 				t.Logf("Cluster nodes:\n%s", output)
-				t.Logf("Cluster has %d node(s)", nodeCount)
-				return
 			}
+			return
+		}
 
-			PrintToTTY("[%d] No nodes found yet\n", iteration)
+		if nodeCount == 0 {
+			if data.NodesError == nil || *data.NodesError == "" {
+				PrintToTTY("[%d] ⏳ No nodes found yet\n", iteration)
+			}
 		}
 
 		ReportProgress(t, iteration, elapsed, remaining, timeout)

@@ -15,6 +15,78 @@ import (
 // so they work correctly when run in separate test invocations.
 var infrastructureGenerationSucceeded bool
 
+// TestInfrastructure_01_ValidateCredentials validates that required environment variables
+// for YAML generation are set. This runs BEFORE gen.sh to provide clear error messages.
+func TestInfrastructure_01_ValidateCredentials(t *testing.T) {
+	config := NewTestConfig()
+
+	PrintTestHeader(t, "TestInfrastructure_ValidateCredentials",
+		"Validate required environment variables for YAML generation")
+
+	// Check if any provider has credential requirements to validate
+	hasCredentials := false
+	for _, p := range config.InfraProviders {
+		if len(p.YAMLGenCredentials) > 0 {
+			hasCredentials = true
+			break
+		}
+	}
+	if !hasCredentials {
+		t.Skip("No provider credential environment variables to validate")
+	}
+
+	var allMissing []EnvVarRequirement
+	for _, provider := range config.InfraProviders {
+		if len(provider.YAMLGenCredentials) == 0 {
+			continue
+		}
+
+		PrintToTTY("\n=== Validating %s credentials environment variables ===\n", provider.Name)
+		t.Logf("Validating %s environment variables for YAML generation", provider.Name)
+
+		var missing []EnvVarRequirement
+		for _, envReq := range provider.YAMLGenCredentials {
+			value := os.Getenv(envReq.Name)
+			if value == "" {
+				missing = append(missing, envReq)
+				PrintToTTY("  ❌ %s: NOT SET\n", envReq.Name)
+				if envReq.Desc != "" {
+					PrintToTTY("     (%s)\n", envReq.Desc)
+				}
+			} else {
+				// Never print credential values to logs - only indicate they're set
+				PrintToTTY("  ✅ %s: (set)\n", envReq.Name)
+				if envReq.Desc != "" {
+					PrintToTTY("     (%s)\n", envReq.Desc)
+				}
+			}
+		}
+
+		if len(missing) > 0 {
+			PrintToTTY("\n❌ %s environment validation FAILED\n", provider.Name)
+			PrintToTTY("Missing environment variables:\n")
+			for _, envReq := range missing {
+				PrintToTTY("  - %s: %s\n", envReq.Name, envReq.Desc)
+			}
+			PrintToTTY("\n")
+			allMissing = append(allMissing, missing...)
+		} else {
+			PrintToTTY("\n✅ %s environment validation PASSED\n\n", provider.Name)
+			t.Logf("%s environment variables are properly configured", provider.Name)
+		}
+	}
+
+	if len(allMissing) > 0 {
+		PrintToTTY("❌ YAML generation will fail without these credentials.\n")
+		PrintToTTY("Please set the missing environment variables before proceeding.\n\n")
+		var missingNames []string
+		for _, envReq := range allMissing {
+			missingNames = append(missingNames, envReq.Name)
+		}
+		t.Fatalf("Required environment variables not set: %v", missingNames)
+	}
+}
+
 // TestInfrastructure_GenerateResources tests generating ARO infrastructure resources
 func TestInfrastructure_GenerateResources(t *testing.T) {
 
@@ -51,10 +123,10 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 		}
 		if allFilesExist {
 			// Check if existing YAMLs match current config before skipping
-			aroYAMLPath := filepath.Join(outputDir, "aro.yaml")
+			clusterYAMLPath := filepath.Join(outputDir, config.ClusterYAML)
 
 			// Check 1: Prefix mismatch (e.g., CAPI_USER changed)
-			prefixMatches, existingPrefix := CheckYAMLConfigMatch(t, aroYAMLPath, config.ClusterNamePrefix)
+			prefixMatches, existingPrefix := CheckYAMLConfigMatch(t, clusterYAMLPath, config.ClusterNamePrefix)
 			if !prefixMatches {
 				PrintToTTY("\n⚠️  Configuration prefix mismatch detected!\n")
 				PrintToTTY("Existing YAMLs use prefix: %s\n", existingPrefix)
@@ -65,7 +137,7 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 				// Fall through to regeneration (don't return)
 			} else {
 				// Check 2: Namespace mismatch (new test run with unique namespace)
-				existingNamespace, err := ExtractNamespaceFromYAML(aroYAMLPath)
+				existingNamespace, err := ExtractNamespaceFromYAML(clusterYAMLPath)
 				if err != nil {
 					PrintToTTY("\n⚠️  Cannot read namespace from existing YAML: %v\n", err)
 					PrintToTTY("Will regenerate infrastructure...\n\n")
@@ -122,7 +194,7 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	SetEnvVar(t, "DEPLOYMENT_ENV", config.Environment)
 	SetEnvVar(t, "USER", config.CAPIUser)
 	SetEnvVar(t, "WORKLOAD_CLUSTER_NAME", config.WorkloadClusterName)
-	SetEnvVar(t, "REGION", config.Region)
+	SetEnvVar(t, config.RegionEnvVar, config.Region) // Provider-specific: REGION for ARO, AWS_REGION for ROSA
 	SetEnvVar(t, "CS_CLUSTER_NAME", config.ClusterNamePrefix)
 	SetEnvVar(t, "OCP_VERSION", config.OCPVersion)
 	// Pass namespace as NAMESPACE env var for YAML generation script
@@ -315,9 +387,7 @@ func redactSecrets(content []byte) ([]byte, bool) {
 // TestInfrastructure_VerifyCredentialsYAML verifies credentials.yaml exists and is valid
 // This test uses file-based detection for idempotency - it will work correctly
 // whether run in the same test invocation as GenerateResources or separately.
-func TestInfrastructure_VerifyCredentialsYAML(t *testing.T) {
-	t.Log("Verifying credentials.yaml")
-
+func TestInfrastructure_VerifyGeneratedYAMLs(t *testing.T) {
 	config := NewTestConfig()
 	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
 
@@ -325,67 +395,40 @@ func TestInfrastructure_VerifyCredentialsYAML(t *testing.T) {
 		t.Skipf("Output directory does not exist: %s", outputDir)
 	}
 
-	filePath := filepath.Join(outputDir, "credentials.yaml")
-	if !FileExists(filePath) {
-		t.Errorf("credentials.yaml not found at %s.\n\n"+
-			"This file should be generated by TestInfrastructure_GenerateResources.\n\n"+
-			"To regenerate:\n"+
-			"  go test -v ./test -run TestInfrastructure_GenerateResources\n\n"+
-			"Or manually run the generation script:\n"+
-			"  cd %s && bash %s %s",
-			filePath, config.RepoDir, config.GenScriptPath, config.GetOutputDirName())
-		return
+	expectedFiles := config.GetExpectedFiles()
+	if len(expectedFiles) == 0 {
+		t.Skip("No expected files configured for provider")
 	}
 
-	// Validate YAML syntax and structure
-	if err := ValidateYAMLFile(filePath); err != nil {
-		t.Errorf("credentials.yaml validation failed: %v", err)
-		return
+	t.Logf("Verifying %d YAML files for provider '%s'", len(expectedFiles), config.InfraProviderName)
+
+	for _, filename := range expectedFiles {
+		t.Run(filename, func(t *testing.T) {
+			filePath := filepath.Join(outputDir, filename)
+
+			if !FileExists(filePath) {
+				t.Errorf("%s not found at %s.\n\n"+
+					"This file should be generated by TestInfrastructure_GenerateResources.\n\n"+
+					"To regenerate:\n"+
+					"  go test -v ./test -run TestInfrastructure_GenerateResources\n\n"+
+					"Or manually run the generation script:\n"+
+					"  cd %s && bash %s %s",
+					filename, filePath, config.RepoDir, config.GenScriptPath, config.GetOutputDirName())
+				return
+			}
+
+			// Validate YAML syntax and structure
+			if err := ValidateYAMLFile(filePath); err != nil {
+				t.Errorf("%s validation failed: %v", filename, err)
+				return
+			}
+
+			info, err := os.Stat(filePath)
+			if err != nil {
+				t.Fatalf("Failed to stat %s: %v", filename, err)
+			}
+
+			t.Logf("%s is valid YAML (size: %d bytes)", filename, info.Size())
+		})
 	}
-
-	info, err := os.Stat(filePath)
-	if err != nil {
-		t.Fatalf("Failed to stat credentials.yaml: %v", err)
-	}
-
-	t.Logf("credentials.yaml is valid YAML (size: %d bytes)", info.Size())
-}
-
-// TestInfrastructure_VerifyAROClusterYAML verifies aro.yaml exists and is valid
-// This test uses file-based detection for idempotency - it will work correctly
-// whether run in the same test invocation as GenerateResources or separately.
-func TestInfrastructure_VerifyAROClusterYAML(t *testing.T) {
-	t.Log("Verifying aro.yaml (ARO cluster configuration)")
-
-	config := NewTestConfig()
-	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
-
-	if !DirExists(outputDir) {
-		t.Skipf("Output directory does not exist: %s", outputDir)
-	}
-
-	filePath := filepath.Join(outputDir, "aro.yaml")
-	if !FileExists(filePath) {
-		t.Errorf("aro.yaml (ARO cluster configuration) not found at %s.\n\n"+
-			"This file should be generated by TestInfrastructure_GenerateResources.\n\n"+
-			"To regenerate:\n"+
-			"  go test -v ./test -run TestInfrastructure_GenerateResources\n\n"+
-			"Or manually run the generation script:\n"+
-			"  cd %s && bash %s %s",
-			filePath, config.RepoDir, config.GenScriptPath, config.GetOutputDirName())
-		return
-	}
-
-	// Validate YAML syntax and structure
-	if err := ValidateYAMLFile(filePath); err != nil {
-		t.Errorf("aro.yaml validation failed: %v", err)
-		return
-	}
-
-	info, err := os.Stat(filePath)
-	if err != nil {
-		t.Fatalf("Failed to stat aro.yaml: %v", err)
-	}
-
-	t.Logf("aro.yaml is valid YAML (size: %d bytes)", info.Size())
 }

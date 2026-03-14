@@ -450,7 +450,7 @@ func IsKubectlApplySuccess(output string) bool {
 // ExtractClusterNameFromYAML extracts the cluster name from a multi-document YAML file.
 // It looks for a document with kind: Cluster (cluster.x-k8s.io/v1beta2) and returns
 // its metadata.name field. This is used to get the actual provisioned cluster name
-// from the generated aro.yaml file, which may differ from WORKLOAD_CLUSTER_NAME.
+// from the generated cluster YAML file, which may differ from WORKLOAD_CLUSTER_NAME.
 //
 // Example YAML:
 //
@@ -519,9 +519,70 @@ func ExtractClusterNameFromYAML(filePath string) (string, error) {
 	return "", fmt.Errorf("no Cluster resource found in %s", filePath)
 }
 
+// ExtractControlPlaneRefFromYAML extracts the control plane reference name from the Cluster resource.
+// It reads the Cluster resource's spec.controlPlaneRef.name field, which works for both
+// ARO (AROControlPlane) and ROSA (ROSAControlPlane).
+func ExtractControlPlaneRefFromYAML(filePath string) (string, error) {
+	if _, err := os.Stat(filePath); err != nil {
+		return "", fmt.Errorf("file not accessible: %w", err)
+	}
+
+	// #nosec G304 - filePath comes from test configuration
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %w", err)
+	}
+
+	docs := strings.Split(string(data), "---")
+	for _, doc := range docs {
+		doc = strings.TrimSpace(doc)
+		if doc == "" {
+			continue
+		}
+
+		var content map[string]interface{}
+		if err := yaml.Unmarshal([]byte(doc), &content); err != nil {
+			continue
+		}
+
+		// Check if this is a Cluster resource
+		kind, ok := content["kind"].(string)
+		if !ok || kind != "Cluster" {
+			continue
+		}
+
+		// Verify it's the CAPI Cluster type
+		apiVersion, ok := content["apiVersion"].(string)
+		if !ok || !strings.HasPrefix(apiVersion, "cluster.x-k8s.io/") {
+			continue
+		}
+
+		// Extract spec.controlPlaneRef.name
+		spec, ok := content["spec"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		controlPlaneRef, ok := spec["controlPlaneRef"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, ok := controlPlaneRef["name"].(string)
+		if !ok || name == "" {
+			continue
+		}
+
+		return name, nil
+	}
+
+	return "", fmt.Errorf("no Cluster resource with controlPlaneRef found in %s", filePath)
+}
+
 // ExtractAROControlPlaneNameFromYAML extracts the AROControlPlane resource name from a YAML file.
 // It looks for a resource with kind "AROControlPlane" and apiVersion starting with
 // "controlplane.cluster.x-k8s.io/" and returns its metadata.name.
+// DEPRECATED: Use ExtractControlPlaneRefFromYAML instead which works for both ARO and ROSA.
 func ExtractAROControlPlaneNameFromYAML(filePath string) (string, error) {
 	if _, err := os.Stat(filePath); err != nil {
 		return "", fmt.Errorf("file not accessible: %w", err)
@@ -624,7 +685,7 @@ func ExtractMachinePoolNameFromYAML(filePath string) (string, error) {
 }
 
 // CheckYAMLConfigMatch verifies that existing YAML files match the current configuration.
-// It extracts the cluster name from the aro.yaml file and compares it with the expected
+// It extracts the cluster name from the cluster YAML file and compares it with the expected
 // cluster name prefix. This is used to detect configuration mismatches that would cause
 // the test to use stale YAML files with outdated values.
 //
@@ -633,19 +694,19 @@ func ExtractMachinePoolNameFromYAML(filePath string) (string, error) {
 //   - existingPrefix: the cluster name extracted from the existing YAML file
 //
 // If the file doesn't exist or cannot be parsed, returns (false, "") to trigger regeneration.
-func CheckYAMLConfigMatch(t *testing.T, aroYAMLPath, expectedPrefix string) (matches bool, existingPrefix string) {
+func CheckYAMLConfigMatch(t *testing.T, clusterYAMLPath, expectedPrefix string) (matches bool, existingPrefix string) {
 	t.Helper()
 
-	// Extract cluster name from existing aro.yaml
-	clusterName, err := ExtractClusterNameFromYAML(aroYAMLPath)
+	// Extract cluster name from existing cluster YAML
+	clusterName, err := ExtractClusterNameFromYAML(clusterYAMLPath)
 	if err != nil {
 		// File doesn't exist or can't be parsed - needs regeneration
-		t.Logf("Could not extract cluster name from %s: %v", aroYAMLPath, err)
+		t.Logf("Could not extract cluster name from %s: %v", clusterYAMLPath, err)
 		return false, ""
 	}
 
 	// Compare the extracted cluster name with expected prefix
-	// The cluster name in aro.yaml should match the ClusterNamePrefix (e.g., "cate-stage")
+	// The cluster name should match the ClusterNamePrefix (e.g., "rcapu-stage")
 	if clusterName == expectedPrefix {
 		return true, clusterName
 	}
@@ -653,8 +714,8 @@ func CheckYAMLConfigMatch(t *testing.T, aroYAMLPath, expectedPrefix string) (mat
 	return false, clusterName
 }
 
-// AROControlPlaneCondition represents a condition from the AROControlPlane status
-type AROControlPlaneCondition struct {
+// ControlPlaneCondition represents a condition from any control plane (ARO, ROSA, etc.)
+type ControlPlaneCondition struct {
 	Type    string `json:"type"`
 	Status  string `json:"status"`
 	Reason  string `json:"reason,omitempty"`
@@ -683,7 +744,7 @@ var waitingPatterns = []WaitingPattern{
 
 // isWaitingCondition checks if a condition with False status and a failure-like reason
 // is actually just waiting for something. Returns true and a description if it's a waiting state.
-func isWaitingCondition(cond AROControlPlaneCondition) (bool, string) {
+func isWaitingCondition(cond ControlPlaneCondition) (bool, string) {
 	// Only check conditions that appear to be failures
 	if cond.Status != "False" {
 		return false, ""
@@ -700,29 +761,11 @@ func isWaitingCondition(cond AROControlPlaneCondition) (bool, string) {
 	return false, ""
 }
 
-// FormatAROControlPlaneConditions formats AROControlPlane conditions for display.
+// FormatControlPlaneConditions formats control plane conditions for display (works for ARO, ROSA, etc.).
 // It parses the JSON output from kubectl and returns a formatted string showing
 // the status of each condition with visual indicators.
-func FormatAROControlPlaneConditions(jsonData string) string {
-	if strings.TrimSpace(jsonData) == "" {
-		return "  (no conditions available)"
-	}
-
-	// Parse the JSON - it could be a full status object or just conditions array
-	var conditions []AROControlPlaneCondition
-
-	// Try parsing as conditions array first
-	if err := json.Unmarshal([]byte(jsonData), &conditions); err != nil {
-		// Try parsing as status object with conditions field
-		var status struct {
-			Conditions []AROControlPlaneCondition `json:"conditions"`
-		}
-		if err := json.Unmarshal([]byte(jsonData), &status); err != nil {
-			return fmt.Sprintf("  (failed to parse conditions: %v)", err)
-		}
-		conditions = status.Conditions
-	}
-
+// formatConditionsList formats a slice of ControlPlaneCondition structs for display.
+func formatConditionsList(conditions []ControlPlaneCondition) string {
 	if len(conditions) == 0 {
 		return "  (no conditions available)"
 	}
@@ -765,6 +808,86 @@ func FormatAROControlPlaneConditions(jsonData string) string {
 	return result.String()
 }
 
+// FormatControlPlaneConditionsFromParsed formats already-parsed conditions from monitor script output.
+// Takes []interface{} from JSON unmarshaling and converts to formatted condition display.
+func FormatControlPlaneConditionsFromParsed(conditionsInterface []interface{}) string {
+	if len(conditionsInterface) == 0 {
+		return "  (no conditions available)"
+	}
+
+	// Convert []interface{} to []ControlPlaneCondition via JSON round-trip
+	conditionsJSON, err := json.Marshal(conditionsInterface)
+	if err != nil {
+		return fmt.Sprintf("  (failed to marshal conditions: %v)", err)
+	}
+
+	var conditions []ControlPlaneCondition
+	if err := json.Unmarshal(conditionsJSON, &conditions); err != nil {
+		return fmt.Sprintf("  (failed to parse conditions: %v)", err)
+	}
+
+	return formatConditionsList(conditions)
+}
+
+// FormatNonTrueConditionsFromParsed formats only conditions that are NOT "True" from monitor script output.
+// This is useful for showing problematic conditions even when the overall status is ready.
+// Returns empty string if all conditions are "True" or if there are no conditions.
+func FormatNonTrueConditionsFromParsed(conditionsInterface []interface{}) string {
+	if len(conditionsInterface) == 0 {
+		return ""
+	}
+
+	// Convert []interface{} to []ControlPlaneCondition via JSON round-trip
+	conditionsJSON, err := json.Marshal(conditionsInterface)
+	if err != nil {
+		return ""
+	}
+
+	var conditions []ControlPlaneCondition
+	if err := json.Unmarshal(conditionsJSON, &conditions); err != nil {
+		return ""
+	}
+
+	// Filter to only non-true conditions
+	var nonTrueConditions []ControlPlaneCondition
+	for _, cond := range conditions {
+		if cond.Status != "True" {
+			nonTrueConditions = append(nonTrueConditions, cond)
+		}
+	}
+
+	if len(nonTrueConditions) == 0 {
+		return ""
+	}
+
+	return formatConditionsList(nonTrueConditions)
+}
+
+// FormatControlPlaneConditions formats control plane conditions for display (works for ARO, ROSA, etc.).
+// Takes JSON string from kubectl output.
+func FormatControlPlaneConditions(jsonData string) string {
+	if strings.TrimSpace(jsonData) == "" {
+		return "  (no conditions available)"
+	}
+
+	// Parse the JSON - it could be a full status object or just conditions array
+	var conditions []ControlPlaneCondition
+
+	// Try parsing as conditions array first
+	if err := json.Unmarshal([]byte(jsonData), &conditions); err != nil {
+		// Try parsing as status object with conditions field
+		var status struct {
+			Conditions []ControlPlaneCondition `json:"conditions"`
+		}
+		if err := json.Unmarshal([]byte(jsonData), &status); err != nil {
+			return fmt.Sprintf("  (failed to parse conditions: %v)", err)
+		}
+		conditions = status.Conditions
+	}
+
+	return formatConditionsList(conditions)
+}
+
 // AROClusterResourceStatus represents a resource entry from AROCluster status.resources[]
 type AROClusterResourceStatus struct {
 	Ready    bool `json:"ready"`
@@ -778,7 +901,7 @@ type AROClusterResourceStatus struct {
 
 // AROClusterStatus represents the status section of the AROCluster resource
 type AROClusterStatus struct {
-	Conditions []AROControlPlaneCondition `json:"conditions"`
+	Conditions []ControlPlaneCondition    `json:"conditions"`
 	Resources  []AROClusterResourceStatus `json:"resources"`
 	Ready      bool                       `json:"ready"`
 }
@@ -795,12 +918,71 @@ type InfrastructureResourceStatus struct {
 	TotalResources int
 	ReadyResources int
 	KindSummaries  []ResourceKindSummary
-	Conditions     []AROControlPlaneCondition
+	Conditions     []ControlPlaneCondition
 	NotReady       []AROClusterResourceStatus
+}
+
+// GetInfrastructureResourceStatusFromParsed converts already-parsed infrastructure data from monitor script
+// into InfrastructureResourceStatus. This avoids duplicate kubectl calls.
+func GetInfrastructureResourceStatusFromParsed(resourcesInterface, conditionsInterface []interface{}) InfrastructureResourceStatus {
+	var result InfrastructureResourceStatus
+
+	// Convert resources
+	if len(resourcesInterface) > 0 {
+		resourcesJSON, err := json.Marshal(resourcesInterface)
+		if err == nil {
+			var resources []AROClusterResourceStatus
+			if err := json.Unmarshal(resourcesJSON, &resources); err == nil {
+				result.TotalResources = len(resources)
+
+				// Count ready and collect not-ready resources
+				for _, r := range resources {
+					if r.Ready {
+						result.ReadyResources++
+					} else {
+						result.NotReady = append(result.NotReady, r)
+					}
+				}
+
+				// Group resources by kind, preserving insertion order
+				var kindOrder []string
+				kindMap := make(map[string]*ResourceKindSummary)
+				for _, r := range resources {
+					kind := r.Resource.Kind
+					if _, exists := kindMap[kind]; !exists {
+						kindOrder = append(kindOrder, kind)
+						kindMap[kind] = &ResourceKindSummary{Kind: kind}
+					}
+					kindMap[kind].Total++
+					if r.Ready {
+						kindMap[kind].Ready++
+					}
+				}
+
+				for _, kind := range kindOrder {
+					result.KindSummaries = append(result.KindSummaries, *kindMap[kind])
+				}
+			}
+		}
+	}
+
+	// Convert conditions
+	if len(conditionsInterface) > 0 {
+		conditionsJSON, err := json.Marshal(conditionsInterface)
+		if err == nil {
+			var conditions []ControlPlaneCondition
+			if err := json.Unmarshal(conditionsJSON, &conditions); err == nil {
+				result.Conditions = conditions
+			}
+		}
+	}
+
+	return result
 }
 
 // GetInfrastructureResourceStatus fetches and parses AROCluster.status.resources[] and status.conditions.
 // Returns an InfrastructureResourceStatus with per-kind breakdown and not-ready resource list.
+// DEPRECATED: Prefer using GetInfrastructureResourceStatusFromParsed with monitor script data.
 func GetInfrastructureResourceStatus(t *testing.T, kubeContext, namespace, clusterName string) InfrastructureResourceStatus {
 	t.Helper()
 
@@ -1376,9 +1558,8 @@ func WaitForClusterHealthy(t *testing.T, kubeContext string, timeout time.Durati
 // Returns nil on success, or an error if all retries are exhausted.
 func ApplyWithRetry(t *testing.T, kubeContext, yamlPath string, maxRetries int) error {
 	t.Helper()
-	// Use the configured workload cluster namespace
-	config := NewTestConfig()
-	return ApplyWithRetryInNamespace(t, kubeContext, config.WorkloadClusterNamespace, yamlPath, maxRetries)
+	// Apply without forcing namespace - let resources use their own namespace from YAML
+	return ApplyWithRetryInNamespace(t, kubeContext, "", yamlPath, maxRetries)
 }
 
 // ApplyWithRetryInNamespace applies a YAML file with retry logic to a specific namespace.
@@ -1399,10 +1580,19 @@ func ApplyWithRetryInNamespace(t *testing.T, kubeContext, namespace, yamlPath st
 	baseDelay := DefaultApplyRetryDelay
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		PrintToTTY("[%d/%d] Applying %s to namespace %s...\n", attempt, maxRetries, yamlPath, namespace)
-		t.Logf("Applying %s to namespace %s (attempt %d/%d)", yamlPath, namespace, attempt, maxRetries)
+		// Build kubectl command - skip namespace flag if namespace is empty
+		var output string
+		var err error
 
-		output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "apply", "--validate=warn", "-f", yamlPath)
+		if namespace == "" {
+			PrintToTTY("[%d/%d] Applying %s...\n", attempt, maxRetries, yamlPath)
+			t.Logf("Applying %s (attempt %d/%d)", yamlPath, attempt, maxRetries)
+			output, err = RunCommandQuiet(t, "kubectl", "--context", kubeContext, "apply", "--validate=warn", "-f", yamlPath)
+		} else {
+			PrintToTTY("[%d/%d] Applying %s to namespace %s...\n", attempt, maxRetries, yamlPath, namespace)
+			t.Logf("Applying %s to namespace %s (attempt %d/%d)", yamlPath, namespace, attempt, maxRetries)
+			output, err = RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "apply", "--validate=warn", "-f", yamlPath)
+		}
 
 		// Check if apply was successful
 		if err == nil || IsKubectlApplySuccess(output) {
@@ -1662,13 +1852,13 @@ func FormatAzureError(info *AzureErrorInfo) string {
 func GetClusterPhase(t *testing.T, kubeContext, namespace, clusterName string) (string, error) {
 	t.Helper()
 
-	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "get", "cluster",
-		clusterName, "-o", "jsonpath={.status.phase}")
+	// Use MonitorCluster to get cluster status via JSON monitoring script
+	data, err := MonitorCluster(t, kubeContext, namespace, clusterName)
 	if err != nil {
 		return "", fmt.Errorf("failed to get cluster phase: %w", err)
 	}
 
-	phase := strings.TrimSpace(output)
+	phase := data.Summary.Phase
 	if phase == "" {
 		return "", fmt.Errorf("cluster phase is empty (cluster may not have status yet)")
 	}
@@ -2439,15 +2629,25 @@ func GetAzureAuthDescription(mode AzureAuthMode) string {
 }
 
 // DeletionResourceStatus holds the status of resources being deleted.
+// ARODeletionStatus contains ARO-specific deletion status fields.
+type ARODeletionStatus struct {
+	ResourceGroup    string
+	RGExists         bool
+	RGProvisionState string
+}
+
+// DeletionResourceStatus represents the status of resources being deleted.
 type DeletionResourceStatus struct {
-	ClusterExists         bool
-	ClusterPhase          string
-	ClusterFinalizers     []string
-	AROControlPlaneCount  int
-	MachinePoolCount      int
-	AzureResourceGroup    string
-	AzureRGExists         bool
-	AzureRGProvisionState string
+	ClusterExists       bool
+	ClusterPhase        string
+	ClusterFinalizers   []string
+	ControlPlaneKind    string // e.g., "AROControlPlane", "ROSAControlPlane"
+	ControlPlaneCount   int
+	ControlPlaneReady   bool   // Control plane ready status
+	ControlPlaneState   string // Control plane state (e.g., "uninstalling", "deleting")
+	MachinePoolCount    int
+	Provider            string             // "aro" or "rosa"
+	AROProviderSpecific *ARODeletionStatus // Only populated for ARO
 }
 
 // GetDeletionResourceStatus retrieves the current status of all resources being deleted.
@@ -2455,57 +2655,98 @@ type DeletionResourceStatus struct {
 func GetDeletionResourceStatus(t *testing.T, kubeContext, namespace, clusterName, resourceGroup string) DeletionResourceStatus {
 	t.Helper()
 
+	config := NewTestConfig()
 	status := DeletionResourceStatus{
-		AzureResourceGroup: resourceGroup,
+		Provider: config.InfraProviderName,
 	}
 
-	// Check if cluster still exists and get its phase
-	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace,
-		"get", "cluster", clusterName, "-o", "jsonpath={.status.phase}", "--ignore-not-found")
-	if err == nil && strings.TrimSpace(output) != "" {
-		status.ClusterExists = true
-		status.ClusterPhase = strings.TrimSpace(output)
+	// Use MonitorCluster to get cluster status via JSON monitoring script
+	data, err := MonitorCluster(t, kubeContext, namespace, clusterName)
+	if err != nil {
+		// Check if this is "not found" (deletion complete) vs. a real error
+		errMsg := err.Error()
+		if strings.Contains(strings.ToLower(errMsg), "not found") ||
+			strings.Contains(strings.ToLower(errMsg), "notfound") {
+			// Cluster not found - it's been deleted
+			status.ClusterExists = false
+		} else {
+			// Real error (network, auth, etc.) - be conservative and assume cluster still exists
+			// This prevents false "deletion complete" on transient errors
+			t.Logf("Warning: Error querying cluster status (will retry): %v", err)
+			status.ClusterExists = true // Conservative: treat errors as "still exists"
+		}
 	} else {
-		// Double check - try to get the cluster without jsonpath
-		checkOutput, checkErr := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace,
-			"get", "cluster", clusterName, "--ignore-not-found")
-		status.ClusterExists = checkErr == nil && strings.TrimSpace(checkOutput) != ""
-	}
+		status.ClusterExists = true
+		status.ClusterPhase = data.Summary.Phase
 
-	// Get cluster finalizers if cluster exists
-	if status.ClusterExists {
-		finalizersOutput, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace,
-			"get", "cluster", clusterName, "-o", "jsonpath={.metadata.finalizers}")
-		if err == nil && strings.TrimSpace(finalizersOutput) != "" {
-			// Parse JSON array of finalizers
-			finalizers := strings.Trim(finalizersOutput, "[]\"")
-			if finalizers != "" {
-				status.ClusterFinalizers = strings.Split(finalizers, "\",\"")
+		// Extract finalizers from cluster conditions (if available in future)
+		// For now, keep empty as the monitoring script doesn't expose finalizers
+		status.ClusterFinalizers = []string{}
+
+		// Get control plane kind and count from monitoring data
+		if data.ControlPlane.Name != "" {
+			status.ControlPlaneKind = data.ControlPlane.Kind
+			status.ControlPlaneCount = 1
+			status.ControlPlaneReady = data.ControlPlane.Ready
+
+			// Get control plane state from JSON (extracted by monitor script)
+			// States include: validating, installing, uninstalling, deleting, upgraded, etc.
+			if data.ControlPlane.State != nil {
+				status.ControlPlaneState = *data.ControlPlane.State
 			}
 		}
+
+		// Count machine pools
+		status.MachinePoolCount = len(data.MachinePools)
 	}
 
-	// Count AROControlPlane resources
-	output, err = RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace,
-		"get", "arocontrolplane", "--ignore-not-found", "-o", "jsonpath={.items[*].metadata.name}")
-	if err == nil && strings.TrimSpace(output) != "" {
-		status.AROControlPlaneCount = len(strings.Fields(output))
-	}
+	// Populate ARO-specific fields only for ARO provider
+	if config.HasProvider("aro") {
+		// Extract actual resource group name from infrastructure resources
+		// instead of using config (which might be different from what was deployed)
+		actualResourceGroup := ""
+		if status.ClusterExists && len(data.Infrastructure.Resources) > 0 {
+			for _, res := range data.Infrastructure.Resources {
+				resMap, ok := res.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				resource, ok := resMap["resource"].(map[string]interface{})
+				if !ok {
+					continue
+				}
+				kind, _ := resource["kind"].(string)
+				if kind == "ResourceGroup" {
+					name, _ := resource["name"].(string)
+					if name != "" {
+						actualResourceGroup = name
+						break
+					}
+				}
+			}
+		}
 
-	// Count MachinePool resources
-	output, err = RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace,
-		"get", "machinepool", "--ignore-not-found", "-o", "jsonpath={.items[*].metadata.name}")
-	if err == nil && strings.TrimSpace(output) != "" {
-		status.MachinePoolCount = len(strings.Fields(output))
-	}
+		// Fall back to config-based name if we couldn't extract it
+		if actualResourceGroup == "" && resourceGroup != "" {
+			actualResourceGroup = resourceGroup
+		}
 
-	// Check Azure resource group status if az CLI is available
-	if CommandExists("az") && resourceGroup != "" {
-		output, err = RunCommandQuiet(t, "az", "group", "show", "--name", resourceGroup,
-			"--query", "properties.provisioningState", "-o", "tsv")
-		if err == nil && strings.TrimSpace(output) != "" {
-			status.AzureRGExists = true
-			status.AzureRGProvisionState = strings.TrimSpace(output)
+		if actualResourceGroup != "" {
+			aroStatus := &ARODeletionStatus{
+				ResourceGroup: actualResourceGroup,
+			}
+
+			// Check Azure resource group status if az CLI is available
+			if CommandExists("az") {
+				output, err := RunCommandQuiet(t, "az", "group", "show", "--name", actualResourceGroup,
+					"--query", "properties.provisioningState", "-o", "tsv")
+				if err == nil && strings.TrimSpace(output) != "" {
+					aroStatus.RGExists = true
+					aroStatus.RGProvisionState = strings.TrimSpace(output)
+				}
+			}
+
+			status.AROProviderSpecific = aroStatus
 		}
 	}
 
@@ -2518,7 +2759,7 @@ func FormatDeletionProgress(status DeletionResourceStatus) string {
 
 	// Box width: 61 characters inside the borders
 	// Emoji takes 2 visual cells but 4 bytes, so we add 2 to valueWidth for padding
-	const labelWidth = 18 // "AROControlPlane:" padded
+	const labelWidth = 18 // "ROSAControlPlane:" padded (longest control plane name)
 
 	// Helper to format a row with emoji, label, and value
 	formatRow := func(emoji, label, value string) string {
@@ -2558,11 +2799,20 @@ func FormatDeletionProgress(status DeletionResourceStatus) string {
 		}
 	}
 
-	// AROControlPlane
-	if status.AROControlPlaneCount > 0 {
-		sb.WriteString(formatRow("🔄", "AROControlPlane", fmt.Sprintf("%d remaining", status.AROControlPlaneCount)))
+	// Control Plane (use dynamic kind name)
+	controlPlaneLabel := status.ControlPlaneKind
+	if controlPlaneLabel == "" {
+		controlPlaneLabel = "ControlPlane"
+	}
+	if status.ControlPlaneCount > 0 {
+		// Show state if available (e.g., "Deleting (uninstalling)")
+		if status.ControlPlaneState != "" {
+			sb.WriteString(formatRow("🔄", controlPlaneLabel, fmt.Sprintf("Deleting (%s)", status.ControlPlaneState)))
+		} else {
+			sb.WriteString(formatRow("🔄", controlPlaneLabel, fmt.Sprintf("%d remaining", status.ControlPlaneCount)))
+		}
 	} else {
-		sb.WriteString(formatRow("✅", "AROControlPlane", "Deleted"))
+		sb.WriteString(formatRow("✅", controlPlaneLabel, "Deleted"))
 	}
 
 	// MachinePool
@@ -2572,16 +2822,19 @@ func FormatDeletionProgress(status DeletionResourceStatus) string {
 		sb.WriteString(formatRow("✅", "MachinePool", "Deleted"))
 	}
 
-	// Azure resource group
-	if status.AzureResourceGroup != "" {
-		if status.AzureRGExists {
-			stateInfo := status.AzureRGProvisionState
-			if stateInfo == "" {
-				stateInfo = "exists"
+	// ARO-specific: Azure resource group (only show for ARO provider)
+	if status.AROProviderSpecific != nil {
+		aroStatus := status.AROProviderSpecific
+		if aroStatus.ResourceGroup != "" {
+			if aroStatus.RGExists {
+				stateInfo := aroStatus.RGProvisionState
+				if stateInfo == "" {
+					stateInfo = "exists"
+				}
+				sb.WriteString(formatRow("🔄", "Azure RG", fmt.Sprintf("%s (%s)", aroStatus.ResourceGroup, stateInfo)))
+			} else {
+				sb.WriteString(formatRow("✅", "Azure RG", "Deleted"))
 			}
-			sb.WriteString(formatRow("🔄", "Azure RG", fmt.Sprintf("%s (%s)", status.AzureResourceGroup, stateInfo)))
-		} else {
-			sb.WriteString(formatRow("✅", "Azure RG", "Deleted"))
 		}
 	}
 
@@ -2605,8 +2858,12 @@ func ReportDeletionProgress(t *testing.T, iteration int, elapsed, remaining time
 	PrintToTTY("%s", FormatDeletionProgress(status))
 
 	// Log summary for test output
-	t.Logf("Deletion progress: cluster=%v, arocp=%d, mp=%d, azureRG=%v",
-		status.ClusterExists, status.AROControlPlaneCount, status.MachinePoolCount, status.AzureRGExists)
+	azureRGExists := false
+	if status.AROProviderSpecific != nil {
+		azureRGExists = status.AROProviderSpecific.RGExists
+	}
+	t.Logf("Deletion progress: cluster=%v, cp=%s(%d), mp=%d, azureRG=%v",
+		status.ClusterExists, status.ControlPlaneKind, status.ControlPlaneCount, status.MachinePoolCount, azureRGExists)
 }
 
 // ============================================================================
@@ -3080,7 +3337,7 @@ func GetExistingClusterNames(t *testing.T, kubeContext, namespace string) ([]str
 // CheckForMismatchedClusters checks if any existing Cluster CRs don't match the expected prefix.
 // Returns a list of cluster names that don't start with the expected prefix.
 // This is used to detect stale Cluster resources from previous configurations (e.g., different CAPI_USER).
-func CheckForMismatchedClusters(t *testing.T, kubeContext, namespace, expectedPrefix string) ([]string, error) {
+func CheckForMismatchedClusters(t *testing.T, kubeContext, namespace, expectedClusterName string) ([]string, error) {
 	t.Helper()
 
 	existingClusters, err := GetExistingClusterNames(t, kubeContext, namespace)
@@ -3090,8 +3347,8 @@ func CheckForMismatchedClusters(t *testing.T, kubeContext, namespace, expectedPr
 
 	var mismatched []string
 	for _, name := range existingClusters {
-		// Check if the cluster name starts with the expected prefix
-		if !strings.HasPrefix(name, expectedPrefix) {
+		// Check if the cluster name matches the expected workload cluster name
+		if name != expectedClusterName {
 			mismatched = append(mismatched, name)
 		}
 	}
@@ -3101,7 +3358,7 @@ func CheckForMismatchedClusters(t *testing.T, kubeContext, namespace, expectedPr
 
 // FormatMismatchedClustersError formats a user-friendly error message for mismatched clusters.
 // This provides clear guidance on how to clean up stale Cluster resources.
-func FormatMismatchedClustersError(mismatched []string, expectedPrefix, namespace string) string {
+func FormatMismatchedClustersError(mismatched []string, expectedClusterName, namespace string) string {
 	var sb strings.Builder
 
 	sb.WriteString("\n")
@@ -3114,7 +3371,7 @@ func FormatMismatchedClustersError(mismatched []string, expectedPrefix, namespac
 		fmt.Fprintf(&sb, "  • %s\n", name)
 	}
 
-	fmt.Fprintf(&sb, "\nCurrent config expects cluster names starting with: %s\n\n", expectedPrefix)
+	fmt.Fprintf(&sb, "\nCurrent config expects cluster name: %s\n\n", expectedClusterName)
 
 	sb.WriteString("This typically happens when CAPI_USER was changed without cleaning up\n")
 	sb.WriteString("the previous cluster resources. Deploying new clusters alongside old ones\n")
