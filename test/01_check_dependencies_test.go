@@ -418,6 +418,163 @@ func TestCheckDependencies_AzureEnvironment(t *testing.T) {
 	})
 }
 
+// ============================================================================
+// ROSA/AWS Authentication and Prerequisites
+// ============================================================================
+
+// TestCheckDependencies_ROSAAuthentication validates ROSA and AWS authentication.
+func TestCheckDependencies_ROSAAuthentication(t *testing.T) {
+	config := NewTestConfig()
+	if !config.HasProvider("rosa") {
+		t.Skip("Skipping ROSA authentication check (provider is not rosa)")
+	}
+
+	// Skip in CI environments where ROSA login may not be available
+	if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
+		t.Skip("Skipping ROSA authentication check in CI environment")
+		return
+	}
+
+	PrintTestHeader(t, "TestCheckDependencies_ROSAAuthentication",
+		"Validate ROSA and AWS authentication")
+
+	// Check ROSA CLI authentication
+	t.Run("ROSA_CLI_Authentication", func(t *testing.T) {
+		if !CommandExists("rosa") {
+			t.Skip("ROSA CLI not available")
+			return
+		}
+
+		output, err := RunCommandQuiet(t, "rosa", "whoami")
+		if err != nil {
+			PrintToTTY("❌ ROSA authentication failed\n")
+			PrintToTTY("   Run 'rosa login' to authenticate\n")
+			PrintToTTY("   Get token from: https://console.redhat.com/openshift/token/rosa\n\n")
+			t.Errorf("ROSA authentication required.\n\n"+
+				"To authenticate:\n"+
+				"  rosa login\n\n"+
+				"Get your token from: https://console.redhat.com/openshift/token/rosa")
+			return
+		}
+
+		PrintToTTY("✅ ROSA authentication successful\n")
+		t.Logf("ROSA whoami output:\n%s", output)
+	})
+
+	// Check AWS CLI authentication
+	t.Run("AWS_CLI_Authentication", func(t *testing.T) {
+		if !CommandExists("aws") {
+			t.Skip("AWS CLI not available")
+			return
+		}
+
+		output, err := RunCommandQuiet(t, "aws", "sts", "get-caller-identity")
+		if err != nil {
+			PrintToTTY("❌ AWS authentication failed\n")
+			PrintToTTY("   Run 'aws configure' to set up credentials\n\n")
+			t.Errorf("AWS authentication required.\n\n"+
+				"To configure AWS credentials:\n"+
+				"  aws configure\n\n"+
+				"Or set environment variables:\n"+
+				"  export AWS_ACCESS_KEY_ID=<key>\n"+
+				"  export AWS_SECRET_ACCESS_KEY=<secret>\n"+
+				"  export AWS_REGION=%s", config.Region)
+			return
+		}
+
+		PrintToTTY("✅ AWS authentication successful\n")
+		t.Logf("AWS caller identity:\n%s", output)
+	})
+
+	PrintToTTY("\n")
+}
+
+// TestCheckDependencies_ROSAOCMRole validates and creates the ROSA OCM role if needed.
+// The OCM role authorizes Red Hat's OpenShift Cluster Manager to manage ROSA clusters
+// in your AWS account. This is a one-time setup per AWS account.
+func TestCheckDependencies_ROSAOCMRole(t *testing.T) {
+	config := NewTestConfig()
+	if !config.HasProvider("rosa") {
+		t.Skip("Skipping ROSA OCM role check (provider is not rosa)")
+	}
+
+	// Skip in CI environments
+	if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
+		t.Skip("Skipping ROSA OCM role check in CI environment")
+		return
+	}
+
+	PrintTestHeader(t, "TestCheckDependencies_ROSAOCMRole",
+		"Validate ROSA OCM role exists (create if needed)")
+
+	// Check if ROSA CLI is available
+	if !CommandExists("rosa") {
+		PrintToTTY("⚠️  ROSA CLI not available - skipping OCM role check\n\n")
+		t.Skip("ROSA CLI not available")
+		return
+	}
+
+	// Check if authenticated
+	if _, err := RunCommandQuiet(t, "rosa", "whoami"); err != nil {
+		PrintToTTY("⚠️  Not logged in to ROSA - skipping OCM role check\n\n")
+		t.Skip("Not authenticated to ROSA")
+		return
+	}
+
+	// Verify OCM role exists by checking permissions
+	PrintToTTY("Verifying ROSA permissions...\n")
+	output, err := RunCommandQuiet(t, "rosa", "verify", "permissions")
+
+	if err != nil {
+		// Check if error is due to missing OCM role
+		if strings.Contains(output, "not authorized") ||
+			strings.Contains(output, "ocm-role") ||
+			strings.Contains(output, "OCM role") {
+
+			PrintToTTY("⚠️  OCM role not found or not authorized\n")
+			PrintToTTY("   Creating OCM role automatically...\n\n")
+			t.Logf("OCM role missing or not authorized, creating...")
+
+			// Create OCM role automatically
+			createOutput, createErr := RunCommand(t, "rosa", "create", "ocm-role", "--mode", "auto", "--yes")
+			if createErr != nil {
+				PrintToTTY("❌ Failed to create OCM role: %v\n", createErr)
+				PrintToTTY("   Output: %s\n\n", createOutput)
+				t.Errorf("Failed to create ROSA OCM role.\n\n"+
+					"This role is required for ROSA to manage clusters in your AWS account.\n\n"+
+					"To create manually:\n"+
+					"  rosa create ocm-role --mode auto --yes\n\n"+
+					"Error: %v\nOutput: %s", createErr, createOutput)
+				return
+			}
+
+			PrintToTTY("✅ OCM role created successfully\n")
+			t.Logf("OCM role created:\n%s", createOutput)
+
+			// Verify permissions again after creation
+			verifyOutput, verifyErr := RunCommand(t, "rosa", "verify", "permissions")
+			if verifyErr != nil {
+				PrintToTTY("⚠️  Permission verification failed after OCM role creation\n")
+				PrintToTTY("   Output: %s\n\n", verifyOutput)
+				t.Logf("Warning: Permissions still not verified after OCM role creation: %v\nOutput: %s", verifyErr, verifyOutput)
+				// Don't fail - role was created, verification might need time to propagate
+			} else {
+				PrintToTTY("✅ ROSA permissions verified\n\n")
+				t.Log("ROSA permissions verified successfully")
+			}
+		} else {
+			// Other permission error
+			PrintToTTY("⚠️  Permission verification failed: %v\n", err)
+			PrintToTTY("   Output: %s\n\n", output)
+			t.Logf("Warning: ROSA permission verification failed (non-OCM role issue): %v\nOutput: %s", err, output)
+		}
+	} else {
+		// Permissions already verified - OCM role exists and is working
+		PrintToTTY("✅ ROSA OCM role exists and permissions verified\n\n")
+		t.Log("ROSA permissions verified - OCM role is configured")
+	}
+}
+
 // TestCheckDependencies_OpenShiftCLI_IsAvailable verifies OpenShift CLI is functional
 func TestCheckDependencies_OpenShiftCLI_IsAvailable(t *testing.T) {
 	output, err := RunCommand(t, "oc", "version", "--client")

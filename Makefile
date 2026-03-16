@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _validate-cleanup test-all _test-all-impl clean clean-all clean-azure help summary
+.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-rosa help summary
 
 # Default values
 # Extract CAPI_USER default from Go config to maintain single source of truth
@@ -494,8 +494,30 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 				echo "Tip: Run 'make clean-azure' to clean all Azure resources (including orphaned)."; \
 			fi; \
 		fi; \
+		elif [ "$(INFRA_PROVIDER)" = "rosa" ]; then \
+			echo "--- AWS/ROSA Resources ---"; \
+			echo "Target prefix: $(CAPI_USER)"; \
+			echo ""; \
+		if ! command -v rosa >/dev/null 2>&1; then \
+			echo "⚠️  ROSA CLI not available - skipping ROSA cleanup"; \
+			echo "   Install from: https://console.redhat.com/openshift/downloads"; \
+		elif ! rosa whoami >/dev/null 2>&1; then \
+			echo "⚠️  Not logged in to ROSA - skipping ROSA cleanup"; \
+			echo "   Run 'rosa login' to authenticate"; \
 		else \
-			echo "Skipping Azure cleanup (INFRA_PROVIDER=$(INFRA_PROVIDER), not aro)"; \
+			echo "Searching for ROSA clusters and AWS resources with prefix '$(CAPI_USER)'..."; \
+			echo ""; \
+			read -p "Search for and delete ROSA clusters/AWS resources with prefix '$(CAPI_USER)'? [y/N] " -n 1 -r; \
+			echo ""; \
+			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+				./scripts/cleanup-rosa-resources.sh --prefix "$(CAPI_USER)" || echo "ROSA resources cleanup encountered an error"; \
+			else \
+				echo "Skipped ROSA resources cleanup."; \
+				echo "Tip: Run 'make clean-rosa' to clean all ROSA/AWS resources."; \
+			fi; \
+		fi; \
+		else \
+			echo "Skipping cloud provider cleanup (INFRA_PROVIDER=$(INFRA_PROVIDER))"; \
 		fi; \
 		echo ""; \
 		if [ -f "$(DEPLOYMENT_STATE_FILE)" ]; then \
@@ -507,7 +529,7 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 		echo "======================================="; \
 	fi
 
-clean-all: ## Clean up ALL test resources without prompting (local + Azure)
+clean-all: ## Clean up ALL test resources without prompting (local + cloud provider resources)
 	@echo "========================================"
 	@echo "=== Non-Interactive Cleanup ==="
 	@echo "========================================"
@@ -522,6 +544,9 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 	@echo ""
 	@# Delete all Azure resources (resource group + orphaned resources + AD apps + SPs) - only for ARO
 	@$(MAKE) --no-print-directory _clean-azure-conditional
+	@echo ""
+	@# Delete all ROSA/AWS resources (clusters + operator roles + OIDC + VPCs) - only for ROSA
+	@$(MAKE) --no-print-directory _clean-rosa-conditional
 	@echo ""
 	@# Delete management cluster
 	@if kind get clusters 2>/dev/null | grep -q "^$(CLEANUP_MANAGEMENT_CLUSTER)$$"; then \
@@ -590,6 +615,47 @@ _clean-azure-conditional:
 		$(MAKE) --no-print-directory _clean-azure-force; \
 	else \
 		echo "Skipping Azure cleanup (INFRA_PROVIDER=$(INFRA_PROVIDER), not aro)"; \
+	fi
+
+clean-rosa: ## Delete all ROSA/AWS resources (clusters, operator roles, OIDC providers, VPCs)
+	@echo "========================================"
+	@echo "=== ROSA/AWS Resource Cleanup ==="
+	@echo "========================================"
+	@echo ""
+	@if ! command -v rosa >/dev/null 2>&1; then \
+		echo "⚠️  Error: rosa CLI not found"; \
+		echo "Install from: https://console.redhat.com/openshift/downloads"; \
+		exit 1; \
+	fi
+	@if ! rosa whoami >/dev/null 2>&1; then \
+		echo "⚠️  Error: Not logged in to ROSA"; \
+		echo "Run 'rosa login' to authenticate"; \
+		exit 1; \
+	fi
+	@echo "Target prefix: $(CAPI_USER)"
+	@echo ""
+	@if [ -f "$(DEPLOYMENT_STATE_FILE)" ]; then \
+		echo "📝 Using deployment state from $(DEPLOYMENT_STATE_FILE)"; \
+		echo ""; \
+	fi
+	@if [ "$(FORCE)" = "1" ]; then \
+		./scripts/cleanup-rosa-resources.sh --prefix "$(CAPI_USER)" --force; \
+	else \
+		./scripts/cleanup-rosa-resources.sh --prefix "$(CAPI_USER)"; \
+	fi
+
+# Internal target: force delete all ROSA resources without prompting
+.PHONY: _clean-rosa-force
+_clean-rosa-force:
+	@./scripts/cleanup-rosa-resources.sh --prefix "$(CAPI_USER)" --force 2>/dev/null || true
+
+# Internal target: conditionally clean ROSA resources (only for ROSA)
+.PHONY: _clean-rosa-conditional
+_clean-rosa-conditional:
+	@if [ "$(INFRA_PROVIDER)" = "rosa" ]; then \
+		$(MAKE) --no-print-directory _clean-rosa-force; \
+	else \
+		echo "Skipping ROSA cleanup (INFRA_PROVIDER=$(INFRA_PROVIDER), not rosa)"; \
 	fi
 
 setup-submodule: ## Add cluster-api-installer as a git submodule

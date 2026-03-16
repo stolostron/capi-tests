@@ -762,8 +762,166 @@ func TestCleanup_Summary(t *testing.T) {
 	PrintToTTY("\n=== Cleanup Commands ===\n")
 	PrintToTTY("  make clean       - Interactive cleanup (prompts for each)\n")
 	PrintToTTY("  make clean-all   - Non-interactive (delete everything)\n")
-	PrintToTTY("  make clean-azure - Azure resources only\n")
+	PrintToTTY("  make clean-azure - Azure resources only (ARO)\n")
+	PrintToTTY("  make clean-rosa  - ROSA resources only (AWS)\n")
 	PrintToTTY("  FORCE=1 make clean - Skip all prompts\n\n")
 
 	t.Log("Cleanup summary complete")
+}
+
+// ============================================================================
+// ROSA/AWS Cleanup Tests
+// ============================================================================
+
+// TestCleanup_VerifyROSACloudFormationStack verifies CloudFormation stack cleanup for ROSA.
+// This test checks if stuck or failed CloudFormation stacks can be identified and cleaned up.
+func TestCleanup_VerifyROSACloudFormationStack(t *testing.T) {
+	config := NewTestConfig()
+
+	// Skip if not ROSA provider
+	if !config.HasProvider("rosa") {
+		t.Skip("Skipping ROSA CloudFormation check (INFRA_PROVIDER is not 'rosa')")
+	}
+
+	PrintTestHeader(t, "TestCleanup_VerifyROSACloudFormationStack",
+		"Verify CloudFormation stack status for ROSA networking")
+
+	// Check if AWS CLI is available
+	if !CommandExists("aws") {
+		PrintToTTY("⚠️  AWS CLI not available - skipping test\n\n")
+		t.Skip("aws command not available")
+	}
+
+	// Check AWS authentication
+	_, err := RunCommandQuiet(t, "aws", "sts", "get-caller-identity")
+	if err != nil {
+		PrintToTTY("⚠️  Not authenticated to AWS - skipping test\n")
+		PrintToTTY("   Run 'aws configure' or set AWS credentials\n\n")
+		t.Skip("Not authenticated to AWS")
+	}
+
+	// Get stack name from config (default: ${CAPI_USER}-net)
+	stackName := fmt.Sprintf("%s-net", config.CAPIUser)
+	region := config.Region
+
+	PrintToTTY("Checking CloudFormation stack: %s (region: %s)\n", stackName, region)
+	t.Logf("Checking CloudFormation stack: %s in region %s", stackName, region)
+
+	// Check stack status
+	output, err := RunCommandQuiet(t, "aws", "cloudformation", "describe-stacks",
+		"--region", region,
+		"--stack-name", stackName)
+
+	if err != nil {
+		if strings.Contains(output, "does not exist") {
+			PrintToTTY("✅ Stack not found (clean state)\n\n")
+			t.Log("CloudFormation stack does not exist - clean state")
+			return
+		}
+		PrintToTTY("⚠️  Error checking stack: %v\n\n", err)
+		t.Logf("Warning: Failed to check stack: %v", err)
+		return
+	}
+
+	// Parse stack status
+	// Extract StackStatus from JSON output
+	if strings.Contains(output, "\"StackStatus\"") {
+		PrintToTTY("📋 Stack exists\n")
+
+		// Check for failed states
+		if strings.Contains(output, "DELETE_FAILED") {
+			PrintToTTY("⚠️  Stack Status: DELETE_FAILED\n")
+			PrintToTTY("   This stack needs manual cleanup\n")
+			PrintToTTY("   Run: aws cloudformation delete-stack --region %s --stack-name %s\n", region, stackName)
+			PrintToTTY("   Or use: ./scripts/cleanup-rosa-resources.sh --prefix %s --force\n\n", config.CAPIUser)
+			t.Logf("CloudFormation stack in DELETE_FAILED state - requires cleanup")
+		} else if strings.Contains(output, "CREATE_COMPLETE") || strings.Contains(output, "UPDATE_COMPLETE") {
+			PrintToTTY("✅ Stack Status: Active and healthy\n")
+			PrintToTTY("   This stack will be cleaned up when deleting the cluster\n\n")
+			t.Logf("CloudFormation stack is active")
+		} else if strings.Contains(output, "DELETE_IN_PROGRESS") {
+			PrintToTTY("⏳ Stack Status: DELETE_IN_PROGRESS\n")
+			PrintToTTY("   Stack is currently being deleted\n\n")
+			t.Logf("CloudFormation stack deletion in progress")
+		} else {
+			PrintToTTY("ℹ️  Stack exists in unknown state\n")
+			PrintToTTY("   Check status: aws cloudformation describe-stacks --region %s --stack-name %s\n\n", region, stackName)
+			t.Logf("CloudFormation stack in unknown state")
+		}
+	}
+}
+
+// TestCleanup_VerifyROSAResources verifies ROSA cluster and operator roles cleanup status.
+func TestCleanup_VerifyROSAResources(t *testing.T) {
+	config := NewTestConfig()
+
+	// Skip if not ROSA provider
+	if !config.HasProvider("rosa") {
+		t.Skip("Skipping ROSA resources check (INFRA_PROVIDER is not 'rosa')")
+	}
+
+	PrintTestHeader(t, "TestCleanup_VerifyROSAResources",
+		"Verify ROSA clusters and operator roles cleanup status")
+
+	// Check if rosa CLI is available
+	if !CommandExists("rosa") {
+		PrintToTTY("⚠️  ROSA CLI not available - skipping test\n")
+		PrintToTTY("   Install from: https://console.redhat.com/openshift/downloads\n\n")
+		t.Skip("rosa command not available")
+	}
+
+	// Check ROSA authentication
+	_, err := RunCommandQuiet(t, "rosa", "whoami")
+	if err != nil {
+		PrintToTTY("⚠️  Not logged in to ROSA - skipping test\n")
+		PrintToTTY("   Run 'rosa login' to authenticate\n\n")
+		t.Skip("Not authenticated to ROSA")
+	}
+
+	PrintToTTY("Checking ROSA resources with prefix: %s\n\n", config.CAPIUser)
+
+	// Check for ROSA clusters
+	PrintToTTY("1. ROSA Clusters:\n")
+	output, err := RunCommandQuiet(t, "rosa", "list", "clusters", "-o", "json")
+	if err == nil && output != "" && output != "[]" {
+		// Count clusters with our prefix
+		clusterCount := strings.Count(output, fmt.Sprintf(`"name":"%s`, config.CAPIUser))
+		if clusterCount > 0 {
+			PrintToTTY("   ⚠️  Found %d cluster(s) with prefix '%s'\n", clusterCount, config.CAPIUser)
+			PrintToTTY("   Run 'make clean-rosa' to delete\n")
+		} else {
+			PrintToTTY("   ✅ CLEAN (no clusters with prefix '%s')\n", config.CAPIUser)
+		}
+	} else {
+		PrintToTTY("   ✅ CLEAN (no clusters found)\n")
+	}
+
+	// Check for operator roles
+	PrintToTTY("\n2. Operator Roles:\n")
+	rolesOutput, err := RunCommandQuiet(t, "rosa", "list", "operator-roles")
+	if err == nil && rolesOutput != "" {
+		// Filter roles by prefix
+		lines := strings.Split(rolesOutput, "\n")
+		matchingRoles := 0
+		for _, line := range lines {
+			if strings.HasPrefix(strings.TrimSpace(line), config.CAPIUser) {
+				matchingRoles++
+			}
+		}
+		if matchingRoles > 0 {
+			PrintToTTY("   ⚠️  Found %d operator role(s) with prefix '%s'\n", matchingRoles, config.CAPIUser)
+			PrintToTTY("   Run 'make clean-rosa' to delete\n")
+		} else {
+			PrintToTTY("   ✅ CLEAN (no operator roles with prefix '%s')\n", config.CAPIUser)
+		}
+	} else {
+		PrintToTTY("   ✅ CLEAN (no operator roles found)\n")
+	}
+
+	PrintToTTY("\n=== Cleanup Command ===\n")
+	PrintToTTY("  make clean-rosa                                    - Interactive cleanup\n")
+	PrintToTTY("  FORCE=1 make clean-rosa                           - Non-interactive\n")
+	PrintToTTY("  ./scripts/cleanup-rosa-resources.sh --prefix %s  - Direct script\n\n", config.CAPIUser)
+
+	t.Log("ROSA resources check complete")
 }

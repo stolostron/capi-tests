@@ -282,6 +282,98 @@ func TestDeletion_VerifyMachinePoolDeletion(t *testing.T) {
 }
 
 // TestDeletion_VerifyAzureResourcesDeletion verifies Azure resources are cleaned up.
+// TestDeletion_CleanupROSAInfrastructure cleans up ROSA-specific infrastructure resources.
+// ROSANetwork and ROSARoleConfig must be deleted BEFORE the management cluster is deleted,
+// otherwise they become orphaned and leave CloudFormation stacks and IAM roles in AWS.
+// This test should run AFTER cluster deletion but BEFORE management cluster cleanup.
+func TestDeletion_CleanupROSAInfrastructure(t *testing.T) {
+	config := NewTestConfig()
+
+	// Skip for non-ROSA providers
+	if !config.HasProvider("rosa") {
+		t.Skip("Skipping ROSA-specific test (infrastructure cleanup is ROSA-specific)")
+	}
+
+	// Set KUBECONFIG for external cluster mode
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	}
+
+	context := config.GetKubeContext()
+
+	PrintTestHeader(t, "TestDeletion_CleanupROSAInfrastructure",
+		"Clean up ROSA infrastructure resources (ROSANetwork, ROSARoleConfig)")
+
+	PrintToTTY("📋 Namespace: %s\n", config.WorkloadClusterNamespace)
+	PrintToTTY("🗑️  Deleting ROSA infrastructure resources...\n\n")
+
+	// Delete ROSANetwork
+	t.Run("DeleteROSANetwork", func(t *testing.T) {
+		PrintToTTY("1. Checking ROSANetwork resources...\n")
+		output, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
+			"get", "rosanetwork", "-o", "name")
+
+		if err != nil || strings.TrimSpace(output) == "" {
+			PrintToTTY("   ✅ No ROSANetwork resources found\n")
+			t.Log("No ROSANetwork resources to delete")
+			return
+		}
+
+		// Delete all ROSANetwork resources in the namespace
+		networks := strings.Split(strings.TrimSpace(output), "\n")
+		for _, network := range networks {
+			networkName := strings.TrimPrefix(network, "rosanetwork.infrastructure.cluster.x-k8s.io/")
+			PrintToTTY("   🗑️  Deleting %s...\n", networkName)
+
+			deleteOutput, deleteErr := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
+				"delete", "rosanetwork", networkName, "--wait=false")
+			if deleteErr != nil {
+				PrintToTTY("   ⚠️  Warning: Failed to delete %s: %v\n", networkName, deleteErr)
+				t.Logf("Warning: Failed to delete ROSANetwork %s: %v\nOutput: %s", networkName, deleteErr, deleteOutput)
+			} else {
+				PrintToTTY("   ✅ Deletion initiated for %s\n", networkName)
+				t.Logf("ROSANetwork deletion initiated: %s", networkName)
+			}
+		}
+	})
+
+	PrintToTTY("\n")
+
+	// Delete ROSARoleConfig
+	t.Run("DeleteROSARoleConfig", func(t *testing.T) {
+		PrintToTTY("2. Checking ROSARoleConfig resources...\n")
+		output, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
+			"get", "rosaroleconfig", "-o", "name")
+
+		if err != nil || strings.TrimSpace(output) == "" {
+			PrintToTTY("   ✅ No ROSARoleConfig resources found\n")
+			t.Log("No ROSARoleConfig resources to delete")
+			return
+		}
+
+		// Delete all ROSARoleConfig resources in the namespace
+		roleConfigs := strings.Split(strings.TrimSpace(output), "\n")
+		for _, roleConfig := range roleConfigs {
+			roleConfigName := strings.TrimPrefix(roleConfig, "rosaroleconfig.infrastructure.cluster.x-k8s.io/")
+			PrintToTTY("   🗑️  Deleting %s...\n", roleConfigName)
+
+			deleteOutput, deleteErr := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
+				"delete", "rosaroleconfig", roleConfigName, "--wait=false")
+			if deleteErr != nil {
+				PrintToTTY("   ⚠️  Warning: Failed to delete %s: %v\n", roleConfigName, deleteErr)
+				t.Logf("Warning: Failed to delete ROSARoleConfig %s: %v\nOutput: %s", roleConfigName, deleteErr, deleteOutput)
+			} else {
+				PrintToTTY("   ✅ Deletion initiated for %s\n", roleConfigName)
+				t.Logf("ROSARoleConfig deletion initiated: %s", roleConfigName)
+			}
+		}
+	})
+
+	PrintToTTY("\n✅ ROSA infrastructure cleanup completed\n")
+	PrintToTTY("   CloudFormation stacks and IAM roles will be cleaned up by AWS controllers\n\n")
+	t.Log("ROSA infrastructure cleanup completed")
+}
+
 // This checks if the Azure resource group still exists after cluster deletion.
 // This test is ARO-specific and skipped for other providers.
 func TestDeletion_VerifyAzureResourcesDeletion(t *testing.T) {
