@@ -4,13 +4,34 @@ name: Management Cluster (ROSA)
 # This workflow deploys a Kind cluster with CAPI/CAPA controllers and validates setup.
 # Does NOT provision ROSA workload clusters.
 #
-# Manual-only trigger. Requires:
+# Triggers:
+#   - Pull requests (pre-merge validation)
+#   - Push to main (post-merge validation)
+#   - Manual dispatch
+#
+# Requires:
 #   - Repository secret: QUAY_AUTH
 #
 # Compare with cluster-rosa.yml:
 #   - management-cluster-rosa.yml (this file): Quick validation, Kind + controllers only
 #   - cluster-rosa.yml: Full deployment including ROSA workload cluster provisioning
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'test/**'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/management-cluster-rosa.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'test/**'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/management-cluster-rosa.yml'
   workflow_dispatch:
 
 permissions:

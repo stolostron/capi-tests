@@ -4,13 +4,34 @@ name: Management Cluster (ARO)
 # This workflow deploys a Kind cluster with CAPI/CAPZ/ASO controllers and validates setup.
 # Does NOT provision ARO HCP workload clusters.
 #
-# Manual-only trigger. Requires:
+# Triggers:
+#   - Pull requests (pre-merge validation)
+#   - Push to main (post-merge validation)
+#   - Manual dispatch
+#
+# Requires:
 #   - Repository secret: QUAY_AUTH
 #
 # Compare with cluster-aro.yml:
 #   - management-cluster-aro.yml (this file): Quick validation, Kind + controllers only
 #   - cluster-aro.yml: Full deployment including ARO HCP workload cluster provisioning
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'test/**'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/management-cluster-aro.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'test/**'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/management-cluster-aro.yml'
   workflow_dispatch:
 
 permissions:
