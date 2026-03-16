@@ -1,14 +1,21 @@
 # CAPI Test Suite
 
-[![Check Dependencies](https://github.com/RadekCap/capi-tests/actions/workflows/check-dependencies.yml/badge.svg)](https://github.com/RadekCap/capi-tests/actions/workflows/check-dependencies.yml)
-[![Repository Setup](https://github.com/RadekCap/capi-tests/actions/workflows/test-setup.yml/badge.svg)](https://github.com/RadekCap/capi-tests/actions/workflows/test-setup.yml)
+**ARO:**
+
+[![Management Cluster (ARO)](https://github.com/stolostron/capi-tests/actions/workflows/management-cluster-aro.yml/badge.svg)](https://github.com/stolostron/capi-tests/actions/workflows/management-cluster-aro.yml)
+[![Full Cluster Deployment (ARO)](https://github.com/stolostron/capi-tests/actions/workflows/workload-cluster-aro.yml/badge.svg)](https://github.com/stolostron/capi-tests/actions/workflows/workload-cluster-aro.yml)
+
+**ROSA:**
+
+[![Management Cluster (ROSA)](https://github.com/stolostron/capi-tests/actions/workflows/management-cluster-rosa.yml/badge.svg)](https://github.com/stolostron/capi-tests/actions/workflows/management-cluster-rosa.yml)
+[![Full Cluster Deployment (ROSA)](https://github.com/stolostron/capi-tests/actions/workflows/workload-cluster-rosa.yml/badge.svg)](https://github.com/stolostron/capi-tests/actions/workflows/workload-cluster-rosa.yml)
 
 **Security Scanning:**
 
-[![govulncheck](https://github.com/RadekCap/capi-tests/actions/workflows/security-govulncheck.yml/badge.svg)](https://github.com/RadekCap/capi-tests/actions/workflows/security-govulncheck.yml)
-[![gosec](https://github.com/RadekCap/capi-tests/actions/workflows/security-gosec.yml/badge.svg)](https://github.com/RadekCap/capi-tests/actions/workflows/security-gosec.yml)
-[![Trivy](https://github.com/RadekCap/capi-tests/actions/workflows/security-trivy.yml/badge.svg)](https://github.com/RadekCap/capi-tests/actions/workflows/security-trivy.yml)
-[![nancy](https://github.com/RadekCap/capi-tests/actions/workflows/security-nancy.yml/badge.svg)](https://github.com/RadekCap/capi-tests/actions/workflows/security-nancy.yml)
+[![govulncheck](https://github.com/stolostron/capi-tests/actions/workflows/security-govulncheck.yml/badge.svg)](https://github.com/stolostron/capi-tests/actions/workflows/security-govulncheck.yml)
+[![gosec](https://github.com/stolostron/capi-tests/actions/workflows/security-gosec.yml/badge.svg)](https://github.com/stolostron/capi-tests/actions/workflows/security-gosec.yml)
+[![Trivy](https://github.com/stolostron/capi-tests/actions/workflows/security-trivy.yml/badge.svg)](https://github.com/stolostron/capi-tests/actions/workflows/security-trivy.yml)
+[![nancy](https://github.com/stolostron/capi-tests/actions/workflows/security-nancy.yml/badge.svg)](https://github.com/stolostron/capi-tests/actions/workflows/security-nancy.yml)
 
 Go-based CAPI test suite supporting ARO (CAPZ/ASO) and ROSA (CAPA) deployment paths.
 
