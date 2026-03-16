@@ -355,15 +355,23 @@ type TestConfig struct {
 	// MCEEnablementTimeout is the timeout for waiting after MCE component enablement.
 	// Controllers need time to be deployed, images pulled, and pods started.
 	MCEEnablementTimeout time.Duration
+
+	// Chart deployment configuration
+	// DeployCharts controls whether to deploy Helm charts to the management cluster.
+	// When true and USE_KUBECONFIG is set, deploys CAPI/provider charts to external cluster.
+	// Default: false
+	DeployCharts bool
 }
 
 // NewTestConfig creates a new test configuration with defaults
 func NewTestConfig() *TestConfig {
 	useKubeconfig := os.Getenv("USE_KUBECONFIG")
+	deployCharts := parseDeployCharts()
 
-	// When using external kubeconfig, default to MCE namespaces (USE_K8S=true)
-	// This triggers multicluster-engine namespace for all controllers
-	if useKubeconfig != "" && os.Getenv("USE_K8S") == "" {
+	// When using external kubeconfig WITHOUT deploying charts, default to MCE namespaces (USE_K8S=true)
+	// This triggers multicluster-engine namespace for all controllers.
+	// When DEPLOY_CHARTS=true, we're deploying to standard namespaces (capi-system, capz-system).
+	if useKubeconfig != "" && !deployCharts && os.Getenv("USE_K8S") == "" {
 		_ = os.Setenv("USE_K8S", "true") // #nosec G104 - os.Setenv with fixed key/value cannot fail in practice
 	}
 
@@ -463,6 +471,9 @@ func NewTestConfig() *TestConfig {
 		// MCE configuration
 		MCEAutoEnable:        parseMCEAutoEnable(useKubeconfig),
 		MCEEnablementTimeout: parseMCEEnablementTimeout(),
+
+		// Chart deployment
+		DeployCharts: parseDeployCharts(),
 	}
 }
 
@@ -561,6 +572,13 @@ func parseMCEEnablementTimeout() time.Duration {
 		return DefaultMCEEnablementTimeout
 	}
 	return timeout
+}
+
+// parseDeployCharts parses the DEPLOY_CHARTS environment variable.
+// Returns true if DEPLOY_CHARTS=true, false otherwise.
+// Default: false
+func parseDeployCharts() bool {
+	return os.Getenv("DEPLOY_CHARTS") == "true"
 }
 
 // GetOutputDirName returns the output directory name for generated infrastructure files

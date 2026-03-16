@@ -305,11 +305,16 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 
 ### External Cluster Mode
 - `USE_KUBECONFIG` - Path to an external kubeconfig file. When set, the test suite runs in "external cluster mode":
-  - Skips Kind cluster creation (Phase 03)
-  - Skips repository cloning (Phase 02) - controllers are pre-installed
+  - Skips Kind cluster creation (Phase 03) by default
+  - Skips repository cloning (Phase 02) when controllers are pre-installed
   - Validates pre-installed CAPI/CAPZ/ASO controllers
   - Uses the `current-context` from the specified kubeconfig file
   - Automatically sets `USE_K8S=true` for MCE namespace defaults (`multicluster-engine`)
+- `DEPLOY_CHARTS` - Deploy Helm charts to external cluster (default: `false`). When set to `true` with `USE_KUBECONFIG`:
+  - Enables chart deployment to the external cluster (Phase 03)
+  - Runs deploy-charts.sh with `DO_INIT_KIND=false` (skips Kind creation)
+  - Deploys CAPI and infrastructure provider controllers
+  - Patches credential secrets after deployment
 
 **RFC 1123 Naming Compliance**: The following variables must be RFC 1123 compliant (lowercase alphanumeric and hyphens only, must start/end with alphanumeric):
 - `CAPI_USER`

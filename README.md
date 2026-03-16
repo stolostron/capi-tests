@@ -219,9 +219,21 @@ make test-all
 ```
 
 When `USE_KUBECONFIG` is set:
-- Phase 02 (Setup) is skipped - no repository cloning needed
+- Phase 02 (Setup) is skipped by default - no repository cloning needed if controllers are pre-installed
 - Phase 03 (Cluster) validates pre-installed controllers instead of creating Kind cluster
 - All other phases work normally using the external cluster
+
+To deploy controllers to an external cluster, set `DEPLOY_CHARTS=true`:
+```bash
+export USE_KUBECONFIG=/path/to/kubeconfig
+export DEPLOY_CHARTS=true
+make test-all
+```
+
+This will:
+- Clone the cluster-api-installer repository (Phase 02)
+- Deploy CAPI and infrastructure provider charts to your external cluster (Phase 03)
+- Continue with YAML generation and cluster deployment as normal
 
 **Note**: All test targets automatically generate JUnit XML reports in a timestamped `results/` directory. The path to the results directory is displayed when tests run.
 

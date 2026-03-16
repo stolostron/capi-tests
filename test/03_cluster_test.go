@@ -294,15 +294,17 @@ func TestExternalCluster_02_EnsureMCEComponents(t *testing.T) {
 // TestExternalCluster_03_ControllersReady validates CAPI/CAPZ/ASO controllers are installed.
 // This test runs only when USE_KUBECONFIG is set, validating pre-installed controllers.
 // If controllers are missing, it provides remediation hints based on whether this is an MCE cluster.
-func TestExternalCluster_03_ControllersReady(t *testing.T) {
+// TestKindCluster_02_ControllersInstalled validates that controller deployments exist.
+// This runs AFTER TestKindCluster_01_ClusterReady, so controllers should be deployed.
+func TestKindCluster_02_ControllersInstalled(t *testing.T) {
 	config := NewTestConfig()
 
 	if !config.IsExternalCluster() {
 		t.Skip("Not using external cluster (USE_KUBECONFIG not set)")
 	}
 
-	PrintTestHeader(t, "TestExternalCluster_03_ControllersReady",
-		"Validate CAPI/CAPZ/ASO controllers are installed on external cluster")
+	PrintTestHeader(t, "TestKindCluster_02_ControllersInstalled",
+		"Validate CAPI/CAPZ/ASO controller deployments exist")
 
 	// Set KUBECONFIG for kubectl
 	SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
@@ -351,12 +353,14 @@ func TestExternalCluster_03_ControllersReady(t *testing.T) {
 	}
 }
 
-// TestKindCluster_KindClusterReady tests deploying a Kind cluster with CAPZ and verifies it's ready
-func TestKindCluster_KindClusterReady(t *testing.T) {
+// TestKindCluster_01_ClusterReady deploys controllers to the management cluster and verifies it's ready.
+// For Kind mode: creates Kind cluster and deploys controllers.
+// For external mode with DEPLOY_CHARTS=true: deploys controllers to existing cluster.
+func TestKindCluster_01_ClusterReady(t *testing.T) {
 	config := NewTestConfig()
 
-	// Skip in external cluster mode - cluster is already provisioned
-	if config.IsExternalCluster() {
+	// Skip in external cluster mode unless DEPLOY_CHARTS=true
+	if config.IsExternalCluster() && !config.DeployCharts {
 		t.Skip("Using external cluster (USE_KUBECONFIG set), skipping Kind cluster deployment")
 	}
 
@@ -368,18 +372,33 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 		t.Skipf("Repository not cloned yet at %s", config.RepoDir)
 	}
 
-	// Check if cluster already exists
-	PrintToTTY("\n=== Checking for existing Kind cluster ===\n")
-	t.Log("Checking for existing Kind cluster")
-	output, _ := RunCommand(t, "kind", "get", "clusters")
-	clusterExists := strings.Contains(output, config.ManagementClusterName)
+	// Determine if we need to deploy controllers
+	var needsDeployment bool
+	var output string
+	var err error
 
-	if !clusterExists {
-		PrintToTTY("Kind cluster '%s' not found - will deploy new cluster\n", config.ManagementClusterName)
+	if config.IsExternalCluster() {
+		PrintToTTY("\n=== Using external management cluster ===\n")
+		PrintToTTY("Kubeconfig: %s\n", config.UseKubeconfig)
+		PrintToTTY("Context: %s\n", config.GetKubeContext())
+		// Deploy charts if explicitly requested
+		needsDeployment = config.DeployCharts
+	} else {
+		// For Kind: check if cluster exists, deploy if it doesn't
+		PrintToTTY("\n=== Checking for existing Kind management cluster ===\n")
+		t.Log("Checking for existing Kind cluster")
+		output, _ = RunCommand(t, "kind", "get", "clusters")
+		clusterExists := strings.Contains(output, config.ManagementClusterName)
+		needsDeployment = !clusterExists
+	}
 
-		// Deploy Kind cluster and CAPI/CAPZ/ASO controllers using deploy-charts.sh
-		// DO_INIT_KIND=true creates the Kind cluster and installs cert-manager
-		// DO_DEPLOY=true deploys the specified charts
+	if needsDeployment {
+		if config.IsExternalCluster() {
+			PrintToTTY("Deploying controllers to external cluster\n")
+		} else {
+			PrintToTTY("Management cluster '%s' not found - will create cluster and deploy controllers\n", config.ManagementClusterName)
+		}
+
 		deployScriptPath := filepath.Join(config.RepoDir, "scripts", "deploy-charts.sh")
 		if !FileExists(deployScriptPath) {
 			PrintToTTY("❌ Deployment script not found: %s\n", deployScriptPath)
@@ -387,32 +406,40 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 			return
 		}
 
-		// Generate Kind config file for private registry access
-		PrintToTTY("\n=== Generating Kind cluster configuration ===\n")
-		kindConfigPath, err := GenerateKindConfig(t, config.RepoDir, config.ManagementClusterName)
-		if err != nil {
-			PrintToTTY("❌ Failed to generate Kind config: %v\n", err)
-			t.Fatalf("Failed to generate Kind config: %v", err)
-			return
-		}
-		if kindConfigPath != "" {
-			PrintToTTY("✅ Kind config generated: %s\n", kindConfigPath)
-		} else {
-			PrintToTTY("⚠️  No Docker config found - Kind nodes will not have registry credentials\n")
-			PrintToTTY("   Private image pulls (e.g., quay.io/acm-d/) may fail with ErrImagePull\n")
+		// Generate Kind config file for private registry access (only for Kind clusters)
+		var kindConfigPath string
+		if !config.IsExternalCluster() {
+			PrintToTTY("\n=== Generating Kind cluster configuration ===\n")
+			var err error
+			kindConfigPath, err = GenerateKindConfig(t, config.RepoDir, config.ManagementClusterName)
+			if err != nil {
+				PrintToTTY("❌ Failed to generate Kind config: %v\n", err)
+				t.Fatalf("Failed to generate Kind config: %v", err)
+				return
+			}
+			if kindConfigPath != "" {
+				PrintToTTY("✅ Kind config generated: %s\n", kindConfigPath)
+			} else {
+				PrintToTTY("⚠️  No Docker config found - Kind nodes will not have registry credentials\n")
+				PrintToTTY("   Private image pulls (e.g., quay.io/acm-d/) may fail with ErrImagePull\n")
+			}
 		}
 
-		PrintToTTY("\n=== Deploying Kind cluster '%s' with CAPI/CAPZ/ASO controllers ===\n", config.ManagementClusterName)
-		PrintToTTY("This will: create Kind cluster, install cert-manager, deploy controllers\n")
+		PrintToTTY("\n=== Deploying controllers to management cluster ===\n")
 		PrintToTTY("Expected duration: 5-10 minutes\n")
 		PrintToTTY("Output streaming below...\n\n")
 
 		// Set environment variables for deploy-charts.sh
 		// USE_KIND or USE_K8S should be set externally by the user
-		// DO_INIT_KIND=true: Create Kind cluster (when USE_KIND=true)
+		// DO_INIT_KIND: Create Kind cluster (false for external clusters)
 		// DO_DEPLOY=true: Deploy the charts
-		SetEnvVar(t, "KIND_CLUSTER_NAME", config.ManagementClusterName)
-		SetEnvVar(t, "DO_INIT_KIND", "true")
+		if config.IsExternalCluster() {
+			SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+			SetEnvVar(t, "DO_INIT_KIND", "false")
+		} else {
+			SetEnvVar(t, "KIND_CLUSTER_NAME", config.ManagementClusterName)
+			SetEnvVar(t, "DO_INIT_KIND", "true")
+		}
 		SetEnvVar(t, "DO_DEPLOY", "true")
 		// Disable the script's built-in deployment check — it assumes all providers
 		// share a namespace (capi-system), but charts may deploy to provider-specific
@@ -446,7 +473,7 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 		chartArgs := config.DeploymentChartArgs()
 		scriptArgs := append([]string{deployScriptPath}, chartArgs...)
 		t.Logf("Executing deployment script: %s %s", deployScriptPath, strings.Join(chartArgs, " "))
-		t.Log("This will: deploy CAPI and infrastructure provider controllers to Kind cluster")
+		t.Log("This will: deploy CAPI and infrastructure provider controllers to management cluster")
 		output, err = RunCommandWithStreaming(t, "bash", scriptArgs...)
 		if err != nil {
 			PrintToTTY("\n❌ Failed to deploy controllers: %v\n", err)
@@ -463,9 +490,9 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 			return
 		}
 
-		// Don't log full script output as it may contain sensitive Azure configuration
-		PrintToTTY("\n✅ Kind cluster deployment script completed successfully\n\n")
-		t.Log("Kind cluster deployment script completed successfully")
+		// Don't log full script output as it may contain sensitive configuration
+		PrintToTTY("\n✅ Controller deployment completed successfully\n\n")
+		t.Log("Controller deployment to management cluster completed successfully")
 
 		// Ensure cloud credentials are available before patching secrets
 		if config.HasProvider("aro") {
@@ -500,28 +527,32 @@ func TestKindCluster_KindClusterReady(t *testing.T) {
 			PrintToTTY("✅ ASO credentials secret patched successfully\n\n")
 		}
 	} else {
-		PrintToTTY("✅ Kind cluster '%s' already exists\n\n", config.ManagementClusterName)
-		t.Logf("Kind cluster '%s' already exists", config.ManagementClusterName)
+		PrintToTTY("✅ Management cluster already exists (controllers assumed deployed)\n\n")
+		t.Log("Management cluster already exists (controllers assumed deployed)")
 	}
 
 	// Verify cluster is accessible via kubectl
-	PrintToTTY("=== Verifying cluster accessibility ===\n")
-	t.Log("Verifying cluster accessibility...")
+	PrintToTTY("=== Verifying management cluster accessibility ===\n")
+	t.Log("Verifying management cluster accessibility...")
 
 	// Set kubeconfig context
-	SetEnvVar(t, "KUBECONFIG", fmt.Sprintf("%s/.kube/config", os.Getenv("HOME")))
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	} else {
+		SetEnvVar(t, "KUBECONFIG", fmt.Sprintf("%s/.kube/config", os.Getenv("HOME")))
+	}
 
-	output, err := RunCommand(t, "kubectl", "--context", config.GetKubeContext(), "get", "nodes")
+	output, err = RunCommand(t, "kubectl", "--context", config.GetKubeContext(), "get", "nodes")
 	if err != nil {
-		PrintToTTY("❌ Failed to access Kind cluster nodes: %v\nOutput: %s\n\n", err, output)
-		t.Errorf("Failed to access Kind cluster nodes: %v\nOutput: %s", err, output)
+		PrintToTTY("❌ Failed to access management cluster nodes: %v\nOutput: %s\n\n", err, output)
+		t.Errorf("Failed to access management cluster nodes: %v\nOutput: %s", err, output)
 		return
 	}
 
-	PrintToTTY("✅ Kind cluster nodes:\n%s\n\n", output)
-	PrintToTTY("✅ Kind cluster is ready\n\n")
-	t.Logf("Kind cluster nodes:\n%s", output)
-	t.Log("Kind cluster is ready")
+	PrintToTTY("✅ Management cluster nodes:\n%s\n\n", output)
+	PrintToTTY("✅ Management cluster is ready\n\n")
+	t.Logf("Management cluster nodes:\n%s", output)
+	t.Log("Management cluster is ready")
 
 	// Write deployment state file for cleanup to know what was actually deployed
 	if err := WriteDeploymentState(config); err != nil {
