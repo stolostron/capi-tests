@@ -343,6 +343,10 @@ jobs:
           echo "---" >> issue_body.md
           echo "*This issue was automatically created by the CI workflow*" >> issue_body.md
 
+          # Ensure labels exist (gh issue create fails if label is missing)
+          gh label create "automated" --force 2>/dev/null || true
+          gh label create "test-failure" --color "d93f0b" --force 2>/dev/null || true
+
           gh issue create \
             --title "[$WORKFLOW_NAME] Workflow failed on $REF_NAME" \
             --body-file issue_body.md \
