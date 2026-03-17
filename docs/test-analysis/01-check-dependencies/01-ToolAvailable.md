@@ -20,13 +20,15 @@ For each tool, the test uses `CommandExists()` helper which internally runs:
 | `git` | `which git` | - |
 | `kubectl` | `which kubectl` | - |
 | `go` | `which go` | - |
+| `xmllint` | `which xmllint` | - |
+| `envsubst` | `which envsubst` | - |
 
 ---
 
 ## Detailed Flow
 
 ```
-For each tool in [docker, kind, az, oc, helm, git, kubectl, go]:
+For each tool in [docker, kind, az, oc, helm, git, kubectl, go, xmllint, envsubst]:
 │
 ├─► Run subtest: t.Run(tool, ...)
 │
@@ -53,12 +55,13 @@ For each tool in [docker, kind, az, oc, helm, git, kubectl, go]:
 requiredTools := []string{
     "docker",
     "kind",
-    "az",
     "oc",
     "helm",
     "git",
     "kubectl",
     "go",
+    "xmllint",
+    "envsubst",
 }
 ```
 

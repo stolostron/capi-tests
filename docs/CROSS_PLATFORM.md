@@ -115,6 +115,7 @@ func openTTY() (*os.File, bool) {
 | `go` | Go runtime | [golang.org](https://golang.org/dl/) | `brew install go` | [golang.org](https://golang.org/dl/) |
 | `jq` | JSON processor | Package manager | `brew install jq` | Package manager |
 | `xmllint` | XML parser | `libxml2-utils` (Debian) or `libxml2` (RHEL) | Pre-installed | `libxml2-utils` |
+| `envsubst` | YAML templating | `gettext-base` (Debian) or `gettext` (RHEL) | `brew install gettext` | `gettext-base` |
 | `bc` | Calculator | Pre-installed | Pre-installed | Pre-installed |
 
 ### Platform-Specific Installation
@@ -124,7 +125,7 @@ func openTTY() (*os.File, bool) {
 ```bash
 # Core tools
 sudo apt-get update
-sudo apt-get install -y docker.io git curl jq libxml2-utils bc
+sudo apt-get install -y docker.io git curl jq libxml2-utils gettext-base bc
 
 # Kind
 go install sigs.k8s.io/kind@latest
@@ -145,7 +146,7 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 ```bash
 # Core tools
-sudo dnf install -y podman git curl jq libxml2 bc
+sudo dnf install -y podman git curl jq libxml2 gettext bc
 
 # Kind
 go install sigs.k8s.io/kind@latest
@@ -168,7 +169,7 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 ```bash
 # Using Homebrew
-brew install docker kind kubernetes-cli azure-cli helm git go jq
+brew install docker kind kubernetes-cli azure-cli helm git go jq gettext
 
 # OpenShift CLI
 brew install openshift-cli

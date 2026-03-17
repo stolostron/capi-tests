@@ -70,6 +70,7 @@ git commit -m "deps(go): add github.com/example/package v1.2.3"
 | **oc** | 4.14+ | latest | OpenShift CLI |
 | **Helm** | 3.12+ | 3.16.0 | Kubernetes package manager |
 | **Git** | 2.30+ | latest | Source control |
+| **envsubst** | - | latest | YAML templating (part of `gettext`) |
 | **jq** | 1.6+ | latest | JSON processing |
 
 ### Version Pinning Strategy
@@ -95,6 +96,7 @@ kubectl version --client
 oc version --client
 helm version
 git --version
+envsubst --version
 jq --version
 ```
 

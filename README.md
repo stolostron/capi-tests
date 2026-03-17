@@ -55,6 +55,7 @@ The following tools are required for running the test suite:
 | **OpenShift CLI** (`oc`) | 4.14+ | latest | OpenShift cluster interaction |
 | **Helm** | 3.12+ | latest | Package manager for Kubernetes |
 | **Git** | 2.30+ | latest | Source control |
+| **envsubst** | - | latest | YAML templating (part of `gettext`) |
 | **jq** | 1.6+ | latest | JSON processing (optional, for scripts) |
 
 **Note**: The Go version is specified in `go.mod` and workflows automatically use this version.
@@ -69,6 +70,7 @@ kubectl version --client
 oc version --client
 helm version
 git --version
+envsubst --version
 jq --version
 ```
 

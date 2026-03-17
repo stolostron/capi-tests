@@ -137,6 +137,8 @@ Verify all required tools are installed and properly configured before running t
 | `kubectl` | Kubernetes CLI | - |
 | `go` | Go runtime | - |
 | `python3` | Python runtime | `python` |
+| `xmllint` | XML parser | - |
+| `envsubst` | YAML templating | - |
 | `clusterctl` | Cluster API CLI (optional) | Provided by cluster-api-installer |
 | `jq` | JSON processor (optional) | Required for MCE auto-enablement |
 
