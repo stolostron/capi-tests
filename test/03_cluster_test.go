@@ -243,12 +243,12 @@ func TestExternalCluster_02_EnsureMCEComponents(t *testing.T) {
 				PrintToTTY("\n❌ MCE Component Exclusivity Error\n")
 				PrintToTTY("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 				PrintToTTY("HyperShift and Cluster API components cannot be enabled simultaneously.\n\n")
-				PrintToTTY("To use CAPZ, you must first disable HyperShift components:\n")
-				PrintToTTY("  kubectl patch mce multiclusterengine --type=merge -p '\n")
-				PrintToTTY("    {\"spec\":{\"overrides\":{\"components\":[\n")
-				PrintToTTY("      {\"name\":\"hypershift\",\"enabled\":false},\n")
-				PrintToTTY("      {\"name\":\"hypershift-local-hosting\",\"enabled\":false}\n")
-				PrintToTTY("    ]}}}'\n\n")
+				PrintToTTY("To use CAPZ, you must first disable HyperShift components with this safe command:\n\n")
+				PrintToTTY("  kubectl patch mce multiclusterengine --type=merge -p \\\n")
+				PrintToTTY("    \"{\\\"spec\\\":{\\\"overrides\\\":{\\\"components\\\":$(kubectl get mce multiclusterengine -o json | \\\n")
+				PrintToTTY("    jq -c '.spec.overrides.components | map(if .name == \\\"hypershift\\\" or .name == \\\"hypershift-local-hosting\\\" \\\n")
+				PrintToTTY("    then .enabled = false else . end)')}}}\" \n\n")
+				PrintToTTY("This command safely disables only HyperShift components while preserving all other settings.\n\n")
 				PrintToTTY("Or use an MCE cluster without HyperShift enabled.\n")
 				PrintToTTY("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
 				t.Fatalf("Cannot enable %s: MCE component exclusivity violation (HyperShift vs Cluster API)", component)
@@ -336,8 +336,11 @@ func TestKindCluster_02_ControllersInstalled(t *testing.T) {
 				t.Errorf("%s controller not found in %s namespace.\n\n"+
 					"This is an MCE cluster but MCE_AUTO_ENABLE=false.\n"+
 					"To enable auto-enablement: MCE_AUTO_ENABLE=true make test-all\n"+
-					"Or manually enable the component:\n"+
-					"  kubectl patch mce multiclusterengine --type=merge -p '{\"spec\":{\"overrides\":{\"components\":[{\"name\":\"%s\",\"enabled\":true}]}}}'",
+					"Or manually enable the component with this safe command:\n"+
+					"  kubectl patch mce multiclusterengine --type=merge -p \\\n"+
+					"    \"{\\\"spec\\\":{\\\"overrides\\\":{\\\"components\\\":$(kubectl get mce multiclusterengine -o json | \\\n"+
+					"    jq -c '.spec.overrides.components | map(if .name == \\\"%s\\\" then .enabled = true else . end)')}}}\"\n"+
+					"This preserves all other component settings.",
 					ctrl.DisplayName, ctrl.Namespace, MCEComponentCAPI)
 			} else {
 				t.Errorf("%s controller not found in %s namespace: %v", ctrl.DisplayName, ctrl.Namespace, err)
