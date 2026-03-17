@@ -641,21 +641,27 @@ func TestKindCluster_CAPIControllerReady(t *testing.T) {
 
 		if elapsed > timeout {
 			PrintToTTY("\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
+
+			// Dump diagnostic info to help identify the root cause
+			PrintToTTY("=== Diagnostic: pod status in %s ===\n", config.CAPINamespace)
+			if podOutput, podErr := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPINamespace, "--request-timeout=30s", "get", "pods", "-o", "wide"); podErr == nil {
+				PrintToTTY("%s\n", podOutput)
+			}
+			PrintToTTY("=== Diagnostic: pod descriptions in %s ===\n", config.CAPINamespace)
+			if descOutput, descErr := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPINamespace, "--request-timeout=30s", "describe", "pods"); descErr == nil {
+				PrintToTTY("%s\n", descOutput)
+			}
+			PrintToTTY("=== Diagnostic: events in %s ===\n", config.CAPINamespace)
+			if evtOutput, evtErr := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPINamespace, "--request-timeout=30s", "get", "events", "--sort-by=.lastTimestamp"); evtErr == nil {
+				PrintToTTY("%s\n", evtOutput)
+			}
+
 			t.Errorf("Timeout waiting for CAPI controller manager to be available after %v.\n\n"+
-				"Troubleshooting steps:\n"+
-				"  1. Check pod status: kubectl --context %s -n %s get pods\n"+
-				"  2. Check pod logs: kubectl --context %s -n %s logs -l %s --tail=50\n"+
-				"  3. Check pod events: kubectl --context %s -n %s describe deployment %s\n"+
-				"  4. Verify Kind cluster is healthy: kind get clusters && kubectl --context %s get nodes\n\n"+
 				"Common causes:\n"+
-				"  - Image pull issues (check network connectivity)\n"+
+				"  - Image pull issues (check pod descriptions above)\n"+
 				"  - Insufficient resources on Kind node\n"+
 				"  - cert-manager not ready (controllers depend on it for webhooks)",
-				elapsed.Round(time.Second),
-				context, config.CAPINamespace,
-				context, config.CAPINamespace, CAPIPodSelector,
-				context, config.CAPINamespace, CAPIControllerDeployment,
-				context)
+				elapsed.Round(time.Second))
 			return
 		}
 
@@ -735,21 +741,27 @@ func TestKindCluster_InfraControllersReady(t *testing.T) {
 
 					if elapsed > timeout {
 						PrintToTTY("\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
+
+						// Dump diagnostic info to help identify the root cause
+						PrintToTTY("=== Diagnostic: pod status in %s ===\n", ctrl.Namespace)
+						if podOutput, podErr := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.Namespace, "--request-timeout=30s", "get", "pods", "-o", "wide"); podErr == nil {
+							PrintToTTY("%s\n", podOutput)
+						}
+						PrintToTTY("=== Diagnostic: pod descriptions in %s ===\n", ctrl.Namespace)
+						if descOutput, descErr := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.Namespace, "--request-timeout=30s", "describe", "pods"); descErr == nil {
+							PrintToTTY("%s\n", descOutput)
+						}
+						PrintToTTY("=== Diagnostic: events in %s ===\n", ctrl.Namespace)
+						if evtOutput, evtErr := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.Namespace, "--request-timeout=30s", "get", "events", "--sort-by=.lastTimestamp"); evtErr == nil {
+							PrintToTTY("%s\n", evtOutput)
+						}
+
 						t.Errorf("Timeout waiting for %s controller manager to be available after %v.\n\n"+
-							"Troubleshooting steps:\n"+
-							"  1. Check pod status: kubectl --context %s -n %s get pods\n"+
-							"  2. Check pod logs: kubectl --context %s -n %s logs -l %s --tail=50\n"+
-							"  3. Check pod events: kubectl --context %s -n %s describe deployment %s\n"+
-							"  4. Verify CAPI is ready first: kubectl --context %s -n %s get deployment %s\n\n"+
 							"Common causes:\n"+
 							"  - CAPI controller not ready yet (infrastructure providers depend on CAPI)\n"+
 							"  - Credentials not configured\n"+
-							"  - Image pull issues (check network connectivity)",
-							ctrl.DisplayName, elapsed.Round(time.Second),
-							context, ctrl.Namespace,
-							context, ctrl.Namespace, ctrl.PodSelector,
-							context, ctrl.Namespace, ctrl.DeploymentName,
-							context, config.CAPINamespace, CAPIControllerDeployment)
+							"  - Image pull issues (check pod descriptions above)",
+							ctrl.DisplayName, elapsed.Round(time.Second))
 						return
 					}
 
