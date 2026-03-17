@@ -1,5 +1,8 @@
 .PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _validate-cleanup test-all _test-all-impl clean clean-all clean-azure help summary
 
+# Use bash for shell commands (required for PIPESTATUS in test-all target)
+SHELL := /bin/bash
+
 # Default values
 # Extract CAPI_USER default from Go config to maintain single source of truth
 CAPI_USER_DEFAULT := $(shell grep 'DefaultCAPIUser = ' test/config.go | grep -o '"[^"]*"' | tr -d '"')
