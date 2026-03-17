@@ -12,12 +12,16 @@ import (
 
 // TestCheckDependencies_ToolAvailable verifies all required tools are installed
 func TestCheckDependencies_ToolAvailable(t *testing.T) {
+	// Check if config initialization failed
+	if configError != nil {
+		t.Fatalf("Configuration initialization failed: %s", *configError)
+	}
+
 	config := NewTestConfig()
 
 	// Common tools required regardless of provider
 	commonTools := []string{
 		"docker",
-		"kind",
 		"oc",
 		"helm",
 		"git",
@@ -25,6 +29,11 @@ func TestCheckDependencies_ToolAvailable(t *testing.T) {
 		"go",
 		"xmllint",
 		"envsubst",
+	}
+
+	// Add kind only when not using external cluster (external clusters are already deployed)
+	if !config.IsExternalCluster() {
+		commonTools = append(commonTools, "kind")
 	}
 
 	// Add provider-specific tools (e.g., "az" for ARO, "aws" for ROSA)
@@ -68,6 +77,95 @@ func TestCheckDependencies_OptionalTools(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCheckDependencies_MCEAuthentication performs MCE cluster authentication when CLUSTER_MODE=mce.
+// This test runs when CLUSTER_MODE is set to "mce", and:
+// 1. Uses kubeconfig created by NewTestConfig() in /tmp
+// 2. Performs oc login to the MCE cluster
+// 3. Validates authentication with oc whoami
+// 4. Fails immediately if authentication fails
+// Runs FIRST to populate kubeconfig before TestCheckDependencies_ExternalKubeconfig validates it.
+func TestCheckDependencies_MCEAuthentication(t *testing.T) {
+	config := NewTestConfig()
+
+	clusterMode := GetEnvOrDefault("CLUSTER_MODE", "")
+
+	// Skip if not in MCE mode
+	if clusterMode != "mce" {
+		t.Skip("CLUSTER_MODE is not 'mce', skipping MCE authentication")
+		return
+	}
+
+	mceAPIURL := GetEnvOrDefault("MCE_API_URL", "")
+	mcePassword := GetEnvOrDefault("MCE_KUBEADMIN_PASSWORD", "")
+
+	// Fail if MCE mode but credentials missing
+	if mceAPIURL == "" || mcePassword == "" {
+		t.Fatalf("CLUSTER_MODE=mce but MCE credentials not provided\n\n"+
+			"Required environment variables:\n"+
+			"  - MCE_API_URL: MCE cluster API URL\n"+
+			"  - MCE_KUBEADMIN_PASSWORD: kubeadmin password\n\n"+
+			"Configure these in your environment or GitHub workflow.")
+	}
+
+	PrintTestHeader(t, "TestCheckDependencies_MCEAuthentication",
+		"Authenticate to MCE cluster using kubeconfig")
+
+	PrintToTTY("\n=== MCE Cluster Authentication ===\n")
+	PrintToTTY("API URL: %s\n\n", mceAPIURL)
+
+	// KUBECONFIG is already created and set by NewTestConfig() when CLUSTER_MODE=mce
+	kubeconfigPath := config.UseKubeconfig
+	if kubeconfigPath == "" {
+		kubeconfigPath = os.Getenv("KUBECONFIG")
+	}
+	if kubeconfigPath == "" {
+		t.Fatalf("KUBECONFIG not set - MCE config initialization failed")
+	}
+
+	PrintToTTY("Using kubeconfig: %s\n", kubeconfigPath)
+	PrintToTTY("Logging into MCE cluster...\n")
+	t.Logf("Attempting oc login to %s (KUBECONFIG=%s)", mceAPIURL, kubeconfigPath)
+
+	output, err := RunCommandQuiet(t, "oc", "login", mceAPIURL,
+		"--insecure-skip-tls-verify",
+		"-u", "kubeadmin",
+		"-p", mcePassword)
+
+	if err != nil {
+		PrintToTTY("❌ Failed to login to MCE cluster\n\n")
+		PrintToTTY("Error: %v\n", err)
+		PrintToTTY("Output: %s\n\n", output)
+		PrintToTTY("KUBECONFIG: %s\n", os.Getenv("KUBECONFIG"))
+		PrintToTTY("oc version:\n")
+		ocVersion, _ := RunCommandQuiet(t, "oc", "version", "--client")
+		PrintToTTY("%s\n\n", ocVersion)
+		t.Fatalf("MCE authentication failed: %v\n\nOutput: %s\n\n"+
+			"KUBECONFIG: %s\n"+
+			"Ensure MCE_API_URL and MCE_KUBEADMIN_PASSWORD are correct.", err, output, os.Getenv("KUBECONFIG"))
+	}
+
+	PrintToTTY("✅ Successfully logged into MCE cluster\n\n")
+	t.Logf("Successfully authenticated to MCE cluster")
+
+	// Verify authentication by checking whoami
+	PrintToTTY("Verifying authentication...\n")
+	whoami, err := RunCommandQuiet(t, "oc", "whoami")
+	if err != nil {
+		t.Fatalf("Failed to verify authentication: %v", err)
+	}
+	PrintToTTY("✅ Authenticated as: %s\n\n", strings.TrimSpace(whoami))
+
+	// Show cluster version
+	version, err := RunCommandQuiet(t, "oc", "version")
+	if err == nil {
+		PrintToTTY("Cluster version:\n%s\n\n", version)
+		t.Logf("MCE cluster version: %s", version)
+	}
+
+	PrintToTTY("=== MCE Authentication Complete ===\n\n")
+	t.Log("MCE cluster authentication completed successfully")
 }
 
 // TestCheckDependencies_ExternalKubeconfig validates the external kubeconfig when USE_KUBECONFIG is set.
@@ -455,6 +553,12 @@ func TestCheckDependencies_Helm_IsAvailable(t *testing.T) {
 
 // TestCheckDependencies_Kind_IsAvailable verifies Kind is installed
 func TestCheckDependencies_Kind_IsAvailable(t *testing.T) {
+	config := NewTestConfig()
+	if config.IsExternalCluster() {
+		t.Skipf("Skipping kind availability check for external management clusters")
+		return
+	}
+
 	output, err := RunCommand(t, "kind", "version")
 	if err != nil {
 		t.Errorf("Kind version check failed: %v\n\n"+

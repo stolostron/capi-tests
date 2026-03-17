@@ -29,6 +29,14 @@ on:
         options:
           - aro-int
           - aro-stage
+      cluster_mode:
+        description: 'Management cluster mode'
+        required: true
+        type: choice
+        default: 'kind'
+        options:
+          - kind
+          - mce
 
 permissions:
   contents: read
@@ -39,7 +47,6 @@ env:
   ARO_REPO_URL: https://github.com/marek-veber/cluster-api-installer.git
   ARO_REPO_BRANCH: capi-tests
   ARO_REPO_DIR: /tmp/cluster-api-installer-aro
-  USE_KIND: "true"
   TEST_TIMEOUT_MINUTES: 120
   # Global variables (not environment-specific)
   QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
@@ -84,13 +91,16 @@ jobs:
         fi
 
   management-cluster:
-    name: Full Cluster (ARO/CAPZ)
+    name: Full Cluster (${{ inputs.cluster_mode || 'kind' }} → ARO)
     needs: check-changes
     if: needs.check-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 240  # 2x TEST_TIMEOUT_MINUTES (120m * 2)
     environment: ${{ inputs.environment || 'aro-stage' }}
     env:
+      # Cluster mode selection
+      CLUSTER_MODE: ${{ inputs.cluster_mode || 'kind' }}
+
       # Environment-specific Azure credentials and config
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
@@ -99,18 +109,26 @@ jobs:
       REGION: ${{ vars.REGION }}
       DEPLOYMENT_ENV: ${{ vars.DEPLOYMENT_ENV }}
 
+      # MCE credentials (only required when cluster_mode=mce)
+      MCE_API_URL: ${{ vars.MCE_API_URL }}
+      MCE_KUBEADMIN_PASSWORD: ${{ secrets.MCE_KUBEADMIN_PASSWORD }}
+
     steps:
-    - name: Validate Azure credentials
+    - name: Validate credentials
       id: secrets
       run: |
         CONFIGURED=true
         missing=""
+
+        # Repository secrets (always required)
         [ -z "$QUAY_AUTH" ] && missing="$missing QUAY_AUTH"
         if [ -n "$missing" ]; then
           echo "::warning::Missing required repository secrets:$missing"
           echo "Configure these in Settings > Secrets and variables > Actions"
           CONFIGURED=false
         fi
+
+        # Azure credentials (always required)
         missing=""
         [ -z "$AZURE_TENANT_ID" ] && missing="$missing vars.AZURE_TENANT_ID"
         [ -z "$AZURE_SUBSCRIPTION_ID" ] && missing="$missing vars.AZURE_SUBSCRIPTION_ID"
@@ -123,11 +141,25 @@ jobs:
           echo "Configure in Settings > Environments > ${{ inputs.environment }}"
           CONFIGURED=false
         fi
+
+        # MCE credentials (only required when CLUSTER_MODE=mce)
+        if [ "$CLUSTER_MODE" = "mce" ]; then
+          missing=""
+          [ -z "$MCE_API_URL" ] && missing="$missing vars.MCE_API_URL"
+          [ -z "$MCE_KUBEADMIN_PASSWORD" ] && missing="$missing secrets.MCE_KUBEADMIN_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::MCE mode selected but missing credentials:$missing"
+            echo "Configure in Settings > Environments > ${{ inputs.environment }}"
+            CONFIGURED=false
+          fi
+        fi
+
         if [ "$CONFIGURED" = "false" ] ; then
           echo "configured=false" >> "$GITHUB_OUTPUT"
           echo "::error::Missing required credentials - workflow cannot continue"
           exit 1
         fi
+
         echo "All required credentials and variables are configured"
         echo "configured=true" >> "$GITHUB_OUTPUT"
 
@@ -145,22 +177,28 @@ jobs:
         sudo apt-get update && sudo apt-get install -y libxml2-utils
         go mod download
 
-    - name: Install OpenShift CLI
+    - name: Install OpenShift CLI and kubectl
       run: |
         rm -f openshift-client-linux.tar.gz sha256sum.txt
         wget -q https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz
         wget -q https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/sha256sum.txt
         grep 'openshift-client-linux.tar.gz$' sha256sum.txt | sha256sum -c -
         tar -xzf openshift-client-linux.tar.gz
+        # Install both oc and kubectl from OpenShift client (same version, avoids conflicts)
         sudo mv oc /usr/local/bin/
+        sudo mv kubectl /usr/local/bin/
         sudo chmod +x /usr/local/bin/oc
+        sudo chmod +x /usr/local/bin/kubectl
         oc version --client
+        kubectl version --client
 
     - name: Verify Azure CLI
       run: az version
 
     # Tool versions - keep in sync with README.md Prerequisites
+    # Kind installation - only when CLUSTER_MODE=kind
     - name: Install Kind
+      if: env.CLUSTER_MODE == 'kind'
       run: |
         KIND_VERSION=v0.31.0
         KIND_BIN=kind-linux-amd64
@@ -171,16 +209,15 @@ jobs:
         sudo mv "./${KIND_BIN}" /usr/local/bin/kind
         kind version
 
-    - name: Install kubectl
+    - name: Install clusterctl
       run: |
-        # kubectl - uses latest stable (compatible with Kubernetes 1.28+)
-        KUBECTL_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
-        curl -fsSLO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-        curl -fsSLO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256"
-        echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
-        chmod +x kubectl
-        sudo mv kubectl /usr/local/bin/
-        kubectl version --client
+        # Note: cluster-api does not publish checksums/signatures for clusterctl binaries
+        # (upstream issues #9292, #9293). Verification only available for container images.
+        CLUSTERCTL_VERSION=v1.12.2
+        curl -fsSL "https://github.com/kubernetes-sigs/cluster-api/releases/download/${CLUSTERCTL_VERSION}/clusterctl-linux-amd64" -o clusterctl
+        chmod +x clusterctl
+        sudo mv clusterctl /usr/local/bin/
+        clusterctl version
 
     - name: Install Helm
       uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
@@ -189,6 +226,7 @@ jobs:
         version: 'v3.16.0'
 
     - name: 'Setup Docker pull secrets for Kind'
+      if: env.CLUSTER_MODE == 'kind'
       run: |
         # Create secure temporary directory for Docker config
         DOCKER_SECRETS=$(mktemp -d)

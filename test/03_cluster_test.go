@@ -333,6 +333,22 @@ func TestKindCluster_02_ControllersInstalled(t *testing.T) {
 
 			// Provide MCE-specific remediation hints
 			if isMCE && !config.MCEAutoEnable {
+				// Determine the correct MCE component name for this controller
+				mceComponentName := MCEComponentCAPI // default to CAPI core
+
+				// Check if this is a provider-specific controller (not CAPI core)
+				if ctrl.DisplayName != "CAPI" {
+					// Find which provider owns this controller
+					for _, provider := range config.InfraProviders {
+						for _, providerCtrl := range provider.Controllers {
+							if providerCtrl.DisplayName == ctrl.DisplayName {
+								mceComponentName = provider.MCEComponentName
+								break
+							}
+						}
+					}
+				}
+
 				t.Errorf("%s controller not found in %s namespace.\n\n"+
 					"This is an MCE cluster but MCE_AUTO_ENABLE=false.\n"+
 					"To enable auto-enablement: MCE_AUTO_ENABLE=true make test-all\n"+
@@ -341,7 +357,7 @@ func TestKindCluster_02_ControllersInstalled(t *testing.T) {
 					"    \"{\\\"spec\\\":{\\\"overrides\\\":{\\\"components\\\":$(kubectl get mce multiclusterengine -o json | \\\n"+
 					"    jq -c '.spec.overrides.components | map(if .name == \\\"%s\\\" then .enabled = true else . end)')}}}\"\n"+
 					"This preserves all other component settings.",
-					ctrl.DisplayName, ctrl.Namespace, MCEComponentCAPI)
+					ctrl.DisplayName, ctrl.Namespace, mceComponentName)
 			} else {
 				t.Errorf("%s controller not found in %s namespace: %v", ctrl.DisplayName, ctrl.Namespace, err)
 			}
@@ -359,7 +375,15 @@ func TestKindCluster_02_ControllersInstalled(t *testing.T) {
 // TestKindCluster_01_ClusterReady deploys controllers to the management cluster and verifies it's ready.
 // For Kind mode: creates Kind cluster and deploys controllers.
 // For external mode with DEPLOY_CHARTS=true: deploys controllers to existing cluster.
+// For MCE mode (CLUSTER_MODE=mce): skips this test (controllers are pre-installed, validated by TestExternalCluster tests).
 func TestKindCluster_01_ClusterReady(t *testing.T) {
+	// Skip if CLUSTER_MODE=mce (MCE cluster - controllers are pre-installed)
+	// This must be checked BEFORE NewTestConfig() to avoid unnecessary initialization
+	clusterMode := GetEnvOrDefault("CLUSTER_MODE", "")
+	if clusterMode == "mce" {
+		t.Skip("CLUSTER_MODE=mce, using MCE cluster with pre-installed controllers (no Kind deployment needed)")
+	}
+
 	config := NewTestConfig()
 
 	// Skip in external cluster mode unless DEPLOY_CHARTS=true
@@ -435,7 +459,9 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 		// Set environment variables for deploy-charts.sh
 		// USE_KIND or USE_K8S should be set externally by the user
 		// DO_INIT_KIND: Create Kind cluster (false for external clusters)
-		// DO_DEPLOY=true: Deploy the charts
+		// DO_DEPLOY: Deploy the charts
+		//   - Kind mode: always true (cluster creation requires chart deployment)
+		//   - External mode: controlled by DEPLOY_CHARTS (test skipped if false at line 365-368)
 		if config.IsExternalCluster() {
 			SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
 			SetEnvVar(t, "DO_INIT_KIND", "false")
@@ -517,18 +543,6 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 			}
 			PrintToTTY("✅ AWS credentials available\n\n")
 		}
-
-		// Patch provider-specific credentials after deployment
-		if config.HasProvider("aro") {
-			PrintToTTY("=== Patching ASO credentials secret ===\n")
-			context := config.GetKubeContext()
-			if err := PatchASOCredentialsSecret(t, context); err != nil {
-				PrintToTTY("❌ Failed to patch ASO credentials: %v\n", err)
-				t.Errorf("Failed to patch ASO credentials secret: %v", err)
-				return
-			}
-			PrintToTTY("✅ ASO credentials secret patched successfully\n\n")
-		}
 	} else {
 		PrintToTTY("✅ Management cluster already exists (controllers assumed deployed)\n\n")
 		t.Log("Management cluster already exists (controllers assumed deployed)")
@@ -538,11 +552,10 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 	PrintToTTY("=== Verifying management cluster accessibility ===\n")
 	t.Log("Verifying management cluster accessibility...")
 
-	// Set kubeconfig context
+	// Set kubeconfig for external cluster mode
+	// (for Kind mode, kubectl defaults to ~/.kube/config)
 	if config.IsExternalCluster() {
 		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	} else {
-		SetEnvVar(t, "KUBECONFIG", fmt.Sprintf("%s/.kube/config", os.Getenv("HOME")))
 	}
 
 	output, err = RunCommand(t, "kubectl", "--context", config.GetKubeContext(), "get", "nodes")

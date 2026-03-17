@@ -3,7 +3,6 @@ package test
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -441,9 +440,7 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 		PrintToTTY("✅ Found clusterctl at: %s\n", clusterctlPath)
 	}
 
-	// Set kubectl context to Kind cluster
 	context := config.GetKubeContext()
-	SetEnvVar(t, "KUBECONFIG", fmt.Sprintf("%s/.kube/config", os.Getenv("HOME")))
 
 	// First, check if cluster resource exists
 	// Use the provisioned cluster name from the cluster YAML, not WORKLOAD_CLUSTER_NAME

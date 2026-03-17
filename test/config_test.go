@@ -240,8 +240,11 @@ func TestNewAzureProvider(t *testing.T) {
 	if p.CredentialSecret == nil {
 		t.Fatal("Expected credential secret to be defined")
 	}
-	if p.CredentialSecret.Name != "aso-controller-settings" {
-		t.Errorf("Expected aso-controller-settings, got %q", p.CredentialSecret.Name)
+	if p.CredentialSecret.Name != "aso-credential" {
+		t.Errorf("Expected aso-credential, got %q", p.CredentialSecret.Name)
+	}
+	if p.CredentialSecret.Namespace != "{WORKLOAD_CLUSTER_NAMESPACE}" {
+		t.Errorf("Expected {WORKLOAD_CLUSTER_NAMESPACE} placeholder, got %q", p.CredentialSecret.Namespace)
 	}
 	if len(p.CredentialSecret.RequiredFields) != 4 {
 		t.Errorf("Expected 4 required fields, got %d", len(p.CredentialSecret.RequiredFields))
@@ -261,7 +264,8 @@ func TestNewAzureProvider(t *testing.T) {
 func TestNewAzureProvider_Namespace(t *testing.T) {
 	p := NewAzureProvider("custom-namespace")
 
-	// Verify namespace propagates to all controllers, webhooks, and credential secret
+	// Verify namespace propagates to controllers and webhooks
+	// Note: CredentialSecret uses {WORKLOAD_CLUSTER_NAMESPACE} placeholder, not controller namespace
 	for _, ctrl := range p.Controllers {
 		if ctrl.Namespace != "custom-namespace" {
 			t.Errorf("Controller %s namespace = %q, expected 'custom-namespace'", ctrl.DisplayName, ctrl.Namespace)
@@ -272,8 +276,9 @@ func TestNewAzureProvider_Namespace(t *testing.T) {
 			t.Errorf("Webhook %s namespace = %q, expected 'custom-namespace'", wh.DisplayName, wh.Namespace)
 		}
 	}
-	if p.CredentialSecret.Namespace != "custom-namespace" {
-		t.Errorf("Credential secret namespace = %q, expected 'custom-namespace'", p.CredentialSecret.Namespace)
+	// Credential secret uses workload cluster namespace placeholder (resolved in Phase 05)
+	if p.CredentialSecret.Namespace != "{WORKLOAD_CLUSTER_NAMESPACE}" {
+		t.Errorf("Credential secret namespace = %q, expected '{WORKLOAD_CLUSTER_NAMESPACE}'", p.CredentialSecret.Namespace)
 	}
 }
 
