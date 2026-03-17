@@ -490,7 +490,16 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 			return
 		}
 
-		// Don't log full script output as it may contain sensitive configuration
+		// Don't log full script output as it may contain sensitive configuration.
+		// Save to artifact file for debugging in CI (Prow collects ARTIFACT_DIR).
+		if resultsDir := GetResultsDir(); resultsDir != "" {
+			logPath := filepath.Join(resultsDir, "deploy-charts.log")
+			if writeErr := os.WriteFile(logPath, []byte(output), 0644); writeErr != nil { // #nosec G306 -- CI artifact log, not sensitive
+				t.Logf("Warning: failed to write deploy-charts log: %v", writeErr)
+			} else {
+				t.Logf("Deploy-charts output saved to %s", logPath)
+			}
+		}
 		PrintToTTY("\n✅ Controller deployment completed successfully\n\n")
 		t.Log("Controller deployment to management cluster completed successfully")
 
