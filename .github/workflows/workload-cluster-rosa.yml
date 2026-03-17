@@ -217,6 +217,8 @@ jobs:
       # AWS credentials and config are set at job level (see env: above)
       env:
         DEPLOYMENT_TIMEOUT: "${{ env.TEST_TIMEOUT_MINUTES }}m"
+        DEPLOY_CRS_TIMEOUT: "${{ env.TEST_TIMEOUT_MINUTES }}m"
+        DELETION_TIMEOUT: "${{ env.TEST_TIMEOUT_MINUTES }}m"
       run: make test-all
       continue-on-error: true
       id: phase3
