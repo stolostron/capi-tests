@@ -32,7 +32,7 @@ For each pair, create a Jira issue link:
 ```
 POST /rest/api/2/issueLink
 {
-  "type": {"id": "12310000"},
+  "type": {"id": "10002"},
   "outwardIssue": {"key": "<old_key>"},
   "inwardIssue": {"key": "<new_key>"}
 }
@@ -55,7 +55,7 @@ Transition each old issue to Closed with resolution Duplicate:
 
 ```
 POST /rest/api/2/issue/<old_key>/transitions
-{"transition": {"id": "61"}, "fields": {"resolution": {"name": "Duplicate"}}}
+{"transition": {"id": "71"}, "fields": {"resolution": {"name": "Duplicate"}}}
 ```
 
 ### Step 5: Report manual steps
@@ -79,6 +79,6 @@ Fetch all issues again and display a final summary table confirming:
 
 - **NEVER skip the confirmation step** (Step 1) — always show the pairs and wait for user approval
 - **NEVER delete Jira issues** — only close them
-- Use `curl -s -w "\n%{http_code}"` for all Jira write calls
-- Read Jira token from `credentials.json`
+- Use `curl -s -w "\n%{http_code}"` with Basic auth (`-u "$EMAIL:$TOKEN"`) for all Jira write calls
+- Read Jira email and token from `credentials.json`
 - Use visibility settings matching the issue's security level
