@@ -200,12 +200,18 @@ _deploy-crs: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	TEST_RESULTS_DIR=$(CURDIR)/$(RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-crs.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestDeployment -timeout $(DEPLOY_CRS_TIMEOUT) || EXIT_CODE=$$?; \
+	echo "--- Phase 1: Apply resources (fail-fast) ---"; \
+	TEST_RESULTS_DIR=$(CURDIR)/$(RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-apply.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestDeployment_0|TestDeployment_Apply|TestDeployment_Provider" -timeout $(DEPLOY_CRS_TIMEOUT) -failfast || EXIT_CODE=$$?; \
+	if [ $$EXIT_CODE -eq 0 ]; then \
+		echo ""; \
+		echo "--- Phase 2: Monitor deployment ---"; \
+		TEST_RESULTS_DIR=$(CURDIR)/$(RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-monitor.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestDeployment_Monitor|TestDeployment_Wait|TestDeployment_Verify" -timeout $(DEPLOY_CRS_TIMEOUT) || EXIT_CODE=$$?; \
+	fi; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	echo ""; \
-	echo "Test results saved to: $(RESULTS_DIR)/junit-deploy-crs.xml"; \
+	echo "Test results saved to: $(RESULTS_DIR)/"; \
 	echo "Latest results copied to: $(LATEST_RESULTS_DIR)/"; \
 	if [ $$EXIT_CODE -eq 0 ]; then \
 		echo "✅ CR Deployment Tests completed"; \
