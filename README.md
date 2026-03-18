@@ -331,7 +331,8 @@ results/
     ├── junit-setup.xml            # Setup test results
     ├── junit-cluster.xml          # Cluster deployment test results
     ├── junit-generate-yamls.xml   # YAML generation test results
-    ├── junit-deploy-crs.xml       # CR deployment test results
+    ├── junit-deploy-apply.xml     # CR deployment test results (apply phase)
+    ├── junit-deploy-monitor.xml   # CR deployment test results (monitor phase)
     ├── junit-verify.xml           # Verification test results
     ├── junit-delete.xml           # Deletion test results
     └── junit-cleanup.xml          # Cleanup validation test results
