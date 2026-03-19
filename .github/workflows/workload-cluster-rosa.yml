@@ -4,7 +4,7 @@ name: Full Cluster Deployment (ROSA)
 # This workflow deploys a Kind management cluster and provisions a ROSA workload cluster.
 #
 # Triggers:
-#   - Nightly at 2:00 AM UTC (only when code changed since last successful run)
+#   - Nightly at 2:00 AM UTC (cancelled/grey if no code changes since last successful run)
 #   - Manual dispatch
 #
 # Requires:
@@ -48,6 +48,9 @@ jobs:
   check-changes:
     name: Check for code changes
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     if: github.event_name != 'schedule' || true
     outputs:
       has_changes: ${{ github.event_name != 'schedule' || steps.check.outputs.has_changes == 'true' }}
@@ -81,6 +84,17 @@ jobs:
           echo "New commits detected: $LAST_SUCCESS_SHA..$CURRENT_SHA"
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
         fi
+
+    - name: Cancel workflow if no changes
+      if: github.event_name == 'schedule' && steps.check.outputs.has_changes == 'false'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RUN_ID: ${{ github.run_id }}
+        REPO: ${{ github.repository }}
+      run: |
+        echo "No code changes detected — cancelling workflow run"
+        gh run cancel "$RUN_ID" --repo "$REPO"
+        sleep 5
 
   management-cluster:
     name: Full Cluster (ROSA/CAPA)
