@@ -101,11 +101,11 @@ func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 
 	// Fail if MCE mode but credentials missing
 	if mceAPIURL == "" || mcePassword == "" {
-		t.Fatalf("CLUSTER_MODE=mce but MCE credentials not provided\n\n"+
-			"Required environment variables:\n"+
-			"  - MCE_API_URL: MCE cluster API URL\n"+
-			"  - MCE_API_USER: MCE cluster username (default: kubeadmin)\n"+
-			"  - MCE_API_PASSWORD: MCE cluster password\n\n"+
+		t.Fatalf("CLUSTER_MODE=mce but MCE credentials not provided\n\n" +
+			"Required environment variables:\n" +
+			"  - MCE_API_URL: MCE cluster API URL\n" +
+			"  - MCE_API_USER: MCE cluster username (default: kubeadmin)\n" +
+			"  - MCE_API_PASSWORD: MCE cluster password\n\n" +
 			"Configure these in your environment or GitHub workflow.")
 	}
 
