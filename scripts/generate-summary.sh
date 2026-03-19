@@ -79,6 +79,8 @@ get_phase_name() {
         "junit-setup") echo "Repository Setup" ;;
         "junit-cluster") echo "Cluster Deployment" ;;
         "junit-generate-yamls") echo "YAML Generation" ;;
+        "junit-deploy-apply") echo "CR Deployment (Apply)" ;;
+        "junit-deploy-monitor") echo "CR Deployment (Monitor)" ;;
         "junit-deploy-crs") echo "CR Deployment" ;;
         "junit-verify") echo "Cluster Verification" ;;
         "junit-delete") echo "Cluster Deletion" ;;
@@ -92,6 +94,8 @@ PHASE_ORDER=(
     "junit-setup"
     "junit-cluster"
     "junit-generate-yamls"
+    "junit-deploy-apply"
+    "junit-deploy-monitor"
     "junit-deploy-crs"
     "junit-verify"
     "junit-delete"
