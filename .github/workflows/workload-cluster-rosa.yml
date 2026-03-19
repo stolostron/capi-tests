@@ -30,7 +30,6 @@ on:
           - rosa-stage
 
 permissions:
-  actions: write
   contents: read
   issues: write
 
@@ -49,6 +48,9 @@ jobs:
   check-changes:
     name: Check for code changes
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     if: github.event_name != 'schedule' || true
     outputs:
       has_changes: ${{ github.event_name != 'schedule' || steps.check.outputs.has_changes == 'true' }}
