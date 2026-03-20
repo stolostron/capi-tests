@@ -12,6 +12,11 @@ import (
 // TestExternalCluster_01_Connectivity validates the external cluster is reachable.
 // This test runs only when USE_KUBECONFIG is set, validating pre-installed controllers.
 func TestExternalCluster_01_Connectivity(t *testing.T) {
+	// Check if config initialization failed
+	if configError != nil {
+		t.Fatalf("Configuration initialization failed: %s", *configError)
+	}
+
 	config := NewTestConfig()
 
 	if !config.IsExternalCluster() {

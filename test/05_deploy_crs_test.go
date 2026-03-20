@@ -81,6 +81,11 @@ type ClusterMonitorStatus struct {
 // and easy cleanup. This namespace is where CAPI CRs (Cluster, AROControlPlane, MachinePool)
 // are deployed, which then create Azure resources.
 func TestDeployment_00_CreateNamespace(t *testing.T) {
+	// Check if config initialization failed
+	if configError != nil {
+		t.Fatalf("Configuration initialization failed: %s", *configError)
+	}
+
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode

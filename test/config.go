@@ -414,17 +414,20 @@ func NewTestConfig() *TestConfig {
 				if err != nil {
 					errMsg := fmt.Sprintf("Failed to create temporary kubeconfig file: %v", err)
 					configError = &errMsg
+					useKubeconfig = "" // Clear to prevent partial config state
 				} else {
-					useKubeconfig = file.Name()
+					tempPath := file.Name()
 					if err := file.Close(); err != nil {
 						errMsg := fmt.Sprintf("Failed to close temporary kubeconfig file: %v", err)
 						configError = &errMsg
+						useKubeconfig = "" // Clear to prevent partial config state
+					} else if err := os.Chmod(tempPath, 0600); err != nil {
+						errMsg := fmt.Sprintf("Failed to set permissions on temporary kubeconfig file: %v", err)
+						configError = &errMsg
+						useKubeconfig = "" // Clear to prevent partial config state
 					} else {
-						// Set restrictive permissions
-						if err := os.Chmod(useKubeconfig, 0600); err != nil {
-							errMsg := fmt.Sprintf("Failed to set permissions on temporary kubeconfig file: %v", err)
-							configError = &errMsg
-						}
+						// All operations succeeded - set the kubeconfig path
+						useKubeconfig = tempPath
 					}
 				}
 			}

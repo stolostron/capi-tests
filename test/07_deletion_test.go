@@ -11,6 +11,11 @@ import (
 // This initiates the deletion by removing the Cluster resource, which triggers
 // CAPI to clean up all associated resources including cloud provider resources.
 func TestDeletion_DeleteCluster(t *testing.T) {
+	// Check if config initialization failed
+	if configError != nil {
+		t.Fatalf("Configuration initialization failed: %s", *configError)
+	}
+
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
