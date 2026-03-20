@@ -126,10 +126,11 @@ func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 	PrintToTTY("Logging into MCE cluster...\n")
 	t.Logf("Attempting oc login to %s (KUBECONFIG=%s)", mceAPIURL, kubeconfigPath)
 
-	output, err := RunCommandQuiet(t, "oc", "login", mceAPIURL,
+	// Pass password via stdin to avoid exposing it in process list (ps aux)
+	// oc login will prompt for password and read it from stdin
+	output, err := RunCommandWithStdin(t, mcePassword+"\n", "oc", "login", mceAPIURL,
 		"--insecure-skip-tls-verify",
-		"-u", "kubeadmin",
-		"-p", mcePassword)
+		"-u", "kubeadmin")
 
 	if err != nil {
 		PrintToTTY("❌ Failed to login to MCE cluster\n\n")

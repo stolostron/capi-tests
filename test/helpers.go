@@ -119,6 +119,38 @@ func RunCommandQuiet(t *testing.T, name string, args ...string) (string, error) 
 	return strings.TrimSpace(string(output)), err
 }
 
+// RunCommandWithStdin executes a command with sensitive input provided via stdin.
+// This prevents the input from appearing in process listings (ps aux).
+// Use this for commands that accept sensitive data like passwords or tokens.
+//
+// The stdin parameter is written to the command's stdin before execution.
+// The command string is logged (without the stdin content) to the test output.
+//
+// Example:
+//
+//	output, err := RunCommandWithStdin(t, password, "oc", "login", apiURL, "--username=admin")
+func RunCommandWithStdin(t *testing.T, stdin string, name string, args ...string) (string, error) {
+	t.Helper()
+
+	// Build command string for logging (without stdin content)
+	cmdStr := name
+	if len(args) > 0 {
+		cmdStr = fmt.Sprintf("%s %s", name, strings.Join(args, " "))
+	}
+
+	// Log command (stdin is not logged for security)
+	t.Logf("Executing command with stdin: %s", cmdStr)
+	logCommandToFile(t.Name(), cmdStr+" (with stdin)")
+
+	cmd := exec.Command(name, args...) // #nosec G204 G702 -- test helper designed to execute arbitrary commands for test orchestration
+
+	// Provide stdin
+	cmd.Stdin = strings.NewReader(stdin)
+
+	output, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(output)), err
+}
+
 // openTTY attempts to open /dev/tty for unbuffered output.
 // Returns the file handle and a boolean indicating whether it should be closed.
 // Falls back to os.Stderr if /dev/tty is unavailable (e.g., Windows, CI, or non-interactive).
