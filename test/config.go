@@ -388,7 +388,10 @@ func NewTestConfig() *TestConfig {
 
 			// Check if kubeconfig already exists from a previous run
 			pattern := filepath.Join("/tmp", repoBaseName+".*.kubeconfig")
-			matches, _ := filepath.Glob(pattern)
+			matches, err := filepath.Glob(pattern)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to glob for existing kubeconfig: %v\n", err)
+			}
 			if len(matches) > 0 {
 				// Use most recent kubeconfig (sort by modification time)
 				var latestFile string
