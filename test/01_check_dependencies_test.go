@@ -89,10 +89,8 @@ func TestCheckDependencies_OptionalTools(t *testing.T) {
 func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 	config := NewTestConfig()
 
-	clusterMode := GetEnvOrDefault("CLUSTER_MODE", "")
-
 	// Skip if not in MCE mode
-	if clusterMode != "mce" {
+	if config.ClusterMode != "mce" {
 		t.Skip("CLUSTER_MODE is not 'mce', skipping MCE authentication")
 		return
 	}

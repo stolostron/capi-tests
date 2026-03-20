@@ -317,6 +317,13 @@ type TestConfig struct {
 	CAPINamespace            string // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
 	CAPZNamespace            string // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" when USE_K8S=true)
 
+	// Management cluster mode
+	// ClusterMode specifies the management cluster deployment mode ("kind" or "mce").
+	// - "kind": Deploy local Kind cluster (default behavior)
+	// - "mce": Use existing MCE (MultiCluster Engine) cluster
+	// Set via CLUSTER_MODE env var. Automatically configures UseKind and UseKubeconfig.
+	ClusterMode string
+
 	// External cluster configuration
 	// UseKubeconfig is the path to an external kubeconfig file.
 	// When set, the test suite runs in "external cluster mode":
@@ -526,6 +533,9 @@ func NewTestConfig() *TestConfig {
 		TestLabelPrefix:          testLabelPrefix,
 		CAPINamespace:            getControllerNamespace("CAPI_NAMESPACE", "capi-system"),
 		CAPZNamespace:            providerNamespace,
+
+		// Management cluster mode
+		ClusterMode: clusterMode,
 
 		// External cluster
 		UseKubeconfig: useKubeconfig,

@@ -382,14 +382,14 @@ func TestKindCluster_02_ControllersInstalled(t *testing.T) {
 // For external mode with DEPLOY_CHARTS=true: deploys controllers to existing cluster.
 // For MCE mode (CLUSTER_MODE=mce): skips this test (controllers are pre-installed, validated by TestExternalCluster tests).
 func TestKindCluster_01_ClusterReady(t *testing.T) {
+	config := NewTestConfig()
+
 	// Skip if CLUSTER_MODE=mce (MCE cluster - controllers are pre-installed)
-	// This must be checked BEFORE NewTestConfig() to avoid unnecessary initialization
-	clusterMode := GetEnvOrDefault("CLUSTER_MODE", "")
-	if clusterMode == "mce" {
+	// Note: MCE mode sets USE_KUBECONFIG, so IsExternalCluster() would also be true,
+	// but we check ClusterMode for clarity about the deployment scenario.
+	if config.ClusterMode == "mce" {
 		t.Skip("CLUSTER_MODE=mce, using MCE cluster with pre-installed controllers (no Kind deployment needed)")
 	}
-
-	config := NewTestConfig()
 
 	// Skip in external cluster mode unless DEPLOY_CHARTS=true
 	if config.IsExternalCluster() && !config.DeployCharts {
