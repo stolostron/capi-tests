@@ -571,3 +571,253 @@ func TestTestConfig_AllRequiredScripts(t *testing.T) {
 		t.Errorf("Expected first script 'scripts/deploy-charts.sh', got %q", scripts[0])
 	}
 }
+
+func TestClusterMode_Kind(t *testing.T) {
+	// Save and restore environment
+	origClusterMode := os.Getenv("CLUSTER_MODE")
+	origUseKind := os.Getenv("USE_KIND")
+	defer func() {
+		if origClusterMode != "" {
+			_ = os.Setenv("CLUSTER_MODE", origClusterMode)
+		} else {
+			_ = os.Unsetenv("CLUSTER_MODE")
+		}
+		if origUseKind != "" {
+			_ = os.Setenv("USE_KIND", origUseKind)
+		} else {
+			_ = os.Unsetenv("USE_KIND")
+		}
+	}()
+
+	// Set CLUSTER_MODE=kind
+	_ = os.Setenv("CLUSTER_MODE", "kind")
+	_ = os.Unsetenv("USE_KIND") // Clear to test auto-setting
+
+	config := NewTestConfig()
+
+	// Verify ClusterMode is set
+	if config.ClusterMode != "kind" {
+		t.Errorf("Expected ClusterMode='kind', got %q", config.ClusterMode)
+	}
+
+	// Verify USE_KIND environment variable was set automatically
+	if os.Getenv("USE_KIND") != "true" {
+		t.Errorf("Expected USE_KIND to be set to 'true', got %q", os.Getenv("USE_KIND"))
+	}
+
+	// Verify config reflects Kind mode
+	if !config.UseKind {
+		t.Error("Expected UseKind=true when CLUSTER_MODE=kind")
+	}
+}
+
+func TestClusterMode_MCE_WithoutExistingKubeconfig(t *testing.T) {
+	// Save and restore environment
+	origClusterMode := os.Getenv("CLUSTER_MODE")
+	origUseKubeconfig := os.Getenv("USE_KUBECONFIG")
+	origARORepoDir := os.Getenv("ARO_REPO_DIR")
+	defer func() {
+		if origClusterMode != "" {
+			_ = os.Setenv("CLUSTER_MODE", origClusterMode)
+		} else {
+			_ = os.Unsetenv("CLUSTER_MODE")
+		}
+		if origUseKubeconfig != "" {
+			_ = os.Setenv("USE_KUBECONFIG", origUseKubeconfig)
+		} else {
+			_ = os.Unsetenv("USE_KUBECONFIG")
+		}
+		if origARORepoDir != "" {
+			_ = os.Setenv("ARO_REPO_DIR", origARORepoDir)
+		} else {
+			_ = os.Unsetenv("ARO_REPO_DIR")
+		}
+	}()
+
+	// Set CLUSTER_MODE=mce
+	_ = os.Setenv("CLUSTER_MODE", "mce")
+	_ = os.Unsetenv("USE_KUBECONFIG") // No existing kubeconfig
+
+	// Use a unique ARO_REPO_DIR to avoid conflicts with existing kubeconfig files
+	testRepoDir := "/tmp/cluster-api-test-" + t.Name()
+	_ = os.Setenv("ARO_REPO_DIR", testRepoDir)
+
+	config := NewTestConfig()
+
+	// Verify ClusterMode is set
+	if config.ClusterMode != "mce" {
+		t.Errorf("Expected ClusterMode='mce', got %q", config.ClusterMode)
+	}
+
+	// Verify UseKubeconfig was set (to a temp file path)
+	if config.UseKubeconfig == "" {
+		t.Error("Expected UseKubeconfig to be set for CLUSTER_MODE=mce")
+	}
+
+	// Verify it's a temp file in /tmp
+	if !strings.HasPrefix(config.UseKubeconfig, "/tmp/") {
+		t.Errorf("Expected kubeconfig in /tmp, got %q", config.UseKubeconfig)
+	}
+
+	// Verify the file was created
+	if _, err := os.Stat(config.UseKubeconfig); os.IsNotExist(err) {
+		t.Errorf("Kubeconfig file was not created: %s", config.UseKubeconfig)
+	}
+
+	// Verify permissions are 0600
+	if info, err := os.Stat(config.UseKubeconfig); err == nil {
+		mode := info.Mode().Perm()
+		if mode != 0600 {
+			t.Errorf("Expected kubeconfig permissions 0600, got %04o", mode)
+		}
+	}
+
+	// Cleanup
+	_ = os.Remove(config.UseKubeconfig)
+}
+
+func TestClusterMode_MCE_WithExistingKubeconfig(t *testing.T) {
+	// Save and restore environment
+	origClusterMode := os.Getenv("CLUSTER_MODE")
+	origUseKubeconfig := os.Getenv("USE_KUBECONFIG")
+	defer func() {
+		if origClusterMode != "" {
+			_ = os.Setenv("CLUSTER_MODE", origClusterMode)
+		} else {
+			_ = os.Unsetenv("CLUSTER_MODE")
+		}
+		if origUseKubeconfig != "" {
+			_ = os.Setenv("USE_KUBECONFIG", origUseKubeconfig)
+		} else {
+			_ = os.Unsetenv("USE_KUBECONFIG")
+		}
+	}()
+
+	// Create a temp kubeconfig file
+	tmpKubeconfig, err := os.CreateTemp("/tmp", "test-kubeconfig-*.yaml")
+	if err != nil {
+		t.Fatalf("Failed to create temp kubeconfig: %v", err)
+	}
+	defer os.Remove(tmpKubeconfig.Name())
+	_ = tmpKubeconfig.Close()
+
+	// Set CLUSTER_MODE=mce with existing USE_KUBECONFIG
+	_ = os.Setenv("CLUSTER_MODE", "mce")
+	_ = os.Setenv("USE_KUBECONFIG", tmpKubeconfig.Name())
+
+	config := NewTestConfig()
+
+	// Verify ClusterMode is set
+	if config.ClusterMode != "mce" {
+		t.Errorf("Expected ClusterMode='mce', got %q", config.ClusterMode)
+	}
+
+	// Verify UseKubeconfig uses the provided path (not creating a new one)
+	if config.UseKubeconfig != tmpKubeconfig.Name() {
+		t.Errorf("Expected UseKubeconfig=%q, got %q", tmpKubeconfig.Name(), config.UseKubeconfig)
+	}
+}
+
+func TestClusterMode_Empty(t *testing.T) {
+	// Save and restore environment
+	origClusterMode := os.Getenv("CLUSTER_MODE")
+	origUseKind := os.Getenv("USE_KIND")
+	origUseKubeconfig := os.Getenv("USE_KUBECONFIG")
+	defer func() {
+		if origClusterMode != "" {
+			_ = os.Setenv("CLUSTER_MODE", origClusterMode)
+		} else {
+			_ = os.Unsetenv("CLUSTER_MODE")
+		}
+		if origUseKind != "" {
+			_ = os.Setenv("USE_KIND", origUseKind)
+		} else {
+			_ = os.Unsetenv("USE_KIND")
+		}
+		if origUseKubeconfig != "" {
+			_ = os.Setenv("USE_KUBECONFIG", origUseKubeconfig)
+		} else {
+			_ = os.Unsetenv("USE_KUBECONFIG")
+		}
+	}()
+
+	// Clear CLUSTER_MODE (default behavior)
+	_ = os.Unsetenv("CLUSTER_MODE")
+	_ = os.Unsetenv("USE_KIND")
+	_ = os.Unsetenv("USE_KUBECONFIG")
+
+	config := NewTestConfig()
+
+	// Verify ClusterMode is empty
+	if config.ClusterMode != "" {
+		t.Errorf("Expected ClusterMode='', got %q", config.ClusterMode)
+	}
+
+	// Verify USE_KIND was not set
+	if os.Getenv("USE_KIND") != "" {
+		t.Errorf("Expected USE_KIND to be unset, got %q", os.Getenv("USE_KIND"))
+	}
+
+	// Verify UseKubeconfig is empty
+	if config.UseKubeconfig != "" {
+		t.Errorf("Expected UseKubeconfig='', got %q", config.UseKubeconfig)
+	}
+}
+
+func TestClusterMode_MCE_FindsMostRecentKubeconfig(t *testing.T) {
+	// Save and restore environment
+	origClusterMode := os.Getenv("CLUSTER_MODE")
+	origUseKubeconfig := os.Getenv("USE_KUBECONFIG")
+	origARORepoDir := os.Getenv("ARO_REPO_DIR")
+	defer func() {
+		if origClusterMode != "" {
+			_ = os.Setenv("CLUSTER_MODE", origClusterMode)
+		} else {
+			_ = os.Unsetenv("CLUSTER_MODE")
+		}
+		if origUseKubeconfig != "" {
+			_ = os.Setenv("USE_KUBECONFIG", origUseKubeconfig)
+		} else {
+			_ = os.Unsetenv("USE_KUBECONFIG")
+		}
+		if origARORepoDir != "" {
+			_ = os.Setenv("ARO_REPO_DIR", origARORepoDir)
+		} else {
+			_ = os.Unsetenv("ARO_REPO_DIR")
+		}
+	}()
+
+	// Create multiple temp kubeconfig files with different timestamps
+	testRepoDir := "test-repo-findmost"
+	_ = os.Setenv("ARO_REPO_DIR", "/tmp/"+testRepoDir)
+
+	// Create older file
+	olderFile, err := os.CreateTemp("/tmp", testRepoDir+".*.kubeconfig")
+	if err != nil {
+		t.Fatalf("Failed to create older kubeconfig: %v", err)
+	}
+	defer os.Remove(olderFile.Name())
+	_ = olderFile.Close()
+
+	// Sleep to ensure different timestamps
+	time.Sleep(10 * time.Millisecond)
+
+	// Create newer file
+	newerFile, err := os.CreateTemp("/tmp", testRepoDir+".*.kubeconfig")
+	if err != nil {
+		t.Fatalf("Failed to create newer kubeconfig: %v", err)
+	}
+	defer os.Remove(newerFile.Name())
+	_ = newerFile.Close()
+
+	// Set CLUSTER_MODE=mce without USE_KUBECONFIG (should find most recent)
+	_ = os.Setenv("CLUSTER_MODE", "mce")
+	_ = os.Unsetenv("USE_KUBECONFIG")
+
+	config := NewTestConfig()
+
+	// Verify it selected the newer file
+	if config.UseKubeconfig != newerFile.Name() {
+		t.Errorf("Expected UseKubeconfig to be most recent file %q, got %q", newerFile.Name(), config.UseKubeconfig)
+	}
+}
