@@ -159,7 +159,9 @@ func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 
 	// Show cluster version
 	version, err := RunCommandQuiet(t, "oc", "version")
-	if err == nil {
+	if err != nil {
+		t.Logf("Warning: failed to retrieve cluster version (connectivity may be unstable): %v", err)
+	} else {
 		PrintToTTY("Cluster version:\n%s\n\n", version)
 		t.Logf("MCE cluster version: %s", version)
 	}
