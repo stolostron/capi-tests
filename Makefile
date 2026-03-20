@@ -423,14 +423,15 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 		fi; \
 		echo ""; \
 		TEMP_DIR="$${TMPDIR:-/tmp}"; \
-		if ls "$$TEMP_DIR"/*-kubeconfig.yaml 1> /dev/null 2>&1; then \
+		KUBECONFIG_FILES=$$(ls "$$TEMP_DIR"/*-kubeconfig.yaml "$$TEMP_DIR"/cluster-api-installer-*.*.kubeconfig 2>/dev/null || true); \
+		if [ -n "$$KUBECONFIG_FILES" ]; then \
 			echo "Kubeconfig files found in $$TEMP_DIR:"; \
-			ls -1 "$$TEMP_DIR"/*-kubeconfig.yaml; \
+			echo "$$KUBECONFIG_FILES" | tr ' ' '\n'; \
 			read -p "Delete kubeconfig files? [y/N] " -n 1 -r; \
 			echo ""; \
 			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 				echo "Deleting kubeconfig files..."; \
-				rm -f "$$TEMP_DIR"/*-kubeconfig.yaml || echo "Failed to delete kubeconfig files"; \
+				rm -f "$$TEMP_DIR"/*-kubeconfig.yaml "$$TEMP_DIR"/cluster-api-installer-*.*.kubeconfig 2>/dev/null || echo "Failed to delete kubeconfig files"; \
 			else \
 				echo "Skipped kubeconfig files deletion."; \
 			fi; \
@@ -545,10 +546,11 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 	@echo ""
 	@# Delete kubeconfig files (use TMPDIR for cross-platform support)
 	@TEMP_DIR="$${TMPDIR:-/tmp}"; \
-	if ls "$$TEMP_DIR"/*-kubeconfig.yaml 1> /dev/null 2>&1; then \
+	KUBECONFIG_FILES=$$(ls "$$TEMP_DIR"/*-kubeconfig.yaml "$$TEMP_DIR"/cluster-api-installer-*.*.kubeconfig 2>/dev/null || true); \
+	if [ -n "$$KUBECONFIG_FILES" ]; then \
 		echo "Deleting kubeconfig files:"; \
-		ls -1 "$$TEMP_DIR"/*-kubeconfig.yaml; \
-		rm -f "$$TEMP_DIR"/*-kubeconfig.yaml || echo "Failed to delete kubeconfig files"; \
+		echo "$$KUBECONFIG_FILES" | tr ' ' '\n'; \
+		rm -f "$$TEMP_DIR"/*-kubeconfig.yaml "$$TEMP_DIR"/cluster-api-installer-*.*.kubeconfig 2>/dev/null || echo "Failed to delete kubeconfig files"; \
 	else \
 		echo "No kubeconfig files found in $$TEMP_DIR (already clean)."; \
 	fi
