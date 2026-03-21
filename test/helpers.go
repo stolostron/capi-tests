@@ -2625,6 +2625,10 @@ func GetDeletionResourceStatus(t *testing.T, kubeContext, namespace, clusterName
 		Provider: config.InfraProviderName,
 	}
 
+	// Declare actualResourceGroup at function scope for ARO provider
+	// (populated in data processing block, used in ARO-specific section below)
+	actualResourceGroup := ""
+
 	// Use MonitorCluster to get cluster status via JSON monitoring script
 	data, err := MonitorCluster(t, kubeContext, namespace, clusterName)
 	if err != nil {
@@ -2663,34 +2667,35 @@ func GetDeletionResourceStatus(t *testing.T, kubeContext, namespace, clusterName
 
 		// Count machine pools
 		status.MachinePoolCount = len(data.MachinePools)
-	}
 
-	// Populate ARO-specific fields only for ARO provider
-	if config.HasProvider("aro") {
-		// Extract actual resource group name from infrastructure resources
-		// instead of using config (which might be different from what was deployed)
-		actualResourceGroup := ""
-		if status.ClusterExists && len(data.Infrastructure.Resources) > 0 {
-			for _, res := range data.Infrastructure.Resources {
-				resMap, ok := res.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				resource, ok := resMap["resource"].(map[string]interface{})
-				if !ok {
-					continue
-				}
-				kind, _ := resource["kind"].(string)
-				if kind == "ResourceGroup" {
-					name, _ := resource["name"].(string)
-					if name != "" {
-						actualResourceGroup = name
-						break
+		// Populate ARO-specific fields only for ARO provider (only when we have valid data)
+		if config.HasProvider("aro") {
+			// Extract actual resource group name from infrastructure resources
+			// instead of using config (which might be different from what was deployed)
+			if status.ClusterExists && len(data.Infrastructure.Resources) > 0 {
+				for _, res := range data.Infrastructure.Resources {
+					resMap, ok := res.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					resource, ok := resMap["resource"].(map[string]interface{})
+					if !ok {
+						continue
+					}
+					kind, _ := resource["kind"].(string)
+					if kind == "ResourceGroup" {
+						name, _ := resource["name"].(string)
+						if name != "" {
+							actualResourceGroup = name
+							break
+						}
 					}
 				}
 			}
 		}
+	}
 
+	if config.HasProvider("aro") {
 		// Fall back to config-based name if we couldn't extract it
 		if actualResourceGroup == "" && resourceGroup != "" {
 			actualResourceGroup = resourceGroup
