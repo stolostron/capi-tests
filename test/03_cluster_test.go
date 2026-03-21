@@ -12,6 +12,11 @@ import (
 // TestExternalCluster_01_Connectivity validates the external cluster is reachable.
 // This test runs only when USE_KUBECONFIG is set, validating pre-installed controllers.
 func TestExternalCluster_01_Connectivity(t *testing.T) {
+	// Check if config initialization failed
+	if configError != nil {
+		t.Fatalf("Configuration initialization failed: %s", *configError)
+	}
+
 	config := NewTestConfig()
 
 	if !config.IsExternalCluster() {
@@ -243,12 +248,12 @@ func TestExternalCluster_02_EnsureMCEComponents(t *testing.T) {
 				PrintToTTY("\n❌ MCE Component Exclusivity Error\n")
 				PrintToTTY("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 				PrintToTTY("HyperShift and Cluster API components cannot be enabled simultaneously.\n\n")
-				PrintToTTY("To use CAPZ, you must first disable HyperShift components:\n")
-				PrintToTTY("  kubectl patch mce multiclusterengine --type=merge -p '\n")
-				PrintToTTY("    {\"spec\":{\"overrides\":{\"components\":[\n")
-				PrintToTTY("      {\"name\":\"hypershift\",\"enabled\":false},\n")
-				PrintToTTY("      {\"name\":\"hypershift-local-hosting\",\"enabled\":false}\n")
-				PrintToTTY("    ]}}}'\n\n")
+				PrintToTTY("To use CAPZ, you must first disable HyperShift components with this safe command:\n\n")
+				PrintToTTY("  kubectl patch mce multiclusterengine --type=merge -p \\\n")
+				PrintToTTY("    \"{\\\"spec\\\":{\\\"overrides\\\":{\\\"components\\\":$(kubectl get mce multiclusterengine -o json | \\\n")
+				PrintToTTY("    jq -c '.spec.overrides.components | map(if .name == \\\"hypershift\\\" or .name == \\\"hypershift-local-hosting\\\" \\\n")
+				PrintToTTY("    then .enabled = false else . end)')}}}\" \n\n")
+				PrintToTTY("This command safely disables only HyperShift components while preserving all other settings.\n\n")
 				PrintToTTY("Or use an MCE cluster without HyperShift enabled.\n")
 				PrintToTTY("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
 				t.Fatalf("Cannot enable %s: MCE component exclusivity violation (HyperShift vs Cluster API)", component)
@@ -333,12 +338,31 @@ func TestKindCluster_02_ControllersInstalled(t *testing.T) {
 
 			// Provide MCE-specific remediation hints
 			if isMCE && !config.MCEAutoEnable {
+				// Determine the correct MCE component name for this controller
+				mceComponentName := MCEComponentCAPI // default to CAPI core
+
+				// Check if this is a provider-specific controller (not CAPI core)
+				if ctrl.DisplayName != "CAPI" {
+					// Find which provider owns this controller
+					for _, provider := range config.InfraProviders {
+						for _, providerCtrl := range provider.Controllers {
+							if providerCtrl.DisplayName == ctrl.DisplayName {
+								mceComponentName = provider.MCEComponentName
+								break
+							}
+						}
+					}
+				}
+
 				t.Errorf("%s controller not found in %s namespace.\n\n"+
 					"This is an MCE cluster but MCE_AUTO_ENABLE=false.\n"+
 					"To enable auto-enablement: MCE_AUTO_ENABLE=true make test-all\n"+
-					"Or manually enable the component:\n"+
-					"  kubectl patch mce multiclusterengine --type=merge -p '{\"spec\":{\"overrides\":{\"components\":[{\"name\":\"%s\",\"enabled\":true}]}}}'",
-					ctrl.DisplayName, ctrl.Namespace, MCEComponentCAPI)
+					"Or manually enable the component with this safe command:\n"+
+					"  kubectl patch mce multiclusterengine --type=merge -p \\\n"+
+					"    \"{\\\"spec\\\":{\\\"overrides\\\":{\\\"components\\\":$(kubectl get mce multiclusterengine -o json | \\\n"+
+					"    jq -c '.spec.overrides.components | map(if .name == \\\"%s\\\" then .enabled = true else . end)')}}}\"\n"+
+					"This preserves all other component settings.",
+					ctrl.DisplayName, ctrl.Namespace, mceComponentName)
 			} else {
 				t.Errorf("%s controller not found in %s namespace: %v", ctrl.DisplayName, ctrl.Namespace, err)
 			}
@@ -356,8 +380,16 @@ func TestKindCluster_02_ControllersInstalled(t *testing.T) {
 // TestKindCluster_01_ClusterReady deploys controllers to the management cluster and verifies it's ready.
 // For Kind mode: creates Kind cluster and deploys controllers.
 // For external mode with DEPLOY_CHARTS=true: deploys controllers to existing cluster.
+// For MCE mode (CLUSTER_MODE=mce): skips this test (controllers are pre-installed, validated by TestExternalCluster tests).
 func TestKindCluster_01_ClusterReady(t *testing.T) {
 	config := NewTestConfig()
+
+	// Skip if CLUSTER_MODE=mce (MCE cluster - controllers are pre-installed)
+	// Note: MCE mode sets USE_KUBECONFIG, so IsExternalCluster() would also be true,
+	// but we check ClusterMode for clarity about the deployment scenario.
+	if config.ClusterMode == "mce" {
+		t.Skip("CLUSTER_MODE=mce, using MCE cluster with pre-installed controllers (no Kind deployment needed)")
+	}
 
 	// Skip in external cluster mode unless DEPLOY_CHARTS=true
 	if config.IsExternalCluster() && !config.DeployCharts {
@@ -432,7 +464,9 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 		// Set environment variables for deploy-charts.sh
 		// USE_KIND or USE_K8S should be set externally by the user
 		// DO_INIT_KIND: Create Kind cluster (false for external clusters)
-		// DO_DEPLOY=true: Deploy the charts
+		// DO_DEPLOY: Deploy the charts
+		//   - Kind mode: always true (cluster creation requires chart deployment)
+		//   - External mode: controlled by DEPLOY_CHARTS (test skipped if false at line 365-368)
 		if config.IsExternalCluster() {
 			SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
 			SetEnvVar(t, "DO_INIT_KIND", "false")
@@ -514,18 +548,6 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 			}
 			PrintToTTY("✅ AWS credentials available\n\n")
 		}
-
-		// Patch provider-specific credentials after deployment
-		if config.HasProvider("aro") {
-			PrintToTTY("=== Patching ASO credentials secret ===\n")
-			context := config.GetKubeContext()
-			if err := PatchASOCredentialsSecret(t, context); err != nil {
-				PrintToTTY("❌ Failed to patch ASO credentials: %v\n", err)
-				t.Errorf("Failed to patch ASO credentials secret: %v", err)
-				return
-			}
-			PrintToTTY("✅ ASO credentials secret patched successfully\n\n")
-		}
 	} else {
 		PrintToTTY("✅ Management cluster already exists (controllers assumed deployed)\n\n")
 		t.Log("Management cluster already exists (controllers assumed deployed)")
@@ -535,11 +557,10 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 	PrintToTTY("=== Verifying management cluster accessibility ===\n")
 	t.Log("Verifying management cluster accessibility...")
 
-	// Set kubeconfig context
+	// Set kubeconfig for external cluster mode
+	// (for Kind mode, kubectl defaults to ~/.kube/config)
 	if config.IsExternalCluster() {
 		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	} else {
-		SetEnvVar(t, "KUBECONFIG", fmt.Sprintf("%s/.kube/config", os.Getenv("HOME")))
 	}
 
 	output, err = RunCommand(t, "kubectl", "--context", config.GetKubeContext(), "get", "nodes")

@@ -119,6 +119,38 @@ func RunCommandQuiet(t *testing.T, name string, args ...string) (string, error) 
 	return strings.TrimSpace(string(output)), err
 }
 
+// RunCommandWithStdin executes a command with sensitive input provided via stdin.
+// This prevents the input from appearing in process listings (ps aux).
+// Use this for commands that accept sensitive data like passwords or tokens.
+//
+// The stdin parameter is written to the command's stdin before execution.
+// The command string is logged (without the stdin content) to the test output.
+//
+// Example:
+//
+//	output, err := RunCommandWithStdin(t, password, "oc", "login", apiURL, "--username=admin")
+func RunCommandWithStdin(t *testing.T, stdin string, name string, args ...string) (string, error) {
+	t.Helper()
+
+	// Build command string for logging (without stdin content)
+	cmdStr := name
+	if len(args) > 0 {
+		cmdStr = fmt.Sprintf("%s %s", name, strings.Join(args, " "))
+	}
+
+	// Log command (stdin is not logged for security)
+	t.Logf("Executing command with stdin: %s", cmdStr)
+	logCommandToFile(t.Name(), cmdStr+" (with stdin)")
+
+	cmd := exec.Command(name, args...) // #nosec G204 G702 -- test helper designed to execute arbitrary commands for test orchestration
+
+	// Provide stdin
+	cmd.Stdin = strings.NewReader(stdin)
+
+	output, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(output)), err
+}
+
 // openTTY attempts to open /dev/tty for unbuffered output.
 // Returns the file handle and a boolean indicating whether it should be closed.
 // Falls back to os.Stderr if /dev/tty is unavailable (e.g., Windows, CI, or non-interactive).
@@ -1265,73 +1297,6 @@ nodes:
 
 	t.Logf("Generated kind config: %s (using Docker config: %s)", kindConfigPath, dockerConfigPath)
 	return kindConfigPath, nil
-}
-
-// PatchASOCredentialsSecret patches the aso-controller-settings secret with Azure credentials.
-// The cluster-api-installer helm chart creates this secret with empty values, so we need to
-// patch it with actual credentials after deployment.
-//
-// This function:
-// 1. Gets AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID from environment (or extracts from Azure CLI)
-// 2. Optionally includes AZURE_CLIENT_ID and AZURE_CLIENT_SECRET if both are set
-// 3. Patches the secret in the controller namespace (capz-system or multicluster-engine)
-//
-// Service principal credentials (AZURE_CLIENT_ID/AZURE_CLIENT_SECRET) are optional for local
-// development but required for ASO to work in Kind clusters since Kind cannot use managed
-// identity or workload identity.
-//
-// Returns an error if credentials cannot be obtained or patching fails.
-func PatchASOCredentialsSecret(t *testing.T, kubeContext string) error {
-	t.Helper()
-
-	// Ensure credentials are available
-	if err := EnsureAzureCredentialsSet(t); err != nil {
-		return fmt.Errorf("failed to ensure Azure credentials: %w", err)
-	}
-
-	tenantID := os.Getenv("AZURE_TENANT_ID")
-	subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
-
-	if tenantID == "" || subscriptionID == "" {
-		return fmt.Errorf("AZURE_TENANT_ID or AZURE_SUBSCRIPTION_ID is empty after extraction")
-	}
-
-	// Build the patch JSON with required credentials
-	// Start with tenant ID and subscription ID (always required)
-	patchData := map[string]string{
-		"AZURE_TENANT_ID":       tenantID,
-		"AZURE_SUBSCRIPTION_ID": subscriptionID,
-	}
-
-	// Add service principal credentials if available
-	// These are optional for local development but required for ASO to work in Kind clusters
-	clientID := os.Getenv("AZURE_CLIENT_ID")
-	clientSecret := os.Getenv("AZURE_CLIENT_SECRET")
-	if clientID != "" && clientSecret != "" {
-		patchData["AZURE_CLIENT_ID"] = clientID
-		patchData["AZURE_CLIENT_SECRET"] = clientSecret
-		t.Log("Including service principal credentials in ASO secret patch")
-	}
-
-	// Build the JSON patch string
-	var pairs []string
-	for key, value := range patchData {
-		pairs = append(pairs, fmt.Sprintf(`"%s":"%s"`, key, value))
-	}
-	patchJSON := fmt.Sprintf(`{"stringData":{%s}}`, strings.Join(pairs, ","))
-
-	// Get controller namespace from config
-	config := NewTestConfig()
-
-	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
-		"-n", config.CAPZNamespace, "patch", "secret", "aso-controller-settings",
-		"--type=merge", "-p", patchJSON)
-	if err != nil {
-		return fmt.Errorf("failed to patch aso-controller-settings secret: %w\nOutput: %s", err, output)
-	}
-
-	t.Log("Patched aso-controller-settings secret with Azure credentials")
-	return nil
 }
 
 // MaxDomainPrefixLength is the maximum allowed length for ARO domain prefix.
@@ -2660,6 +2625,10 @@ func GetDeletionResourceStatus(t *testing.T, kubeContext, namespace, clusterName
 		Provider: config.InfraProviderName,
 	}
 
+	// Declare actualResourceGroup at function scope for ARO provider
+	// (populated in data processing block, used in ARO-specific section below)
+	actualResourceGroup := ""
+
 	// Use MonitorCluster to get cluster status via JSON monitoring script
 	data, err := MonitorCluster(t, kubeContext, namespace, clusterName)
 	if err != nil {
@@ -2698,34 +2667,35 @@ func GetDeletionResourceStatus(t *testing.T, kubeContext, namespace, clusterName
 
 		// Count machine pools
 		status.MachinePoolCount = len(data.MachinePools)
-	}
 
-	// Populate ARO-specific fields only for ARO provider
-	if config.HasProvider("aro") {
-		// Extract actual resource group name from infrastructure resources
-		// instead of using config (which might be different from what was deployed)
-		actualResourceGroup := ""
-		if status.ClusterExists && len(data.Infrastructure.Resources) > 0 {
-			for _, res := range data.Infrastructure.Resources {
-				resMap, ok := res.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				resource, ok := resMap["resource"].(map[string]interface{})
-				if !ok {
-					continue
-				}
-				kind, _ := resource["kind"].(string)
-				if kind == "ResourceGroup" {
-					name, _ := resource["name"].(string)
-					if name != "" {
-						actualResourceGroup = name
-						break
+		// Populate ARO-specific fields only for ARO provider (only when we have valid data)
+		if config.HasProvider("aro") {
+			// Extract actual resource group name from infrastructure resources
+			// instead of using config (which might be different from what was deployed)
+			if status.ClusterExists && len(data.Infrastructure.Resources) > 0 {
+				for _, res := range data.Infrastructure.Resources {
+					resMap, ok := res.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					resource, ok := resMap["resource"].(map[string]interface{})
+					if !ok {
+						continue
+					}
+					kind, _ := resource["kind"].(string)
+					if kind == "ResourceGroup" {
+						name, _ := resource["name"].(string)
+						if name != "" {
+							actualResourceGroup = name
+							break
+						}
 					}
 				}
 			}
 		}
+	}
 
+	if config.HasProvider("aro") {
 		// Fall back to config-based name if we couldn't extract it
 		if actualResourceGroup == "" && resourceGroup != "" {
 			actualResourceGroup = resourceGroup

@@ -10,6 +10,11 @@ import (
 // TestSetup_CloneRepository tests cloning the cluster-api-installer repository.
 // The repository is needed for YAML generation even in external cluster mode.
 func TestSetup_CloneRepository(t *testing.T) {
+	// Check if config initialization failed
+	if configError != nil {
+		t.Fatalf("Configuration initialization failed: %s", *configError)
+	}
+
 	config := NewTestConfig()
 
 	// Note: We still need the repo in external cluster mode for YAML generation (Phase 04)

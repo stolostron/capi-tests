@@ -10,6 +10,12 @@ import (
 	"time"
 )
 
+var (
+	// configError stores the error message if NewTestConfig() encountered a fatal error during initialization.
+	// If nil, configuration succeeded. Check with (configError != nil) in first test.
+	configError *string
+)
+
 const (
 	// DefaultDeploymentTimeout is the default timeout for control plane deployment
 	DefaultDeploymentTimeout = 60 * time.Minute
@@ -136,10 +142,10 @@ func NewAzureProvider(namespace string) InfraProvider {
 			{DisplayName: "ASO", Namespace: namespace, ServiceName: "azureserviceoperator-webhook-service", Port: 443},
 		},
 		// Note: ARO uses namespace-scoped AzureClusterIdentity and aso-credential secret
-		// created by gen.sh script (Phase 04)
+		// created by gen.sh script (Phase 04) in the workload cluster namespace
 		CredentialSecret: &CredentialSecretDef{
-			Name:      "aso-controller-settings",
-			Namespace: namespace,
+			Name:      GetEnvOrDefault("ASO_CREDENTIAL_NAME", "aso-credential"),
+			Namespace: "{WORKLOAD_CLUSTER_NAMESPACE}",
 			RequiredFields: []string{
 				"AZURE_TENANT_ID",
 				"AZURE_SUBSCRIPTION_ID",
@@ -311,6 +317,13 @@ type TestConfig struct {
 	CAPINamespace            string // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
 	CAPZNamespace            string // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" when USE_K8S=true)
 
+	// Management cluster mode
+	// ClusterMode specifies the management cluster deployment mode ("kind" or "mce").
+	// - "kind": Deploy local Kind cluster (default behavior)
+	// - "mce": Use existing MCE (MultiCluster Engine) cluster
+	// Set via CLUSTER_MODE env var. Automatically configures UseKind and UseKubeconfig.
+	ClusterMode string
+
 	// External cluster configuration
 	// UseKubeconfig is the path to an external kubeconfig file.
 	// When set, the test suite runs in "external cluster mode":
@@ -367,6 +380,81 @@ type TestConfig struct {
 func NewTestConfig() *TestConfig {
 	useKubeconfig := os.Getenv("USE_KUBECONFIG")
 	deployCharts := parseDeployCharts()
+
+	// Handle CLUSTER_MODE: auto-configure based on cluster mode
+	clusterMode := GetEnvOrDefault("CLUSTER_MODE", "")
+	if clusterMode == "kind" {
+		// Set USE_KIND for Kind mode (tests depend on this)
+		_ = os.Setenv("USE_KIND", "true") // #nosec G104
+	} else if clusterMode == "mce" {
+		// Step 1: Create temporary kubeconfig file if not already set
+		if useKubeconfig == "" {
+			// Pattern: /tmp/cluster-api-installer-aro.*.kubeconfig
+			repoDir := GetEnvOrDefault("ARO_REPO_DIR", "/tmp/cluster-api-installer-aro")
+			repoBaseName := filepath.Base(repoDir)
+
+			// Check if kubeconfig already exists from a previous run
+			pattern := filepath.Join("/tmp", repoBaseName+".*.kubeconfig")
+			matches, err := filepath.Glob(pattern)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to glob for existing kubeconfig: %v\n", err)
+			}
+			if len(matches) > 0 {
+				// Use most recent kubeconfig (sort by modification time)
+				var latestFile string
+				var latestTime time.Time
+				for _, match := range matches {
+					info, err := os.Stat(match)
+					if err == nil && info.ModTime().After(latestTime) {
+						latestTime = info.ModTime()
+						latestFile = match
+					}
+				}
+				if latestFile != "" {
+					useKubeconfig = latestFile
+				} else {
+					useKubeconfig = matches[0]
+				}
+			} else {
+				// Create new temporary kubeconfig file (empty, will be populated by oc login)
+				file, err := os.CreateTemp("/tmp", repoBaseName+".*.kubeconfig")
+				if err != nil {
+					errMsg := fmt.Sprintf("Failed to create temporary kubeconfig file: %v", err)
+					configError = &errMsg
+					useKubeconfig = "" // Clear to prevent partial config state
+				} else {
+					tempPath := file.Name()
+					if err := file.Close(); err != nil {
+						errMsg := fmt.Sprintf("Failed to close temporary kubeconfig file: %v", err)
+						configError = &errMsg
+						useKubeconfig = "" // Clear to prevent partial config state
+					} else if err := os.Chmod(tempPath, 0600); err != nil {
+						errMsg := fmt.Sprintf("Failed to set permissions on temporary kubeconfig file: %v", err)
+						configError = &errMsg
+						useKubeconfig = "" // Clear to prevent partial config state
+					} else {
+						// All operations succeeded - set the kubeconfig path
+						useKubeconfig = tempPath
+					}
+				}
+			}
+		}
+
+		// Step 2: Set KUBECONFIG environment variable
+		if useKubeconfig != "" {
+			_ = os.Setenv("USE_KUBECONFIG", useKubeconfig) // #nosec G104
+			_ = os.Setenv("KUBECONFIG", useKubeconfig)     // #nosec G104
+		}
+
+		// Step 3: Set MCE mode flags
+		_ = os.Setenv("USE_KIND", "false") // #nosec G104
+		_ = os.Setenv("USE_MCE", "true")   // #nosec G104
+
+		// MCE mode disables chart deployment (controllers are pre-installed)
+		if os.Getenv("DEPLOY_CHARTS") == "" {
+			_ = os.Setenv("DEPLOY_CHARTS", "false") // #nosec G104
+		}
+	}
 
 	// When using external kubeconfig WITHOUT deploying charts, default to MCE namespaces (USE_K8S=true)
 	// This triggers multicluster-engine namespace for all controllers.
@@ -445,6 +533,9 @@ func NewTestConfig() *TestConfig {
 		TestLabelPrefix:          testLabelPrefix,
 		CAPINamespace:            getControllerNamespace("CAPI_NAMESPACE", "capi-system"),
 		CAPZNamespace:            providerNamespace,
+
+		// Management cluster mode
+		ClusterMode: clusterMode,
 
 		// External cluster
 		UseKubeconfig: useKubeconfig,

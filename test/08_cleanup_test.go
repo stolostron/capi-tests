@@ -28,6 +28,11 @@ import (
 // TestCleanup_VerifyKindClusterDeletion verifies the Kind cluster can be deleted properly.
 // This test checks the cleanup mechanism for local Kind clusters.
 func TestCleanup_VerifyKindClusterDeletion(t *testing.T) {
+	// Check if config initialization failed
+	if configError != nil {
+		t.Fatalf("Configuration initialization failed: %s", *configError)
+	}
+
 	config := NewTestConfig()
 
 	PrintTestHeader(t, "TestCleanup_VerifyKindClusterDeletion",
