@@ -1,7 +1,6 @@
 FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.24-openshift-4.20
 
 # Tool versions - pin all versions for reproducible builds
-ARG KIND_VERSION=v0.31.0
 ARG KUBECTL_VERSION=v1.35.2
 ARG HELM_VERSION=v3.16.0
 ARG CLUSTERCTL_VERSION=v1.12.3
@@ -9,9 +8,8 @@ ARG CLUSTERCTL_VERSION=v1.12.3
 ARG CLUSTERCTL_SHA256=9b75287b15656a62ece65c8ad7491412cebfd30c78e085a9d61396a50df17349
 ARG GOTESTSUM_VERSION=v1.13.0
 
-# Install podman (docker alternative) and OpenShift CLI
+# Install OpenShift CLI
 ARG OC_VERSION=latest
-RUN dnf install -y podman && dnf clean all
 RUN curl -fsSL "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/${OC_VERSION}/openshift-client-linux.tar.gz" -o /tmp/oc.tar.gz && \
     tar xz -C /usr/local/bin -f /tmp/oc.tar.gz oc && \
     chmod +x /usr/local/bin/oc && \
@@ -30,15 +28,9 @@ RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
     if [ -d /etc/yum.repos.art/ci ]; then \
       cp /etc/yum.repos.d/azure-cli.repo /etc/yum.repos.art/ci/; \
     fi && \
-    dnf install -y azure-cli jq && dnf clean all
+    dnf install -y azure-cli jq gettext libxml2 bc python3-cffi && dnf clean all
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-
-# Install kind (with checksum verification)
-RUN curl -Lo /usr/local/bin/kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64" && \
-    curl -Lo /tmp/kind.sha256 "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64.sha256sum" && \
-    echo "$(awk '{print $1}' /tmp/kind.sha256)  /usr/local/bin/kind" | sha256sum -c && \
-    chmod +x /usr/local/bin/kind && rm -f /tmp/kind.sha256
 
 # Install kubectl (with checksum verification)
 RUN curl -Lo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
@@ -57,8 +49,14 @@ RUN curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o 
 # Install gotestsum for JUnit XML output
 RUN GOFLAGS='' GOBIN=/usr/local/bin go install gotest.tools/gotestsum@${GOTESTSUM_VERSION}
 
-# Ensure Go directories are writable for arbitrary UIDs (OpenShift CI runs as random non-root user)
-RUN chmod -R 777 /go
+# Pre-clone cluster-api-installer so it's available in all Prow steps
+# (each step runs in a separate container from this image, so /tmp is not shared)
+ARG INSTALLER_REPO=https://github.com/marek-veber/cluster-api-installer
+ARG INSTALLER_BRANCH=capi-tests
+RUN git clone -b "${INSTALLER_BRANCH}" "${INSTALLER_REPO}" /tmp/cluster-api-installer-aro
+
+# Ensure Go and installer directories are writable for arbitrary UIDs (OpenShift CI runs as random non-root user)
+RUN chmod -R 777 /go /tmp/cluster-api-installer-aro
 
 # Install clusterctl (with checksum verification via hardcoded digest)
 RUN curl -Lo /usr/local/bin/clusterctl "https://github.com/kubernetes-sigs/cluster-api/releases/download/${CLUSTERCTL_VERSION}/clusterctl-linux-amd64" && \
