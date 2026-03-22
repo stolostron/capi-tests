@@ -1,0 +1,13 @@
+ref:
+  as: capz-test-e2e
+  from: src
+  commands: capz-test-e2e-commands.sh
+  resources:
+    requests:
+      cpu: 200m
+      memory: 400Mi
+  timeout: 3h
+  documentation: |-
+    Runs the full CAPZ e2e test suite (Phases 01-07) against the
+    CI-provisioned cluster using USE_KUBECONFIG mode.
+    Requires CAPI/CAPZ/ASO controllers to be pre-installed.

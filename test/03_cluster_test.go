@@ -470,6 +470,9 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 		if config.IsExternalCluster() {
 			SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
 			SetEnvVar(t, "DO_INIT_KIND", "false")
+			// Set OCP_CONTEXT so deploy-charts.sh uses the actual kubeconfig context
+			// instead of defaulting to "crc-admin" (which doesn't exist on IPI clusters).
+			SetEnvVar(t, "OCP_CONTEXT", config.GetKubeContext())
 		} else {
 			SetEnvVar(t, "KIND_CLUSTER_NAME", config.ManagementClusterName)
 			SetEnvVar(t, "DO_INIT_KIND", "true")
@@ -486,6 +489,14 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 		// config with Docker credentials mounted for private registry access
 		if kindConfigPath != "" {
 			SetEnvVar(t, "KIND_CFG_NAME", kindConfigPath)
+		}
+
+		// Resolve results dir before chdir so relative paths anchor to the test root.
+		resultsDir := GetResultsDir()
+		if resultsDir != "" && !filepath.IsAbs(resultsDir) {
+			if absDir, err := filepath.Abs(resultsDir); err == nil {
+				resultsDir = absDir
+			}
 		}
 
 		// Change to repository directory for script execution
@@ -524,7 +535,16 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 			return
 		}
 
-		// Don't log full script output as it may contain sensitive configuration
+		// Log deploy-charts output so it appears in CI build logs (Prow build-log.txt).
+		t.Logf("Deploy-charts output:\n%s", output)
+
+		// Also save to artifact file for easy access.
+		if resultsDir != "" {
+			logPath := filepath.Join(resultsDir, "deploy-charts.log")
+			if writeErr := os.WriteFile(logPath, []byte(output), 0644); writeErr != nil { // #nosec G306 -- CI artifact log, operational output only
+				t.Logf("Warning: failed to write deploy-charts log: %v", writeErr)
+			}
+		}
 		PrintToTTY("\n✅ Controller deployment completed successfully\n\n")
 		t.Log("Controller deployment to management cluster completed successfully")
 
@@ -581,6 +601,65 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 	} else {
 		PrintToTTY("📝 Deployment state saved to %s\n", DeploymentStateFile)
 		t.Logf("Deployment state saved to %s", DeploymentStateFile)
+	}
+}
+
+// TestKindCluster_02_ControllersInstalled validates that controller deployments exist.
+// This runs AFTER TestKindCluster_01_ClusterReady, so controllers should be deployed.
+func TestKindCluster_02_ControllersInstalled(t *testing.T) {
+	config := NewTestConfig()
+
+	if !config.IsExternalCluster() {
+		t.Skip("Not using external cluster (USE_KUBECONFIG not set)")
+	}
+
+	PrintTestHeader(t, "TestKindCluster_02_ControllersInstalled",
+		"Validate CAPI/CAPZ/ASO controller deployments exist")
+
+	// Set KUBECONFIG for kubectl
+	SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	context := config.GetKubeContext()
+
+	// Check if this is an MCE cluster for better error messages
+	isMCE := IsMCECluster(t, context)
+
+	PrintToTTY("\n=== Checking for pre-installed controllers ===\n")
+	for _, ns := range config.AllNamespaces() {
+		PrintToTTY("Namespace: %s\n", ns)
+	}
+	if isMCE {
+		PrintToTTY("MCE Cluster: yes\n")
+	}
+	PrintToTTY("\n")
+
+	allFound := true
+	for _, ctrl := range config.AllControllers() {
+		PrintToTTY("Checking %s controller manager...\n", ctrl.DisplayName)
+		_, err := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.Namespace,
+			"get", "deployment", ctrl.DeploymentName)
+		if err != nil {
+			PrintToTTY("❌ %s controller not found in %s namespace\n", ctrl.DisplayName, ctrl.Namespace)
+			allFound = false
+
+			// Provide MCE-specific remediation hints
+			if isMCE && !config.MCEAutoEnable {
+				t.Errorf("%s controller not found in %s namespace.\n\n"+
+					"This is an MCE cluster but MCE_AUTO_ENABLE=false.\n"+
+					"To enable auto-enablement: MCE_AUTO_ENABLE=true make test-all\n"+
+					"Or manually enable the component:\n"+
+					"  kubectl patch mce multiclusterengine --type=merge -p '{\"spec\":{\"overrides\":{\"components\":[{\"name\":\"%s\",\"enabled\":true}]}}}'",
+					ctrl.DisplayName, ctrl.Namespace, MCEComponentCAPI)
+			} else {
+				t.Errorf("%s controller not found in %s namespace: %v", ctrl.DisplayName, ctrl.Namespace, err)
+			}
+		} else {
+			PrintToTTY("✅ %s controller manager found\n", ctrl.DisplayName)
+			t.Logf("%s controller manager found in %s", ctrl.DisplayName, ctrl.Namespace)
+		}
+	}
+
+	if allFound {
+		PrintToTTY("\n✅ All required controllers are installed on external cluster\n\n")
 	}
 }
 

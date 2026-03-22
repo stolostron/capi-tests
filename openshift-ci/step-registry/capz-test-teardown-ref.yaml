@@ -10,5 +10,5 @@ ref:
   timeout: 30m
   documentation: |-
     Teardown safety net for CAPZ test suite. Always runs as a post step,
-    even if test steps fail. Cleans up Kind cluster, cloned repository,
-    kubeconfig files, and Azure resources. Does not affect Prow artifacts.
+    even if test steps fail. Cleans up Azure resources (workload cluster,
+    resource groups). The management cluster is deprovisioned by ipi-azure-post.

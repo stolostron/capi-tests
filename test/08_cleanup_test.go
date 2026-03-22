@@ -88,8 +88,9 @@ func TestCleanup_VerifyKubeconfigRemoval(t *testing.T) {
 	PrintTestHeader(t, "TestCleanup_VerifyKubeconfigRemoval",
 		"Verify kubeconfig files can be identified for cleanup")
 
-	// Check for kubeconfig files in temp directory (cross-platform)
-	tempDir := os.TempDir()
+	// Check for kubeconfig files in shared temp directory (cross-platform, Prow-aware)
+	config := NewTestConfig()
+	tempDir := config.SharedTempDir()
 	pattern := filepath.Join(tempDir, "*-kubeconfig.yaml")
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
@@ -702,9 +703,9 @@ func TestCleanup_Summary(t *testing.T) {
 		PrintToTTY("  Kind Cluster:     kind not available\n")
 	}
 
-	// Kubeconfig (cross-platform)
-	tempDir := os.TempDir()
-	matches, _ := filepath.Glob(filepath.Join(tempDir, "*-kubeconfig.yaml"))
+	// Kubeconfig (cross-platform, Prow-aware)
+	kubeconfigDir := config.SharedTempDir()
+	matches, _ := filepath.Glob(filepath.Join(kubeconfigDir, "*-kubeconfig.yaml"))
 	if len(matches) > 0 {
 		PrintToTTY("  Kubeconfig:       %d file(s) found\n", len(matches))
 	} else {
