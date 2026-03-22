@@ -15,27 +15,40 @@
 #   ./scripts/cleanup-azure-resources.sh [OPTIONS]
 #
 # Options:
-#   --prefix PREFIX        Resource name prefix to search for (default: from CAPI_USER env var or 'cate')
+#   --prefix PREFIX        Resource name prefix to search for (default: CS_CLUSTER_NAME, else CAPI_USER-DEPLOYMENT_ENV, else cate)
 #   --resource-group RG    Also delete this Azure resource group
+#   --match-mode MODE      How to match resource names: 'startswith' (default, safer) or 'contains' (broader)
 #   --dry-run              Show what would be deleted without actually deleting
 #   --force                Skip confirmation prompts
 #   --help                 Show this help message
 #
 # Environment variables:
-#   CAPI_USER          Default prefix for resource names (e.g., 'cate')
+#   CS_CLUSTER_NAME    Full cluster name prefix (e.g., 'cate-stage') - preferred, most specific
+#   CAPI_USER          User prefix for resource names (e.g., 'cate') - fallback if CS_CLUSTER_NAME not set
+#   DEPLOYMENT_ENV     Deployment environment (default: 'stage') - combined with CAPI_USER as fallback
 #   AZURE_SUBSCRIPTION_ID  Azure subscription ID to search in
 #
 # Examples:
 #   ./scripts/cleanup-azure-resources.sh --dry-run
-#   ./scripts/cleanup-azure-resources.sh --prefix cated --force
+#   ./scripts/cleanup-azure-resources.sh --prefix cate-stage --force
 #   ./scripts/cleanup-azure-resources.sh --resource-group myapp-resgroup --prefix myapp
-#   CAPI_USER=myuser ./scripts/cleanup-azure-resources.sh
+#   CS_CLUSTER_NAME=cate-stage ./scripts/cleanup-azure-resources.sh
+#   ./scripts/cleanup-azure-resources.sh --prefix cate --match-mode contains  # broader search
 
 set -euo pipefail
 
 # Default values
-PREFIX="${CAPI_USER:-cate}"
+# Prefer CS_CLUSTER_NAME (e.g., cate-stage) for more specific matching.
+# Fall back to CAPI_USER-DEPLOYMENT_ENV, then 'cate' as final fallback.
+if [[ -n "${CS_CLUSTER_NAME:-}" ]]; then
+    PREFIX="${CS_CLUSTER_NAME}"
+elif [[ -n "${CAPI_USER:-}" ]]; then
+    PREFIX="${CAPI_USER}-${DEPLOYMENT_ENV:-stage}"
+else
+    PREFIX="cate"
+fi
 RESOURCE_GROUP=""
+MATCH_MODE="startswith"
 DRY_RUN=false
 FORCE=false
 
@@ -54,7 +67,7 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Show usage
 usage() {
-    head -35 "$0" | grep '^#' | sed 's/^# \?//'
+    sed -n '2,/^$/p' "$0" | grep '^#' | sed 's/^# \?//'
     exit 0
 }
 
@@ -62,11 +75,31 @@ usage() {
 while [[ $# -gt 0 ]]; do
     case $1 in
         --prefix)
+            if [[ $# -lt 2 ]]; then
+                print_error "Missing value for --prefix"
+                exit 1
+            fi
             PREFIX="$2"
             shift 2
             ;;
         --resource-group)
+            if [[ $# -lt 2 ]]; then
+                print_error "Missing value for --resource-group"
+                exit 1
+            fi
             RESOURCE_GROUP="$2"
+            shift 2
+            ;;
+        --match-mode)
+            if [[ $# -lt 2 ]]; then
+                print_error "Missing value for --match-mode"
+                exit 1
+            fi
+            MATCH_MODE="$2"
+            if [[ "$MATCH_MODE" != "startswith" && "$MATCH_MODE" != "contains" ]]; then
+                print_error "Invalid match mode '${MATCH_MODE}': must be 'startswith' or 'contains'"
+                exit 1
+            fi
             shift 2
             ;;
         --dry-run)
@@ -151,11 +184,10 @@ delete_resource_group() {
     fi
 
     echo ""
-    print_info "Deleting resource group '${rg_name}' (running in background)..."
+    print_info "Deleting resource group '${rg_name}' (this may take several minutes)..."
 
-    if az group delete --name "$rg_name" --yes --no-wait 2>/dev/null; then
-        print_success "Resource group deletion initiated"
-        print_warning "Note: Resource group deletion runs asynchronously and may take several minutes."
+    if az group delete --name "$rg_name" --yes 2>/dev/null; then
+        print_success "Resource group deleted"
     else
         print_error "Failed to delete resource group '${rg_name}'"
         return 1
@@ -166,16 +198,17 @@ delete_resource_group() {
 find_resources() {
     local prefix="$1"
 
-    print_info "Searching for Azure resources with prefix '${prefix}'..." >&2
+    print_info "Searching for Azure resources with prefix '${prefix}' (mode: ${MATCH_MODE})..." >&2
 
-    # Query Azure Resource Graph for resources matching the pattern
-    # We search for:
-    # 1. Resources with names starting with the prefix (e.g., catea, cateb, catec, etc.)
-    # 2. Resources with names containing the prefix pattern
-
-    # Build the query to find resources with the naming pattern
-    # The pattern is: prefix followed by optional suffix (e.g., catea, cateb, cate-stage, etc.)
-    local query="Resources | where name contains '${prefix}' | project id, name, type, resourceGroup, subscriptionId | order by type asc, name asc"
+    # Build the query based on match mode:
+    # - startswith (default): safer, only matches resources whose names begin with the prefix
+    # - contains: broader, matches resources whose names contain the prefix anywhere
+    local query
+    if [[ "$MATCH_MODE" == "startswith" ]]; then
+        query="Resources | where name startswith '${prefix}' | project id, name, type, resourceGroup, subscriptionId | order by type asc, name asc"
+    else
+        query="Resources | where name contains '${prefix}' | project id, name, type, resourceGroup, subscriptionId | order by type asc, name asc"
+    fi
 
     local resources_json
     resources_json=$(az graph query -q "$query" -o json 2>/dev/null)
@@ -194,7 +227,8 @@ find_ad_applications() {
     print_info "Searching for Azure AD Applications with prefix '${prefix}'..." >&2
 
     # Use az ad app list with OData filter for displayName starting with prefix
-    # Note: The filter is case-insensitive
+    # Note: OData filters for az ad only support 'startswith', not 'contains',
+    # so --match-mode does not apply here.
     local apps_json
     apps_json=$(az ad app list --filter "startswith(displayName, '${prefix}')" --query "[].{appId: appId, displayName: displayName}" -o json 2>/dev/null)
     if [[ $? -ne 0 ]]; then
@@ -212,6 +246,8 @@ find_service_principals() {
     print_info "Searching for Service Principals with prefix '${prefix}'..." >&2
 
     # Use az ad sp list with OData filter for displayName starting with prefix
+    # Note: OData filters for az ad only support 'startswith', not 'contains',
+    # so --match-mode does not apply here.
     local sps_json
     sps_json=$(az ad sp list --filter "startswith(displayName, '${prefix}')" --query "[].{appId: appId, displayName: displayName, id: id}" -o json 2>/dev/null)
     if [[ $? -ne 0 ]]; then
@@ -544,6 +580,7 @@ main() {
     echo "========================================"
     echo ""
     print_info "Resource prefix: ${PREFIX}"
+    print_info "Match mode: ${MATCH_MODE}"
     if [[ -n "$RESOURCE_GROUP" ]]; then
         print_info "Resource group: ${RESOURCE_GROUP}"
     fi
