@@ -67,7 +67,7 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Show usage
 usage() {
-    head -36 "$0" | grep '^#' | sed 's/^# \?//'
+    sed -n '2,/^$/p' "$0" | grep '^#' | sed 's/^# \?//'
     exit 0
 }
 
