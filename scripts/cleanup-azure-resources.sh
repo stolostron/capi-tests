@@ -215,7 +215,8 @@ find_ad_applications() {
     print_info "Searching for Azure AD Applications with prefix '${prefix}'..." >&2
 
     # Use az ad app list with OData filter for displayName starting with prefix
-    # Note: The filter is case-insensitive
+    # Note: OData filters for az ad only support 'startswith', not 'contains',
+    # so --match-mode does not apply here.
     local apps_json
     apps_json=$(az ad app list --filter "startswith(displayName, '${prefix}')" --query "[].{appId: appId, displayName: displayName}" -o json 2>/dev/null)
     if [[ $? -ne 0 ]]; then
@@ -233,6 +234,8 @@ find_service_principals() {
     print_info "Searching for Service Principals with prefix '${prefix}'..." >&2
 
     # Use az ad sp list with OData filter for displayName starting with prefix
+    # Note: OData filters for az ad only support 'startswith', not 'contains',
+    # so --match-mode does not apply here.
     local sps_json
     sps_json=$(az ad sp list --filter "startswith(displayName, '${prefix}')" --query "[].{appId: appId, displayName: displayName, id: id}" -o json 2>/dev/null)
     if [[ $? -ne 0 ]]; then
