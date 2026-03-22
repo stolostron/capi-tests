@@ -35,11 +35,6 @@ func TestCheckDependencies_ToolAvailable(t *testing.T) {
 		commonTools = append([]string{"docker", "kind"}, commonTools...)
 	}
 
-	// Add kind only when not using external cluster (external clusters are already deployed)
-	if !config.IsExternalCluster() {
-		commonTools = append(commonTools, "kind")
-	}
-
 	// Add provider-specific tools (e.g., "az" for ARO, "aws" for ROSA)
 	requiredTools := append(commonTools, config.AllRequiredTools()...)
 
