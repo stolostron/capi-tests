@@ -161,7 +161,7 @@ The `make clean` command is interactive by default and will prompt you to confir
 - Kubeconfig files
 - Results directory
 - Azure resource group (`${CS_CLUSTER_NAME}-resgroup`)
-- Orphaned Azure resources (resources with `${CAPI_USER}` prefix that survive RG deletion)
+- Orphaned Azure resources (resources with `${CS_CLUSTER_NAME}` prefix that survive RG deletion)
 
 This prevents accidental deletion and allows selective cleanup.
 
@@ -188,12 +188,13 @@ FORCE=1 make clean-azure
 ./scripts/cleanup-azure-resources.sh --resource-group myapp-resgroup --prefix myapp --dry-run
 
 # Clean with custom prefix
-CAPI_USER=myprefix make clean-azure
+CS_CLUSTER_NAME=myprefix-stage make clean-azure
 ```
 
 Notes:
-- The resource group name is derived from `${CAPI_USER}-${DEPLOYMENT_ENV}-resgroup` (default: `cate-stage-resgroup`)
-- Uses `az group delete --yes --no-wait` for non-blocking deletion
+- The resource group name is derived from `${CS_CLUSTER_NAME}-resgroup` where `CS_CLUSTER_NAME` defaults to `${CAPI_USER}-${DEPLOYMENT_ENV}` (e.g., `cate-stage-resgroup`)
+- Resource matching uses `startswith` by default (safer than `contains`). Use `--match-mode contains` for broader search.
+- Uses `az group delete --yes` for synchronous deletion (waits for completion before orphan cleanup)
 - Gracefully skips Azure cleanup if Azure CLI is not installed or not authenticated
 
 ### Code Quality

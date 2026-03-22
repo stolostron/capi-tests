@@ -15,7 +15,7 @@ import (
 // kubeconfig without relying on environment variables that may be cleaned up.
 func getKubeconfigPath(config *TestConfig) string {
 	provisionedClusterName := config.GetProvisionedClusterName()
-	return filepath.Join(os.TempDir(), fmt.Sprintf("%s-kubeconfig.yaml", provisionedClusterName))
+	return filepath.Join(config.SharedTempDir(), fmt.Sprintf("%s-kubeconfig.yaml", provisionedClusterName))
 }
 
 // TestVerification_RetrieveKubeconfig tests retrieving the cluster kubeconfig

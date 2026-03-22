@@ -187,7 +187,9 @@ func TestDeployment_01_CheckExistingClusters(t *testing.T) {
 			len(mismatched), config.WorkloadClusterName, mismatched)
 	}
 
-	PrintToTTY("✅ All existing clusters match current configuration\n\n")
+	if len(existing) > 0 {
+		PrintToTTY("✅ All existing clusters match current configuration\n\n")
+	}
 }
 
 // TestDeployment_ApplyResources tests applying generated resources to the cluster
@@ -543,6 +545,41 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 
 		if elapsed > timeout {
 			PrintToTTY("\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
+
+			// Dump diagnostics for not-ready infrastructure resources
+			monitorScript := "../scripts/monitor-cluster-json.sh"
+			diagJSON, diagErr := RunCommandQuiet(t, monitorScript, "--context", context, config.WorkloadClusterNamespace, provisionedClusterName)
+			if diagErr == nil {
+				var diagStatus ClusterMonitorStatus
+				if json.Unmarshal([]byte(diagJSON), &diagStatus) == nil {
+					infraStatus := GetInfrastructureResourceStatusFromParsed(diagStatus.Infrastructure.Resources, diagStatus.Infrastructure.Conditions)
+					DumpNotReadyResourceDiagnostics(t, context, config.WorkloadClusterNamespace, infraStatus.NotReady)
+				}
+			}
+
+			// Write diagnostics to file so they survive Prow entrypoint timeout
+			var diagBuilder strings.Builder
+			fmt.Fprintf(&diagBuilder, "=== Deployment Timeout Diagnostics ===\n")
+			fmt.Fprintf(&diagBuilder, "Timestamp: %s\n", time.Now().UTC().Format(time.RFC3339))
+			fmt.Fprintf(&diagBuilder, "Timeout: %v (elapsed: %v)\n", timeout, elapsed.Round(time.Second))
+			fmt.Fprintf(&diagBuilder, "ControlPlane ready: %v\n", controlPlaneReady)
+			fmt.Fprintf(&diagBuilder, "MachinePool ready: %v\n\n", machinePoolReady)
+			if diagErr == nil {
+				fmt.Fprintf(&diagBuilder, "=== Raw monitor-cluster-json.sh output ===\n%s\n\n", diagJSON)
+			} else {
+				fmt.Fprintf(&diagBuilder, "=== monitor-cluster-json.sh failed: %v ===\n\n", diagErr)
+			}
+
+			// Collect namespace events for debugging
+			eventsOutput, eventsErr := RunCommandQuiet(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace, "get", "events", "--sort-by=.lastTimestamp")
+			if eventsErr == nil && eventsOutput != "" {
+				fmt.Fprintf(&diagBuilder, "=== Namespace Events ===\n%s\n\n", eventsOutput)
+			} else if eventsErr != nil {
+				fmt.Fprintf(&diagBuilder, "=== Failed to collect events: %v ===\n\n", eventsErr)
+			}
+
+			WriteDiagnosticsFile(t, "diagnostics-deploy-timeout.txt", diagBuilder.String())
+
 			t.Errorf("Timeout waiting for deployment after %v.\n"+
 				"  ControlPlane ready: %v\n"+
 				"  MachinePool ready: %v\n\n"+
@@ -551,7 +588,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 				"  2. Check MachinePool status: kubectl --context %s -n %s get machinepool %s -o yaml\n"+
 				"  3. Check cluster conditions: kubectl --context %s -n %s get cluster %s -o yaml\n"+
 				"  4. Check controller logs: kubectl --context %s -n capz-system logs -l control-plane=controller-manager --tail=100\n\n"+
-				"To increase timeout: export DEPLOYMENT_TIMEOUT=60m",
+				"To increase timeout: export DEPLOYMENT_TIMEOUT=90m",
 				elapsed.Round(time.Second),
 				controlPlaneReady, machinePoolReady,
 				context, config.WorkloadClusterNamespace, strings.ToLower(controlPlaneKind), controlPlaneName,
@@ -783,6 +820,38 @@ func TestDeployment_VerifyInfrastructureResources(t *testing.T) {
 
 		if elapsed > timeout {
 			PrintToTTY("\n❌ Timeout reached after %v waiting for NetworkInfrastructureReady\n\n", elapsed.Round(time.Second))
+
+			// Dump diagnostics for not-ready infrastructure resources
+			diagJSON, diagErr := RunCommandQuiet(t, "../scripts/monitor-cluster-json.sh", "--context", context, config.WorkloadClusterNamespace, provisionedClusterName)
+			if diagErr == nil {
+				var diagStatus ClusterMonitorStatus
+				if json.Unmarshal([]byte(diagJSON), &diagStatus) == nil {
+					infraStatus := GetInfrastructureResourceStatusFromParsed(diagStatus.Infrastructure.Resources, diagStatus.Infrastructure.Conditions)
+					DumpNotReadyResourceDiagnostics(t, context, config.WorkloadClusterNamespace, infraStatus.NotReady)
+				}
+			}
+
+			// Write diagnostics to file so they survive Prow entrypoint timeout
+			var diagBuilder strings.Builder
+			fmt.Fprintf(&diagBuilder, "=== NetworkInfrastructureReady Timeout Diagnostics ===\n")
+			fmt.Fprintf(&diagBuilder, "Timestamp: %s\n", time.Now().UTC().Format(time.RFC3339))
+			fmt.Fprintf(&diagBuilder, "Timeout: %v (elapsed: %v)\n\n", timeout, elapsed.Round(time.Second))
+			if diagErr == nil {
+				fmt.Fprintf(&diagBuilder, "=== Raw monitor-cluster-json.sh output ===\n%s\n\n", diagJSON)
+			} else {
+				fmt.Fprintf(&diagBuilder, "=== monitor-cluster-json.sh failed: %v ===\n\n", diagErr)
+			}
+
+			// Collect namespace events for debugging
+			eventsOutput, eventsErr := RunCommandQuiet(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace, "get", "events", "--sort-by=.lastTimestamp")
+			if eventsErr == nil && eventsOutput != "" {
+				fmt.Fprintf(&diagBuilder, "=== Namespace Events ===\n%s\n\n", eventsOutput)
+			} else if eventsErr != nil {
+				fmt.Fprintf(&diagBuilder, "=== Failed to collect events: %v ===\n\n", eventsErr)
+			}
+
+			WriteDiagnosticsFile(t, "diagnostics-infra-timeout.txt", diagBuilder.String())
+
 			t.Fatalf("Timeout waiting for NetworkInfrastructureReady after %v.\n\n"+
 				"Check AROCluster status:\n"+
 				"  kubectl --context %s -n %s get arocluster %s -o yaml",

@@ -15,9 +15,9 @@ func TestCheckDependencies_ToolAvailable(t *testing.T) {
 	config := NewTestConfig()
 
 	// Common tools required regardless of provider
+	// docker and kind are only needed for Kind mode (local management cluster)
+	// When using an external cluster (USE_KUBECONFIG), they are not required
 	commonTools := []string{
-		"docker",
-		"kind",
 		"oc",
 		"helm",
 		"git",
@@ -25,6 +25,9 @@ func TestCheckDependencies_ToolAvailable(t *testing.T) {
 		"go",
 		"xmllint",
 		"envsubst",
+	}
+	if !config.IsExternalCluster() {
+		commonTools = append([]string{"docker", "kind"}, commonTools...)
 	}
 
 	// Add provider-specific tools (e.g., "az" for ARO, "aws" for ROSA)
@@ -108,6 +111,13 @@ func TestCheckDependencies_ExternalKubeconfig(t *testing.T) {
 // This catches issues early before Kind Cluster tests fail with confusing errors.
 // On macOS, provides instructions for starting Docker Desktop or Rancher Desktop.
 func TestCheckDependencies_DockerDaemonRunning(t *testing.T) {
+	// Skip in external cluster mode — Docker is only needed for Kind
+	config := NewTestConfig()
+	if config.IsExternalCluster() {
+		t.Skip("Skipping Docker daemon check in external cluster mode (USE_KUBECONFIG is set)")
+		return
+	}
+
 	// Skip if using podman instead of docker
 	if !CommandExists("docker") {
 		if CommandExists("podman") {
@@ -455,6 +465,13 @@ func TestCheckDependencies_Helm_IsAvailable(t *testing.T) {
 
 // TestCheckDependencies_Kind_IsAvailable verifies Kind is installed
 func TestCheckDependencies_Kind_IsAvailable(t *testing.T) {
+	// Skip in external cluster mode — Kind is only needed for local management cluster
+	config := NewTestConfig()
+	if config.IsExternalCluster() {
+		t.Skip("Skipping Kind check in external cluster mode (USE_KUBECONFIG is set)")
+		return
+	}
+
 	output, err := RunCommand(t, "kind", "version")
 	if err != nil {
 		t.Errorf("Kind version check failed: %v\n\n"+

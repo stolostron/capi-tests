@@ -428,8 +428,8 @@ func NewTestConfig() *TestConfig {
 
 	return &TestConfig{
 		// Repository defaults
-		RepoURL:    GetEnvOrDefault("ARO_REPO_URL", "https://github.com/stolostron/cluster-api-installer"),
-		RepoBranch: GetEnvOrDefault("ARO_REPO_BRANCH", "main"),
+		RepoURL:    GetEnvOrDefault("ARO_REPO_URL", "https://github.com/marek-veber/cluster-api-installer"),
+		RepoBranch: GetEnvOrDefault("ARO_REPO_BRANCH", "capi-tests"),
 		RepoDir:    getDefaultRepoDir(),
 
 		// Cluster defaults
@@ -679,6 +679,16 @@ func (c *TestConfig) GetExpectedFiles() []string {
 		"credentials.yaml",
 		"aro.yaml",
 	}
+}
+
+// SharedTempDir returns a directory suitable for storing temporary files that
+// must persist across CI steps. In Prow, SHARED_DIR is a volume shared between
+// all step containers. Outside Prow, falls back to os.TempDir().
+func (c *TestConfig) SharedTempDir() string {
+	if dir := os.Getenv("SHARED_DIR"); dir != "" {
+		return dir
+	}
+	return os.TempDir()
 }
 
 // GetKubeContext returns the kubectl context to use for the management cluster.

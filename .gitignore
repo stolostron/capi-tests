@@ -13,8 +13,7 @@ bin/
 dist/
 *.test
 
-# Dependencies
-vendor/
+# Dependencies (vendor/ is committed for reproducible CI builds)
 
 # Test results
 *.log

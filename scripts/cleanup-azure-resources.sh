@@ -15,27 +15,40 @@
 #   ./scripts/cleanup-azure-resources.sh [OPTIONS]
 #
 # Options:
-#   --prefix PREFIX        Resource name prefix to search for (default: from CAPI_USER env var or 'cate')
+#   --prefix PREFIX        Resource name prefix to search for (default: CS_CLUSTER_NAME or CAPI_USER-DEPLOYMENT_ENV)
 #   --resource-group RG    Also delete this Azure resource group
+#   --match-mode MODE      How to match resource names: 'startswith' (default, safer) or 'contains' (broader)
 #   --dry-run              Show what would be deleted without actually deleting
 #   --force                Skip confirmation prompts
 #   --help                 Show this help message
 #
 # Environment variables:
-#   CAPI_USER          Default prefix for resource names (e.g., 'cate')
+#   CS_CLUSTER_NAME    Full cluster name prefix (e.g., 'cate-stage') - preferred, most specific
+#   CAPI_USER          User prefix for resource names (e.g., 'cate') - fallback if CS_CLUSTER_NAME not set
+#   DEPLOYMENT_ENV     Deployment environment (default: 'stage') - combined with CAPI_USER as fallback
 #   AZURE_SUBSCRIPTION_ID  Azure subscription ID to search in
 #
 # Examples:
 #   ./scripts/cleanup-azure-resources.sh --dry-run
-#   ./scripts/cleanup-azure-resources.sh --prefix cated --force
+#   ./scripts/cleanup-azure-resources.sh --prefix cate-stage --force
 #   ./scripts/cleanup-azure-resources.sh --resource-group myapp-resgroup --prefix myapp
-#   CAPI_USER=myuser ./scripts/cleanup-azure-resources.sh
+#   CS_CLUSTER_NAME=cate-stage ./scripts/cleanup-azure-resources.sh
+#   ./scripts/cleanup-azure-resources.sh --prefix cate --match-mode contains  # broader search
 
 set -euo pipefail
 
 # Default values
-PREFIX="${CAPI_USER:-cate}"
+# Prefer CS_CLUSTER_NAME (e.g., cate-stage) for more specific matching.
+# Fall back to CAPI_USER-DEPLOYMENT_ENV, then just CAPI_USER.
+if [[ -n "${CS_CLUSTER_NAME:-}" ]]; then
+    PREFIX="${CS_CLUSTER_NAME}"
+elif [[ -n "${CAPI_USER:-}" ]]; then
+    PREFIX="${CAPI_USER}-${DEPLOYMENT_ENV:-stage}"
+else
+    PREFIX="cate"
+fi
 RESOURCE_GROUP=""
+MATCH_MODE="startswith"
 DRY_RUN=false
 FORCE=false
 
@@ -54,7 +67,7 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Show usage
 usage() {
-    head -35 "$0" | grep '^#' | sed 's/^# \?//'
+    head -36 "$0" | grep '^#' | sed 's/^# \?//'
     exit 0
 }
 
@@ -67,6 +80,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --resource-group)
             RESOURCE_GROUP="$2"
+            shift 2
+            ;;
+        --match-mode)
+            MATCH_MODE="$2"
+            if [[ "$MATCH_MODE" != "startswith" && "$MATCH_MODE" != "contains" ]]; then
+                print_error "Invalid match mode '${MATCH_MODE}': must be 'startswith' or 'contains'"
+                exit 1
+            fi
             shift 2
             ;;
         --dry-run)
@@ -105,9 +126,25 @@ check_prerequisites() {
     fi
 
     if ! az account show >/dev/null 2>&1; then
-        print_error "Not logged in to Azure CLI"
-        echo "Run 'az login' to authenticate"
-        exit 1
+        # Try service principal login if AZURE_* env vars are set
+        if [[ -n "${AZURE_CLIENT_ID:-}" && -n "${AZURE_CLIENT_SECRET:-}" && -n "${AZURE_TENANT_ID:-}" ]]; then
+            print_info "Not logged in to Azure CLI, attempting service principal login..."
+            if ! az login --service-principal \
+                -u "$AZURE_CLIENT_ID" \
+                -p "$AZURE_CLIENT_SECRET" \
+                --tenant "$AZURE_TENANT_ID" >/dev/null 2>&1; then
+                print_error "Service principal login failed"
+                exit 1
+            fi
+            if [[ -n "${AZURE_SUBSCRIPTION_ID:-}" ]]; then
+                az account set --subscription "$AZURE_SUBSCRIPTION_ID" >/dev/null 2>&1
+            fi
+            print_success "Logged in via service principal"
+        else
+            print_error "Not logged in to Azure CLI"
+            echo "Run 'az login' to authenticate or set AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID"
+            exit 1
+        fi
     fi
 
     # Check for resource-graph extension
@@ -151,11 +188,10 @@ delete_resource_group() {
     fi
 
     echo ""
-    print_info "Deleting resource group '${rg_name}' (running in background)..."
+    print_info "Deleting resource group '${rg_name}' (this may take several minutes)..."
 
-    if az group delete --name "$rg_name" --yes --no-wait 2>/dev/null; then
-        print_success "Resource group deletion initiated"
-        print_warning "Note: Resource group deletion runs asynchronously and may take several minutes."
+    if az group delete --name "$rg_name" --yes 2>/dev/null; then
+        print_success "Resource group deleted"
     else
         print_error "Failed to delete resource group '${rg_name}'"
         return 1
@@ -166,16 +202,17 @@ delete_resource_group() {
 find_resources() {
     local prefix="$1"
 
-    print_info "Searching for Azure resources with prefix '${prefix}'..." >&2
+    print_info "Searching for Azure resources with prefix '${prefix}' (mode: ${MATCH_MODE})..." >&2
 
-    # Query Azure Resource Graph for resources matching the pattern
-    # We search for:
-    # 1. Resources with names starting with the prefix (e.g., catea, cateb, catec, etc.)
-    # 2. Resources with names containing the prefix pattern
-
-    # Build the query to find resources with the naming pattern
-    # The pattern is: prefix followed by optional suffix (e.g., catea, cateb, cate-stage, etc.)
-    local query="Resources | where name contains '${prefix}' | project id, name, type, resourceGroup, subscriptionId | order by type asc, name asc"
+    # Build the query based on match mode:
+    # - startswith (default): safer, only matches resources whose names begin with the prefix
+    # - contains: broader, matches resources whose names contain the prefix anywhere
+    local query
+    if [[ "$MATCH_MODE" == "startswith" ]]; then
+        query="Resources | where name startswith '${prefix}' | project id, name, type, resourceGroup, subscriptionId | order by type asc, name asc"
+    else
+        query="Resources | where name contains '${prefix}' | project id, name, type, resourceGroup, subscriptionId | order by type asc, name asc"
+    fi
 
     local resources_json
     resources_json=$(az graph query -q "$query" -o json 2>/dev/null)
@@ -337,6 +374,10 @@ delete_resources() {
         print_warning "Note: Deletions run asynchronously. Resources may take a few minutes to be fully removed."
         print_info "Run this script again to verify cleanup is complete."
     fi
+
+    if [[ "$failed" -gt 0 ]]; then
+        return 1
+    fi
 }
 
 # Display Azure AD Applications
@@ -435,6 +476,10 @@ delete_ad_applications() {
     print_info "Azure AD Application deletion summary:"
     echo "  - Deleted: ${deleted}"
     echo "  - Failed: ${failed}"
+
+    if [[ "$failed" -gt 0 ]]; then
+        return 1
+    fi
 }
 
 # Display Service Principals
@@ -537,6 +582,129 @@ delete_service_principals() {
     echo "  - Skipped (already deleted): ${skipped}"
 }
 
+# Find soft-deleted Key Vaults matching the prefix
+find_soft_deleted_vaults() {
+    local prefix="$1"
+
+    print_info "Searching for soft-deleted Key Vaults with prefix '${prefix}'..." >&2
+
+    # List all soft-deleted vaults first, then filter client-side.
+    # The JMESPath starts_with() filter can fail in some az CLI versions,
+    # so we use jq for reliable filtering.
+    local all_vaults_json
+    local error_output
+    error_output=$(mktemp)
+
+    all_vaults_json=$(az keyvault list-deleted -o json 2>"$error_output")
+    if [[ $? -ne 0 ]]; then
+        print_error "Failed to list soft-deleted Key Vaults" >&2
+        print_error "Azure CLI error: $(cat "$error_output")" >&2
+        rm -f "$error_output"
+        echo "[]"
+        return 1
+    fi
+    rm -f "$error_output"
+
+    # Filter by prefix using jq (reliable across all platforms)
+    local filtered
+    filtered=$(echo "$all_vaults_json" | jq --arg pfx "$prefix" '[.[] | select(.name | startswith($pfx)) | {name: .name, location: .properties.location, deletionDate: .properties.deletionDate}]' 2>/dev/null)
+    if [[ $? -ne 0 ]] || [[ -z "$filtered" ]]; then
+        echo "[]"
+        return
+    fi
+    echo "$filtered"
+}
+
+# Display soft-deleted Key Vaults
+display_soft_deleted_vaults() {
+    local vaults_json="$1"
+    local count
+
+    if [[ -z "$vaults_json" ]] || [[ "$vaults_json" == "[]" ]] || ! echo "$vaults_json" | jq -e '.' >/dev/null 2>&1; then
+        print_info "No soft-deleted Key Vaults found matching prefix '${PREFIX}'"
+        return 1
+    fi
+
+    count=$(echo "$vaults_json" | jq -r 'length // 0')
+
+    if [[ "$count" -eq 0 ]]; then
+        print_info "No soft-deleted Key Vaults found matching prefix '${PREFIX}'"
+        return 1
+    fi
+
+    echo ""
+    print_warning "Found ${count} soft-deleted Key Vault(s) matching prefix '${PREFIX}':"
+    echo ""
+
+    printf "%-40s | %-20s | %-30s\n" "NAME" "LOCATION" "DELETION DATE"
+    printf "%s\n" "$(printf '%.0s-' {1..95})"
+
+    echo "$vaults_json" | jq -r '.[] | "\(.name)|\(.location)|\(.deletionDate)"' | while IFS='|' read -r name location date; do
+        printf "%-40s | %-20s | %-30s\n" "$name" "$location" "$date"
+    done
+
+    echo ""
+    return 0
+}
+
+# Purge soft-deleted Key Vaults
+purge_soft_deleted_vaults() {
+    local vaults_json="$1"
+    local count
+    local purged=0
+    local failed=0
+
+    count=$(echo "$vaults_json" | jq -r 'length')
+
+    if [[ "$count" -eq 0 ]]; then
+        return 0
+    fi
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_warning "[DRY-RUN] Would purge ${count} soft-deleted Key Vault(s)"
+        return 0
+    fi
+
+    if [[ "$FORCE" != "true" ]]; then
+        echo ""
+        read -p "Purge all ${count} soft-deleted Key Vault(s)? [y/N] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_info "Key Vault purge cancelled"
+            return 0
+        fi
+    fi
+
+    echo ""
+    print_info "Purging soft-deleted Key Vaults..."
+    echo ""
+
+    while IFS='|' read -r name location; do
+        if [[ -z "$name" ]]; then
+            continue
+        fi
+
+        echo -n "  Purging: ${name} (${location})... "
+
+        if az keyvault purge --name "$name" --location "$location" --no-wait 2>/dev/null; then
+            echo "INITIATED"
+            ((purged++)) || true
+        else
+            echo "FAILED"
+            ((failed++)) || true
+        fi
+    done < <(echo "$vaults_json" | jq -r '.[] | "\(.name)|\(.location)"')
+
+    echo ""
+    print_info "Key Vault purge summary:"
+    echo "  - Initiated: ${purged}"
+    echo "  - Failed: ${failed}"
+
+    if [[ "$failed" -gt 0 ]]; then
+        return 1
+    fi
+}
+
 # Main function
 main() {
     echo "========================================"
@@ -544,6 +712,7 @@ main() {
     echo "========================================"
     echo ""
     print_info "Resource prefix: ${PREFIX}"
+    print_info "Match mode: ${MATCH_MODE}"
     if [[ -n "$RESOURCE_GROUP" ]]; then
         print_info "Resource group: ${RESOURCE_GROUP}"
     fi
@@ -556,13 +725,31 @@ main() {
     echo ""
 
     local found_any=false
+    local cleanup_failed=false
 
     # Delete resource group if specified (do this first)
     if [[ -n "$RESOURCE_GROUP" ]]; then
         if az group show --name "$RESOURCE_GROUP" >/dev/null 2>&1; then
             found_any=true
         fi
-        delete_resource_group "$RESOURCE_GROUP"
+        if ! delete_resource_group "$RESOURCE_GROUP"; then
+            cleanup_failed=true
+        fi
+    fi
+
+    # Find and purge soft-deleted Key Vaults
+    echo ""
+    local vaults_json
+    if ! vaults_json=$(find_soft_deleted_vaults "$PREFIX"); then
+        cleanup_failed=true
+        vaults_json="[]"
+    fi
+
+    if display_soft_deleted_vaults "$vaults_json"; then
+        found_any=true
+        if ! purge_soft_deleted_vaults "$vaults_json"; then
+            cleanup_failed=true
+        fi
     fi
 
     # Find and cleanup ARM resources
@@ -572,7 +759,9 @@ main() {
     # Display found resources
     if display_resources "$resources_json"; then
         found_any=true
-        delete_resources "$resources_json"
+        if ! delete_resources "$resources_json"; then
+            cleanup_failed=true
+        fi
     fi
 
     # Find and cleanup Azure AD Applications
@@ -582,7 +771,9 @@ main() {
 
     if display_ad_applications "$apps_json"; then
         found_any=true
-        delete_ad_applications "$apps_json"
+        if ! delete_ad_applications "$apps_json"; then
+            cleanup_failed=true
+        fi
     fi
 
     # Find and cleanup Service Principals
@@ -601,6 +792,11 @@ main() {
 
     echo ""
     echo "========================================"
+    if [[ "$cleanup_failed" == "true" ]]; then
+        echo "=== Cleanup FAILED ==="
+        echo "========================================"
+        return 1
+    fi
     echo "=== Cleanup Complete ==="
     echo "========================================"
 }
