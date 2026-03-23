@@ -3586,3 +3586,46 @@ func TestGenerateKindConfig_NoDockerConfig(t *testing.T) {
 		t.Error("Kind config file should not be created when Docker config is missing")
 	}
 }
+
+func TestRedactCommand(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "kubectl patch with AZURE_CLIENT_SECRET",
+			input: `kubectl patch secret aso -p {"stringData":{"AZURE_CLIENT_SECRET":"super-secret-value","AZURE_TENANT_ID":"tenant-123"}}`,
+			want:  `kubectl patch secret aso -p {"stringData":{"AZURE_CLIENT_SECRET":"***REDACTED***","AZURE_TENANT_ID":"tenant-123"}}`,
+		},
+		{
+			name:  "multiple sensitive keys",
+			input: `{"AZURE_CLIENT_SECRET":"sec1","clientSecret":"sec2","AWS_SECRET_ACCESS_KEY":"sec3"}`,
+			want:  `{"AZURE_CLIENT_SECRET":"***REDACTED***","clientSecret":"***REDACTED***","AWS_SECRET_ACCESS_KEY":"***REDACTED***"}`,
+		},
+		{
+			name:  "no sensitive data",
+			input: `kubectl get pods -n capz-system`,
+			want:  `kubectl get pods -n capz-system`,
+		},
+		{
+			name:  "empty string",
+			input: "",
+			want:  "",
+		},
+		{
+			name:  "non-sensitive JSON",
+			input: `kubectl patch -p {"stringData":{"AZURE_TENANT_ID":"tenant-123","AZURE_SUBSCRIPTION_ID":"sub-456"}}`,
+			want:  `kubectl patch -p {"stringData":{"AZURE_TENANT_ID":"tenant-123","AZURE_SUBSCRIPTION_ID":"sub-456"}}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := redactCommand(tt.input)
+			if got != tt.want {
+				t.Errorf("redactCommand() =\n  %s\nwant:\n  %s", got, tt.want)
+			}
+		})
+	}
+}
