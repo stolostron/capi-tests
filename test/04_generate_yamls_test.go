@@ -18,6 +18,11 @@ var infrastructureGenerationSucceeded bool
 // TestInfrastructure_01_ValidateCredentials validates that required environment variables
 // for YAML generation are set. This runs BEFORE gen.sh to provide clear error messages.
 func TestInfrastructure_01_ValidateCredentials(t *testing.T) {
+	// Check if config initialization failed
+	if configError != nil {
+		t.Fatalf("Configuration initialization failed: %s", *configError)
+	}
+
 	config := NewTestConfig()
 
 	PrintTestHeader(t, "TestInfrastructure_ValidateCredentials",

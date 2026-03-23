@@ -20,6 +20,10 @@ func getKubeconfigPath(config *TestConfig) string {
 
 // TestVerification_RetrieveKubeconfig tests retrieving the cluster kubeconfig
 func TestVerification_RetrieveKubeconfig(t *testing.T) {
+	// Check if config initialization failed
+	if configError != nil {
+		t.Fatalf("Configuration initialization failed: %s", *configError)
+	}
 
 	config := NewTestConfig()
 

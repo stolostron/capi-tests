@@ -3,7 +3,6 @@ package test
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -82,6 +81,11 @@ type ClusterMonitorStatus struct {
 // and easy cleanup. This namespace is where CAPI CRs (Cluster, AROControlPlane, MachinePool)
 // are deployed, which then create Azure resources.
 func TestDeployment_00_CreateNamespace(t *testing.T) {
+	// Check if config initialization failed
+	if configError != nil {
+		t.Fatalf("Configuration initialization failed: %s", *configError)
+	}
+
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
@@ -441,9 +445,7 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 		PrintToTTY("✅ Found clusterctl at: %s\n", clusterctlPath)
 	}
 
-	// Set kubectl context to Kind cluster
 	context := config.GetKubeContext()
-	SetEnvVar(t, "KUBECONFIG", fmt.Sprintf("%s/.kube/config", os.Getenv("HOME")))
 
 	// First, check if cluster resource exists
 	// Use the provisioned cluster name from the cluster YAML, not WORKLOAD_CLUSTER_NAME
