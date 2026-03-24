@@ -138,9 +138,25 @@ check_prerequisites() {
     fi
 
     if ! az account show >/dev/null 2>&1; then
-        print_error "Not logged in to Azure CLI"
-        echo "Run 'az login' to authenticate"
-        exit 1
+        # Try service principal login if AZURE_* env vars are set
+        if [[ -n "${AZURE_CLIENT_ID:-}" && -n "${AZURE_CLIENT_SECRET:-}" && -n "${AZURE_TENANT_ID:-}" ]]; then
+            print_info "Not logged in to Azure CLI, attempting service principal login..."
+            if ! az login --service-principal \
+                -u "$AZURE_CLIENT_ID" \
+                -p "$AZURE_CLIENT_SECRET" \
+                --tenant "$AZURE_TENANT_ID" >/dev/null 2>&1; then
+                print_error "Service principal login failed"
+                exit 1
+            fi
+            if [[ -n "${AZURE_SUBSCRIPTION_ID:-}" ]]; then
+                az account set --subscription "$AZURE_SUBSCRIPTION_ID" >/dev/null 2>&1
+            fi
+            print_success "Logged in via service principal"
+        else
+            print_error "Not logged in to Azure CLI"
+            echo "Run 'az login' to authenticate or set AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID"
+            exit 1
+        fi
     fi
 
     # Check for resource-graph extension
@@ -573,6 +589,108 @@ delete_service_principals() {
     echo "  - Skipped (already deleted): ${skipped}"
 }
 
+# Find soft-deleted Key Vaults matching the prefix
+find_soft_deleted_vaults() {
+    local prefix="$1"
+
+    print_info "Searching for soft-deleted Key Vaults with prefix '${prefix}'..." >&2
+
+    local vaults_json
+    vaults_json=$(az keyvault list-deleted --query "[?starts_with(name, '${prefix}')].{name: name, location: properties.location, deletionDate: properties.deletionDate}" -o json 2>/dev/null)
+    if [[ $? -ne 0 ]]; then
+        print_error "Failed to list soft-deleted Key Vaults with prefix '${prefix}'" >&2
+        echo "[]"
+        return
+    fi
+    echo "$vaults_json"
+}
+
+# Display soft-deleted Key Vaults
+display_soft_deleted_vaults() {
+    local vaults_json="$1"
+    local count
+
+    if [[ -z "$vaults_json" ]] || [[ "$vaults_json" == "[]" ]] || ! echo "$vaults_json" | jq -e '.' >/dev/null 2>&1; then
+        print_info "No soft-deleted Key Vaults found matching prefix '${PREFIX}'"
+        return 1
+    fi
+
+    count=$(echo "$vaults_json" | jq -r 'length // 0')
+
+    if [[ "$count" -eq 0 ]]; then
+        print_info "No soft-deleted Key Vaults found matching prefix '${PREFIX}'"
+        return 1
+    fi
+
+    echo ""
+    print_warning "Found ${count} soft-deleted Key Vault(s) matching prefix '${PREFIX}':"
+    echo ""
+
+    printf "%-40s | %-20s | %-30s\n" "NAME" "LOCATION" "DELETION DATE"
+    printf "%s\n" "$(printf '%.0s-' {1..95})"
+
+    echo "$vaults_json" | jq -r '.[] | "\(.name)|\(.location)|\(.deletionDate)"' | while IFS='|' read -r name location date; do
+        printf "%-40s | %-20s | %-30s\n" "$name" "$location" "$date"
+    done
+
+    echo ""
+    return 0
+}
+
+# Purge soft-deleted Key Vaults
+purge_soft_deleted_vaults() {
+    local vaults_json="$1"
+    local count
+    local purged=0
+    local failed=0
+
+    count=$(echo "$vaults_json" | jq -r 'length')
+
+    if [[ "$count" -eq 0 ]]; then
+        return 0
+    fi
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_warning "[DRY-RUN] Would purge ${count} soft-deleted Key Vault(s)"
+        return 0
+    fi
+
+    if [[ "$FORCE" != "true" ]]; then
+        echo ""
+        read -p "Purge all ${count} soft-deleted Key Vault(s)? [y/N] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_info "Key Vault purge cancelled"
+            return 0
+        fi
+    fi
+
+    echo ""
+    print_info "Purging soft-deleted Key Vaults..."
+    echo ""
+
+    while IFS='|' read -r name location; do
+        if [[ -z "$name" ]]; then
+            continue
+        fi
+
+        echo -n "  Purging: ${name} (${location})... "
+
+        if az keyvault purge --name "$name" --location "$location" --no-wait 2>/dev/null; then
+            echo "INITIATED"
+            ((purged++)) || true
+        else
+            echo "FAILED"
+            ((failed++)) || true
+        fi
+    done < <(echo "$vaults_json" | jq -r '.[] | "\(.name)|\(.location)"')
+
+    echo ""
+    print_info "Key Vault purge summary:"
+    echo "  - Initiated: ${purged}"
+    echo "  - Failed: ${failed}"
+}
+
 # Main function
 main() {
     echo "========================================"
@@ -600,6 +718,16 @@ main() {
             found_any=true
         fi
         delete_resource_group "$RESOURCE_GROUP"
+    fi
+
+    # Find and purge soft-deleted Key Vaults
+    echo ""
+    local vaults_json
+    vaults_json=$(find_soft_deleted_vaults "$PREFIX")
+
+    if display_soft_deleted_vaults "$vaults_json"; then
+        found_any=true
+        purge_soft_deleted_vaults "$vaults_json"
     fi
 
     # Find and cleanup ARM resources
