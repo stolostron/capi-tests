@@ -436,6 +436,9 @@ git push --force-with-lease
 git merge main  # Creates merge commits - avoid this
 ```
 
+**Conflict resolution during rebase:**
+When rebasing and conflicts arise, each conflict resolution must be shown to and approved by the user before proceeding. Show the conflict, the proposed resolution, and wait for explicit approval. Never silently resolve conflicts — changes can be lost.
+
 **Using the `/sync-main` command:**
 The `/sync-main` Claude Code command helps keep your branch updated with proper rebase workflow. It handles fetching, rebasing, and force pushing safely.
 
