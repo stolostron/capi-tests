@@ -19,7 +19,7 @@ fi
 export INFRA_PROVIDER=aro
 export CAPI_USER=prow
 export DEPLOYMENT_ENV=ci
-export REGION="${REGION:-uksouth}"
+export REGION="${LEASED_RESOURCE:-uksouth}"
 export OPERATORS_UAMIS_SUFFIX_FILE="/tmp/operators-uamis-suffix.txt"
 export ARO_REPO_URL="https://github.com/marek-veber/cluster-api-installer.git"
 export ARO_REPO_BRANCH="capi-tests"
