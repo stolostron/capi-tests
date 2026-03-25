@@ -712,15 +712,9 @@ main() {
 
     local found_any=false
 
-    # Delete resource group if specified (do this first)
-    if [[ -n "$RESOURCE_GROUP" ]]; then
-        if az group show --name "$RESOURCE_GROUP" >/dev/null 2>&1; then
-            found_any=true
-        fi
-        delete_resource_group "$RESOURCE_GROUP"
-    fi
-
-    # Find and purge soft-deleted Key Vaults
+    # Find and purge soft-deleted Key Vaults BEFORE deleting the resource group.
+    # RG deletion soft-deletes any Key Vaults inside it, but Azure needs time to
+    # register the soft-delete state. Purging first catches KVs from previous runs.
     echo ""
     local vaults_json
     vaults_json=$(find_soft_deleted_vaults "$PREFIX")
@@ -728,6 +722,14 @@ main() {
     if display_soft_deleted_vaults "$vaults_json"; then
         found_any=true
         purge_soft_deleted_vaults "$vaults_json"
+    fi
+
+    # Delete resource group (may soft-delete KVs — next run's purge will catch them)
+    if [[ -n "$RESOURCE_GROUP" ]]; then
+        if az group show --name "$RESOURCE_GROUP" >/dev/null 2>&1; then
+            found_any=true
+        fi
+        delete_resource_group "$RESOURCE_GROUP"
     fi
 
     # Find and cleanup ARM resources
