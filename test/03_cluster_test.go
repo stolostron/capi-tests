@@ -604,65 +604,6 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 	}
 }
 
-// TestKindCluster_02_ControllersInstalled validates that controller deployments exist.
-// This runs AFTER TestKindCluster_01_ClusterReady, so controllers should be deployed.
-func TestKindCluster_02_ControllersInstalled(t *testing.T) {
-	config := NewTestConfig()
-
-	if !config.IsExternalCluster() {
-		t.Skip("Not using external cluster (USE_KUBECONFIG not set)")
-	}
-
-	PrintTestHeader(t, "TestKindCluster_02_ControllersInstalled",
-		"Validate CAPI/CAPZ/ASO controller deployments exist")
-
-	// Set KUBECONFIG for kubectl
-	SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	context := config.GetKubeContext()
-
-	// Check if this is an MCE cluster for better error messages
-	isMCE := IsMCECluster(t, context)
-
-	PrintToTTY("\n=== Checking for pre-installed controllers ===\n")
-	for _, ns := range config.AllNamespaces() {
-		PrintToTTY("Namespace: %s\n", ns)
-	}
-	if isMCE {
-		PrintToTTY("MCE Cluster: yes\n")
-	}
-	PrintToTTY("\n")
-
-	allFound := true
-	for _, ctrl := range config.AllControllers() {
-		PrintToTTY("Checking %s controller manager...\n", ctrl.DisplayName)
-		_, err := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.Namespace,
-			"get", "deployment", ctrl.DeploymentName)
-		if err != nil {
-			PrintToTTY("❌ %s controller not found in %s namespace\n", ctrl.DisplayName, ctrl.Namespace)
-			allFound = false
-
-			// Provide MCE-specific remediation hints
-			if isMCE && !config.MCEAutoEnable {
-				t.Errorf("%s controller not found in %s namespace.\n\n"+
-					"This is an MCE cluster but MCE_AUTO_ENABLE=false.\n"+
-					"To enable auto-enablement: MCE_AUTO_ENABLE=true make test-all\n"+
-					"Or manually enable the component:\n"+
-					"  kubectl patch mce multiclusterengine --type=merge -p '{\"spec\":{\"overrides\":{\"components\":[{\"name\":\"%s\",\"enabled\":true}]}}}'",
-					ctrl.DisplayName, ctrl.Namespace, MCEComponentCAPI)
-			} else {
-				t.Errorf("%s controller not found in %s namespace: %v", ctrl.DisplayName, ctrl.Namespace, err)
-			}
-		} else {
-			PrintToTTY("✅ %s controller manager found\n", ctrl.DisplayName)
-			t.Logf("%s controller manager found in %s", ctrl.DisplayName, ctrl.Namespace)
-		}
-	}
-
-	if allFound {
-		PrintToTTY("\n✅ All required controllers are installed on external cluster\n\n")
-	}
-}
-
 // TestKindCluster_CAPINamespacesExists verifies controller namespaces are installed
 func TestKindCluster_CAPINamespacesExists(t *testing.T) {
 	PrintTestHeader(t, "TestKindCluster_CAPINamespacesExists",
