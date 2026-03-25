@@ -296,87 +296,6 @@ func TestExternalCluster_02_EnsureMCEComponents(t *testing.T) {
 	}
 }
 
-// TestExternalCluster_03_ControllersReady validates CAPI/CAPZ/ASO controllers are installed.
-// This test runs only when USE_KUBECONFIG is set, validating pre-installed controllers.
-// If controllers are missing, it provides remediation hints based on whether this is an MCE cluster.
-// TestKindCluster_02_ControllersInstalled validates that controller deployments exist.
-// This runs AFTER TestKindCluster_01_ClusterReady, so controllers should be deployed.
-func TestKindCluster_02_ControllersInstalled(t *testing.T) {
-	config := NewTestConfig()
-
-	if !config.IsExternalCluster() {
-		t.Skip("Not using external cluster (USE_KUBECONFIG not set)")
-	}
-
-	PrintTestHeader(t, "TestKindCluster_02_ControllersInstalled",
-		"Validate CAPI/CAPZ/ASO controller deployments exist")
-
-	// Set KUBECONFIG for kubectl
-	SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	context := config.GetKubeContext()
-
-	// Check if this is an MCE cluster for better error messages
-	isMCE := IsMCECluster(t, context)
-
-	PrintToTTY("\n=== Checking for pre-installed controllers ===\n")
-	for _, ns := range config.AllNamespaces() {
-		PrintToTTY("Namespace: %s\n", ns)
-	}
-	if isMCE {
-		PrintToTTY("MCE Cluster: yes\n")
-	}
-	PrintToTTY("\n")
-
-	allFound := true
-	for _, ctrl := range config.AllControllers() {
-		PrintToTTY("Checking %s controller manager...\n", ctrl.DisplayName)
-		_, err := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.Namespace,
-			"get", "deployment", ctrl.DeploymentName)
-		if err != nil {
-			PrintToTTY("❌ %s controller not found in %s namespace\n", ctrl.DisplayName, ctrl.Namespace)
-			allFound = false
-
-			// Provide MCE-specific remediation hints
-			if isMCE && !config.MCEAutoEnable {
-				// Determine the correct MCE component name for this controller
-				mceComponentName := MCEComponentCAPI // default to CAPI core
-
-				// Check if this is a provider-specific controller (not CAPI core)
-				if ctrl.DisplayName != "CAPI" {
-					// Find which provider owns this controller
-					for _, provider := range config.InfraProviders {
-						for _, providerCtrl := range provider.Controllers {
-							if providerCtrl.DisplayName == ctrl.DisplayName {
-								mceComponentName = provider.MCEComponentName
-								break
-							}
-						}
-					}
-				}
-
-				t.Errorf("%s controller not found in %s namespace.\n\n"+
-					"This is an MCE cluster but MCE_AUTO_ENABLE=false.\n"+
-					"To enable auto-enablement: MCE_AUTO_ENABLE=true make test-all\n"+
-					"Or manually enable the component with this safe command:\n"+
-					"  kubectl patch mce multiclusterengine --type=merge -p \\\n"+
-					"    \"{\\\"spec\\\":{\\\"overrides\\\":{\\\"components\\\":$(kubectl get mce multiclusterengine -o json | \\\n"+
-					"    jq -c '.spec.overrides.components | map(if .name == \\\"%s\\\" then .enabled = true else . end)')}}}\"\n"+
-					"This preserves all other component settings.",
-					ctrl.DisplayName, ctrl.Namespace, mceComponentName)
-			} else {
-				t.Errorf("%s controller not found in %s namespace: %v", ctrl.DisplayName, ctrl.Namespace, err)
-			}
-		} else {
-			PrintToTTY("✅ %s controller manager found\n", ctrl.DisplayName)
-			t.Logf("%s controller manager found in %s", ctrl.DisplayName, ctrl.Namespace)
-		}
-	}
-
-	if allFound {
-		PrintToTTY("\n✅ All required controllers are installed on external cluster\n\n")
-	}
-}
-
 // TestKindCluster_01_ClusterReady deploys controllers to the management cluster and verifies it's ready.
 // For Kind mode: creates Kind cluster and deploys controllers.
 // For external mode with DEPLOY_CHARTS=true: deploys controllers to existing cluster.
@@ -601,6 +520,84 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 	} else {
 		PrintToTTY("📝 Deployment state saved to %s\n", DeploymentStateFile)
 		t.Logf("Deployment state saved to %s", DeploymentStateFile)
+	}
+}
+
+// TestKindCluster_02_ControllersInstalled validates that controller deployments exist.
+// This runs AFTER TestKindCluster_01_ClusterReady, so controllers should be deployed.
+func TestKindCluster_02_ControllersInstalled(t *testing.T) {
+	config := NewTestConfig()
+
+	if !config.IsExternalCluster() {
+		t.Skip("Not using external cluster (USE_KUBECONFIG not set)")
+	}
+
+	PrintTestHeader(t, "TestKindCluster_02_ControllersInstalled",
+		"Validate CAPI/CAPZ/ASO controller deployments exist")
+
+	// Set KUBECONFIG for kubectl
+	SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	context := config.GetKubeContext()
+
+	// Check if this is an MCE cluster for better error messages
+	isMCE := IsMCECluster(t, context)
+
+	PrintToTTY("\n=== Checking for pre-installed controllers ===\n")
+	for _, ns := range config.AllNamespaces() {
+		PrintToTTY("Namespace: %s\n", ns)
+	}
+	if isMCE {
+		PrintToTTY("MCE Cluster: yes\n")
+	}
+	PrintToTTY("\n")
+
+	allFound := true
+	for _, ctrl := range config.AllControllers() {
+		PrintToTTY("Checking %s controller manager...\n", ctrl.DisplayName)
+		_, err := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.Namespace,
+			"get", "deployment", ctrl.DeploymentName)
+		if err != nil {
+			PrintToTTY("❌ %s controller not found in %s namespace\n", ctrl.DisplayName, ctrl.Namespace)
+			allFound = false
+
+			// Provide MCE-specific remediation hints
+			if isMCE && !config.MCEAutoEnable {
+				// Determine the correct MCE component name for this controller
+				mceComponentName := MCEComponentCAPI // default to CAPI core
+
+				// Check if this is a provider-specific controller (not CAPI core)
+				if ctrl.DisplayName != "CAPI" {
+					// Find which provider owns this controller
+					for _, provider := range config.InfraProviders {
+						for _, providerCtrl := range provider.Controllers {
+							if providerCtrl.DisplayName == ctrl.DisplayName {
+								mceComponentName = provider.MCEComponentName
+								break
+							}
+						}
+					}
+				}
+
+				t.Errorf("%s controller not found in %s namespace.\n\n"+
+					"This is an MCE cluster but MCE_AUTO_ENABLE=false.\n"+
+					"To enable auto-enablement: MCE_AUTO_ENABLE=true make test-all\n"+
+					"Or manually enable the component with this safe command:\n"+
+					"  kubectl patch mce multiclusterengine --type=merge -p \\\n"+
+					"    \"{\\\"spec\\\":{\\\"overrides\\\":{\\\"components\\\":$(kubectl get mce multiclusterengine -o json | \\\n"+
+					"    jq -c '.spec.overrides.components | map(if .name == \\\"%s\\\" then .enabled = true else . end)')}}}\"\n"+
+					"This preserves all other component settings.",
+					ctrl.DisplayName, ctrl.Namespace, mceComponentName)
+			} else {
+				t.Errorf("%s controller not found in %s namespace: %v", ctrl.DisplayName, ctrl.Namespace, err)
+			}
+		} else {
+			PrintToTTY("✅ %s controller manager found\n", ctrl.DisplayName)
+			t.Logf("%s controller manager found in %s", ctrl.DisplayName, ctrl.Namespace)
+		}
+	}
+
+	if allFound {
+		PrintToTTY("\n✅ All required controllers are installed on external cluster\n\n")
 	}
 }
 
