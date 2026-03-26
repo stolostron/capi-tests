@@ -37,6 +37,19 @@ export USE_K8S=false
 # ARO HCP provisioning can take 60+ minutes in CI; increase from default 60m.
 export DEPLOYMENT_TIMEOUT=90m
 
+# Randomize NAME_PREFIX per run to avoid Azure Key Vault name collisions.
+# KV names are globally unique with mandatory soft-delete — reusing a static
+# name fails with VaultAlreadyExists if a previous run's vault wasn't purged.
+# The first step to source this file generates the suffix; subsequent steps
+# read the same value from SHARED_DIR.
+NAME_PREFIX_FILE="${SHARED_DIR:-/tmp}/name-prefix"
+if [[ -f "$NAME_PREFIX_FILE" ]]; then
+  export NAME_PREFIX=$(cat "$NAME_PREFIX_FILE")
+else
+  export NAME_PREFIX="${WORKLOAD_CLUSTER_NAME:-capz-tests}-$(openssl rand -hex 2)"
+  echo "$NAME_PREFIX" > "$NAME_PREFIX_FILE"
+fi
+
 # WORKLOAD_CLUSTER_NAMESPACE is set at the steps.env level in the ci-operator
 # config, so all steps share the same fixed namespace without needing to pass
 # it through SHARED_DIR files.
