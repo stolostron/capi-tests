@@ -125,7 +125,7 @@ jobs:
 
       # MCE credentials (only required when cluster_mode=mce)
       MCE_API_URL: ${{ vars.MCE_API_URL }}
-      MCE_KUBEADMIN_PASSWORD: ${{ secrets.MCE_KUBEADMIN_PASSWORD }}
+      MCE_API_PASSWORD: ${{ secrets.MCE_API_PASSWORD }}
 
     steps:
     - name: Validate credentials
@@ -160,7 +160,7 @@ jobs:
         if [ "$CLUSTER_MODE" = "mce" ]; then
           missing=""
           [ -z "$MCE_API_URL" ] && missing="$missing vars.MCE_API_URL"
-          [ -z "$MCE_KUBEADMIN_PASSWORD" ] && missing="$missing secrets.MCE_KUBEADMIN_PASSWORD"
+          [ -z "$MCE_API_PASSWORD" ] && missing="$missing secrets.MCE_API_PASSWORD"
           if [ -n "$missing" ]; then
             echo "::error::MCE mode selected but missing credentials:$missing"
             echo "Configure in Settings > Environments > ${{ inputs.environment }}"
