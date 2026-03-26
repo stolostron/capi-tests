@@ -96,6 +96,17 @@ Tests are configured via environment variables:
 
 - `INFRA_PROVIDER` - Infrastructure provider to use (values: `aro`, `rosa`; default: `aro`)
 
+### AWS/ROSA Authentication
+
+When using `INFRA_PROVIDER=rosa`, the following credentials are required:
+
+- `AWS_ACCESS_KEY_ID` - AWS access key ID
+- `AWS_SECRET_ACCESS_KEY` - AWS secret access key
+- `AWS_REGION` - AWS region (default: `us-east-1`)
+- `OCM_API_URL` - OpenShift Cluster Manager API URL
+- `OCM_CLIENT_ID` - OCM OAuth client ID
+- `OCM_CLIENT_SECRET` - OCM OAuth client secret
+
 ### Cluster Configuration
 
 - `MANAGEMENT_CLUSTER_NAME` - Management cluster name (default: `capz-tests-stage` for ARO, `capa-tests-stage` for ROSA)
@@ -103,7 +114,7 @@ Tests are configured via environment variables:
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests` for ARO, `capa-tests` for ROSA). Keep short due to cloud provider length limits
 - `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation (default: `${CAPI_USER}-${DEPLOYMENT_ENV}`). The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`.
-- `OCP_VERSION` - OpenShift version (default: `4.21`)
+- `OCP_VERSION` - OpenShift version (default: `4.20`)
 - `REGION` - Azure region (default: `uksouth`)
 - `AZURE_SUBSCRIPTION_NAME` - Azure subscription ID
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`)
@@ -141,6 +152,12 @@ export CS_CLUSTER_NAME=-my-cluster  # Invalid - starts with hyphen
 
 The test suite validates naming compliance during the Check Dependencies phase (phase 1), preventing late failures during CR deployment (phase 5).
 
+### Cluster Mode
+
+- `CLUSTER_MODE` - Management cluster deployment mode (values: `kind`, `mce`). When set:
+  - `kind`: Automatically sets `USE_KIND=true` for local Kind cluster deployment
+  - `mce`: Configures external MCE cluster mode — auto-creates kubeconfig, sets `USE_KUBECONFIG`, disables chart deployment by default
+
 ### Kind Mode
 
 - `USE_KIND` - Enable Kind deployment mode (default: `false`). When set to `true`:
@@ -150,6 +167,20 @@ The test suite validates naming compliance during the Check Dependencies phase (
 
 - `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `60m`). Use Go duration format: `1h`, `45m`, `90m`, etc.
 - `TEST_VERBOSITY` - Test output verbosity (default: `-v` for verbose). Set to empty string for quiet output: `TEST_VERBOSITY= make test`
+
+#### Makefile Timeout Variables
+
+Individual test phase timeouts can be overridden via Makefile variables:
+
+| Variable | Default | Phase |
+|----------|---------|-------|
+| `CLUSTER_TIMEOUT` | `30m` | Management cluster deployment |
+| `GENERATE_YAMLS_TIMEOUT` | `20m` | YAML generation |
+| `DEPLOY_CRS_TIMEOUT` | `60m` | CR deployment and monitoring |
+| `VERIFY_TIMEOUT` | `20m` | Workload cluster verification |
+| `DELETION_TIMEOUT` | `60m` | Workload cluster deletion |
+
+Example: `DEPLOY_CRS_TIMEOUT=90m make _deploy-crs`
 
 ## Getting Started
 
@@ -280,7 +311,7 @@ These targets are called by `make test-all` but can be run individually for debu
 | `make clean` | Interactive cleanup - prompts before deleting each resource |
 | `make clean-all` | Delete ALL resources without prompting (local + Azure) |
 | `FORCE=1 make clean` | Same as `make clean-all` |
-| `make clean-azure` | Delete only Azure resource group (interactive) |
+| `make clean-azure` | Delete all Azure resources (RG, orphaned resources, AD apps, SPs) |
 
 #### Setup and Prerequisites
 
@@ -383,7 +414,7 @@ For automated workflows (CI/CD, scripts) or quick full resets, use:
 - `FORCE=1 make clean` - equivalent to `make clean-all`
 
 **Azure Resource Cleanup**: The cleanup commands now include Azure resource group deletion:
-- Uses `--no-wait` for non-blocking deletion (deletion continues in background)
+- Uses synchronous `--yes` deletion (waits for completion before orphan cleanup)
 - Gracefully skips if Azure CLI is not installed or not logged in
 - Checks if resource group exists before attempting deletion
 - The resource group name is derived from `${CAPI_USER}-${DEPLOYMENT_ENV}-resgroup` (default: `cate-stage-resgroup`)
@@ -435,7 +466,11 @@ test/
 ├── 07_deletion_test.go            # Workload cluster deletion
 ├── 08_cleanup_test.go             # Cleanup validation
 ├── config.go                      # Configuration management
+├── config_test.go                 # Configuration validation tests
 ├── helpers.go                     # Shared utilities
+├── helpers_test.go                # Helper function tests
+├── cluster_monitor_test.go        # Cluster monitoring utilities
+├── start_test.go                  # Test suite entry point
 └── README.md                      # Detailed test documentation
 ```
 
@@ -443,10 +478,22 @@ For detailed test documentation, see [test/README.md](test/README.md).
 
 ## CI/CD Integration
 
-The test suite integrates with GitHub Actions for continuous testing:
+The test suite integrates with GitHub Actions:
 
-- **Check Dependencies Workflow** - Runs dependency checks on every push
-- **Full Test Workflow** - Can be triggered manually for complete validation
+**Test Workflows:**
+- **Management Cluster (ARO)** - ARO management cluster deployment tests
+- **Management Cluster (ROSA)** - ROSA management cluster deployment tests
+- **Full Cluster Deployment (ARO)** - Complete ARO workload cluster lifecycle
+- **Full Cluster Deployment (ROSA)** - Complete ROSA workload cluster lifecycle
+- **Check Dependencies** - Dependency checks on every push
+- **Test Setup** - Repository setup validation
+- **Test Kind Cluster** - Kind cluster deployment tests
+
+**Security Scanning:**
+- **govulncheck** - Go vulnerability scanning
+- **gosec** - Go security analysis
+- **Trivy** - Container and dependency vulnerability scanning
+- **nancy** - Go dependency vulnerability auditing
 
 ## Contributing
 
