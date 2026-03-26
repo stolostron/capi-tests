@@ -509,8 +509,7 @@ The test suite integrates with GitHub Actions:
 | Variable | `DEPLOYMENT_ENV` | Environment identifier (e.g., `stage`) |
 | Secret | `AZURE_CLIENT_SECRET` | Service principal secret |
 | Variable | `MCE_API_URL` | MCE cluster API endpoint (optional, for MCE mode) |
-| Variable | `MCE_API_USER` | MCE cluster username (optional, default: `kubeadmin`) |
-| Secret | `MCE_API_PASSWORD` | MCE cluster password (optional, for MCE mode) |
+| Secret | `MCE_KUBEADMIN_PASSWORD` | MCE kubeadmin password (optional, for MCE mode) |
 
 **GitHub Actions Environment: `rosa-stage`** (used by ROSA workflows):
 
@@ -524,8 +523,7 @@ The test suite integrates with GitHub Actions:
 | Secret | `AWS_SECRET_ACCESS_KEY` | AWS secret access key |
 | Secret | `OCM_CLIENT_SECRET` | OCM OAuth client secret |
 | Variable | `MCE_API_URL` | MCE cluster API endpoint (optional, for MCE mode) |
-| Variable | `MCE_API_USER` | MCE cluster username (optional, default: `kubeadmin`) |
-| Secret | `MCE_API_PASSWORD` | MCE cluster password (optional, for MCE mode) |
+| Secret | `MCE_KUBEADMIN_PASSWORD` | MCE kubeadmin password (optional, for MCE mode) |
 
 ## Contributing
 
