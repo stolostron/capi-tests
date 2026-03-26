@@ -753,8 +753,8 @@ purge_soft_deleted_vaults() {
 
         echo -n "  Purging: ${name} (${location})... "
 
-        if az keyvault purge --name "$name" --location "$location" --no-wait 2>/dev/null; then
-            echo "INITIATED"
+        if az keyvault purge --name "$name" --location "$location" 2>/dev/null; then
+            echo "PURGED"
             ((purged++)) || true
         else
             echo "FAILED"
@@ -764,7 +764,7 @@ purge_soft_deleted_vaults() {
 
     echo ""
     print_info "Key Vault purge summary:"
-    echo "  - Initiated: ${purged}"
+    echo "  - Purged: ${purged}"
     echo "  - Failed: ${failed}"
 }
 
@@ -908,9 +908,41 @@ main() {
 
     # Prefix-based cleanup mode (original behavior)
 
-    # Find and purge soft-deleted Key Vaults BEFORE deleting the resource group.
-    # RG deletion soft-deletes any Key Vaults inside it, but Azure needs time to
-    # register the soft-delete state. Purging first catches KVs from previous runs.
+    # Clean up Key Vaults in ANY state before deleting the resource group.
+    # Step 1: Soft-delete active KVs in the RG (moves them to soft-deleted state).
+    # Step 2: Purge all soft-deleted KVs (from step 1 + leftovers from older runs).
+    # This must happen before RG deletion — otherwise deleting the RG soft-deletes
+    # its KVs and Azure rejects new KVs with the same name.
+    if [[ -n "$RESOURCE_GROUP" ]] && az group show --name "$RESOURCE_GROUP" >/dev/null 2>&1; then
+        echo ""
+        print_info "Searching for active Key Vaults in '${RESOURCE_GROUP}' with prefix '${PREFIX}'..."
+        local active_kvs
+        active_kvs=$(az keyvault list --resource-group "$RESOURCE_GROUP" \
+            --query "[?starts_with(name, '${PREFIX}')].{name: name, location: location}" -o json 2>/dev/null || echo "[]")
+        local active_count
+        active_count=$(echo "$active_kvs" | jq -r 'length // 0')
+
+        if [[ "$active_count" -gt 0 ]]; then
+            found_any=true
+            print_warning "Found ${active_count} active Key Vault(s) — deleting before RG removal..."
+            while IFS='|' read -r name _location; do
+                [[ -z "$name" ]] && continue
+                if [[ "$DRY_RUN" == "true" ]]; then
+                    print_warning "[DRY-RUN] Would delete active Key Vault '${name}'"
+                else
+                    echo -n "  Deleting: ${name}... "
+                    if az keyvault delete --name "$name" 2>/dev/null; then
+                        echo "OK (soft-deleted)"
+                    else
+                        echo "FAILED"
+                    fi
+                fi
+            done < <(echo "$active_kvs" | jq -r '.[] | "\(.name)|\(.location)"')
+        else
+            print_info "No active Key Vaults found in '${RESOURCE_GROUP}'"
+        fi
+    fi
+
     echo ""
     local vaults_json
     vaults_json=$(find_soft_deleted_vaults "$PREFIX")
@@ -920,7 +952,7 @@ main() {
         purge_soft_deleted_vaults "$vaults_json"
     fi
 
-    # Delete resource group (may soft-delete KVs — next run's purge will catch them)
+    # Delete resource group (KVs already purged — nothing left to soft-delete)
     if [[ -n "$RESOURCE_GROUP" ]]; then
         if az group show --name "$RESOURCE_GROUP" >/dev/null 2>&1; then
             found_any=true
