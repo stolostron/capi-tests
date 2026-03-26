@@ -96,14 +96,16 @@ func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 	}
 
 	mceAPIURL := GetEnvOrDefault("MCE_API_URL", "")
-	mcePassword := GetEnvOrDefault("MCE_KUBEADMIN_PASSWORD", "")
+	mceUser := GetEnvOrDefault("MCE_API_USER", "kubeadmin")
+	mcePassword := GetEnvOrDefault("MCE_API_PASSWORD", "")
 
 	// Fail if MCE mode but credentials missing
 	if mceAPIURL == "" || mcePassword == "" {
 		t.Fatalf("CLUSTER_MODE=mce but MCE credentials not provided\n\n"+
 			"Required environment variables:\n"+
 			"  - MCE_API_URL: MCE cluster API URL\n"+
-			"  - MCE_KUBEADMIN_PASSWORD: kubeadmin password\n\n"+
+			"  - MCE_API_USER: MCE cluster username (default: kubeadmin)\n"+
+			"  - MCE_API_PASSWORD: MCE cluster password\n\n"+
 			"Configure these in your environment or GitHub workflow.")
 	}
 
@@ -130,7 +132,7 @@ func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 	// oc login will prompt for password and read it from stdin
 	output, err := RunCommandWithStdin(t, mcePassword+"\n", "oc", "login", mceAPIURL,
 		"--insecure-skip-tls-verify",
-		"-u", "kubeadmin")
+		"-u", mceUser)
 
 	if err != nil {
 		PrintToTTY("❌ Failed to login to MCE cluster\n\n")
@@ -142,7 +144,7 @@ func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 		PrintToTTY("%s\n\n", ocVersion)
 		t.Fatalf("MCE authentication failed: %v\n\nOutput: %s\n\n"+
 			"KUBECONFIG: %s\n"+
-			"Ensure MCE_API_URL and MCE_KUBEADMIN_PASSWORD are correct.", err, output, os.Getenv("KUBECONFIG"))
+			"Ensure MCE_API_URL, MCE_API_USER, and MCE_API_PASSWORD are correct.", err, output, os.Getenv("KUBECONFIG"))
 	}
 
 	PrintToTTY("✅ Successfully logged into MCE cluster\n\n")
