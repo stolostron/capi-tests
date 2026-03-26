@@ -495,6 +495,9 @@ The test suite integrates with GitHub Actions:
 - **Trivy** - Container and dependency vulnerability scanning
 - **nancy** - Go dependency vulnerability auditing
 
+**Required Repository Secrets:**
+- `QUAY_AUTH` - Base64-encoded quay.io credentials for pulling container images (required by all cluster workflows)
+
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
