@@ -498,6 +498,33 @@ The test suite integrates with GitHub Actions:
 **Required Repository Secrets:**
 - `QUAY_AUTH` - Base64-encoded quay.io credentials for pulling container images (required by all cluster workflows)
 
+**GitHub Actions Environment: `aro-stage`** (used by ARO workflows):
+
+| Type | Name | Purpose |
+|------|------|---------|
+| Variable | `AZURE_TENANT_ID` | Azure tenant ID |
+| Variable | `AZURE_SUBSCRIPTION_ID` | Azure subscription ID |
+| Variable | `AZURE_CLIENT_ID` | Service principal client ID |
+| Variable | `REGION` | Azure region (e.g., `uksouth`) |
+| Variable | `DEPLOYMENT_ENV` | Environment identifier (e.g., `stage`) |
+| Secret | `AZURE_CLIENT_SECRET` | Service principal secret |
+| Variable | `MCE_API_URL` | MCE cluster API endpoint (optional, for MCE mode) |
+| Secret | `MCE_KUBEADMIN_PASSWORD` | MCE kubeadmin password (optional, for MCE mode) |
+
+**GitHub Actions Environment: `rosa-stage`** (used by ROSA workflows):
+
+| Type | Name | Purpose |
+|------|------|---------|
+| Variable | `AWS_REGION` | AWS region (e.g., `us-east-1`) |
+| Variable | `OCM_API_URL` | OpenShift Cluster Manager API URL |
+| Variable | `OCM_CLIENT_ID` | OCM OAuth client ID |
+| Variable | `DEPLOYMENT_ENV` | Environment identifier (e.g., `stage`) |
+| Secret | `AWS_ACCESS_KEY_ID` | AWS access key ID |
+| Secret | `AWS_SECRET_ACCESS_KEY` | AWS secret access key |
+| Secret | `OCM_CLIENT_SECRET` | OCM OAuth client secret |
+| Variable | `MCE_API_URL` | MCE cluster API endpoint (optional, for MCE mode) |
+| Secret | `MCE_KUBEADMIN_PASSWORD` | MCE kubeadmin password (optional, for MCE mode) |
+
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
