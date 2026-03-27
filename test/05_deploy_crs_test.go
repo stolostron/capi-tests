@@ -545,6 +545,17 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 
 		if elapsed > timeout {
 			PrintToTTY("\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
+
+			// Dump diagnostics for not-ready infrastructure resources
+			monitorScript := "../scripts/monitor-cluster-json.sh"
+			if diagJSON, diagErr := RunCommandQuiet(t, monitorScript, "--context", context, config.WorkloadClusterNamespace, provisionedClusterName); diagErr == nil {
+				var diagStatus ClusterMonitorStatus
+				if json.Unmarshal([]byte(diagJSON), &diagStatus) == nil {
+					infraStatus := GetInfrastructureResourceStatusFromParsed(diagStatus.Infrastructure.Resources, diagStatus.Infrastructure.Conditions)
+					DumpNotReadyResourceDiagnostics(t, context, config.WorkloadClusterNamespace, infraStatus.NotReady)
+				}
+			}
+
 			t.Errorf("Timeout waiting for deployment after %v.\n"+
 				"  ControlPlane ready: %v\n"+
 				"  MachinePool ready: %v\n\n"+
@@ -785,6 +796,16 @@ func TestDeployment_VerifyInfrastructureResources(t *testing.T) {
 
 		if elapsed > timeout {
 			PrintToTTY("\n❌ Timeout reached after %v waiting for NetworkInfrastructureReady\n\n", elapsed.Round(time.Second))
+
+			// Dump diagnostics for not-ready infrastructure resources
+			if diagJSON, diagErr := RunCommandQuiet(t, "../scripts/monitor-cluster-json.sh", "--context", context, config.WorkloadClusterNamespace, provisionedClusterName); diagErr == nil {
+				var diagStatus ClusterMonitorStatus
+				if json.Unmarshal([]byte(diagJSON), &diagStatus) == nil {
+					infraStatus := GetInfrastructureResourceStatusFromParsed(diagStatus.Infrastructure.Resources, diagStatus.Infrastructure.Conditions)
+					DumpNotReadyResourceDiagnostics(t, context, config.WorkloadClusterNamespace, infraStatus.NotReady)
+				}
+			}
+
 			t.Fatalf("Timeout waiting for NetworkInfrastructureReady after %v.\n\n"+
 				"Check AROCluster status:\n"+
 				"  kubectl --context %s -n %s get arocluster %s -o yaml",

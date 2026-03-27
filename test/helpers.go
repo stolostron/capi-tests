@@ -1147,6 +1147,15 @@ func FormatInfrastructureProgress(status InfrastructureResourceStatus) string {
 
 	sb.WriteString("└" + border + "┘\n")
 
+	// List not-ready resources by name for diagnostics
+	if len(status.NotReady) > 0 {
+		sb.WriteString(fmt.Sprintf("  ⏳ Not ready (%d):", len(status.NotReady)))
+		for _, r := range status.NotReady {
+			sb.WriteString(fmt.Sprintf(" %s/%s", r.Resource.Kind, r.Resource.Name))
+		}
+		sb.WriteString("\n")
+	}
+
 	return sb.String()
 }
 
@@ -1159,6 +1168,65 @@ func ReportInfrastructureProgress(t *testing.T, iteration int, elapsed, remainin
 
 	// Log summary for test output
 	t.Logf("Infrastructure progress: %d/%d resources reconciled", status.ReadyResources, status.TotalResources)
+}
+
+// DumpNotReadyResourceDiagnostics fetches conditions and events for not-ready ASO resources.
+// Call this on timeout to understand why specific resources are stuck.
+func DumpNotReadyResourceDiagnostics(t *testing.T, context, namespace string, notReady []AROClusterResourceStatus) {
+	t.Helper()
+
+	if len(notReady) == 0 {
+		return
+	}
+
+	PrintToTTY("\n=== DIAGNOSTICS: Not-ready infrastructure resources ===\n")
+	t.Logf("Dumping diagnostics for %d not-ready resources", len(notReady))
+
+	for _, r := range notReady {
+		resourceType := strings.ToLower(r.Resource.Kind) + "s"
+		if r.Resource.Group != "" {
+			resourceType = resourceType + "." + r.Resource.Group
+		}
+
+		PrintToTTY("\n--- %s/%s ---\n", r.Resource.Kind, r.Resource.Name)
+
+		// Fetch resource conditions
+		condOutput, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", namespace,
+			"get", resourceType, r.Resource.Name,
+			"-o", "jsonpath={range .status.conditions[*]}{.type}: {.status} ({.reason}) {.message}{\"\\n\"}{end}")
+		if err == nil && strings.TrimSpace(condOutput) != "" {
+			PrintToTTY("Conditions:\n%s\n", condOutput)
+			t.Logf("%s/%s conditions:\n%s", r.Resource.Kind, r.Resource.Name, condOutput)
+		} else if err != nil {
+			PrintToTTY("Could not fetch conditions: %v\n", err)
+		}
+
+		// Fetch events related to this resource
+		evtOutput, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", namespace,
+			"get", "events",
+			"--field-selector", fmt.Sprintf("involvedObject.name=%s", r.Resource.Name),
+			"--sort-by=.lastTimestamp",
+			"--request-timeout=10s")
+		if err == nil && strings.TrimSpace(evtOutput) != "" {
+			PrintToTTY("Events:\n%s\n", evtOutput)
+			t.Logf("%s/%s events:\n%s", r.Resource.Kind, r.Resource.Name, evtOutput)
+		}
+	}
+
+	// Also dump recent namespace events for broader context
+	PrintToTTY("\n--- Recent events in namespace %s ---\n", namespace)
+	evtOutput, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", namespace,
+		"get", "events", "--sort-by=.lastTimestamp", "--request-timeout=10s")
+	if err == nil && strings.TrimSpace(evtOutput) != "" {
+		// Show last 30 lines to avoid flooding
+		lines := strings.Split(evtOutput, "\n")
+		if len(lines) > 31 {
+			PrintToTTY("(showing last 30 of %d events)\n", len(lines)-1)
+			lines = append(lines[:1], lines[len(lines)-30:]...) // header + last 30
+		}
+		PrintToTTY("%s\n", strings.Join(lines, "\n"))
+	}
+	PrintToTTY("=== END DIAGNOSTICS ===\n\n")
 }
 
 // EnsureAzureCredentialsSet ensures Azure credentials are available as environment variables.
