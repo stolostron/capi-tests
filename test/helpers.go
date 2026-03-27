@@ -86,12 +86,15 @@ func RunCommand(t *testing.T, name string, args ...string) (string, error) {
 		cmdStr = fmt.Sprintf("%s %s", name, strings.Join(args, " "))
 	}
 
+	// Redact sensitive values before any logging
+	safeCmdStr := redactCommand(cmdStr)
+
 	// Print command being executed to TTY for immediate visibility
-	PrintToTTY("Running: %s\n", cmdStr)
+	PrintToTTY("Running: %s\n", safeCmdStr)
 
 	// Also log to test output
-	t.Logf("Executing command: %s", cmdStr)
-	logCommandToFile(t.Name(), cmdStr)
+	t.Logf("Executing command: %s", safeCmdStr)
+	logCommandToFile(t.Name(), safeCmdStr)
 
 	cmd := exec.Command(name, args...) // #nosec G204 G702 -- test helper designed to execute arbitrary commands for test orchestration
 	output, err := cmd.CombinedOutput()
@@ -110,9 +113,12 @@ func RunCommandQuiet(t *testing.T, name string, args ...string) (string, error) 
 		cmdStr = fmt.Sprintf("%s %s", name, strings.Join(args, " "))
 	}
 
+	// Redact sensitive values before logging
+	safeCmdStr := redactCommand(cmdStr)
+
 	// Only log to test output (not TTY)
-	t.Logf("Executing command (quiet): %s", cmdStr)
-	logCommandToFile(t.Name(), cmdStr)
+	t.Logf("Executing command (quiet): %s", safeCmdStr)
+	logCommandToFile(t.Name(), safeCmdStr)
 
 	cmd := exec.Command(name, args...) // #nosec G204 G702 -- test helper designed to execute arbitrary commands for test orchestration
 	output, err := cmd.CombinedOutput()
@@ -188,9 +194,11 @@ func RunCommandWithStreaming(t *testing.T, name string, args ...string) (string,
 		}()
 	}
 
-	_, _ = fmt.Fprintf(tty, "Running (streaming): %s\n", cmdStr)
-	t.Logf("Executing command (streaming): %s", cmdStr)
-	logCommandToFile(t.Name(), cmdStr)
+	// Redact sensitive values before any logging
+	safeCmdStr := redactCommand(cmdStr)
+	_, _ = fmt.Fprintf(tty, "Running (streaming): %s\n", safeCmdStr)
+	t.Logf("Executing command (streaming): %s", safeCmdStr)
+	logCommandToFile(t.Name(), safeCmdStr)
 
 	cmd := exec.Command(name, args...) // #nosec G204 G702 -- test helper designed to execute arbitrary commands for test orchestration
 
@@ -290,6 +298,24 @@ var (
 	commandLogSeen map[string]bool
 	commandLogMu   sync.Mutex
 )
+
+// sensitiveKeyPattern matches JSON key-value pairs containing known secret fields.
+// Used by redactCommand to scrub credentials from command strings before logging.
+var sensitiveKeyPattern = regexp.MustCompile(
+	`"(AZURE_CLIENT_SECRET|AWS_SECRET_ACCESS_KEY|clientSecret)"\s*:\s*"[^"]*"`)
+
+// redactCommand scrubs known sensitive values from a command string before logging.
+// This is a defense-in-depth measure — callers should avoid putting secrets in
+// command arguments in the first place (e.g., use --patch-file instead of -p).
+func redactCommand(cmdStr string) string {
+	return sensitiveKeyPattern.ReplaceAllStringFunc(cmdStr, func(match string) string {
+		idx := strings.Index(match, ":")
+		if idx < 0 {
+			return match
+		}
+		return match[:idx] + `:"***REDACTED***"`
+	})
+}
 
 // resolveCommandLogDir returns the results directory path for command logging.
 func resolveCommandLogDir() string {
@@ -1297,6 +1323,89 @@ nodes:
 
 	t.Logf("Generated kind config: %s (using Docker config: %s)", kindConfigPath, dockerConfigPath)
 	return kindConfigPath, nil
+}
+
+// PatchASOCredentialsSecret patches the aso-controller-settings secret with Azure credentials.
+// The cluster-api-installer helm chart creates this secret with empty values, so we need to
+// patch it with actual credentials after deployment.
+//
+// This function:
+// 1. Gets AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID from environment (or extracts from Azure CLI)
+// 2. Optionally includes AZURE_CLIENT_ID and AZURE_CLIENT_SECRET if both are set
+// 3. Patches the secret in the controller namespace (capz-system or multicluster-engine)
+//
+// Service principal credentials (AZURE_CLIENT_ID/AZURE_CLIENT_SECRET) are optional for local
+// development but required for ASO to work in Kind clusters since Kind cannot use managed
+// identity or workload identity.
+//
+// Returns an error if credentials cannot be obtained or patching fails.
+func PatchASOCredentialsSecret(t *testing.T, kubeContext string) error {
+	t.Helper()
+
+	// Ensure credentials are available
+	if err := EnsureAzureCredentialsSet(t); err != nil {
+		return fmt.Errorf("failed to ensure Azure credentials: %w", err)
+	}
+
+	tenantID := os.Getenv("AZURE_TENANT_ID")
+	subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
+
+	if tenantID == "" || subscriptionID == "" {
+		return fmt.Errorf("AZURE_TENANT_ID or AZURE_SUBSCRIPTION_ID is empty after extraction")
+	}
+
+	// Build the patch JSON with required credentials
+	// Start with tenant ID and subscription ID (always required)
+	patchData := map[string]string{
+		"AZURE_TENANT_ID":       tenantID,
+		"AZURE_SUBSCRIPTION_ID": subscriptionID,
+	}
+
+	// Add service principal credentials if available
+	// These are optional for local development but required for ASO to work in Kind clusters
+	clientID := os.Getenv("AZURE_CLIENT_ID")
+	clientSecret := os.Getenv("AZURE_CLIENT_SECRET")
+	if clientID != "" && clientSecret != "" {
+		patchData["AZURE_CLIENT_ID"] = clientID
+		patchData["AZURE_CLIENT_SECRET"] = clientSecret
+		t.Log("Including service principal credentials in ASO secret patch")
+	}
+
+	// Build the JSON patch
+	patch := map[string]any{"stringData": patchData}
+	patchJSON, err := json.Marshal(patch)
+	if err != nil {
+		return fmt.Errorf("failed to marshal ASO patch JSON: %w", err)
+	}
+
+	// Write patch to a temp file so credentials don't appear in command args or logs
+	tmpFile, err := os.CreateTemp("", "aso-patch-*.json")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file for ASO patch: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	if _, err := tmpFile.Write(patchJSON); err != nil {
+		if closeErr := tmpFile.Close(); closeErr != nil {
+			return fmt.Errorf("failed to write ASO patch file: %w (also failed to close: %v)", err, closeErr)
+		}
+		return fmt.Errorf("failed to write ASO patch file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close ASO patch temp file: %w", err)
+	}
+
+	// Get controller namespace from config
+	config := NewTestConfig()
+
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+		"-n", config.CAPZNamespace, "patch", "secret", "aso-controller-settings",
+		"--type=merge", "--patch-file", tmpFile.Name())
+	if err != nil {
+		return fmt.Errorf("failed to patch aso-controller-settings secret: %w\nOutput: %s", err, output)
+	}
+
+	t.Log("Patched aso-controller-settings secret with Azure credentials")
+	return nil
 }
 
 // MaxDomainPrefixLength is the maximum allowed length for ARO domain prefix.
