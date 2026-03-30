@@ -1466,10 +1466,12 @@ func PatchASOCredentialsSecret(t *testing.T, kubeContext string) error {
 	}
 	defer os.Remove(tmpFile.Name())
 	if _, err := tmpFile.Write(patchJSON); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close() // best-effort close on write failure
 		return fmt.Errorf("failed to write ASO patch file: %w", err)
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close ASO patch temp file: %w", err)
+	}
 
 	// Get controller namespace from config
 	config := NewTestConfig()
