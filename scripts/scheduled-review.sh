@@ -2,8 +2,8 @@
 # Run the scheduled repository review locally using Claude Code.
 #
 # Prerequisites:
-#   - ANTHROPIC_API_KEY set in environment (or ~/.anthropic/api_key)
-#   - claude CLI installed (npm install -g @anthropic-ai/claude-code)
+#   - claude CLI installed and authenticated (npm install -g @anthropic-ai/claude-code)
+#     Authentication: OAuth (claude auth login), API key (ANTHROPIC_API_KEY), or ~/.anthropic/api_key
 #   - gh CLI authenticated
 #
 # Usage:
@@ -58,10 +58,11 @@ check_prerequisites() {
         missing+=("gh (install: brew install gh)")
     fi
 
-    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-        # Check if claude can authenticate via other means
-        if [[ ! -f "$HOME/.anthropic/api_key" ]]; then
-            missing+=("ANTHROPIC_API_KEY environment variable")
+    # Verify claude can authenticate (OAuth, API key env var, or key file)
+    if [[ -z "${ANTHROPIC_API_KEY:-}" ]] && [[ ! -f "$HOME/.anthropic/api_key" ]]; then
+        # No env var or key file — check if OAuth is configured
+        if ! claude auth status &>/dev/null 2>&1; then
+            missing+=("Claude Code authentication (run 'claude auth login', or set ANTHROPIC_API_KEY)")
         fi
     fi
 
