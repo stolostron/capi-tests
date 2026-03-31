@@ -295,7 +295,7 @@ test-all: ## Run all test phases sequentially
 		if [ "$$(uname)" = "Darwin" ]; then \
 			script -q /dev/null $(MAKE) --no-print-directory _test-all-impl 2>&1 | tee $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE); \
 		else \
-			script -q -c "$(MAKE) --no-print-directory _test-all-impl" /dev/null 2>&1 | tee $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE); \
+			script -qe -c "$(MAKE) --no-print-directory _test-all-impl" /dev/null 2>&1 | tee $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE); \
 		fi; \
 		EXIT_CODE=$${PIPESTATUS[0]}; \
 	else \
