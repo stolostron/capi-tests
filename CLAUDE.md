@@ -240,8 +240,26 @@ FORCE=1 make clean-azure
 CS_CLUSTER_NAME=myprefix-stage make clean-azure
 ```
 
+**Tag-Based Cleanup (for parallel runs)**:
+
+All test runs automatically tag Azure resource groups with ownership metadata (`capi-test-user`, `capi-test-env`, `capi-test-run-id`, `capi-test-created-at`). This enables tag-based resource discovery and cleanup:
+
+```bash
+# List all my test resources (dry-run, uses capi-test-user=$USER tag)
+make clean-my-resources
+
+# Find resources by specific tag
+./scripts/cleanup-azure-resources.sh --tag capi-test-user=alice --dry-run
+
+# Delete all resources tagged with a specific user
+./scripts/cleanup-azure-resources.sh --tag capi-test-user=alice --force
+
+# Delete resources from a specific test run
+./scripts/cleanup-azure-resources.sh --tag capi-test-run-id=cate-a1b2c --force
+```
+
 Notes:
-- The resource group name is derived from `${CS_CLUSTER_NAME}-resgroup` where `CS_CLUSTER_NAME` defaults to `${CAPI_USER}-${DEPLOYMENT_ENV}` (e.g., `cate-stage-resgroup`)
+- The resource group name is derived from `${CS_CLUSTER_NAME}-resgroup` where `CS_CLUSTER_NAME` is auto-generated as `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c-resgroup`)
 - Resource matching uses `startswith` by default (safer than `contains`). Use `--match-mode contains` for broader search.
 - Uses `az group delete --yes` for synchronous deletion (waits for completion before orphan cleanup)
 - Gracefully skips Azure cleanup if Azure CLI is not installed or not authenticated
@@ -350,11 +368,11 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
   - **Note**: Tests automatically translate this to `KIND_CLUSTER_NAME` for the deployment script
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests` for ARO, `capa-tests` for ROSA). Keep short as cloud providers may have length limits (e.g., Azure node pools max 15 chars including suffixes)
-- `CS_CLUSTER_NAME` - **C**luster **S**ervice cluster name prefix used for YAML generation and Azure resource naming (default: `${CAPI_USER}-${DEPLOYMENT_ENV}`). The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`. This prefix is also used for the ExternalAuth resource ID.
+- `CS_CLUSTER_NAME` - **C**luster **S**ervice cluster name prefix used for YAML generation and Azure resource naming. If not set, auto-generates a unique value: `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c`). This enables parallel test runs against the same Azure subscription without resource name collisions. The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`. This prefix is also used for the ExternalAuth resource ID (max 15 chars including `-ea` suffix, so CS_CLUSTER_NAME max 12 chars). When resuming a multi-phase test run, the prefix is automatically loaded from the deployment state file.
 - `OCP_VERSION` - OpenShift version (default: `4.21`)
 - `REGION` - Azure region (default: `uksouth`)
-- `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`)
-- `CAPI_USER` - User identifier for domain prefix (default: `cate`). Must be short enough that `${CAPI_USER}-${DEPLOYMENT_ENV}` does not exceed 15 characters.
+- `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`). Used in Azure resource tags and domain prefix validation, but not included in the auto-generated `CS_CLUSTER_NAME`.
+- `CAPI_USER` - User identifier for domain prefix (default: `cate`). Used as the base for auto-generated `CS_CLUSTER_NAME` (e.g., `cate-a1b2c`). Must be short enough that `${CAPI_USER}-${DEPLOYMENT_ENV}` does not exceed 15 characters.
 - `WORKLOAD_CLUSTER_NAMESPACE` - Namespace for workload cluster resources (CAPI CRs that create cloud resources). If set, uses the exact value provided (for resume scenarios). If not set, generates a unique namespace per test run using `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` format (e.g., `capz-test-20260202-135526` for ARO, `capa-test-20260202-135526` for ROSA). This namespace is passed as `$NAMESPACE` to the YAML generation script.
 - `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` - Prefix for auto-generated workload cluster namespace (default: provider-specific — `capz-test` for ARO, `capa-test` for ROSA). Only used when `WORKLOAD_CLUSTER_NAMESPACE` is not set.
 
