@@ -125,6 +125,7 @@ jobs:
 
       # MCE credentials (only required when cluster_mode=mce)
       MCE_API_URL: ${{ vars.MCE_API_URL }}
+      MCE_API_USER: ${{ vars.MCE_API_USER }}
       MCE_API_PASSWORD: ${{ secrets.MCE_API_PASSWORD }}
 
     steps:
