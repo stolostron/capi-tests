@@ -300,9 +300,16 @@ var (
 )
 
 // sensitiveKeyPattern matches JSON key-value pairs containing known secret fields.
-// Used by redactCommand to scrub credentials from command strings before logging.
-var sensitiveKeyPattern = regexp.MustCompile(
-	`"(AZURE_CLIENT_SECRET|AWS_SECRET_ACCESS_KEY|clientSecret)"\s*:\s*"[^"]*"`)
+// Built dynamically from InfraProvider.SensitiveKeyNames() so config.go remains
+// the single source of truth for which fields are sensitive.
+var sensitiveKeyPattern = func() *regexp.Regexp {
+	keys := append(
+		NewAzureProvider("").SensitiveKeyNames(),
+		NewAWSProvider("").SensitiveKeyNames()...,
+	)
+	return regexp.MustCompile(
+		`"(` + strings.Join(keys, "|") + `)"\s*:\s*"[^"]*"`)
+}()
 
 // redactCommand scrubs known sensitive values from a command string before logging.
 // This is a defense-in-depth measure — callers should avoid putting secrets in

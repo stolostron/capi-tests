@@ -3600,8 +3600,8 @@ func TestRedactCommand(t *testing.T) {
 		},
 		{
 			name:  "multiple sensitive keys",
-			input: `{"AZURE_CLIENT_SECRET":"sec1","clientSecret":"sec2","AWS_SECRET_ACCESS_KEY":"sec3"}`,
-			want:  `{"AZURE_CLIENT_SECRET":"***REDACTED***","clientSecret":"***REDACTED***","AWS_SECRET_ACCESS_KEY":"***REDACTED***"}`,
+			input: `{"AZURE_CLIENT_SECRET":"sec1","OCM_CLIENT_SECRET":"sec2","AWS_SECRET_ACCESS_KEY":"sec3"}`,
+			want:  `{"AZURE_CLIENT_SECRET":"***REDACTED***","OCM_CLIENT_SECRET":"***REDACTED***","AWS_SECRET_ACCESS_KEY":"***REDACTED***"}`,
 		},
 		{
 			name:  "no sensitive data",
