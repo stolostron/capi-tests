@@ -743,6 +743,89 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	}
 }
 
+// TestDeployment_WaitForExternalAuthReady waits for the ExternalAuthReady condition on the control plane
+// to become True. ExternalAuth requires at least one ready machine pool, so this test must run after
+// TestDeployment_WaitForControlPlane (which waits for both ControlPlane.Ready and MachinePool.Ready).
+//
+// This is ARO-specific: the AROControlPlane has an ExternalAuthReady condition that tracks whether
+// the external authentication configuration (e.g., Azure AD integration) has been reconciled.
+// ROSA handles authentication differently and does not use this condition.
+//
+// The ExternalAuthReady condition often shows as "ReconciliationFailed" with message
+// "requires at least one ready machine pool" while machine pools are still provisioning.
+// Once machine pools are ready, the controller reconciles ExternalAuth and the condition becomes True.
+func TestDeployment_WaitForExternalAuthReady(t *testing.T) {
+	config := NewTestConfig()
+
+	// ExternalAuthReady is ARO-specific
+	if !config.HasProvider("aro") {
+		t.Skip("Skipping ARO-specific test (ExternalAuthReady condition is ARO-specific)")
+	}
+
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	}
+
+	context := config.GetKubeContext()
+	provisionedClusterName := config.GetProvisionedClusterName()
+
+	timeout := 10 * time.Minute
+	pollInterval := 15 * time.Second
+	startTime := time.Now()
+
+	PrintToTTY("\n=== Waiting for ExternalAuthReady ===\n")
+	PrintToTTY("Cluster: %s | Namespace: %s\n", provisionedClusterName, config.WorkloadClusterNamespace)
+	PrintToTTY("Timeout: %v | Poll interval: %v\n\n", timeout, pollInterval)
+	t.Logf("Waiting for ExternalAuthReady (namespace: %s, timeout: %v)...", config.WorkloadClusterNamespace, timeout)
+
+	for {
+		elapsed := time.Since(startTime)
+		if elapsed > timeout {
+			PrintToTTY("\n❌ Timeout reached after %v waiting for ExternalAuthReady\n\n", elapsed.Round(time.Second))
+			t.Fatalf("Timeout waiting for ExternalAuthReady after %v.\n\n"+
+				"Check control plane conditions:\n"+
+				"  kubectl --context %s -n %s get arocontrolplane -o yaml",
+				elapsed.Round(time.Second), context, config.WorkloadClusterNamespace)
+			return
+		}
+
+		data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
+		if err != nil {
+			PrintToTTY("⏳ Waiting for cluster data... (%v)\n", elapsed.Round(time.Second))
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		// Search for ExternalAuthReady in control plane conditions
+		found := false
+		for _, cond := range data.ControlPlane.Conditions {
+			if cond.Type == "ExternalAuthReady" {
+				found = true
+				if cond.Status == "True" {
+					PrintToTTY("✅ ExternalAuthReady is True (took %v)\n\n", elapsed.Round(time.Second))
+					t.Logf("ExternalAuthReady=True (took %v)", elapsed.Round(time.Second))
+					return
+				}
+				// Show status with reason/message for visibility
+				detail := cond.Status
+				if cond.Reason != "" {
+					detail = fmt.Sprintf("%s (%s)", cond.Status, cond.Reason)
+				}
+				if cond.Message != "" {
+					detail = fmt.Sprintf("%s - %s", detail, cond.Message)
+				}
+				PrintToTTY("⏳ ExternalAuthReady: %s (elapsed %v)\n", detail, elapsed.Round(time.Second))
+			}
+		}
+
+		if !found {
+			PrintToTTY("⏳ ExternalAuthReady condition not found yet (elapsed %v)\n", elapsed.Round(time.Second))
+		}
+
+		time.Sleep(pollInterval)
+	}
+}
+
 // TestDeployment_VerifyInfrastructureResources waits for AROCluster infrastructure to be fully ready.
 // This test polls AROCluster.status.conditions[] for NetworkInfrastructureReady=True,
 // which is the controller's authoritative signal that all infrastructure resources are
