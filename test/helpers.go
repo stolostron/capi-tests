@@ -2594,14 +2594,16 @@ func ExtractNamespaceFromYAML(filePath string) (string, error) {
 // This is written to a state file during deployment and read during cleanup
 // to ensure the cleanup targets the correct Azure resources.
 type DeploymentState struct {
-	ResourceGroup            string `json:"resource_group"`
-	ManagementClusterName    string `json:"management_cluster_name"`
-	WorkloadClusterName      string `json:"workload_cluster_name"`
-	WorkloadClusterNamespace string `json:"workload_cluster_namespace"`
-	ClusterNamePrefix        string `json:"cluster_name_prefix"`
-	Region                   string `json:"region"`
-	User                     string `json:"user"`
-	Environment              string `json:"environment"`
+	ResourceGroup            string            `json:"resource_group"`
+	ManagementClusterName    string            `json:"management_cluster_name"`
+	WorkloadClusterName      string            `json:"workload_cluster_name"`
+	WorkloadClusterNamespace string            `json:"workload_cluster_namespace"`
+	ClusterNamePrefix        string            `json:"cluster_name_prefix"`
+	Region                   string            `json:"region"`
+	User                     string            `json:"user"`
+	Environment              string            `json:"environment"`
+	TestRunID                string            `json:"test_run_id,omitempty"`
+	AzureResourceTags        map[string]string `json:"azure_resource_tags,omitempty"`
 }
 
 // DeploymentStateFile is the path to the deployment state file.
@@ -2621,6 +2623,8 @@ func WriteDeploymentState(config *TestConfig) error {
 		Region:                   config.Region,
 		User:                     config.CAPIUser,
 		Environment:              config.Environment,
+		TestRunID:                config.TestRunID,
+		AzureResourceTags:        config.AzureResourceTags,
 	}
 
 	data, err := json.MarshalIndent(state, "", "  ")

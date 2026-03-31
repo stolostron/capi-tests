@@ -113,12 +113,12 @@ When using `INFRA_PROVIDER=rosa`, the following credentials are required:
   - **Note**: Tests automatically translate this to `KIND_CLUSTER_NAME` for the deployment script
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests` for ARO, `capa-tests` for ROSA). Keep short due to cloud provider length limits
-- `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation (default: `${CAPI_USER}-${DEPLOYMENT_ENV}`). The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`.
+- `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation and Azure resource naming. If not set, auto-generates a unique value: `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c`) to enable parallel test runs. The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`. Max 12 characters (ExternalAuth ID constraint).
 - `OCP_VERSION` - OpenShift version (default: `4.20`)
 - `REGION` - Azure region (default: `uksouth`)
 - `AZURE_SUBSCRIPTION_NAME` - Azure subscription ID
-- `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`)
-- `CAPI_USER` - User identifier for domain prefix (default: `cate`)
+- `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`). Used in Azure resource tags and domain prefix validation.
+- `CAPI_USER` - User identifier and base for auto-generated `CS_CLUSTER_NAME` (default: `cate`)
 - `WORKLOAD_CLUSTER_NAMESPACE` - Namespace for workload cluster resources. If set, uses the exact value provided (for resume scenarios). If not set, auto-generates a unique namespace per test run using `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` format.
 - `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` - Prefix for auto-generated namespace (default: provider-specific — `capz-test` for ARO, `capa-test` for ROSA). Only used when `WORKLOAD_CLUSTER_NAMESPACE` is not set.
 
@@ -312,6 +312,7 @@ These targets are called by `make test-all` but can be run individually for debu
 | `make clean-all` | Delete ALL resources without prompting (local + Azure) |
 | `FORCE=1 make clean` | Same as `make clean-all` |
 | `make clean-azure` | Delete all Azure resources (RG, orphaned resources, AD apps, SPs) |
+| `make clean-my-resources` | List all Azure resources tagged as mine (dry-run) |
 
 #### Setup and Prerequisites
 
@@ -417,7 +418,37 @@ For automated workflows (CI/CD, scripts) or quick full resets, use:
 - Uses synchronous `--yes` deletion (waits for completion before orphan cleanup)
 - Gracefully skips if Azure CLI is not installed or not logged in
 - Checks if resource group exists before attempting deletion
-- The resource group name is derived from `${CAPI_USER}-${DEPLOYMENT_ENV}-resgroup` (default: `cate-stage-resgroup`)
+- The resource group name is derived from `${CS_CLUSTER_NAME}-resgroup` (auto-generated, e.g., `cate-a1b2c-resgroup`)
+
+**Tag-Based Cleanup (for parallel runs)**: All test runs automatically tag Azure resources with ownership metadata. Use tag-based queries to find and clean up resources:
+
+```bash
+make clean-my-resources                                          # List all my test resources (dry-run)
+./scripts/cleanup-azure-resources.sh --tag capi-test-user=alice  # Find resources by user
+./scripts/cleanup-azure-resources.sh --tag capi-test-user=alice --force  # Delete by tag
+```
+
+## Parallel Runs
+
+Multiple users (or CI jobs) can run the test suite simultaneously against the same Azure subscription. Each test run automatically generates a unique `CS_CLUSTER_NAME` (e.g., `cate-a1b2c`) to avoid resource collisions.
+
+**How it works**:
+- `CS_CLUSTER_NAME` is auto-generated as `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c`)
+- Each run creates its own Azure resource group (e.g., `cate-a1b2c-resgroup`)
+- All Azure resources are tagged with `capi-test-user`, `capi-test-env`, `capi-test-run-id`, and `capi-test-created-at`
+- The deployment state file (`.deployment-state.json`) tracks the generated prefix for cleanup
+
+**Recommended setup for each user**:
+```bash
+export CAPI_USER=alice     # Use your own short identifier (max ~6 chars)
+make test-all              # CS_CLUSTER_NAME auto-generated as alice-xxxxx
+```
+
+**Cleanup after parallel runs**:
+```bash
+make clean-my-resources    # List all my tagged Azure resources
+make clean-azure           # Clean resources from the current deployment state
+```
 
 ## Integration with cluster-api-installer
 

@@ -1242,3 +1242,157 @@ func TestDeployment_VerifyClusterInfrastructureReady(t *testing.T) {
 		time.Sleep(pollInterval)
 	}
 }
+
+// TestDeployment_TagAzureResources tags all Azure resources created by the deployment
+// with ownership metadata for parallel run cleanup. Tags the resource group (ARM tags)
+// and Azure AD Applications/Service Principals (Microsoft Graph tags).
+// Non-fatal: failures are logged as warnings since tagging is for cleanup convenience only.
+func TestDeployment_TagAzureResources(t *testing.T) {
+	config := NewTestConfig()
+
+	if len(config.AzureResourceTags) == 0 {
+		t.Skip("No Azure resource tags configured")
+		return
+	}
+
+	if !CommandExists("az") {
+		t.Skip("Azure CLI not available, skipping resource tagging")
+		return
+	}
+
+	if config.InfraProviderName != "aro" {
+		t.Skip("Azure resource tagging only applies to ARO provider")
+		return
+	}
+
+	PrintToTTY("\n=== Tagging Azure Resources ===\n")
+
+	// Tag resource group
+	tagAzureResourceGroupDeploy(t, config)
+
+	// Tag Azure AD Applications matching our prefix
+	tagAzureADApplications(t, config)
+
+	// Tag Service Principals matching our prefix
+	tagAzureServicePrincipals(t, config)
+
+	PrintToTTY("✅ Azure resource tagging completed\n\n")
+}
+
+// tagAzureResourceGroupDeploy tags the resource group with ownership metadata.
+func tagAzureResourceGroupDeploy(t *testing.T, config *TestConfig) {
+	t.Helper()
+
+	resourceGroup := fmt.Sprintf("%s-resgroup", config.ClusterNamePrefix)
+
+	var tagPairs []string
+	for k, v := range config.AzureResourceTags {
+		tagPairs = append(tagPairs, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	args := []string{"group", "update", "--name", resourceGroup, "--tags"}
+	args = append(args, tagPairs...)
+
+	PrintToTTY("Tagging resource group %s...\n", resourceGroup)
+	if _, err := RunCommandQuiet(t, "az", args...); err != nil {
+		t.Logf("Warning: could not tag resource group %s: %v", resourceGroup, err)
+	} else {
+		t.Logf("Tagged resource group %s with %d tags", resourceGroup, len(tagPairs))
+	}
+}
+
+// tagAzureADApplications finds and tags Azure AD Applications matching our prefix.
+// AD Application tags are string arrays (not key-value pairs), so we add strings
+// in the format "key:value" (e.g., "capi-test-user:cate").
+func tagAzureADApplications(t *testing.T, config *TestConfig) {
+	t.Helper()
+
+	prefix := config.ClusterNamePrefix
+
+	// Find AD apps matching our prefix
+	output, err := RunCommandQuiet(t, "az", "ad", "app", "list",
+		"--filter", fmt.Sprintf("startswith(displayName, '%s')", prefix),
+		"--query", "[].{appId: appId, displayName: displayName}",
+		"-o", "json")
+	if err != nil {
+		t.Logf("Warning: could not list AD Applications: %v", err)
+		return
+	}
+
+	var apps []struct {
+		AppID       string `json:"appId"`
+		DisplayName string `json:"displayName"`
+	}
+	if err := json.Unmarshal([]byte(output), &apps); err != nil || len(apps) == 0 {
+		t.Log("No Azure AD Applications found to tag")
+		return
+	}
+
+	// Build tag strings for AD apps (string array format: "key:value")
+	var tagStrings []string
+	for k, v := range config.AzureResourceTags {
+		tagStrings = append(tagStrings, fmt.Sprintf("%s:%s", k, v))
+	}
+
+	for _, app := range apps {
+		args := []string{"ad", "app", "update", "--id", app.AppID, "--set", fmt.Sprintf("tags=%s", toJSONArray(tagStrings))}
+		if _, err := RunCommandQuiet(t, "az", args...); err != nil {
+			t.Logf("Warning: could not tag AD Application %s (%s): %v", app.DisplayName, app.AppID, err)
+		} else {
+			PrintToTTY("  Tagged AD Application: %s\n", app.DisplayName)
+		}
+	}
+	t.Logf("Tagged %d Azure AD Application(s)", len(apps))
+}
+
+// tagAzureServicePrincipals finds and tags Service Principals matching our prefix.
+// SP tags use the same string array format as AD Applications.
+func tagAzureServicePrincipals(t *testing.T, config *TestConfig) {
+	t.Helper()
+
+	prefix := config.ClusterNamePrefix
+
+	// Find SPs matching our prefix
+	output, err := RunCommandQuiet(t, "az", "ad", "sp", "list",
+		"--filter", fmt.Sprintf("startswith(displayName, '%s')", prefix),
+		"--query", "[].{id: id, displayName: displayName}",
+		"-o", "json")
+	if err != nil {
+		t.Logf("Warning: could not list Service Principals: %v", err)
+		return
+	}
+
+	var sps []struct {
+		ID          string `json:"id"`
+		DisplayName string `json:"displayName"`
+	}
+	if err := json.Unmarshal([]byte(output), &sps); err != nil || len(sps) == 0 {
+		t.Log("No Service Principals found to tag")
+		return
+	}
+
+	// Build tag strings for SPs (string array format: "key:value")
+	var tagStrings []string
+	for k, v := range config.AzureResourceTags {
+		tagStrings = append(tagStrings, fmt.Sprintf("%s:%s", k, v))
+	}
+
+	for _, sp := range sps {
+		args := []string{"ad", "sp", "update", "--id", sp.ID, "--set", fmt.Sprintf("tags=%s", toJSONArray(tagStrings))}
+		if _, err := RunCommandQuiet(t, "az", args...); err != nil {
+			t.Logf("Warning: could not tag Service Principal %s (%s): %v", sp.DisplayName, sp.ID, err)
+		} else {
+			PrintToTTY("  Tagged Service Principal: %s\n", sp.DisplayName)
+		}
+	}
+	t.Logf("Tagged %d Service Principal(s)", len(sps))
+}
+
+// toJSONArray converts a string slice to a JSON array string for use with az CLI --set.
+func toJSONArray(items []string) string {
+	data, err := json.Marshal(items)
+	if err != nil {
+		return "[]"
+	}
+	return string(data)
+}

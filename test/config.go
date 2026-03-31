@@ -1,6 +1,8 @@
 package test
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -238,6 +240,9 @@ var (
 
 	workloadClusterNamespace     string
 	workloadClusterNamespaceOnce sync.Once
+
+	clusterNamePrefix     string
+	clusterNamePrefixOnce sync.Once
 )
 
 // getDefaultRepoDir returns the default repository directory path.
@@ -312,6 +317,62 @@ func getWorkloadClusterNamespace(defaultPrefix string) string {
 	return workloadClusterNamespace
 }
 
+// getClusterNamePrefix returns the CS_CLUSTER_NAME value, generating a unique one if not explicitly set.
+// When CS_CLUSTER_NAME is not set, a unique prefix is generated: ${CAPI_USER}-${random5hex}
+// (e.g., "cate-a1b2c"). This enables parallel test runs against the same Azure subscription
+// without resource name collisions.
+//
+// Resolution order:
+// 1. CS_CLUSTER_NAME env var (explicit override)
+// 2. Existing deployment state file in RepoDir (auto-resume from previous run)
+// 3. Generate unique prefix: ${CAPI_USER}-${random5hex}
+//
+// The auto-resume from deployment state ensures that subsequent test phases
+// (run as separate go test invocations) use the same prefix as the initial phase.
+func getClusterNamePrefix(capiUser string) string {
+	clusterNamePrefixOnce.Do(func() {
+		// Check if explicitly provided
+		if prefix := os.Getenv("CS_CLUSTER_NAME"); prefix != "" {
+			clusterNamePrefix = prefix
+			return
+		}
+
+		// Check for existing deployment state file in RepoDir
+		// This handles the case where a previous test invocation already generated
+		// a unique prefix and we need to reuse it for subsequent phases
+		repoDir := getDefaultRepoDir()
+		stateFilePath := filepath.Join(repoDir, ".deployment-state.json")
+		// #nosec G304 - path constructed from repo directory and fixed filename (.deployment-state.json)
+		if data, err := os.ReadFile(stateFilePath); err == nil {
+			var state struct {
+				ClusterNamePrefix string `json:"cluster_name_prefix"`
+			}
+			if err := json.Unmarshal(data, &state); err == nil && state.ClusterNamePrefix != "" {
+				clusterNamePrefix = state.ClusterNamePrefix
+				return
+			}
+		}
+
+		// Generate unique prefix: ${CAPI_USER}-${random5hex}
+		runID := generateRunID(5)
+		clusterNamePrefix = fmt.Sprintf("%s-%s", capiUser, runID)
+	})
+
+	return clusterNamePrefix
+}
+
+// generateRunID creates a random hex string of the specified length.
+// Uses crypto/rand for unpredictable values. Falls back to timestamp-based
+// suffix if crypto/rand fails.
+func generateRunID(length int) string {
+	bytes := make([]byte, (length+1)/2)
+	if _, err := rand.Read(bytes); err != nil {
+		// Fallback to timestamp-based suffix
+		return fmt.Sprintf("%05x", time.Now().UnixNano()%0xFFFFF)
+	}
+	return hex.EncodeToString(bytes)[:length]
+}
+
 // TestConfig holds configuration for CAPI tests
 type TestConfig struct {
 	// Repository configuration
@@ -329,8 +390,10 @@ type TestConfig struct {
 	AzureSubscriptionName    string // Azure subscription name (from AZURE_SUBSCRIPTION_NAME env var)
 	Environment              string
 	CAPIUser                 string // User identifier for CAPI resources (from CAPI_USER env var)
-	WorkloadClusterNamespace string // Namespace for workload cluster resources on management cluster (unique per test run)
-	TestLabelPrefix          string // Provider-specific label prefix for test namespaces (e.g., "capz-test" for ARO, "capa-test" for ROSA)
+	WorkloadClusterNamespace string            // Namespace for workload cluster resources on management cluster (unique per test run)
+	TestLabelPrefix          string            // Provider-specific label prefix for test namespaces (e.g., "capz-test" for ARO, "capa-test" for ROSA)
+	TestRunID                string            // Unique run identifier (5 hex chars) for parallel run isolation
+	AzureResourceTags        map[string]string // Azure tags applied to all created resources for cleanup queries
 	CAPINamespace            string // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
 	CAPZNamespace            string // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" when USE_K8S=true)
 
@@ -530,6 +593,24 @@ func NewTestConfig() *TestConfig {
 
 	// Resolve CAPI_USER
 	capiUser := getCAPIUser()
+	environment := GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv)
+
+	// Resolve CS_CLUSTER_NAME with auto-uniqueness for parallel runs
+	prefix := getClusterNamePrefix(capiUser)
+
+	// Extract run ID from the generated prefix (the part after the user prefix)
+	testRunID := ""
+	if userPrefix := capiUser + "-"; strings.HasPrefix(prefix, userPrefix) {
+		testRunID = strings.TrimPrefix(prefix, userPrefix)
+	}
+
+	// Build Azure resource tags for cleanup and ownership tracking
+	azureTags := map[string]string{
+		"capi-test-user":       capiUser,
+		"capi-test-env":        environment,
+		"capi-test-run-id":     prefix,
+		"capi-test-created-at": time.Now().Format(time.RFC3339),
+	}
 
 	return &TestConfig{
 		// Repository defaults
@@ -540,15 +621,17 @@ func NewTestConfig() *TestConfig {
 		// Cluster defaults
 		ManagementClusterName:    GetEnvOrDefault("MANAGEMENT_CLUSTER_NAME", defaultMgmtCluster),
 		WorkloadClusterName:      GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", defaultWorkloadCluster),
-		ClusterNamePrefix:        GetEnvOrDefault("CS_CLUSTER_NAME", fmt.Sprintf("%s-%s", capiUser, GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv))),
-		NamePrefix:               GetEnvOrDefault("NAME_PREFIX", ""), // Optional; set by capz-test-env.sh in CI
+		ClusterNamePrefix:        prefix,
+		NamePrefix:               GetEnvOrDefault("NAME_PREFIX", ""),
 		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.20"),
 		Region:                   GetEnvOrDefault(regionEnvVar, defaultRegion),
 		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),
-		Environment:              GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv),
+		Environment:              environment,
 		CAPIUser:                 capiUser,
 		WorkloadClusterNamespace: getWorkloadClusterNamespace(testLabelPrefix),
 		TestLabelPrefix:          testLabelPrefix,
+		TestRunID:                testRunID,
+		AzureResourceTags:        azureTags,
 		CAPINamespace:            getControllerNamespace("CAPI_NAMESPACE", "capi-system"),
 		CAPZNamespace:            providerNamespace,
 

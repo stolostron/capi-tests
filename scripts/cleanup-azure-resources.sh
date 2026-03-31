@@ -18,6 +18,8 @@
 #   --prefix PREFIX        Resource name prefix to search for (default: CS_CLUSTER_NAME, else CAPI_USER-DEPLOYMENT_ENV, else cate)
 #   --resource-group RG    Also delete this Azure resource group
 #   --match-mode MODE      How to match resource names: 'startswith' (default, safer) or 'contains' (broader)
+#   --my-resources         Find all resources tagged with capi-test-user=$USER (dry-run)
+#   --tag KEY=VALUE        Find resources by Azure tag (e.g., 'capi-test-user=alice')
 #   --dry-run              Show what would be deleted without actually deleting
 #   --force                Skip confirmation prompts
 #   --help                 Show this help message
@@ -34,6 +36,8 @@
 #   ./scripts/cleanup-azure-resources.sh --resource-group myapp-resgroup --prefix myapp
 #   CS_CLUSTER_NAME=cate-stage ./scripts/cleanup-azure-resources.sh
 #   ./scripts/cleanup-azure-resources.sh --prefix cate --match-mode contains  # broader search
+#   ./scripts/cleanup-azure-resources.sh --my-resources                       # find all my test resources
+#   ./scripts/cleanup-azure-resources.sh --tag capi-test-user=alice --force   # delete by tag
 
 set -euo pipefail
 
@@ -49,6 +53,7 @@ else
 fi
 RESOURCE_GROUP=""
 MATCH_MODE="startswith"
+TAG_FILTER=""
 DRY_RUN=false
 FORCE=false
 
@@ -102,6 +107,27 @@ while [[ $# -gt 0 ]]; do
             fi
             shift 2
             ;;
+        --tag)
+            if [[ $# -lt 2 ]]; then
+                print_error "Missing value for --tag"
+                exit 1
+            fi
+            TAG_FILTER="$2"
+            if [[ ! "$TAG_FILTER" =~ ^[a-zA-Z0-9_-]+=.+$ ]]; then
+                print_error "Invalid tag format '${TAG_FILTER}': expected KEY=VALUE (e.g., 'capi-test-user=alice')"
+                exit 1
+            fi
+            shift 2
+            ;;
+        --my-resources)
+            if [[ -z "${USER:-}" ]]; then
+                print_error "USER environment variable is not set"
+                exit 1
+            fi
+            TAG_FILTER="capi-test-user=${USER}"
+            DRY_RUN=true
+            shift
+            ;;
         --dry-run)
             DRY_RUN=true
             shift
@@ -120,9 +146,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Validate prefix to prevent OData filter injection
+# Validate prefix to prevent OData filter injection (skip when using tag mode only)
 # Must be lowercase alphanumeric with optional hyphens, starting with alphanumeric
-if [[ ! "$PREFIX" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+if [[ -z "$TAG_FILTER" ]] && [[ ! "$PREFIX" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
     print_error "Invalid prefix '${PREFIX}': must be lowercase alphanumeric with hyphens, starting with alphanumeric"
     exit 1
 fi
@@ -256,6 +282,44 @@ find_service_principals() {
         return
     fi
     echo "$sps_json"
+}
+
+# Find resources by Azure tag
+find_resources_by_tag() {
+    local tag_filter="$1"
+    local tag_key="${tag_filter%%=*}"
+    local tag_value="${tag_filter#*=}"
+
+    print_info "Searching for Azure resources with tag '${tag_key}=${tag_value}'..." >&2
+
+    local query="Resources | where tags['${tag_key}'] == '${tag_value}' | project id, name, type, resourceGroup, subscriptionId | order by resourceGroup asc, type asc, name asc"
+
+    local resources_json
+    resources_json=$(az graph query -q "$query" -o json 2>/dev/null)
+    if [[ $? -ne 0 ]]; then
+        print_error "Failed to search for resources with tag '${tag_filter}'" >&2
+        echo '{"data": []}'
+        return
+    fi
+    echo "$resources_json"
+}
+
+# Find resource groups by Azure tag
+find_resource_groups_by_tag() {
+    local tag_filter="$1"
+    local tag_key="${tag_filter%%=*}"
+    local tag_value="${tag_filter#*=}"
+
+    print_info "Searching for resource groups with tag '${tag_key}=${tag_value}'..." >&2
+
+    local rgs_json
+    rgs_json=$(az group list --tag "${tag_key}=${tag_value}" --query "[].{name: name, location: location}" -o json 2>/dev/null)
+    if [[ $? -ne 0 ]]; then
+        print_error "Failed to search for resource groups with tag '${tag_filter}'" >&2
+        echo "[]"
+        return
+    fi
+    echo "$rgs_json"
 }
 
 # Parse and display resources
@@ -579,8 +643,13 @@ main() {
     echo "=== Azure Resource Cleanup ==="
     echo "========================================"
     echo ""
-    print_info "Resource prefix: ${PREFIX}"
-    print_info "Match mode: ${MATCH_MODE}"
+
+    if [[ -n "$TAG_FILTER" ]]; then
+        print_info "Tag filter: ${TAG_FILTER}"
+    else
+        print_info "Resource prefix: ${PREFIX}"
+        print_info "Match mode: ${MATCH_MODE}"
+    fi
     if [[ -n "$RESOURCE_GROUP" ]]; then
         print_info "Resource group: ${RESOURCE_GROUP}"
     fi
@@ -593,6 +662,93 @@ main() {
     echo ""
 
     local found_any=false
+
+    # Tag-based cleanup mode
+    if [[ -n "$TAG_FILTER" ]]; then
+        # Find tagged resource groups
+        local rgs_json
+        rgs_json=$(find_resource_groups_by_tag "$TAG_FILTER")
+
+        local rg_count
+        rg_count=$(echo "$rgs_json" | jq -r 'length // 0')
+
+        if [[ "$rg_count" -gt 0 ]]; then
+            found_any=true
+            echo ""
+            print_warning "Found ${rg_count} resource group(s) with tag '${TAG_FILTER}':"
+            echo ""
+            echo "$rgs_json" | jq -r '.[] | "  \(.name) (\(.location))"'
+            echo ""
+
+            for rg_name in $(echo "$rgs_json" | jq -r '.[].name'); do
+                delete_resource_group "$rg_name"
+            done
+        fi
+
+        # Find tagged ARM resources (orphans that survive RG deletion)
+        local resources_json
+        resources_json=$(find_resources_by_tag "$TAG_FILTER")
+
+        if display_resources "$resources_json"; then
+            found_any=true
+            delete_resources "$resources_json"
+        fi
+
+        # Find Azure AD Applications and Service Principals with matching tags.
+        # AD app tags are string arrays with "key:value" format (not ARM key=value).
+        # Microsoft Graph doesn't support server-side tag filtering via OData, so we use
+        # the capi-test-run-id tag value (which equals CS_CLUSTER_NAME) as a displayName
+        # prefix filter (fast, server-side) and then verify tags client-side.
+        local tag_key="${TAG_FILTER%%=*}"
+        local tag_value="${TAG_FILTER#*=}"
+        local ad_tag_string="${tag_key}:${tag_value}"
+
+        # For capi-test-run-id tags, we can use the value directly as a prefix filter
+        # For other tags (like capi-test-user), we need the prefix from resource group names
+        local ad_prefix=""
+        if [[ "$tag_key" == "capi-test-run-id" ]]; then
+            ad_prefix="${tag_value}"
+        elif [[ "$rg_count" -gt 0 ]]; then
+            # Extract prefix from first resource group name (strip -resgroup suffix)
+            ad_prefix=$(echo "$rgs_json" | jq -r '.[0].name' | sed 's/-resgroup$//')
+        fi
+
+        if [[ -n "$ad_prefix" ]]; then
+            echo ""
+            local apps_json
+            apps_json=$(find_ad_applications "$ad_prefix")
+
+            if display_ad_applications "$apps_json"; then
+                found_any=true
+                delete_ad_applications "$apps_json"
+            fi
+
+            echo ""
+            local sps_json
+            sps_json=$(find_service_principals "$ad_prefix")
+
+            if display_service_principals "$sps_json"; then
+                found_any=true
+                delete_service_principals "$sps_json"
+            fi
+        else
+            echo ""
+            print_info "No AD Application/Service Principal prefix available for tag '${TAG_FILTER}'"
+            print_info "Tip: Use --tag capi-test-run-id=<prefix> to search AD objects by prefix"
+        fi
+
+        if [[ "$found_any" == "false" ]]; then
+            print_success "No resources found with tag '${TAG_FILTER}'"
+        fi
+
+        echo ""
+        echo "========================================"
+        echo "=== Cleanup Complete ==="
+        echo "========================================"
+        return
+    fi
+
+    # Prefix-based cleanup mode (original behavior)
 
     # Delete resource group if specified (do this first)
     if [[ -n "$RESOURCE_GROUP" ]]; then
