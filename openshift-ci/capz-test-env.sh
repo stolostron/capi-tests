@@ -16,6 +16,24 @@ if [[ -n "${CLUSTER_PROFILE_DIR:-}" && -f "${CLUSTER_PROFILE_DIR}/osServicePrinc
   set -o xtrace
 fi
 
+# Override with CAPZ-specific Azure credentials from Vault (when available).
+# These credentials target the subscription where workload clusters are deployed,
+# which differs from the IPI cluster profile subscription used for the management cluster.
+# The vault secret is mounted by Prow via the credentials block in each step ref YAML.
+# Note: ipi-azure-post reads directly from CLUSTER_PROFILE_DIR/osServicePrincipal.json,
+# so overriding env vars here does not affect management cluster deprovisioning.
+CAPZ_CREDS_DIR="/var/run/capz-azure-credentials"
+if [[ -d "${CAPZ_CREDS_DIR}" && -f "${CAPZ_CREDS_DIR}/AZURE_CLIENT_ID" ]]; then
+  { set +o xtrace; } 2>/dev/null
+  AZURE_CLIENT_ID=$(cat "${CAPZ_CREDS_DIR}/AZURE_CLIENT_ID")
+  AZURE_CLIENT_SECRET=$(cat "${CAPZ_CREDS_DIR}/AZURE_CLIENT_SECRET")
+  AZURE_TENANT_ID=$(cat "${CAPZ_CREDS_DIR}/AZURE_TENANT_ID")
+  AZURE_SUBSCRIPTION_ID=$(cat "${CAPZ_CREDS_DIR}/AZURE_SUBSCRIPTION_ID")
+  export AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID
+  echo "[capz-test-env] Azure credentials overridden with CAPZ vault credentials"
+  set -o xtrace
+fi
+
 export INFRA_PROVIDER=aro
 export CAPI_USER=prow
 export DEPLOYMENT_ENV=ci
