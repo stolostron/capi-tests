@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -2646,10 +2647,7 @@ func TagAzureResourceGroup(t *testing.T, config *TestConfig) {
 
 	resourceGroup := fmt.Sprintf("%s-resgroup", config.ClusterNamePrefix)
 
-	var tagPairs []string
-	for k, v := range config.AzureResourceTags {
-		tagPairs = append(tagPairs, fmt.Sprintf("%s=%s", k, v))
-	}
+	tagPairs := sortedTagPairs(config.AzureResourceTags, "=")
 
 	args := []string{"group", "update", "--name", resourceGroup, "--tags"}
 	args = append(args, tagPairs...)
@@ -2659,6 +2657,22 @@ func TagAzureResourceGroup(t *testing.T, config *TestConfig) {
 	} else {
 		t.Logf("Tagged resource group %s with %d tags", resourceGroup, len(tagPairs))
 	}
+}
+
+// sortedTagPairs converts a tag map to a sorted slice of "key<sep>value" strings.
+// Deterministic ordering ensures reproducible CLI arguments and test logs.
+func sortedTagPairs(tags map[string]string, sep string) []string {
+	keys := make([]string, 0, len(tags))
+	for k := range tags {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	pairs := make([]string, 0, len(tags))
+	for _, k := range keys {
+		pairs = append(pairs, fmt.Sprintf("%s%s%s", k, sep, tags[k]))
+	}
+	return pairs
 }
 
 // ReadDeploymentState reads the deployment state from the state file.

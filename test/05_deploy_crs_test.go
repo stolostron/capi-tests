@@ -1311,10 +1311,7 @@ func tagAzureADApplications(t *testing.T, config *TestConfig) {
 	}
 
 	// Build tag strings for AD apps (string array format: "key:value")
-	var tagStrings []string
-	for k, v := range config.AzureResourceTags {
-		tagStrings = append(tagStrings, fmt.Sprintf("%s:%s", k, v))
-	}
+	tagStrings := sortedTagPairs(config.AzureResourceTags, ":")
 
 	for _, app := range apps {
 		args := []string{"ad", "app", "update", "--id", app.AppID, "--set", fmt.Sprintf("tags=%s", toJSONArray(tagStrings))}
@@ -1358,10 +1355,7 @@ func tagAzureServicePrincipals(t *testing.T, config *TestConfig) {
 	}
 
 	// Build tag strings for SPs (string array format: "key:value")
-	var tagStrings []string
-	for k, v := range config.AzureResourceTags {
-		tagStrings = append(tagStrings, fmt.Sprintf("%s:%s", k, v))
-	}
+	tagStrings = sortedTagPairs(config.AzureResourceTags, ":")
 
 	for _, sp := range sps {
 		args := []string{"ad", "sp", "update", "--id", sp.ID, "--set", fmt.Sprintf("tags=%s", toJSONArray(tagStrings))}
