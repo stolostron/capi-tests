@@ -336,7 +336,7 @@ func getWorkloadClusterNamespace(defaultPrefix string) string {
 func getClusterNamePrefix(capiUser string) string {
 	clusterNamePrefixOnce.Do(func() {
 		// Check if explicitly provided
-		if prefix := os.Getenv("CS_CLUSTER_NAME"); prefix != "" {
+		if prefix := GetEnvOrDefault("CS_CLUSTER_NAME", ""); prefix != "" {
 			clusterNamePrefix = prefix
 			return
 		}
