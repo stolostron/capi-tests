@@ -1170,19 +1170,18 @@ func ReportInfrastructureProgress(t *testing.T, iteration int, elapsed, remainin
 	t.Logf("Infrastructure progress: %d/%d resources reconciled", status.ReadyResources, status.TotalResources)
 }
 
-// DumpNotReadyResourceDiagnostics fetches conditions and events for not-ready ASO resources.
-// Call this on timeout to understand why specific resources are stuck.
+// DumpNotReadyResourceDiagnostics fetches conditions and events for not-ready ASO resources
+// and recent namespace events. Call this on timeout to understand why resources are stuck.
 // Diagnostic output is printed to TTY/test log and saved to the results directory as an artifact.
+//
+// Always dumps namespace events even when notReady is empty, because conditions like
+// NetworkInfrastructureReady can stay False even when all individual resources report ready=true.
 func DumpNotReadyResourceDiagnostics(t *testing.T, context, namespace string, notReady []AROClusterResourceStatus) {
 	t.Helper()
 
-	if len(notReady) == 0 {
-		return
-	}
-
 	var diagLog strings.Builder
 
-	header := fmt.Sprintf("=== DIAGNOSTICS: Not-ready infrastructure resources (%s) ===", time.Now().Format("2006-01-02 15:04:05"))
+	header := fmt.Sprintf("=== DIAGNOSTICS: Infrastructure timeout diagnostics (%s) ===", time.Now().Format("2006-01-02 15:04:05"))
 	PrintToTTY("\n%s\n", header)
 	diagLog.WriteString(header + "\n")
 	t.Logf("Dumping diagnostics for %d not-ready resources", len(notReady))
