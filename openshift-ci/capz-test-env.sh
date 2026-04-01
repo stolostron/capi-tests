@@ -37,7 +37,11 @@ fi
 export INFRA_PROVIDER=aro
 export CAPI_USER=prow
 export DEPLOYMENT_ENV=ci
-export REGION="${LEASED_RESOURCE:-uksouth}"
+# ARO HCP is only available in a limited set of regions; LEASED_RESOURCE is
+# chosen by Prow from the azure4 pool and may not be one of them.  Hardcode
+# to uksouth so the workload cluster always lands in a supported region.
+# The IPI management cluster still uses LEASED_RESOURCE via ipi-azure-pre.
+export REGION="uksouth"
 export OPERATORS_UAMIS_SUFFIX_FILE="/tmp/operators-uamis-suffix.txt"
 export ARO_REPO_URL="https://github.com/marek-veber/cluster-api-installer.git"
 export ARO_REPO_BRANCH="capi-tests"
