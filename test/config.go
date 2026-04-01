@@ -323,6 +323,7 @@ type TestConfig struct {
 	ManagementClusterName    string
 	WorkloadClusterName      string
 	ClusterNamePrefix        string // Used as CS_CLUSTER_NAME for YAML generation; resource group becomes ${ClusterNamePrefix}-resgroup
+	NamePrefix               string // NAME_PREFIX used for Azure resource naming (Key Vault, node pools); passed to YAML generation
 	OCPVersion               string
 	Region                   string
 	AzureSubscriptionName    string // Azure subscription name (from AZURE_SUBSCRIPTION_NAME env var)
@@ -540,6 +541,7 @@ func NewTestConfig() *TestConfig {
 		ManagementClusterName:    GetEnvOrDefault("MANAGEMENT_CLUSTER_NAME", defaultMgmtCluster),
 		WorkloadClusterName:      GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", defaultWorkloadCluster),
 		ClusterNamePrefix:        GetEnvOrDefault("CS_CLUSTER_NAME", fmt.Sprintf("%s-%s", capiUser, GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv))),
+		NamePrefix:               os.Getenv("NAME_PREFIX"), // Optional; set by capz-test-env.sh in CI
 		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.20"),
 		Region:                   GetEnvOrDefault(regionEnvVar, defaultRegion),
 		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),

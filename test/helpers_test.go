@@ -1582,6 +1582,109 @@ func TestValidateExternalAuthID_Constants(t *testing.T) {
 	}
 }
 
+func TestValidateNamePrefix(t *testing.T) {
+	tests := []struct {
+		name        string
+		namePrefix  string
+		expectError bool
+	}{
+		// Valid cases
+		{
+			name:        "empty - not set",
+			namePrefix:  "",
+			expectError: false,
+		},
+		{
+			name:        "exactly 11 chars - at limit",
+			namePrefix:  "12345678901",
+			expectError: false, // "12345678901" + "-mp1" = 15 chars
+		},
+		{
+			name:        "short prefix",
+			namePrefix:  "ct-ab12",
+			expectError: false, // "ct-ab12" + "-mp1" = 11 chars
+		},
+		{
+			name:        "10 chars",
+			namePrefix:  "1234567890",
+			expectError: false, // "1234567890" + "-mp1" = 14 chars
+		},
+		// Invalid cases
+		{
+			name:        "12 chars - one over limit",
+			namePrefix:  "123456789012",
+			expectError: true, // "123456789012" + "-mp1" = 16 chars
+		},
+		{
+			name:        "15 chars - typical CI failure",
+			namePrefix:  "capz-tests-25b0",
+			expectError: true, // "capz-tests-25b0" + "-mp1" = 19 chars
+		},
+		{
+			name:        "20 chars - way over",
+			namePrefix:  "12345678901234567890",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateNamePrefix(tt.namePrefix)
+			if tt.expectError {
+				if err == nil {
+					nodePoolName := tt.namePrefix + NodePoolSuffix
+					t.Errorf("ValidateNamePrefix(%q) expected error for node pool name %q (%d chars), got nil",
+						tt.namePrefix, nodePoolName, len(nodePoolName))
+				} else {
+					for _, msg := range []string{"NAME_PREFIX", "node pool", "ARO HCP"} {
+						if !strings.Contains(err.Error(), msg) {
+							t.Errorf("ValidateNamePrefix(%q) error = %q, expected to contain %q",
+								tt.namePrefix, err.Error(), msg)
+						}
+					}
+				}
+			} else {
+				if err != nil {
+					t.Errorf("ValidateNamePrefix(%q) unexpected error: %v",
+						tt.namePrefix, err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateNamePrefix_Constants(t *testing.T) {
+	if MaxNodePoolNameLength != 15 {
+		t.Errorf("MaxNodePoolNameLength = %d, expected 15", MaxNodePoolNameLength)
+	}
+
+	if NodePoolSuffix != "-mp1" {
+		t.Errorf("NodePoolSuffix = %q, expected \"-mp1\"", NodePoolSuffix)
+	}
+
+	if MaxNamePrefixLength != 11 {
+		t.Errorf("MaxNamePrefixLength = %d, expected 11 (15 - 4)", MaxNamePrefixLength)
+	}
+
+	// Verify the relationship: MaxNamePrefixLength + len(suffix) == MaxNodePoolNameLength
+	if MaxNamePrefixLength+len(NodePoolSuffix) != MaxNodePoolNameLength {
+		t.Errorf("MaxNamePrefixLength (%d) + len(NodePoolSuffix) (%d) != MaxNodePoolNameLength (%d)",
+			MaxNamePrefixLength, len(NodePoolSuffix), MaxNodePoolNameLength)
+	}
+
+	// Test boundary: exactly at the limit should pass
+	err := ValidateNamePrefix("12345678901") // 11 chars
+	if err != nil {
+		t.Errorf("ValidateNamePrefix with 11 chars should pass, got error: %v", err)
+	}
+
+	// Test boundary: one char over should fail
+	err = ValidateNamePrefix("123456789012") // 12 chars
+	if err == nil {
+		t.Error("ValidateNamePrefix with 12 chars should fail, got nil")
+	}
+}
+
 func TestIsRetryableKubectlError(t *testing.T) {
 	tests := []struct {
 		name     string

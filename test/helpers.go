@@ -1696,6 +1696,41 @@ func ValidateDomainPrefix(user, environment string) error {
 	return nil
 }
 
+// MaxNodePoolNameLength is the maximum allowed length for ARO HCP node pool names.
+// Azure enforces this via the regex ^[a-zA-Z][-a-zA-Z0-9]{1,13}[a-zA-Z0-9]$ (3-15 chars).
+const MaxNodePoolNameLength = 15
+
+// NodePoolSuffix is the suffix appended to NAME_PREFIX to form the node pool Azure name.
+// The machine pool name is typically constructed as ${NAME_PREFIX}-mp1 by cluster-api-installer.
+const NodePoolSuffix = "-mp1"
+
+// MaxNamePrefixLength is the maximum allowed length for NAME_PREFIX,
+// calculated as MaxNodePoolNameLength minus the length of NodePoolSuffix.
+// This ensures the resulting node pool name (${NAME_PREFIX}-mp1) stays within limits.
+const MaxNamePrefixLength = MaxNodePoolNameLength - len(NodePoolSuffix) // 11
+
+// ValidateNamePrefix checks if the NAME_PREFIX length is within the allowed limit
+// for ARO HCP node pool naming. The node pool Azure name is constructed as
+// ${NAME_PREFIX}-mp1 and must not exceed 15 characters.
+// Returns nil if NAME_PREFIX is empty (not set), as it's optional for local runs.
+func ValidateNamePrefix(namePrefix string) error {
+	if namePrefix == "" {
+		return nil
+	}
+	if len(namePrefix) > MaxNamePrefixLength {
+		nodePoolName := namePrefix + NodePoolSuffix
+		return fmt.Errorf(
+			"NAME_PREFIX '%s' (%d chars) exceeds maximum length of %d characters\n"+
+				"  Node pool name would be '%s' (%d chars), exceeding ARO HCP limit of %d chars\n"+
+				"  ARO HCP node pool names must match: ^[a-zA-Z][-a-zA-Z0-9]{1,13}[a-zA-Z0-9]$\n"+
+				"  Suggestion: Use a shorter NAME_PREFIX (max %d chars)",
+			namePrefix, len(namePrefix), MaxNamePrefixLength,
+			nodePoolName, len(nodePoolName), MaxNodePoolNameLength,
+			MaxNamePrefixLength)
+	}
+	return nil
+}
+
 // RFC1123NameRegex is a regex for RFC 1123 subdomain name validation.
 // Names must consist of lowercase alphanumeric characters or '-', and must start
 // and end with an alphanumeric character.
