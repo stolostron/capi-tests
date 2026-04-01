@@ -3,6 +3,7 @@ package test
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1368,10 +1369,11 @@ func tagAzureServicePrincipals(t *testing.T, config *TestConfig) {
 	t.Logf("Tagged %d Service Principal(s)", len(sps))
 }
 
-// toJSONArray converts a string slice to a JSON array string for use with az CLI --set.
+// toJSONArray converts a string slice to a JSON array string.
 func toJSONArray(items []string) string {
 	data, err := json.Marshal(items)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to marshal tag array: %v\n", err)
 		return "[]"
 	}
 	return string(data)
