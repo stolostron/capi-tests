@@ -1267,8 +1267,8 @@ func TestDeployment_TagAzureResources(t *testing.T) {
 
 	PrintToTTY("\n=== Tagging Azure Resources ===\n")
 
-	// Tag resource group
-	tagAzureResourceGroupDeploy(t, config)
+	PrintToTTY("Tagging resource group %s-resgroup...\n", config.ClusterNamePrefix)
+	TagAzureResourceGroup(t, config)
 
 	// Tag Azure AD Applications matching our prefix
 	tagAzureADApplications(t, config)
@@ -1277,28 +1277,6 @@ func TestDeployment_TagAzureResources(t *testing.T) {
 	tagAzureServicePrincipals(t, config)
 
 	PrintToTTY("✅ Azure resource tagging completed\n\n")
-}
-
-// tagAzureResourceGroupDeploy tags the resource group with ownership metadata.
-func tagAzureResourceGroupDeploy(t *testing.T, config *TestConfig) {
-	t.Helper()
-
-	resourceGroup := fmt.Sprintf("%s-resgroup", config.ClusterNamePrefix)
-
-	var tagPairs []string
-	for k, v := range config.AzureResourceTags {
-		tagPairs = append(tagPairs, fmt.Sprintf("%s=%s", k, v))
-	}
-
-	args := []string{"group", "update", "--name", resourceGroup, "--tags"}
-	args = append(args, tagPairs...)
-
-	PrintToTTY("Tagging resource group %s...\n", resourceGroup)
-	if _, err := RunCommandQuiet(t, "az", args...); err != nil {
-		t.Logf("Warning: could not tag resource group %s: %v", resourceGroup, err)
-	} else {
-		t.Logf("Tagged resource group %s with %d tags", resourceGroup, len(tagPairs))
-	}
 }
 
 // tagAzureADApplications finds and tags Azure AD Applications matching our prefix.

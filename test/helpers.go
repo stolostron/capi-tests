@@ -2639,6 +2639,28 @@ func WriteDeploymentState(config *TestConfig) error {
 	return nil
 }
 
+// TagAzureResourceGroup applies Azure resource tags to the resource group.
+// Non-fatal: failures are logged as warnings since tagging is for cleanup convenience only.
+func TagAzureResourceGroup(t *testing.T, config *TestConfig) {
+	t.Helper()
+
+	resourceGroup := fmt.Sprintf("%s-resgroup", config.ClusterNamePrefix)
+
+	var tagPairs []string
+	for k, v := range config.AzureResourceTags {
+		tagPairs = append(tagPairs, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	args := []string{"group", "update", "--name", resourceGroup, "--tags"}
+	args = append(args, tagPairs...)
+
+	if _, err := RunCommandQuiet(t, "az", args...); err != nil {
+		t.Logf("Warning: could not tag resource group %s: %v", resourceGroup, err)
+	} else {
+		t.Logf("Tagged resource group %s with %d tags", resourceGroup, len(tagPairs))
+	}
+}
+
 // ReadDeploymentState reads the deployment state from the state file.
 // Returns nil if the file doesn't exist (no deployment has been recorded).
 func ReadDeploymentState() (*DeploymentState, error) {
