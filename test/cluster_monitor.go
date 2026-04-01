@@ -258,6 +258,19 @@ func MonitorClusterUntilReady(t *testing.T, kubeContext, namespace, clusterName 
 
 		t.Logf("[%d] %s", iteration, data.FormatSummary())
 
+		// Fail-fast: check for terminal cluster phase
+		if data.Cluster.Phase == ClusterPhaseFailed {
+			return data, fmt.Errorf("cluster phase is 'Failed' — deployment cannot recover")
+		}
+
+		// Fail-fast: check conditions for permanent failures
+		if err := CheckK8sConditionsForPermanentFailure(data.ControlPlane.Conditions); err != nil {
+			return data, fmt.Errorf("permanent failure in %s: %w", data.ControlPlane.Kind, err)
+		}
+		if err := CheckK8sConditionsForPermanentFailure(data.Infrastructure.Conditions); err != nil {
+			return data, fmt.Errorf("permanent failure in %s: %w", data.Infrastructure.Kind, err)
+		}
+
 		if data.IsReady() {
 			t.Logf("Cluster is ready after %v", elapsed.Round(time.Second))
 			return data, nil
@@ -294,6 +307,16 @@ func MonitorControlPlaneUntilReady(t *testing.T, kubeContext, namespace, cluster
 		}
 
 		t.Logf("[%d] %s", iteration, data.FormatSummary())
+
+		// Fail-fast: check for terminal cluster phase
+		if data.Cluster.Phase == ClusterPhaseFailed {
+			return data, fmt.Errorf("cluster phase is 'Failed' — deployment cannot recover")
+		}
+
+		// Fail-fast: check control plane conditions for permanent failures
+		if err := CheckK8sConditionsForPermanentFailure(data.ControlPlane.Conditions); err != nil {
+			return data, fmt.Errorf("permanent failure in %s: %w", data.ControlPlane.Kind, err)
+		}
 
 		if data.IsControlPlaneReady() {
 			t.Logf("Control plane is ready after %v", elapsed.Round(time.Second))

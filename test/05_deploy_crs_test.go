@@ -589,6 +589,44 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 			continue
 		}
 
+		// Fail-fast: check Cluster.Phase for terminal failure
+		if status.Cluster.Phase == ClusterPhaseFailed {
+			PrintToTTY("\n❌ Cluster phase is Failed — aborting early\n\n")
+			t.Fatalf("Cluster phase is 'Failed' — deployment cannot recover.\n\n"+
+				"Check cluster status:\n"+
+				"  kubectl --context %s -n %s get cluster %s -o yaml",
+				context, config.WorkloadClusterNamespace, provisionedClusterName)
+			return
+		}
+
+		// Fail-fast: check ControlPlane conditions for permanent failures
+		if err := CheckConditionsForPermanentFailure(status.ControlPlane.Conditions); err != nil {
+			PrintToTTY("\n❌ Permanent failure detected in %s conditions — aborting early\n", status.ControlPlane.Kind)
+			PrintToTTY("   %v\n\n", err)
+			t.Fatalf("Permanent failure in %s conditions — deployment cannot recover.\n%v\n\n"+
+				"Check control plane status:\n"+
+				"  kubectl --context %s -n %s get %s %s -o yaml",
+				status.ControlPlane.Kind, err,
+				context, config.WorkloadClusterNamespace, strings.ToLower(status.ControlPlane.Kind), controlPlaneName)
+			return
+		}
+
+		// Fail-fast: check MachinePool infrastructure conditions for permanent failures
+		for _, mp := range status.MachinePools {
+			if mp.Infrastructure != nil {
+				if err := CheckConditionsForPermanentFailure(mp.Infrastructure.Conditions); err != nil {
+					PrintToTTY("\n❌ Permanent failure detected in %s conditions — aborting early\n", mp.Infrastructure.Kind)
+					PrintToTTY("   %v\n\n", err)
+					t.Fatalf("Permanent failure in %s conditions — deployment cannot recover.\n%v\n\n"+
+						"Check machine pool status:\n"+
+						"  kubectl --context %s -n %s get %s %s -o yaml",
+						mp.Infrastructure.Kind, err,
+						context, config.WorkloadClusterNamespace, strings.ToLower(mp.Infrastructure.Kind), mp.Name)
+					return
+				}
+			}
+		}
+
 		// Check ControlPlane ready status (works for ARO/ROSA dynamically)
 		if !controlPlaneReady {
 			cpKind := status.ControlPlane.Kind
@@ -800,6 +838,18 @@ func TestDeployment_WaitForExternalAuthReady(t *testing.T) {
 			continue
 		}
 
+		// Fail-fast: check all control plane conditions for permanent failures
+		if err := CheckK8sConditionsForPermanentFailure(data.ControlPlane.Conditions); err != nil {
+			PrintToTTY("\n❌ Permanent failure detected in %s conditions — aborting early\n", data.ControlPlane.Kind)
+			PrintToTTY("   %v\n\n", err)
+			t.Fatalf("Permanent failure in %s conditions — deployment cannot recover.\n%v\n\n"+
+				"Check control plane status:\n"+
+				"  kubectl --context %s -n %s get %s -o yaml",
+				data.ControlPlane.Kind, err,
+				context, config.WorkloadClusterNamespace, strings.ToLower(data.ControlPlane.Kind))
+			return
+		}
+
 		// Search for ExternalAuthReady in control plane conditions
 		found := false
 		for _, cond := range data.ControlPlane.Conditions {
@@ -898,6 +948,18 @@ func TestDeployment_VerifyInfrastructureResources(t *testing.T) {
 			PrintToTTY("[%d] ⚠️  Failed to parse monitor output: %v\n", iteration, err)
 			time.Sleep(pollInterval)
 			continue
+		}
+
+		// Fail-fast: check infrastructure conditions for permanent failures
+		if err := CheckConditionsForPermanentFailure(status.Infrastructure.Conditions); err != nil {
+			PrintToTTY("\n❌ Permanent failure detected in %s conditions — aborting early\n", status.Infrastructure.Kind)
+			PrintToTTY("   %v\n\n", err)
+			t.Fatalf("Permanent failure in %s conditions — deployment cannot recover.\n%v\n\n"+
+				"Check infrastructure status:\n"+
+				"  kubectl --context %s -n %s get %s %s -o yaml",
+				status.Infrastructure.Kind, err,
+				context, config.WorkloadClusterNamespace, strings.ToLower(status.Infrastructure.Kind), provisionedClusterName)
+			return
 		}
 
 		// Get infrastructure status from already-parsed data
@@ -1002,6 +1064,20 @@ func TestDeployment_VerifyAROClusterReady(t *testing.T) {
 			return
 		}
 
+		// Fail-fast: check infrastructure conditions for permanent failures
+		if err == nil {
+			if failErr := CheckK8sConditionsForPermanentFailure(data.Infrastructure.Conditions); failErr != nil {
+				PrintToTTY("\n❌ Permanent failure detected in %s conditions — aborting early\n", data.Infrastructure.Kind)
+				PrintToTTY("   %v\n\n", failErr)
+				t.Fatalf("Permanent failure in %s conditions — deployment cannot recover.\n%v\n\n"+
+					"Check infrastructure status:\n"+
+					"  kubectl --context %s -n %s get %s %s -o yaml",
+					data.Infrastructure.Kind, failErr,
+					context, config.WorkloadClusterNamespace, infraResourceType, provisionedClusterName)
+				return
+			}
+		}
+
 		PrintToTTY("⏳ %s.Ready: %s (elapsed %v)\n", data.Infrastructure.Kind, status, elapsed.Round(time.Second))
 		time.Sleep(pollInterval)
 	}
@@ -1059,6 +1135,27 @@ func TestDeployment_VerifyClusterProvisioned(t *testing.T) {
 			return
 		}
 
+		// Fail-fast: check cluster phase and conditions for permanent failures
+		if err == nil {
+			if data.Cluster.Phase == ClusterPhaseFailed {
+				PrintToTTY("\n❌ Cluster phase is Failed — aborting early\n\n")
+				t.Fatalf("Cluster phase is 'Failed' — deployment cannot recover.\n\n"+
+					"Check cluster status:\n"+
+					"  kubectl --context %s -n %s get cluster %s -o yaml",
+					context, config.WorkloadClusterNamespace, provisionedClusterName)
+				return
+			}
+			if failErr := CheckK8sConditionsForPermanentFailure(data.Cluster.Conditions); failErr != nil {
+				PrintToTTY("\n❌ Permanent failure detected in Cluster conditions — aborting early\n")
+				PrintToTTY("   %v\n\n", failErr)
+				t.Fatalf("Permanent failure in Cluster conditions — deployment cannot recover.\n%v\n\n"+
+					"Check cluster status:\n"+
+					"  kubectl --context %s -n %s get cluster %s -o yaml",
+					failErr, context, config.WorkloadClusterNamespace, provisionedClusterName)
+				return
+			}
+		}
+
 		PrintToTTY("⏳ Cluster.Initialization.InfrastructureProvisioned: %s (elapsed %v)\n", status, elapsed.Round(time.Second))
 		time.Sleep(pollInterval)
 	}
@@ -1114,6 +1211,27 @@ func TestDeployment_VerifyClusterInfrastructureReady(t *testing.T) {
 			PrintToTTY("✅ Cluster.InfrastructureReady is True (took %v)\n\n", elapsed.Round(time.Second))
 			t.Logf("Cluster InfrastructureReady=True (took %v)", elapsed.Round(time.Second))
 			return
+		}
+
+		// Fail-fast: check cluster phase and conditions for permanent failures
+		if err == nil {
+			if data.Cluster.Phase == ClusterPhaseFailed {
+				PrintToTTY("\n❌ Cluster phase is Failed — aborting early\n\n")
+				t.Fatalf("Cluster phase is 'Failed' — deployment cannot recover.\n\n"+
+					"Check cluster status:\n"+
+					"  kubectl --context %s -n %s get cluster %s -o yaml",
+					context, config.WorkloadClusterNamespace, provisionedClusterName)
+				return
+			}
+			if failErr := CheckK8sConditionsForPermanentFailure(data.Cluster.Conditions); failErr != nil {
+				PrintToTTY("\n❌ Permanent failure detected in Cluster conditions — aborting early\n")
+				PrintToTTY("   %v\n\n", failErr)
+				t.Fatalf("Permanent failure in Cluster conditions — deployment cannot recover.\n%v\n\n"+
+					"Check cluster status:\n"+
+					"  kubectl --context %s -n %s get cluster %s -o yaml",
+					failErr, context, config.WorkloadClusterNamespace, provisionedClusterName)
+				return
+			}
 		}
 
 		PrintToTTY("⏳ Cluster.InfrastructureReady: %s (elapsed %v)\n", status, elapsed.Round(time.Second))
