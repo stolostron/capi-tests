@@ -1435,6 +1435,9 @@ func PatchASOCredentialsSecret(t *testing.T, kubeContext string) error {
 	// These are optional for local development but required for ASO to work in Kind clusters
 	clientID := os.Getenv("AZURE_CLIENT_ID")
 	clientSecret := os.Getenv("AZURE_CLIENT_SECRET")
+	if (clientID == "") != (clientSecret == "") {
+		return fmt.Errorf("AZURE_CLIENT_ID and AZURE_CLIENT_SECRET must both be set or both be empty")
+	}
 	if clientID != "" && clientSecret != "" {
 		patchData["AZURE_CLIENT_ID"] = clientID
 		patchData["AZURE_CLIENT_SECRET"] = clientSecret
