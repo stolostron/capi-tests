@@ -283,8 +283,13 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 			t.Logf("Deployment state saved (namespace: %s)", config.WorkloadClusterNamespace)
 		}
 
-		// Tag Azure resource group for parallel run cleanup queries
-		tagAzureResourceGroup(t, config)
+		// Tag Azure resource group for parallel run cleanup queries.
+		// Resource group may not exist yet (created by CAPI during deployment),
+		// so failure here is expected — Phase 05 will retry after deployment.
+		if len(config.AzureResourceTags) > 0 && CommandExists("az") {
+			PrintToTTY("🏷️  Tagging resource group %s-resgroup...\n", config.ClusterNamePrefix)
+			TagAzureResourceGroup(t, config)
+		}
 
 		// Copy generated YAMLs to results directory for visibility
 		copyYAMLsToResultsDir(t, outputDir, expectedFiles)
@@ -391,42 +396,6 @@ func redactSecrets(content []byte) ([]byte, bool) {
 	}
 
 	return []byte(strings.Join(result, "---")), redacted
-}
-
-// tagAzureResourceGroup applies Azure resource tags to the resource group for parallel run
-// cleanup and ownership tracking. Tags enable queries like "find all my test resources"
-// via Azure Resource Graph. Non-fatal: failures are logged as warnings.
-func tagAzureResourceGroup(t *testing.T, config *TestConfig) {
-	t.Helper()
-
-	if len(config.AzureResourceTags) == 0 {
-		return
-	}
-
-	if !CommandExists("az") {
-		t.Log("Azure CLI not available, skipping resource group tagging")
-		return
-	}
-
-	resourceGroup := fmt.Sprintf("%s-resgroup", config.ClusterNamePrefix)
-
-	// Build tag arguments: key1=value1 key2=value2 ...
-	var tagPairs []string
-	for k, v := range config.AzureResourceTags {
-		tagPairs = append(tagPairs, fmt.Sprintf("%s=%s", k, v))
-	}
-
-	args := []string{"group", "update", "--name", resourceGroup, "--tags"}
-	args = append(args, tagPairs...)
-
-	PrintToTTY("🏷️  Tagging resource group %s...\n", resourceGroup)
-	if _, err := RunCommandQuiet(t, "az", args...); err != nil {
-		// Resource group may not exist yet (created by CAPI during deployment, not during YAML generation)
-		t.Logf("Note: could not tag resource group %s (may not exist yet): %v", resourceGroup, err)
-		t.Log("Tags will need to be applied manually after deployment creates the resource group")
-	} else {
-		t.Logf("Tagged resource group %s with %d tags", resourceGroup, len(tagPairs))
-	}
 }
 
 // TestInfrastructure_VerifyCredentialsYAML verifies credentials.yaml exists and is valid
