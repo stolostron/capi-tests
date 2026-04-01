@@ -3648,6 +3648,16 @@ func TestRedactCommand(t *testing.T) {
 			input: `az login -p the-secret`,
 			want:  `az login -p ***REDACTED***`,
 		},
+		{
+			name:  "alias key clientSecret in JSON",
+			input: `{"clientSecret":"my-secret","tenantId":"t1"}`,
+			want:  `{"clientSecret":"***REDACTED***","tenantId":"t1"}`,
+		},
+		{
+			name:  "alias key SecretAccessKey in JSON",
+			input: `{"SecretAccessKey":"aws-key","AccessKeyId":"key-id"}`,
+			want:  `{"SecretAccessKey":"***REDACTED***","AccessKeyId":"key-id"}`,
+		},
 	}
 
 	for _, tt := range tests {
