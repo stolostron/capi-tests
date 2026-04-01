@@ -386,8 +386,10 @@ func getClusterNamePrefix(capiUser string) string {
 func generateRunID(length int) string {
 	bytes := make([]byte, (length+1)/2)
 	if _, err := rand.Read(bytes); err != nil {
-		// Fallback to timestamp-based suffix
-		return fmt.Sprintf("%05x", time.Now().UnixNano()%0xFFFFF)
+		// Fallback to timestamp-based suffix; mask to length hex digits
+		fmt.Fprintf(os.Stderr, "Warning: crypto/rand failed (%v), falling back to timestamp-based run ID\n", err)
+		mask := int64(1)<<(length*4) - 1
+		return fmt.Sprintf("%0*x", length, time.Now().UnixNano()&mask)
 	}
 	return hex.EncodeToString(bytes)[:length]
 }
