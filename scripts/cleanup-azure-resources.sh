@@ -15,7 +15,8 @@
 #   ./scripts/cleanup-azure-resources.sh [OPTIONS]
 #
 # Options:
-#   --prefix PREFIX        Resource name prefix to search for (default: CS_CLUSTER_NAME, else CAPI_USER-DEPLOYMENT_ENV, else cate)
+#   --prefix PREFIX        Resource name prefix to search for (default: CS_CLUSTER_NAME env var, else CAPI_USER-DEPLOYMENT_ENV, else cate)
+#                          Note: The Go test suite auto-generates CS_CLUSTER_NAME as CAPI_USER-<random>; this fallback is for standalone script usage.
 #   --resource-group RG    Also delete this Azure resource group
 #   --match-mode MODE      How to match resource names: 'startswith' (default, safer) or 'contains' (broader)
 #   --my-resources         Find all resources tagged with capi-test-user=$USER (dry-run)
@@ -25,9 +26,10 @@
 #   --help                 Show this help message
 #
 # Environment variables:
-#   CS_CLUSTER_NAME    Full cluster name prefix (e.g., 'cate-stage') - preferred, most specific
+#   CS_CLUSTER_NAME    Full cluster name prefix (e.g., 'cate-a1b2c') - preferred, most specific.
+#                      The Go test suite auto-generates this as CAPI_USER-<5hex> for parallel runs.
 #   CAPI_USER          User prefix for resource names (e.g., 'cate') - fallback if CS_CLUSTER_NAME not set
-#   DEPLOYMENT_ENV     Deployment environment (default: 'stage') - combined with CAPI_USER as fallback
+#   DEPLOYMENT_ENV     Deployment environment (default: 'stage') - combined with CAPI_USER as standalone fallback
 #   AZURE_SUBSCRIPTION_ID  Azure subscription ID to search in
 #
 # Examples:
