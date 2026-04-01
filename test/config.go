@@ -243,6 +243,10 @@ var (
 
 	clusterNamePrefix     string
 	clusterNamePrefixOnce sync.Once
+
+	// cachedAzureResourceTags holds tags loaded from the deployment state file on resume.
+	// nil means no cached tags (first run or explicit CS_CLUSTER_NAME).
+	cachedAzureResourceTags map[string]string
 )
 
 // getDefaultRepoDir returns the default repository directory path.
@@ -345,13 +349,15 @@ func getClusterNamePrefix(capiUser string) string {
 		// #nosec G304 - path constructed from repo directory and fixed filename (.deployment-state.json)
 		if data, err := os.ReadFile(stateFilePath); err == nil {
 			var state struct {
-				ClusterNamePrefix string `json:"cluster_name_prefix"`
+				ClusterNamePrefix string            `json:"cluster_name_prefix"`
+				AzureResourceTags map[string]string `json:"azure_resource_tags,omitempty"`
 			}
 			if unmarshalErr := json.Unmarshal(data, &state); unmarshalErr != nil {
 				fmt.Fprintf(os.Stderr, "Warning: deployment state file %s exists but cannot be parsed: %v\n", stateFilePath, unmarshalErr)
 				fmt.Fprintf(os.Stderr, "Generating new cluster name prefix instead of resuming previous run\n")
 			} else if state.ClusterNamePrefix != "" {
 				clusterNamePrefix = state.ClusterNamePrefix
+				cachedAzureResourceTags = state.AzureResourceTags
 				return
 			}
 		} else if !os.IsNotExist(err) {
@@ -617,12 +623,16 @@ func NewTestConfig() *TestConfig {
 		testRunID = strings.TrimPrefix(prefix, userPrefix)
 	}
 
-	// Build Azure resource tags for cleanup and ownership tracking
-	azureTags := map[string]string{
-		"capi-test-user":       capiUser,
-		"capi-test-env":        environment,
-		"capi-test-run-id":     prefix,
-		"capi-test-created-at": time.Now().Format(time.RFC3339),
+	// Build Azure resource tags for cleanup and ownership tracking.
+	// On resume, use cached tags from the deployment state to preserve the original created-at timestamp.
+	azureTags := cachedAzureResourceTags
+	if azureTags == nil {
+		azureTags = map[string]string{
+			"capi-test-user":       capiUser,
+			"capi-test-env":        environment,
+			"capi-test-run-id":     prefix,
+			"capi-test-created-at": time.Now().Format(time.RFC3339),
+		}
 	}
 
 	return &TestConfig{
