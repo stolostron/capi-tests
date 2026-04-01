@@ -1323,7 +1323,11 @@ func tagAzureADApplications(t *testing.T, config *TestConfig) {
 		AppID       string `json:"appId"`
 		DisplayName string `json:"displayName"`
 	}
-	if err := json.Unmarshal([]byte(output), &apps); err != nil || len(apps) == 0 {
+	if err := json.Unmarshal([]byte(output), &apps); err != nil {
+		t.Logf("Warning: failed to parse AD Applications JSON output: %v", err)
+		return
+	}
+	if len(apps) == 0 {
 		t.Log("No Azure AD Applications found to tag")
 		return
 	}
@@ -1366,7 +1370,11 @@ func tagAzureServicePrincipals(t *testing.T, config *TestConfig) {
 		ID          string `json:"id"`
 		DisplayName string `json:"displayName"`
 	}
-	if err := json.Unmarshal([]byte(output), &sps); err != nil || len(sps) == 0 {
+	if err := json.Unmarshal([]byte(output), &sps); err != nil {
+		t.Logf("Warning: failed to parse Service Principals JSON output: %v", err)
+		return
+	}
+	if len(sps) == 0 {
 		t.Log("No Service Principals found to tag")
 		return
 	}
