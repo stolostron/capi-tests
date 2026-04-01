@@ -113,8 +113,8 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             TAG_FILTER="$2"
-            if [[ ! "$TAG_FILTER" =~ ^[a-zA-Z0-9_-]+=.+$ ]]; then
-                print_error "Invalid tag format '${TAG_FILTER}': expected KEY=VALUE (e.g., 'capi-test-user=alice')"
+            if [[ ! "$TAG_FILTER" =~ ^[a-zA-Z0-9_-]+=[a-zA-Z0-9_.@:/-]+$ ]]; then
+                print_error "Invalid tag format '${TAG_FILTER}': expected KEY=VALUE with alphanumeric, hyphens, dots, @, colons, slashes (e.g., 'capi-test-user=alice')"
                 exit 1
             fi
             shift 2
@@ -122,6 +122,10 @@ while [[ $# -gt 0 ]]; do
         --my-resources)
             if [[ -z "${USER:-}" ]]; then
                 print_error "USER environment variable is not set"
+                exit 1
+            fi
+            if [[ ! "${USER}" =~ ^[a-zA-Z0-9_.@/-]+$ ]]; then
+                print_error "USER '${USER}' contains disallowed characters for tag value"
                 exit 1
             fi
             TAG_FILTER="capi-test-user=${USER}"
