@@ -31,9 +31,27 @@ jobs:
     - name: Install Claude Code
       run: npm install -g @anthropic-ai/claude-code
 
+    # Authentication to GCP for Vertex AI.
+    # Option A: Workload Identity Federation (recommended, no long-lived secrets)
+    #   Requires GCP setup: create a Workload Identity Pool + Provider for GitHub Actions.
+    #   See: https://github.com/google-github-actions/auth#workload-identity-federation
+    # Option B: Service Account Key JSON (simpler setup, less secure)
+    #   Store the JSON key as GCP_SA_KEY repository secret.
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@ba79af03959ebeac9769e648f473a284504d9193 # v2.1.10
+      with:
+        # --- Option A: Workload Identity Federation (uncomment and fill in) ---
+        # workload_identity_provider: 'projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/<POOL_ID>/providers/<PROVIDER_ID>'
+        # service_account: '<SA_NAME>@<PROJECT_ID>.iam.gserviceaccount.com'
+        # --- Option B: Service Account Key JSON (uncomment) ---
+        # credentials_json: '${{ secrets.GCP_SA_KEY }}'
+        credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
     - name: Run scheduled review
       env:
-        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        CLAUDE_CODE_USE_VERTEX: "1"
+        ANTHROPIC_VERTEX_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        CLOUD_ML_REGION: "global"
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         claude -p "$(cat .claude/commands/scheduled-review.md)" \
