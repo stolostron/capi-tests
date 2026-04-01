@@ -1282,10 +1282,38 @@ func saveDiagnosticsToFile(t *testing.T, content string) {
 	t.Logf("Diagnostics saved to: %s", filePath)
 }
 
+// diagnosticsDeadline is the maximum time allowed for the entire diagnostics sweep.
+// This bounds the total time spent collecting diagnostics on timeout, preventing hangs
+// when the API server is degraded (MonitorCluster has no built-in timeout).
+const diagnosticsDeadline = 2 * time.Minute
+
 // CollectAndDumpInfraDiagnostics collects infrastructure status via the monitor script
 // and dumps diagnostics for any not-ready resources. Call this on timeout in deployment
 // wait loops to capture why resources are stuck.
+//
+// The entire sweep runs under a hard deadline to prevent hanging when the API server
+// is unresponsive — MonitorCluster blocks on CombinedOutput() without a timeout,
+// and per-resource kubectl calls add 10s each.
 func CollectAndDumpInfraDiagnostics(t *testing.T, context, namespace, clusterName string) {
+	t.Helper()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		collectInfraDiagnostics(t, context, namespace, clusterName)
+	}()
+
+	select {
+	case <-done:
+		return
+	case <-time.After(diagnosticsDeadline):
+		PrintToTTY("⚠️  Diagnostics collection timed out after %v\n", diagnosticsDeadline)
+		t.Logf("Warning: diagnostics collection timed out after %v", diagnosticsDeadline)
+	}
+}
+
+// collectInfraDiagnostics is the inner implementation of CollectAndDumpInfraDiagnostics.
+func collectInfraDiagnostics(t *testing.T, context, namespace, clusterName string) {
 	t.Helper()
 
 	data, err := MonitorCluster(t, context, namespace, clusterName)
