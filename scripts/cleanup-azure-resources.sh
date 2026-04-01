@@ -19,7 +19,7 @@
 #                          Note: The Go test suite auto-generates CS_CLUSTER_NAME as CAPI_USER-<random>; this fallback is for standalone script usage.
 #   --resource-group RG    Also delete this Azure resource group
 #   --match-mode MODE      How to match resource names: 'startswith' (default, safer) or 'contains' (broader)
-#   --my-resources         Find all resources tagged with capi-test-user=$USER (dry-run)
+#   --my-resources         Find all resources tagged with capi-test-user=$CAPI_USER (or $USER fallback) (dry-run)
 #   --tag KEY=VALUE        Find resources by Azure tag (e.g., 'capi-test-user=alice')
 #   --dry-run              Show what would be deleted without actually deleting
 #   --force                Skip confirmation prompts
@@ -122,15 +122,18 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --my-resources)
-            if [[ -z "${USER:-}" ]]; then
-                print_error "USER environment variable is not set"
+            # Use CAPI_USER to match the tag set by the Go test suite (config.go).
+            # Fall back to USER (OS login) if CAPI_USER is not set.
+            local my_user="${CAPI_USER:-${USER:-}}"
+            if [[ -z "$my_user" ]]; then
+                print_error "Neither CAPI_USER nor USER environment variable is set"
                 exit 1
             fi
-            if [[ ! "${USER}" =~ ^[a-zA-Z0-9_.@/-]+$ ]]; then
-                print_error "USER '${USER}' contains disallowed characters for tag value"
+            if [[ ! "$my_user" =~ ^[a-zA-Z0-9_.@/-]+$ ]]; then
+                print_error "User identifier '$my_user' contains disallowed characters for tag value"
                 exit 1
             fi
-            TAG_FILTER="capi-test-user=${USER}"
+            TAG_FILTER="capi-test-user=${my_user}"
             DRY_RUN=true
             shift
             ;;
