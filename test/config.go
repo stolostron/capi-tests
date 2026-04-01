@@ -347,10 +347,15 @@ func getClusterNamePrefix(capiUser string) string {
 			var state struct {
 				ClusterNamePrefix string `json:"cluster_name_prefix"`
 			}
-			if err := json.Unmarshal(data, &state); err == nil && state.ClusterNamePrefix != "" {
+			if unmarshalErr := json.Unmarshal(data, &state); unmarshalErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: deployment state file %s exists but cannot be parsed: %v\n", stateFilePath, unmarshalErr)
+				fmt.Fprintf(os.Stderr, "Generating new cluster name prefix instead of resuming previous run\n")
+			} else if state.ClusterNamePrefix != "" {
 				clusterNamePrefix = state.ClusterNamePrefix
 				return
 			}
+		} else if !os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "Warning: cannot read deployment state file %s: %v\n", stateFilePath, err)
 		}
 
 		// Generate unique prefix: ${CAPI_USER}-${random5hex}
