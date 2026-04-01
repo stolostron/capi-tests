@@ -3586,3 +3586,86 @@ func TestGenerateKindConfig_NoDockerConfig(t *testing.T) {
 		t.Error("Kind config file should not be created when Docker config is missing")
 	}
 }
+
+func TestRedactCommand(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "kubectl patch with AZURE_CLIENT_SECRET",
+			input: `kubectl patch secret aso -p {"stringData":{"AZURE_CLIENT_SECRET":"super-secret-value","AZURE_TENANT_ID":"tenant-123"}}`,
+			want:  `kubectl patch secret aso -p {"stringData":{"AZURE_CLIENT_SECRET":"***REDACTED***","AZURE_TENANT_ID":"tenant-123"}}`,
+		},
+		{
+			name:  "multiple sensitive keys",
+			input: `{"AZURE_CLIENT_SECRET":"sec1","OCM_CLIENT_SECRET":"sec2","AWS_SECRET_ACCESS_KEY":"sec3"}`,
+			want:  `{"AZURE_CLIENT_SECRET":"***REDACTED***","OCM_CLIENT_SECRET":"***REDACTED***","AWS_SECRET_ACCESS_KEY":"***REDACTED***"}`,
+		},
+		{
+			name:  "no sensitive data",
+			input: `kubectl get pods -n capz-system`,
+			want:  `kubectl get pods -n capz-system`,
+		},
+		{
+			name:  "empty string",
+			input: "",
+			want:  "",
+		},
+		{
+			name:  "non-sensitive JSON",
+			input: `kubectl patch -p {"stringData":{"AZURE_TENANT_ID":"tenant-123","AZURE_SUBSCRIPTION_ID":"sub-456"}}`,
+			want:  `kubectl patch -p {"stringData":{"AZURE_TENANT_ID":"tenant-123","AZURE_SUBSCRIPTION_ID":"sub-456"}}`,
+		},
+		{
+			name:  "az login with -p flag",
+			input: `az login --service-principal -u my-client-id -p super-secret --tenant my-tenant`,
+			want:  `az login --service-principal -u my-client-id -p ***REDACTED*** --tenant my-tenant`,
+		},
+		{
+			name:  "--password flag",
+			input: `some-tool --password my-secret-pass --user admin`,
+			want:  `some-tool --password ***REDACTED*** --user admin`,
+		},
+		{
+			name:  "--password=value form",
+			input: `some-tool --password=my-secret-pass --user admin`,
+			want:  `some-tool --password=***REDACTED*** --user admin`,
+		},
+		{
+			name:  "--client-secret flag",
+			input: `some-tool --client-secret abc123 --tenant t1`,
+			want:  `some-tool --client-secret ***REDACTED*** --tenant t1`,
+		},
+		{
+			name:  "KEY=value env assignment",
+			input: `env AZURE_CLIENT_SECRET=my-secret AWS_SECRET_ACCESS_KEY=aws-key REGION=uksouth ./run.sh`,
+			want:  `env AZURE_CLIENT_SECRET=***REDACTED*** AWS_SECRET_ACCESS_KEY=***REDACTED*** REGION=uksouth ./run.sh`,
+		},
+		{
+			name:  "-p flag at end of command",
+			input: `az login -p the-secret`,
+			want:  `az login -p ***REDACTED***`,
+		},
+		{
+			name:  "alias key clientSecret in JSON",
+			input: `{"clientSecret":"my-secret","tenantId":"t1"}`,
+			want:  `{"clientSecret":"***REDACTED***","tenantId":"t1"}`,
+		},
+		{
+			name:  "alias key SecretAccessKey in JSON",
+			input: `{"SecretAccessKey":"aws-key","AccessKeyId":"key-id"}`,
+			want:  `{"SecretAccessKey":"***REDACTED***","AccessKeyId":"key-id"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := redactCommand(tt.input)
+			if got != tt.want {
+				t.Errorf("redactCommand() =\n  %s\nwant:\n  %s", got, tt.want)
+			}
+		})
+	}
+}
