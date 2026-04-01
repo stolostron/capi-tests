@@ -354,6 +354,14 @@ func getClusterNamePrefix(capiUser string) string {
 		}
 
 		// Generate unique prefix: ${CAPI_USER}-${random5hex}
+		// CAPI_USER must be short enough that the result fits within MaxClusterNamePrefixLength (12).
+		// With 5 hex chars + hyphen, CAPI_USER can be at most 6 chars (6 + 1 + 5 = 12).
+		maxUserLen := MaxClusterNamePrefixLength - 1 - 5 // hyphen + 5 hex chars
+		if len(capiUser) > maxUserLen {
+			fmt.Fprintf(os.Stderr, "Warning: CAPI_USER %q is %d chars, exceeds max %d for auto-generated CS_CLUSTER_NAME (max %d chars). Truncating.\n",
+				capiUser, len(capiUser), maxUserLen, MaxClusterNamePrefixLength)
+			capiUser = capiUser[:maxUserLen]
+		}
 		runID := generateRunID(5)
 		clusterNamePrefix = fmt.Sprintf("%s-%s", capiUser, runID)
 	})
