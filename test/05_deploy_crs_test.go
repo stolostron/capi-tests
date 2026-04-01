@@ -545,6 +545,10 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 
 		if elapsed > timeout {
 			PrintToTTY("\n❌ Timeout reached after %v\n\n", elapsed.Round(time.Second))
+
+			// Dump diagnostics for not-ready infrastructure resources
+			CollectAndDumpInfraDiagnostics(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
+
 			t.Errorf("Timeout waiting for deployment after %v.\n"+
 				"  ControlPlane ready: %v\n"+
 				"  MachinePool ready: %v\n\n"+
@@ -868,6 +872,10 @@ func TestDeployment_VerifyInfrastructureResources(t *testing.T) {
 
 		if elapsed > timeout {
 			PrintToTTY("\n❌ Timeout reached after %v waiting for NetworkInfrastructureReady\n\n", elapsed.Round(time.Second))
+
+			// Dump diagnostics for not-ready infrastructure resources
+			CollectAndDumpInfraDiagnostics(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
+
 			t.Fatalf("Timeout waiting for NetworkInfrastructureReady after %v.\n\n"+
 				"Check AROCluster status:\n"+
 				"  kubectl --context %s -n %s get arocluster %s -o yaml",
@@ -966,6 +974,9 @@ func TestDeployment_VerifyAROClusterReady(t *testing.T) {
 	for {
 		elapsed := time.Since(startTime)
 		if elapsed > timeout {
+			// Dump diagnostics for not-ready infrastructure resources
+			CollectAndDumpInfraDiagnostics(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
+
 			t.Fatalf("Timeout after %v waiting for %s.Ready=true.\n"+
 				"  kubectl --context %s -n %s get %s %s -o yaml",
 				elapsed.Round(time.Second), infraKind, context, config.WorkloadClusterNamespace, infraResourceType, provisionedClusterName)
@@ -1020,6 +1031,9 @@ func TestDeployment_VerifyClusterProvisioned(t *testing.T) {
 	for {
 		elapsed := time.Since(startTime)
 		if elapsed > timeout {
+			// Dump diagnostics for not-ready infrastructure resources
+			CollectAndDumpInfraDiagnostics(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
+
 			t.Fatalf("Timeout after %v waiting for cluster.status.initialization.infrastructureProvisioned=true.\n"+
 				"  kubectl --context %s -n %s get cluster %s -o yaml",
 				elapsed.Round(time.Second), context, config.WorkloadClusterNamespace, provisionedClusterName)
@@ -1074,6 +1088,9 @@ func TestDeployment_VerifyClusterInfrastructureReady(t *testing.T) {
 	for {
 		elapsed := time.Since(startTime)
 		if elapsed > timeout {
+			// Dump diagnostics for not-ready infrastructure resources
+			CollectAndDumpInfraDiagnostics(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
+
 			t.Fatalf("Timeout after %v waiting for Cluster InfrastructureReady=True.\n"+
 				"  kubectl --context %s -n %s get cluster %s -o yaml",
 				elapsed.Round(time.Second), context, config.WorkloadClusterNamespace, provisionedClusterName)
