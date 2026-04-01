@@ -1390,7 +1390,7 @@ func PatchASOCredentialsSecret(t *testing.T, kubeContext string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create temp file for ASO patch: %w", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	t.Cleanup(func() { os.Remove(tmpFile.Name()) })
 	if _, err := tmpFile.Write(patchJSON); err != nil {
 		if closeErr := tmpFile.Close(); closeErr != nil {
 			return fmt.Errorf("failed to write ASO patch file: %w (also failed to close: %v)", err, closeErr)
