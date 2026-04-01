@@ -714,42 +714,44 @@ main() {
         fi
 
         # Find Azure AD Applications and Service Principals with matching tags.
-        # AD app tags are string arrays with "key:value" format (not ARM key=value).
         # Microsoft Graph doesn't support server-side tag filtering via OData, so we use
-        # the capi-test-run-id tag value (which equals CS_CLUSTER_NAME) as a displayName
-        # prefix filter (fast, server-side) and then verify tags client-side.
+        # displayName prefix filters (fast, server-side) derived from resource group names.
+        # For capi-test-run-id tags, the value is the prefix directly.
+        # For other tags (like capi-test-user), we extract prefixes from all matched RGs
+        # to handle multiple test runs by the same user.
         local tag_key="${TAG_FILTER%%=*}"
         local tag_value="${TAG_FILTER#*=}"
-        local ad_tag_string="${tag_key}:${tag_value}"
 
-        # For capi-test-run-id tags, we can use the value directly as a prefix filter
-        # For other tags (like capi-test-user), we need the prefix from resource group names
-        local ad_prefix=""
+        local ad_prefixes=()
         if [[ "$tag_key" == "capi-test-run-id" ]]; then
-            ad_prefix="${tag_value}"
+            ad_prefixes+=("${tag_value}")
         elif [[ "$rg_count" -gt 0 ]]; then
-            # Extract prefix from first resource group name (strip -resgroup suffix)
-            ad_prefix=$(echo "$rgs_json" | jq -r '.[0].name' | sed 's/-resgroup$//')
+            # Extract distinct prefixes from all matched resource groups (strip -resgroup suffix)
+            while IFS= read -r rg_prefix; do
+                ad_prefixes+=("$rg_prefix")
+            done < <(echo "$rgs_json" | jq -r '.[].name' | sed 's/-resgroup$//' | sort -u)
         fi
 
-        if [[ -n "$ad_prefix" ]]; then
-            echo ""
-            local apps_json
-            apps_json=$(find_ad_applications "$ad_prefix")
+        if [[ ${#ad_prefixes[@]} -gt 0 ]]; then
+            for ad_prefix in "${ad_prefixes[@]}"; do
+                echo ""
+                local apps_json
+                apps_json=$(find_ad_applications "$ad_prefix")
 
-            if display_ad_applications "$apps_json"; then
-                found_any=true
-                delete_ad_applications "$apps_json"
-            fi
+                if display_ad_applications "$apps_json"; then
+                    found_any=true
+                    delete_ad_applications "$apps_json"
+                fi
 
-            echo ""
-            local sps_json
-            sps_json=$(find_service_principals "$ad_prefix")
+                echo ""
+                local sps_json
+                sps_json=$(find_service_principals "$ad_prefix")
 
-            if display_service_principals "$sps_json"; then
-                found_any=true
-                delete_service_principals "$sps_json"
-            fi
+                if display_service_principals "$sps_json"; then
+                    found_any=true
+                    delete_service_principals "$sps_json"
+                fi
+            done
         else
             echo ""
             print_info "No AD Application/Service Principal prefix available for tag '${TAG_FILTER}'"
