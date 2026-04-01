@@ -1270,11 +1270,7 @@ func TestDeployment_TagAzureResources(t *testing.T) {
 
 	PrintToTTY("Tagging resource group %s-resgroup...\n", config.ClusterNamePrefix)
 	TagAzureResourceGroup(t, config)
-
-	// Tag Azure AD Applications matching our prefix
 	tagAzureADApplications(t, config)
-
-	// Tag Service Principals matching our prefix
 	tagAzureServicePrincipals(t, config)
 
 	PrintToTTY("✅ Azure resource tagging completed\n\n")
