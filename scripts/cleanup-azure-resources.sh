@@ -299,12 +299,14 @@ find_resources_by_tag() {
     local query="Resources | where tags['${tag_key}'] == '${tag_value}' | project id, name, type, resourceGroup, subscriptionId | order by resourceGroup asc, type asc, name asc"
 
     local resources_json
-    resources_json=$(az graph query -q "$query" -o json 2>/dev/null)
-    if [[ $? -ne 0 ]]; then
-        print_error "Failed to search for resources with tag '${tag_filter}'" >&2
-        echo '{"data": []}'
-        return
+    local az_stderr
+    az_stderr=$(mktemp)
+    if ! resources_json=$(az graph query -q "$query" -o json 2>"$az_stderr"); then
+        print_error "Failed to search for resources with tag '${tag_filter}': $(cat "$az_stderr")" >&2
+        rm -f "$az_stderr"
+        return 1
     fi
+    rm -f "$az_stderr"
     echo "$resources_json"
 }
 
@@ -317,12 +319,14 @@ find_resource_groups_by_tag() {
     print_info "Searching for resource groups with tag '${tag_key}=${tag_value}'..." >&2
 
     local rgs_json
-    rgs_json=$(az group list --tag "${tag_key}=${tag_value}" --query "[].{name: name, location: location}" -o json 2>/dev/null)
-    if [[ $? -ne 0 ]]; then
-        print_error "Failed to search for resource groups with tag '${tag_filter}'" >&2
-        echo "[]"
-        return
+    local az_stderr
+    az_stderr=$(mktemp)
+    if ! rgs_json=$(az group list --tag "${tag_key}=${tag_value}" --query "[].{name: name, location: location}" -o json 2>"$az_stderr"); then
+        print_error "Failed to search for resource groups with tag '${tag_filter}': $(cat "$az_stderr")" >&2
+        rm -f "$az_stderr"
+        return 1
     fi
+    rm -f "$az_stderr"
     echo "$rgs_json"
 }
 
@@ -671,7 +675,10 @@ main() {
     if [[ -n "$TAG_FILTER" ]]; then
         # Find tagged resource groups
         local rgs_json
-        rgs_json=$(find_resource_groups_by_tag "$TAG_FILTER")
+        if ! rgs_json=$(find_resource_groups_by_tag "$TAG_FILTER"); then
+            print_warning "Skipping resource group cleanup due to query failure"
+            rgs_json="[]"
+        fi
 
         local rg_count
         rg_count=$(echo "$rgs_json" | jq -r 'length // 0')
@@ -691,7 +698,10 @@ main() {
 
         # Find tagged ARM resources (orphans that survive RG deletion)
         local resources_json
-        resources_json=$(find_resources_by_tag "$TAG_FILTER")
+        if ! resources_json=$(find_resources_by_tag "$TAG_FILTER"); then
+            print_warning "Skipping ARM resource cleanup due to query failure"
+            resources_json='{"data": []}'
+        fi
 
         if display_resources "$resources_json"; then
             found_any=true
