@@ -3618,6 +3618,36 @@ func TestRedactCommand(t *testing.T) {
 			input: `kubectl patch -p {"stringData":{"AZURE_TENANT_ID":"tenant-123","AZURE_SUBSCRIPTION_ID":"sub-456"}}`,
 			want:  `kubectl patch -p {"stringData":{"AZURE_TENANT_ID":"tenant-123","AZURE_SUBSCRIPTION_ID":"sub-456"}}`,
 		},
+		{
+			name:  "az login with -p flag",
+			input: `az login --service-principal -u my-client-id -p super-secret --tenant my-tenant`,
+			want:  `az login --service-principal -u my-client-id -p ***REDACTED*** --tenant my-tenant`,
+		},
+		{
+			name:  "--password flag",
+			input: `some-tool --password my-secret-pass --user admin`,
+			want:  `some-tool --password ***REDACTED*** --user admin`,
+		},
+		{
+			name:  "--password=value form",
+			input: `some-tool --password=my-secret-pass --user admin`,
+			want:  `some-tool --password=***REDACTED*** --user admin`,
+		},
+		{
+			name:  "--client-secret flag",
+			input: `some-tool --client-secret abc123 --tenant t1`,
+			want:  `some-tool --client-secret ***REDACTED*** --tenant t1`,
+		},
+		{
+			name:  "KEY=value env assignment",
+			input: `env AZURE_CLIENT_SECRET=my-secret AWS_SECRET_ACCESS_KEY=aws-key REGION=uksouth ./run.sh`,
+			want:  `env AZURE_CLIENT_SECRET=***REDACTED*** AWS_SECRET_ACCESS_KEY=***REDACTED*** REGION=uksouth ./run.sh`,
+		},
+		{
+			name:  "-p flag at end of command",
+			input: `az login -p the-secret`,
+			want:  `az login -p ***REDACTED***`,
+		},
 	}
 
 	for _, tt := range tests {

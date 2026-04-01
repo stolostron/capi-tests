@@ -311,11 +311,74 @@ var sensitiveKeyPattern = func() *regexp.Regexp {
 		`"(` + strings.Join(keys, "|") + `)"\s*:\s*"[^"]*"`)
 }()
 
+// sensitiveFlags lists CLI flags whose next argument contains a secret value.
+// These are matched positionally: if a token matches one of these flags, the
+// following token is redacted.
+var sensitiveFlags = map[string]bool{
+	"--password":      true,
+	"--client-secret": true,
+}
+
+// sensitiveEnvKeys lists env-var names that should be redacted in KEY=value args.
+var sensitiveEnvKeys = func() map[string]bool {
+	keys := append(
+		NewAzureProvider("").SensitiveKeyNames(),
+		NewAWSProvider("").SensitiveKeyNames()...,
+	)
+	m := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		m[k] = true
+	}
+	return m
+}()
+
 // redactCommand scrubs known sensitive values from a command string before logging.
+// It performs two passes:
+//  1. Arg-level: redacts values after known secret flags (-p, --password, --client-secret)
+//     and KEY=value assignments where KEY is a known sensitive env var.
+//  2. JSON-level: redacts "sensitiveKey":"value" patterns in JSON payloads.
+//
 // This is a defense-in-depth measure — callers should avoid putting secrets in
 // command arguments in the first place (e.g., use --patch-file instead of -p).
 func redactCommand(cmdStr string) string {
-	return sensitiveKeyPattern.ReplaceAllStringFunc(cmdStr, func(match string) string {
+	// Pass 1: redact flag values and env assignments at the arg level
+	tokens := strings.Fields(cmdStr)
+	redactNext := false
+	// Detect "az login" context where -p means --password (not --patch like in kubectl)
+	isAzLogin := len(tokens) >= 2 && tokens[0] == "az" && tokens[1] == "login"
+	for i, tok := range tokens {
+		if redactNext {
+			tokens[i] = "***REDACTED***"
+			redactNext = false
+			continue
+		}
+		if sensitiveFlags[tok] || (isAzLogin && tok == "-p") {
+			redactNext = true
+			continue
+		}
+		// Handle --flag=value forms
+		for flag := range sensitiveFlags {
+			if strings.HasPrefix(tok, flag+"=") {
+				tokens[i] = flag + "=***REDACTED***"
+				break
+			}
+		}
+		if isAzLogin && strings.HasPrefix(tok, "-p=") {
+			tokens[i] = "-p=***REDACTED***"
+			continue
+		}
+		// Handle KEY=value env-style assignments
+		if eqIdx := strings.Index(tok, "="); eqIdx > 0 {
+			key := tok[:eqIdx]
+			if sensitiveEnvKeys[key] {
+				tokens[i] = key + "=***REDACTED***"
+			}
+		}
+	}
+	result := strings.Join(tokens, " ")
+
+	// Pass 2: redact JSON key-value pairs
+	return sensitiveKeyPattern.ReplaceAllStringFunc(result, func(match string) string {
 		idx := strings.Index(match, ":")
 		if idx < 0 {
 			return match
