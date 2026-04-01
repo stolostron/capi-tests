@@ -64,11 +64,13 @@ export DEPLOYMENT_TIMEOUT=90m
 # name fails with VaultAlreadyExists if a previous run's vault wasn't purged.
 # The first step to source this file generates the suffix; subsequent steps
 # read the same value from SHARED_DIR.
+# NOTE: NAME_PREFIX must be ≤11 chars because ARO HCP node pool names
+# (${NAME_PREFIX}-mp1) are limited to 15 characters.
 NAME_PREFIX_FILE="${SHARED_DIR:-/tmp}/name-prefix"
 if [[ -f "$NAME_PREFIX_FILE" ]]; then
   export NAME_PREFIX=$(cat "$NAME_PREFIX_FILE")
 else
-  export NAME_PREFIX="${WORKLOAD_CLUSTER_NAME:-capz-tests}-$(openssl rand -hex 2)"
+  export NAME_PREFIX="capz-$(openssl rand -hex 2)"
   echo "$NAME_PREFIX" > "$NAME_PREFIX_FILE"
 fi
 
