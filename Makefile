@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _validate-cleanup test-all _test-all-impl clean clean-all clean-azure help summary
+.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _validate-cleanup test-all _test-all-impl clean clean-all clean-azure help summary scheduled-review
 
 # Use bash for shell commands (required for PIPESTATUS in test-all target)
 SHELL := /bin/bash
@@ -697,6 +697,9 @@ summary: ## Generate test results summary from latest results
 		echo "Error: No test results found. Run 'make test-all' first."; \
 		exit 1; \
 	fi
+
+scheduled-review: ## Run AI-powered review of new issues and PRs (requires ANTHROPIC_API_KEY)
+	@./scripts/scheduled-review.sh $(SCHEDULED_REVIEW_ARGS)
 
 fmt: ## Format Go code
 	go fmt ./...
