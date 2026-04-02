@@ -1352,7 +1352,7 @@ func tagAzureServicePrincipals(t *testing.T, config *TestConfig) {
 	}
 
 	// Build tag strings for SPs (string array format: "key:value")
-	tagStrings = sortedTagPairs(config.AzureResourceTags, ":")
+	tagStrings := sortedTagPairs(config.AzureResourceTags, ":")
 
 	for _, sp := range sps {
 		args := []string{"ad", "sp", "update", "--id", sp.ID, "--set", fmt.Sprintf("tags=%s", toJSONArray(tagStrings))}
