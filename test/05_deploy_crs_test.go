@@ -3,7 +3,6 @@ package test
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1309,9 +1308,14 @@ func tagAzureADApplications(t *testing.T, config *TestConfig) {
 
 	// Build tag strings for AD apps (string array format: "key:value")
 	tagStrings := sortedTagPairs(config.AzureResourceTags, ":")
+	tagsJSON, err := toJSONArray(tagStrings)
+	if err != nil {
+		t.Logf("Warning: %v — skipping AD Application tagging", err)
+		return
+	}
 
 	for _, app := range apps {
-		args := []string{"ad", "app", "update", "--id", app.AppID, "--set", fmt.Sprintf("tags=%s", toJSONArray(tagStrings))}
+		args := []string{"ad", "app", "update", "--id", app.AppID, "--set", fmt.Sprintf("tags=%s", tagsJSON)}
 		if _, err := RunCommandQuiet(t, "az", args...); err != nil {
 			t.Logf("Warning: could not tag AD Application %s (%s): %v", app.DisplayName, app.AppID, err)
 		} else {
@@ -1353,9 +1357,14 @@ func tagAzureServicePrincipals(t *testing.T, config *TestConfig) {
 
 	// Build tag strings for SPs (string array format: "key:value")
 	tagStrings := sortedTagPairs(config.AzureResourceTags, ":")
+	tagsJSON, err := toJSONArray(tagStrings)
+	if err != nil {
+		t.Logf("Warning: %v — skipping Service Principal tagging", err)
+		return
+	}
 
 	for _, sp := range sps {
-		args := []string{"ad", "sp", "update", "--id", sp.ID, "--set", fmt.Sprintf("tags=%s", toJSONArray(tagStrings))}
+		args := []string{"ad", "sp", "update", "--id", sp.ID, "--set", fmt.Sprintf("tags=%s", tagsJSON)}
 		if _, err := RunCommandQuiet(t, "az", args...); err != nil {
 			t.Logf("Warning: could not tag Service Principal %s (%s): %v", sp.DisplayName, sp.ID, err)
 		} else {
@@ -1366,11 +1375,10 @@ func tagAzureServicePrincipals(t *testing.T, config *TestConfig) {
 }
 
 // toJSONArray converts a string slice to a JSON array string.
-func toJSONArray(items []string) string {
+func toJSONArray(items []string) (string, error) {
 	data, err := json.Marshal(items)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to marshal tag array: %v\n", err)
-		return "[]"
+		return "", fmt.Errorf("failed to marshal tag array: %w", err)
 	}
-	return string(data)
+	return string(data), nil
 }
