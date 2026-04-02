@@ -381,15 +381,13 @@ func getClusterNamePrefix(capiUser string) string {
 }
 
 // generateRunID creates a random hex string of the specified length.
-// Uses crypto/rand for unpredictable values. Falls back to timestamp-based
-// suffix if crypto/rand fails.
+// Uses crypto/rand for unpredictable values. Panics if crypto/rand fails,
+// as this indicates a serious system issue (e.g., /dev/urandom unavailable)
+// and a timestamp fallback would undermine parallel-run uniqueness.
 func generateRunID(length int) string {
 	bytes := make([]byte, (length+1)/2)
 	if _, err := rand.Read(bytes); err != nil {
-		// Fallback to timestamp-based suffix; mask to length hex digits
-		fmt.Fprintf(os.Stderr, "Warning: crypto/rand failed (%v), falling back to timestamp-based run ID\n", err)
-		mask := int64(1)<<(length*4) - 1
-		return fmt.Sprintf("%0*x", length, time.Now().UnixNano()&mask)
+		panic(fmt.Sprintf("crypto/rand.Read failed: %v — cannot generate unique run ID for parallel safety", err))
 	}
 	return hex.EncodeToString(bytes)[:length]
 }
