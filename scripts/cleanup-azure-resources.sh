@@ -124,7 +124,7 @@ while [[ $# -gt 0 ]]; do
         --my-resources)
             # Use CAPI_USER to match the tag set by the Go test suite (config.go).
             # Fall back to USER (OS login) if CAPI_USER is not set.
-            local my_user="${CAPI_USER:-${USER:-}}"
+            my_user="${CAPI_USER:-${USER:-}}"
             if [[ -z "$my_user" ]]; then
                 print_error "Neither CAPI_USER nor USER environment variable is set"
                 exit 1
