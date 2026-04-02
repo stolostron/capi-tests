@@ -2641,8 +2641,8 @@ func WriteDeploymentState(config *TestConfig) error {
 }
 
 // TagAzureResourceGroup applies Azure resource tags to the resource group.
-// Non-fatal: failures are logged as warnings since tagging is for cleanup convenience only.
-func TagAzureResourceGroup(t *testing.T, config *TestConfig) {
+// Returns an error if tagging fails, allowing callers to decide severity.
+func TagAzureResourceGroup(t *testing.T, config *TestConfig) error {
 	t.Helper()
 
 	resourceGroup := fmt.Sprintf("%s-resgroup", config.ClusterNamePrefix)
@@ -2653,10 +2653,10 @@ func TagAzureResourceGroup(t *testing.T, config *TestConfig) {
 	args = append(args, tagPairs...)
 
 	if _, err := RunCommandQuiet(t, "az", args...); err != nil {
-		t.Logf("Warning: could not tag resource group %s: %v", resourceGroup, err)
-	} else {
-		t.Logf("Tagged resource group %s with %d tags", resourceGroup, len(tagPairs))
+		return fmt.Errorf("could not tag resource group %s: %w", resourceGroup, err)
 	}
+	t.Logf("Tagged resource group %s with %d tags", resourceGroup, len(tagPairs))
+	return nil
 }
 
 // sortedTagPairs converts a tag map to a sorted slice of "key<sep>value" strings.

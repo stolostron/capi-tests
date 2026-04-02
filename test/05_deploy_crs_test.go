@@ -1268,7 +1268,9 @@ func TestDeployment_TagAzureResources(t *testing.T) {
 	PrintToTTY("\n=== Tagging Azure Resources ===\n")
 
 	PrintToTTY("Tagging resource group %s-resgroup...\n", config.ClusterNamePrefix)
-	TagAzureResourceGroup(t, config)
+	if err := TagAzureResourceGroup(t, config); err != nil {
+		t.Errorf("Failed to tag resource group post-deployment (RG should exist): %v", err)
+	}
 	tagAzureADApplications(t, config)
 	tagAzureServicePrincipals(t, config)
 
