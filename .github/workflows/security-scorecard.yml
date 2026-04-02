@@ -8,8 +8,9 @@ on:
     - cron: '30 4 * * 1'
   workflow_dispatch:
 
-# Scorecard requires read-all at workflow level per upstream recommendation:
+# Scorecard requires no workflow-level write permissions per upstream docs:
 # https://github.com/ossf/scorecard-action#workflow-restrictions
+# Using read-all satisfies this constraint while granting read access for all scopes.
 permissions: read-all
 
 jobs:
