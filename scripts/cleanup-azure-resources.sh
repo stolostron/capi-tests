@@ -675,6 +675,7 @@ main() {
     echo ""
 
     local found_any=false
+    local query_failed=false
 
     # Tag-based cleanup mode
     if [[ -n "$TAG_FILTER" ]]; then
@@ -683,6 +684,7 @@ main() {
         if ! rgs_json=$(find_resource_groups_by_tag "$TAG_FILTER"); then
             print_warning "Skipping resource group cleanup due to query failure"
             rgs_json="[]"
+            query_failed=true
         fi
 
         local rg_count
@@ -706,6 +708,7 @@ main() {
         if ! resources_json=$(find_resources_by_tag "$TAG_FILTER"); then
             print_warning "Skipping ARM resource cleanup due to query failure"
             resources_json='{"data": []}'
+            query_failed=true
         fi
 
         if display_resources "$resources_json"; then
@@ -759,13 +762,21 @@ main() {
         fi
 
         if [[ "$found_any" == "false" ]]; then
-            print_success "No resources found with tag '${TAG_FILTER}'"
+            if [[ "$query_failed" == "true" ]]; then
+                print_error "Some queries failed — results may be incomplete"
+            else
+                print_success "No resources found with tag '${TAG_FILTER}'"
+            fi
         fi
 
         echo ""
         echo "========================================"
         echo "=== Cleanup Complete ==="
         echo "========================================"
+
+        if [[ "$query_failed" == "true" ]]; then
+            exit 1
+        fi
         return
     fi
 
