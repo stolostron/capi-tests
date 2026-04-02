@@ -65,8 +65,12 @@ jobs:
           echo "## ❌ Analysis failed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "CodeQL analysis encountered errors. Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
-        else
+        elif [ "${{ steps.analyze.outcome }}" = "success" ]; then
           echo "CodeQL semantic code analysis completed for **Go**." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## ❌ Workflow failed before analysis could run" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "A prerequisite step failed. Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
         fi
 
         echo "" >> $GITHUB_STEP_SUMMARY

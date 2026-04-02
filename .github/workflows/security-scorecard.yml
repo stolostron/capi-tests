@@ -64,8 +64,12 @@ jobs:
           echo "## ❌ Scorecard assessment failed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "The OpenSSF Scorecard action encountered errors. Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
-        else
+        elif [ "${{ steps.scorecard.outcome }}" = "success" ]; then
           echo "Supply chain security assessment completed." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## ❌ Scorecard assessment was skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "A prerequisite step failed. Scorecard did not run." >> $GITHUB_STEP_SUMMARY
         fi
 
         echo "" >> $GITHUB_STEP_SUMMARY
