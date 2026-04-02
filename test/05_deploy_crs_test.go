@@ -1251,17 +1251,17 @@ func TestDeployment_TagAzureResources(t *testing.T) {
 	config := NewTestConfig()
 
 	if len(config.AzureResourceTags) == 0 {
-		t.Skip("No Azure resource tags configured")
+		t.Skipf("No Azure resource tags configured")
 		return
 	}
 
 	if !CommandExists("az") {
-		t.Skip("Azure CLI not available, skipping resource tagging")
+		t.Skipf("Azure CLI not available, skipping resource tagging")
 		return
 	}
 
 	if config.InfraProviderName != "aro" {
-		t.Skip("Azure resource tagging only applies to ARO provider")
+		t.Skipf("Azure resource tagging only applies to ARO provider")
 		return
 	}
 
