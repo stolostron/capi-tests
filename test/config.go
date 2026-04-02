@@ -353,8 +353,10 @@ func getClusterNamePrefix(capiUser string) string {
 				AzureResourceTags map[string]string `json:"azure_resource_tags,omitempty"`
 			}
 			if unmarshalErr := json.Unmarshal(data, &state); unmarshalErr != nil {
-				fmt.Fprintf(os.Stderr, "Warning: deployment state file %s exists but cannot be parsed: %v\n", stateFilePath, unmarshalErr)
-				fmt.Fprintf(os.Stderr, "Generating new cluster name prefix instead of resuming previous run\n")
+				fmt.Fprintf(os.Stderr, "ERROR: deployment state file %s exists but cannot be parsed: %v\n", stateFilePath, unmarshalErr)
+				fmt.Fprintf(os.Stderr, "Generating a new prefix would orphan Azure resources from the previous run.\n")
+				fmt.Fprintf(os.Stderr, "Delete the file to start fresh, or fix the JSON to resume.\n")
+				os.Exit(1)
 			} else if state.ClusterNamePrefix != "" {
 				clusterNamePrefix = state.ClusterNamePrefix
 				cachedAzureResourceTags = state.AzureResourceTags
