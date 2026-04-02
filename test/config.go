@@ -245,7 +245,8 @@ var (
 	clusterNamePrefixOnce sync.Once
 
 	// cachedAzureResourceTags holds tags loaded from the deployment state file on resume.
-	// nil means no cached tags (first run or explicit CS_CLUSTER_NAME).
+	// nil means tags were not loaded from state (fresh run or explicit CS_CLUSTER_NAME),
+	// so fresh tags will be generated.
 	cachedAzureResourceTags map[string]string
 )
 
@@ -413,7 +414,7 @@ type TestConfig struct {
 	CAPIUser                 string // User identifier for CAPI resources (from CAPI_USER env var)
 	WorkloadClusterNamespace string            // Namespace for workload cluster resources on management cluster (unique per test run)
 	TestLabelPrefix          string            // Provider-specific label prefix for test namespaces (e.g., "capz-test" for ARO, "capa-test" for ROSA)
-	TestRunID                string            // Unique run identifier (5 hex chars) for parallel run isolation. Empty when CS_CLUSTER_NAME is explicitly set.
+	TestRunID                string            // Unique run identifier extracted from ClusterNamePrefix (the part after CAPI_USER-). Empty when prefix does not start with CAPI_USER-.
 	AzureResourceTags        map[string]string // Azure tags applied to all created resources for cleanup queries
 	CAPINamespace            string // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
 	CAPZNamespace            string // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" when USE_K8S=true)

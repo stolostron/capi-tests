@@ -44,7 +44,7 @@
 set -euo pipefail
 
 # Default values
-# Prefer CS_CLUSTER_NAME (e.g., cate-stage) for more specific matching.
+# Prefer CS_CLUSTER_NAME (e.g., cate-a1b2c) for more specific matching.
 # Fall back to CAPI_USER-DEPLOYMENT_ENV, then 'cate' as final fallback.
 if [[ -n "${CS_CLUSTER_NAME:-}" ]]; then
     PREFIX="${CS_CLUSTER_NAME}"
