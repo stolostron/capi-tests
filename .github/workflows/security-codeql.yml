@@ -10,10 +10,13 @@ on:
     - cron: '0 4 * * 1'
   workflow_dispatch:
 
+# Note: CodeQL advanced setup requires disabling the "Default setup" in
+# Settings > Code security > Code scanning. Otherwise SARIF uploads will fail with:
+# "CodeQL analyses from advanced configurations cannot be processed when the default setup is enabled"
+
 permissions:
   contents: read
   security-events: write
-  issues: write
 
 jobs:
   codeql:
@@ -39,18 +42,33 @@ jobs:
 
     - name: Build
       run: go build ./...
+      id: build
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@c10b8064de6f491fea524254123dbe5e09572f13 # v4
       with:
         category: '/language:go'
+      id: analyze
 
     - name: Generate summary
       if: always()
       run: |
         echo "# CodeQL Analysis Results" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "CodeQL semantic code analysis completed for **Go**." >> $GITHUB_STEP_SUMMARY
+
+        if [ "${{ steps.build.outcome }}" = "failure" ]; then
+          echo "## ⚠️ Build failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The Go build step failed. CodeQL analysis could not complete." >> $GITHUB_STEP_SUMMARY
+          echo "Check the workflow logs for build errors." >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ steps.analyze.outcome }}" = "failure" ]; then
+          echo "## ❌ Analysis failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "CodeQL analysis encountered errors. Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "CodeQL semantic code analysis completed for **Go**." >> $GITHUB_STEP_SUMMARY
+        fi
+
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "Results are available in the [Security tab](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/security/code-scanning)." >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
@@ -58,5 +76,5 @@ jobs:
         echo "- SQL injection, XSS, and other injection flaws" >> $GITHUB_STEP_SUMMARY
         echo "- Path traversal and unsafe file operations" >> $GITHUB_STEP_SUMMARY
         echo "- Incorrect error handling" >> $GITHUB_STEP_SUMMARY
-        echo "- Resource leaks and race conditions" >> $GITHUB_STEP_SUMMARY
+        echo "- Resource leaks" >> $GITHUB_STEP_SUMMARY
         echo "- Cryptographic misuse" >> $GITHUB_STEP_SUMMARY
