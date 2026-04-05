@@ -69,17 +69,66 @@ Never hardcode values - always use `GetEnvOrDefault()` for new configuration.
 
 ### Helper Functions
 
-`test/helpers.go` provides shared utilities used across all tests:
+`test/helpers.go` provides 80+ shared utilities used across all tests, organized by category:
 
+**Core utilities:**
 - `CommandExists(cmd)` - Check if CLI tool is available
-- `RunCommand(t, name, args...)` - Execute shell commands with test context
+- `RunCommand(t, name, args...)` / `RunCommandQuiet` / `RunCommandWithStdin` / `RunCommandWithStreaming` - Execute shell commands
 - `SetEnvVar(t, key, value)` - Set env var with automatic cleanup
 - `FileExists(path)` / `DirExists(path)` - Path validation
 - `GetEnvOrDefault(key, default)` - Config value resolution
-- `ValidateDomainPrefix(user, env)` - Validate domain prefix length (max 15 chars)
-- `ValidateRFC1123Name(name, varName)` - Validate RFC 1123 subdomain naming compliance
+- `PrintTestHeader(t, name, desc)` / `PrintToTTY` / `ReportProgress` - Output and progress
 
-Always use these helpers instead of reimplementing functionality.
+**Validation:**
+- `ValidateDomainPrefix(user, env)` - Domain prefix length (max 15 chars)
+- `ValidateRFC1123Name(name, varName)` - RFC 1123 subdomain naming
+- `ValidateExternalAuthID` / `ValidateTimeout` / `ValidateDeploymentTimeout` / `ValidateASOControllerTimeout`
+- `ValidateAllConfigurations(t, config)` / `FormatValidationResults` - Bulk config validation
+- `ValidateAzureSubscriptionAccess` / `ValidateAzureRegion` - Azure resource validation
+- `ValidateYAMLFile` / `ValidateServicePrincipalCredentials`
+
+**YAML extraction:**
+- `ExtractClusterNameFromYAML` / `ExtractControlPlaneRefFromYAML` / `ExtractAROControlPlaneNameFromYAML`
+- `ExtractMachinePoolNameFromYAML` / `ExtractNamespaceFromYAML` / `CheckYAMLConfigMatch`
+
+**Cluster operations:**
+- `GetClusterPhase` / `IsClusterReady` / `WaitForClusterReady` / `WaitForClusterHealthy`
+- `ApplyWithRetry` / `ApplyWithRetryInNamespace` / `IsKubectlApplySuccess`
+- `ExtractCurrentContext` / `GetExistingClusterNames` / `CheckForMismatchedClusters`
+
+**Azure utilities:**
+- `EnsureAzureCredentialsSet` / `DetectAzureAuthMode` / `HasServicePrincipalCredentials` / `GetAzureAuthDescription`
+- `DetectAzureError` / `FormatAzureError` - Azure error detection and formatting
+
+**AWS/ROSA utilities:**
+- `EnsureAWSCredentialsSet` - AWS credential setup for ROSA provider
+
+**Infrastructure and deletion progress:**
+- `GetInfrastructureResourceStatus` / `FormatInfrastructureProgress` / `ReportInfrastructureProgress`
+- `GetDeletionResourceStatus` / `FormatDeletionProgress` / `ReportDeletionProgress`
+- `FormatControlPlaneConditions` / `FormatNonTrueConditionsFromParsed`
+
+**Controller logs:**
+- `GetControllerLogs` / `ParseControllerLogs` / `SummarizeControllerLogs` / `SaveControllerLogs`
+- `GetAllControllerLogSummaries` / `FormatControllerLogSummaries` / `SaveAllControllerLogs`
+
+**Deployment state:**
+- `WriteDeploymentState` / `ReadDeploymentState` / `DeleteDeploymentState`
+
+**MCE integration:**
+- `IsMCECluster` / `GetMCEComponentStatus` / `SetMCEComponentState` / `EnableMCEComponent` / `WaitForMCEController`
+
+**Component versions:**
+- `GetDeploymentImage` / `GetComponentVersions` / `FormatComponentVersions`
+
+**Repository tracking:**
+- `RegisterClonedRepository` / `GetClonedRepositories` / `ClearClonedRepositories`
+
+**Other:**
+- `GetDomainPrefix` / `GetExternalAuthID` / `GetResultsDir`
+- `ResolveDockerConfigPath` / `GenerateKindConfig` / `FormatMismatchedClustersError`
+
+See `test/helpers.go` for the full list. Always use these helpers instead of reimplementing functionality.
 
 ### Test Patterns
 
@@ -208,6 +257,15 @@ make lint
 
 # Download/update dependencies
 make deps
+
+# Install gotestsum for improved test output
+make install-gotestsum
+
+# Fix Docker credential helper configuration issues
+make fix-docker-config
+
+# Generate test results summary from latest results
+make summary
 ```
 
 ## Integration with cluster-api-installer
@@ -441,7 +499,7 @@ The `/sync-main` Claude Code command helps keep your branch updated with proper 
 
 ## Known Issues
 
-- `test/start_test.go` contains trivial test with unreachable code
+- `test/start_test.go` contains a trivial test with dead code (`if true { ... } else { t.Error(...) }` — the else branch is unreachable)
 
 These are tracked issues and should be fixed in separate PRs when addressed.
 
@@ -532,6 +590,27 @@ Systematically debug test failures.
 
 **Example**: `/troubleshoot`
 
+#### `/coderabbit-review`
+Full pipeline — self-review, wait for CodeRabbit AI, process all findings with individual commits.
+
+**Use when**: After creating a PR that uses CodeRabbit for automated review
+
+**Example**: `/coderabbit-review`
+
+#### `/implement-issue`
+Analyze a GitHub issue and create a pull request that implements the fix.
+
+**Use when**: Picking up a GitHub issue to implement
+
+**Example**: `/implement-issue 42`
+
+#### `/handle-jira-duplicates`
+Handle duplicate Jira subtasks by linking, renaming, and closing the old ones.
+
+**Use when**: Duplicate Jira subtasks need to be consolidated
+
+**Example**: `/handle-jira-duplicates`
+
 ### Using Slash Commands
 
 Simply type the command in Claude Code:
@@ -563,6 +642,12 @@ When creating pull requests, always read and follow `.github/PULL_REQUEST_TEMPLA
 - `docs/API_REVIEW.md` - V1 API/Interface contract review
 - `docs/PERFORMANCE_REVIEW.md` - V1 Performance review and optimization analysis
 - `docs/SECURITY_REVIEW.md` - V1 Security review and vulnerability assessment
+- `docs/CI_CD_REVIEW.md` - CI/CD pipeline review
+- `docs/ORPHANED-RESOURCES.md` - Guide for handling orphaned Azure resources
+- `docs/RESOURCE_ANALYSIS.md` - Resource analysis documentation
+- `docs/TLDR.md` - Quick reference / TL;DR guide
+- `docs/FEDORA-43-AZURE-CLI.md` - Fedora 43 Azure CLI installation workaround
+- `docs/KIND-INOTIFY-FIX.md` - Kind cluster inotify limit fix
 - `TEST_COVERAGE.md` - Test coverage analysis and metrics
 
 ### Community Health Files
