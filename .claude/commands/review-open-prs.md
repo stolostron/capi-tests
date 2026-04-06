@@ -51,7 +51,7 @@ Print a short overview table (this is the only "report" output — keep it brief
 |---|-------|----|-----------|------|
 | <number> | <title> | pass/fail | yes/no | +N/-N |
 
-Draft PRs: #<numbers> (skipped from review)
+Skipped: #<numbers> (draft), #<numbers> (auto/* branch), #<numbers> (self-authored)
 ```
 
 ## Phase 2: Analyze Each PR
