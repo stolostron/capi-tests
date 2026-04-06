@@ -8,6 +8,14 @@ Review all open PRs in the repository. For each PR: analyze the code, generate f
 present them to the user for approval, and post approved findings as inline GitHub review comments
 with suggestion blocks.
 
+## Usage
+
+```
+/review-open-prs
+```
+
+No arguments needed. Reviews all open non-draft PRs in the current repository (up to 10 most recently updated).
+
 ## Step 0: Determine repository context
 
 ```bash
