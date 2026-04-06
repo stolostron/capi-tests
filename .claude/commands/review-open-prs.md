@@ -8,12 +8,22 @@ Review all open PRs in the repository. For each PR: analyze the code, generate f
 present them to the user for approval, and post approved findings as inline GitHub review comments
 with suggestion blocks.
 
+## Step 0: Determine repository context
+
+```bash
+REPO_INFO=$(gh repo view --json owner,name)
+OWNER=$(echo "$REPO_INFO" | jq -r '.owner.login')
+REPO=$(echo "$REPO_INFO" | jq -r '.name')
+```
+
+Use `$OWNER/$REPO` in all subsequent `gh` and `gh api` commands.
+
 ## Phase 1: Discover and Summarize
 
 ### Step 1: Fetch all open PRs
 
 ```bash
-gh pr list --repo stolostron/capi-tests --state open \
+gh pr list --repo $OWNER/$REPO --state open \
   --json number,title,author,createdAt,updatedAt,isDraft,headRefName,baseRefName,mergeable,reviewDecision,statusCheckRollup,labels,additions,deletions,changedFiles \
   --jq '.'
 ```
@@ -42,10 +52,10 @@ For each **non-draft** open PR (skip draft PRs, skip branches starting with `aut
 
 ```bash
 # Get the diff
-gh pr diff <number> --repo stolostron/capi-tests
+gh pr diff <number> --repo $OWNER/$REPO
 
 # Check existing review comments to avoid duplicates
-gh api repos/stolostron/capi-tests/pulls/<number>/comments \
+gh api repos/$OWNER/$REPO/pulls/<number>/comments \
   --jq '[.[] | {path: .path, line: .line, body: .body}]'
 ```
 
@@ -178,7 +188,7 @@ REVIEW_FILE=$(mktemp)
 cat > "$REVIEW_FILE" << 'REVIEW_JSON'
 <json content>
 REVIEW_JSON
-gh api repos/stolostron/capi-tests/pulls/<number>/reviews \
+gh api repos/$OWNER/$REPO/pulls/<number>/reviews \
   --method POST --input "$REVIEW_FILE"
 rm -f "$REVIEW_FILE"
 ```
