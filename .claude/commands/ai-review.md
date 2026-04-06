@@ -1,20 +1,22 @@
 ---
-description: Full pipeline - self-review, wait for CodeRabbit AI, process all findings with individual commits
+description: Full pipeline - self-review, wait for AI reviewers (CodeRabbit, Qodo), process all findings with individual commits
 ---
 
-# CodeRabbit Review Pipeline
+# AI Review Pipeline
 
-Full pipeline command that runs Claude Code self-review, waits for CodeRabbit AI review, and processes all findings - accepting or denying each one with individual commits per fix. Every finding gets a reply and is resolved.
+Full pipeline command that runs Claude Code self-review, waits for AI code reviewers (CodeRabbit and Qodo), and processes all findings - accepting or denying each one with individual commits per fix. Every finding gets a reply and is resolved.
+
+Supersedes the former `/coderabbit-review` command.
 
 ## Usage
 
 ```
-/coderabbit-review [pr-number]
+/ai-review [pr-number]
 ```
 
 If no PR number is provided, auto-detects the PR for the current branch.
 
-**Example**: `/coderabbit-review 42` or just `/coderabbit-review`
+**Example**: `/ai-review 42` or just `/ai-review`
 
 ## Instructions
 
@@ -60,7 +62,7 @@ If no PR number is provided, auto-detects the PR for the current branch.
 
 ### Step 2: Self-Review
 
-Before CodeRabbit reviews, run Claude Code's own code review to catch issues early.
+Before external AI reviews, run Claude Code's own code review to catch issues early.
 
 1. **Get the PR diff**:
    ```bash
@@ -95,7 +97,7 @@ Before CodeRabbit reviews, run Claude Code's own code review to catch issues ear
 
 4. **If no issues found**, skip to Step 3:
    ```
-   Self-review: No issues found. Proceeding to wait for CodeRabbit.
+   Self-review: No issues found. Proceeding to wait for AI reviewers.
    ```
 
 ### Steps 3-6: CodeRabbit Review Loop
@@ -574,7 +576,7 @@ After processing all findings in the current round:
    - If at limit: Log warning and exit loop:
      ```
      WARNING: Reached maximum review rounds (5). Some new CodeRabbit findings may remain.
-     Run `/coderabbit-review` again to continue processing.
+     Run `/ai-review` again to continue processing.
      ```
 3. **If no findings were accepted** (all denied or already resolved): **Exit the loop** - no new code was pushed, so CodeRabbit won't re-review. Proceed to Step 7.
 
@@ -586,7 +588,7 @@ At the end, provide a comprehensive summary:
 
 ```
 ========================================
-CodeRabbit Review Pipeline Summary - PR #<number>
+AI Review Pipeline Summary - PR #<number>
 ========================================
 
 Self-Review:
@@ -683,3 +685,4 @@ All threads resolved: Yes/No
 - `/copilot-review <pr>` - Process GitHub Copilot code review findings (same thread resolution pattern)
 - `/implement-issue <number>` - Implement a GitHub issue end-to-end (includes PR creation)
 - `/review-test <file>` - Review test files for pattern compliance
+- `/review-open-prs` - Review all open PRs in the repository (batch mode)
