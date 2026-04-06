@@ -64,6 +64,9 @@ For each **non-draft** open PR (skip draft PRs, skip branches starting with `aut
 # Get the diff
 gh pr diff <number> --repo $OWNER/$REPO
 
+# Get the head commit SHA (used later in the review payload)
+COMMIT_SHA=$(gh pr view <number> --repo $OWNER/$REPO --json headRefOid --jq '.headRefOid')
+
 # Check existing review comments to avoid duplicates
 gh api repos/$OWNER/$REPO/pulls/<number>/comments \
   --jq '[.[] | {path: .path, line: .line, body: .body}]'
@@ -155,6 +158,7 @@ The JSON body for the review:
 
 ```json
 {
+  "commit_id": "<COMMIT_SHA from Step 3>",
   "event": "COMMENT",
   "body": "Automated code review — <N> suggestions. Apply individually or batch-apply in the Files changed tab.",
   "comments": [
