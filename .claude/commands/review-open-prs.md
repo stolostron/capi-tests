@@ -31,7 +31,7 @@ Use `$OWNER/$REPO` in all subsequent `gh` and `gh api` commands.
 ### Step 1: Fetch all open PRs
 
 ```bash
-gh pr list --repo $OWNER/$REPO --state open \
+gh pr list --repo "$OWNER/$REPO" --state open \
   --json number,title,author,createdAt,updatedAt,isDraft,headRefName,baseRefName,mergeable,reviewDecision,statusCheckRollup,labels,additions,deletions,changedFiles \
   --jq 'sort_by(.updatedAt) | reverse | .[:10]'
 ```
@@ -62,10 +62,10 @@ For each **non-draft** open PR (skip draft PRs, skip branches starting with `aut
 
 ```bash
 # Get the diff
-gh pr diff <number> --repo $OWNER/$REPO
+gh pr diff <number> --repo "$OWNER/$REPO"
 
 # Get the head commit SHA (used later in the review payload)
-COMMIT_SHA=$(gh pr view <number> --repo $OWNER/$REPO --json headRefOid --jq '.headRefOid')
+COMMIT_SHA=$(gh pr view <number> --repo "$OWNER/$REPO" --json headRefOid --jq '.headRefOid')
 
 # Check existing review comments to avoid duplicates
 gh api repos/$OWNER/$REPO/pulls/<number>/comments \
