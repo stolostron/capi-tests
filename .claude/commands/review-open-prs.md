@@ -232,3 +232,4 @@ PRs skipped (draft): #<numbers>
 - **Suggestion accuracy**: The `line` number in the review comment must reference the line in the PR diff (the new file version), not the old file. Use `side: "RIGHT"` always.
 - **Minimal fixes**: Suggestion blocks should change only the lines needed. Do not reformat or refactor surrounding code.
 - **One review per PR**: Submit all approved findings for a PR as a single batch review, not individual comments.
+- **API pacing**: When posting reviews to multiple PRs, wait 2-3 seconds between API calls to avoid triggering GitHub's secondary rate limits.
