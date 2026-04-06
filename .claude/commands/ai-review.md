@@ -582,6 +582,103 @@ After processing all findings in the current round:
 
 This ensures the pipeline iterates until CodeRabbit is satisfied (zero new unresolved findings) or the safety limit is reached.
 
+### Step 6b: Process Qodo Findings
+
+After the CodeRabbit loop exits, process Qodo review findings. Qodo runs after CodeRabbit because many findings overlap — processing CodeRabbit first allows us to dismiss Qodo duplicates automatically.
+
+**Track a list of already-fixed files and lines** from CodeRabbit commits (collected during Steps 5d/5e) to detect duplicates.
+
+#### 6b.1. Fetch Qodo inline review comments
+
+```bash
+QODO_COMMENTS=$(gh api "repos/$OWNER/$REPO/pulls/$PR_NUMBER/comments" \
+  --jq '[.[] | select(.user.login == "qodo-code-review[bot]" or .user.login == "qodo-code-review") | {id: .id, path: .path, line: (.line // .original_line), body: .body, in_reply_to_id: .in_reply_to_id}]')
+QODO_COUNT=$(echo "$QODO_COMMENTS" | jq 'length')
+echo "Found $QODO_COUNT Qodo inline review comments"
+```
+
+Filter to **root comments only** (exclude replies — those are follow-ups or our own replies):
+```bash
+QODO_FINDINGS=$(echo "$QODO_COMMENTS" | jq '[.[] | select(.in_reply_to_id == null)]')
+QODO_FINDING_COUNT=$(echo "$QODO_FINDINGS" | jq 'length')
+echo "Qodo findings to process: $QODO_FINDING_COUNT"
+```
+
+If zero findings, skip to Step 7.
+
+#### 6b.2. Also fetch Qodo issue comments for bug findings
+
+Qodo posts a summary issue comment with categorized findings (Bugs, Rule violations, Requirement gaps). Check if all bugs are `0`:
+
+```bash
+QODO_ISSUE_BODY=$(gh api "repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
+  --jq '[.[] | select(.user.login == "qodo-code-review[bot]")] | .[-1].body // ""')
+```
+
+If the body contains `Bugs (0)` and `Rule violations (0)` and `Requirement gaps (0)`, Qodo is clean — note this and skip to Step 7.
+
+#### 6b.3. Check for duplicates with CodeRabbit fixes
+
+For each Qodo finding, check if it targets the same file and line (within ±3 lines) as a CodeRabbit finding that was already accepted and fixed:
+
+```bash
+for each QODO finding at file:line:
+  if already_fixed_files contains (file, line ±3):
+    # This is a duplicate — reply and skip
+    mark as DUPLICATE
+  else:
+    # This is a unique Qodo finding — process it
+    mark as UNIQUE
+```
+
+#### 6b.4. Process each Qodo finding
+
+For each finding, in order:
+
+**If DUPLICATE**:
+```bash
+gh api -X POST "repos/$OWNER/$REPO/pulls/comments/$COMMENT_ID/replies" \
+  -f body="Already addressed in commit \`<SHA>\` (CodeRabbit finding for the same location)."
+```
+
+**If UNIQUE** — same accept/deny flow as CodeRabbit findings (Steps 5c-5e):
+
+1. Present the finding to the user with context
+2. Read the code, analyze the suggestion
+3. **ACCEPT**: Apply fix, commit, push, reply inline:
+   ```bash
+   git add "$FILE_PATH"
+   git commit -m "$(cat <<'EOF'
+   fix: address Qodo finding - <brief description>
+
+   Qodo finding for PR #<pr-number>:
+   - File: <file>:<line>
+   - <description of what was changed>
+
+   Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+   EOF
+   )"
+   git push
+
+   gh api -X POST "repos/$OWNER/$REPO/pulls/comments/$COMMENT_ID/replies" \
+     -f body="**Implemented** — <description>. Commit: \`<SHA>\`"
+   ```
+
+4. **DENY**: Reply inline with rationale:
+   ```bash
+   gh api -X POST "repos/$OWNER/$REPO/pulls/comments/$COMMENT_ID/replies" \
+     -f body="**Not implementing** — <rationale>"
+   ```
+
+**Note**: Qodo PR review comments cannot be programmatically resolved (no GraphQL thread resolution like CodeRabbit). The inline reply serves as the resolution signal.
+
+#### 6b.5. Track Qodo results for summary
+
+- Count total Qodo findings
+- Count duplicates (already addressed by CodeRabbit)
+- Count accepted (unique, implemented)
+- Count denied (unique, not applicable)
+
 ### Step 7: Summary Report
 
 At the end, provide a comprehensive summary:
@@ -608,15 +705,24 @@ Pre-merge Checks:
 - Fixed: Y
 - False Positives: Z
 
+Qodo Review:
+- Total Findings: X
+- Duplicates (already fixed via CodeRabbit): D
+- Accepted: Y (with individual commits)
+- Denied: Z
+
 Accepted Findings:
-1. [Round N] Finding #N: <brief description> - file:line (commit: <SHA>)
-2. ...
+1. [CodeRabbit Round N] Finding #N: <brief description> - file:line (commit: <SHA>)
+2. [Qodo] Finding #N: <brief description> - file:line (commit: <SHA>)
+...
 
 Denied Findings:
-1. [Round N] Finding #N: <brief description> - Rationale: <brief reason>
-2. ...
+1. [CodeRabbit Round N] Finding #N: <brief description> - Rationale: <brief reason>
+2. [Qodo] Finding #N: <brief description> - Rationale: <brief reason>
+...
 
-All threads resolved: Yes/No
+All CodeRabbit threads resolved: Yes/No
+All Qodo findings replied to: Yes/No
 ```
 
 ## Important Guidelines
@@ -626,14 +732,14 @@ All threads resolved: Yes/No
 - **Security findings**: ALWAYS implement security fixes unless there is a very strong reason not to
 - **Pattern compliance**: Prioritize fixes that align with CLAUDE.md patterns
 - **Test impact**: Consider if changes affect test behavior or idempotency
-- **Suggestion blocks**: Prefer applying CodeRabbit's exact suggestion when it is correct; modify only if the suggestion has a bug
+- **Suggestion blocks**: Prefer applying the reviewer's exact suggestion when it is correct; modify only if the suggestion has a bug
 - **Be thorough**: Every finding gets a response and resolution
 - **Be respectful**: Provide clear rationale for denials
 
 ### Commit Strategy
 
 - **ONE COMMIT PER FINDING** - each accepted finding gets its own commit
-- Commit message format: `fix: address CodeRabbit finding - <description>`
+- Commit message format: `fix: address <CodeRabbit|Qodo> finding - <description>`
 - Push after each commit to keep the PR updated
 - Include `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>` in every commit
 
@@ -661,18 +767,25 @@ All threads resolved: Yes/No
 
 8. **Pre-merge check false positives**: CodeRabbit's pre-merge checks (e.g., "Linked Issues") may report failures that are false positives (e.g., issue is linked via JIRA reference instead of GitHub `Fixes #N` syntax). Analyze the actual PR content before deciding. Post a PR comment explaining the false positive rather than making unnecessary changes.
 
+9. **Qodo posts no inline comments**: Qodo sometimes only posts issue comments (summary) without inline findings. If the issue comment shows `Bugs (0)`, there are no findings — skip Qodo processing.
+
+10. **Qodo and CodeRabbit find the same issue**: Process CodeRabbit first (it has better APIs). When processing Qodo, reply to duplicates with "Already addressed in commit `<SHA>`" — this keeps the PR tidy without redundant fixes.
+
+11. **Qodo comments cannot be resolved**: Unlike CodeRabbit threads, Qodo PR review comments have no programmatic "resolve" API. The inline reply serves as the resolution signal. The user can manually collapse them in the GitHub UI.
+
 ## Response Format for Each Finding
 
 **Finding #N: [Brief description]**
+- **Source**: CodeRabbit / Qodo
 - **Location**: `file.go:line`
-- **Thread ID**: `PRRT_...`
-- **CodeRabbit Suggestion**: [Summary of what was suggested]
+- **Thread/Comment ID**: `PRRT_...` or `<comment_id>`
+- **Suggestion**: [Summary of what was suggested]
 - **Has Suggestion Block**: Yes/No
-- **Decision**: ACCEPTED / DENIED
-- **Action**: [What was implemented OR why it was denied]
+- **Decision**: ACCEPTED / DENIED / DUPLICATE
+- **Action**: [What was implemented OR why it was denied OR which commit already addressed it]
 - **Commit**: `<SHA>` (if accepted)
 - **Reply Posted**: Yes
-- **Thread Resolved**: Yes / Failed (manual resolution needed)
+- **Thread Resolved**: Yes / Failed / N/A (Qodo — no resolve API)
 
 ## Permissions Required
 
