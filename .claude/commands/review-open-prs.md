@@ -128,13 +128,7 @@ For each PR with approved findings, submit a **single batch review** using the G
 
 Each approved finding becomes an inline review comment with a suggestion block:
 
-```bash
-gh api repos/stolostron/capi-tests/pulls/<number>/reviews \
-  --method POST \
-  -f event="COMMENT" \
-  -f body="Automated review: <N> findings" \
-  --input <json-file>
-```
+Build the full JSON payload (see below) and post via `--input` to avoid shell escaping issues:
 
 The JSON body for the review:
 
