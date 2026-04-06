@@ -25,8 +25,10 @@ Use `$OWNER/$REPO` in all subsequent `gh` and `gh api` commands.
 ```bash
 gh pr list --repo $OWNER/$REPO --state open \
   --json number,title,author,createdAt,updatedAt,isDraft,headRefName,baseRefName,mergeable,reviewDecision,statusCheckRollup,labels,additions,deletions,changedFiles \
-  --jq '.'
+  --jq 'sort_by(.updatedAt) | reverse | .[:10]'
 ```
+
+This fetches the 10 most recently updated PRs. If fewer than 10 are open, all are returned.
 
 If there are no open PRs, print "No open pull requests found." and stop.
 
