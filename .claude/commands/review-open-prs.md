@@ -223,7 +223,7 @@ PRs skipped (draft): #<numbers>
 - **User approval required**: Never post review comments without explicit user approval for each finding.
 - **Skip auto/* branches**: Exclude PRs from branches starting with `auto/` (automated PRs).
 - **Skip self-authored PRs**: Exclude PRs authored by the current GitHub user (determined via `gh api user --jq '.login'`). Posting automated review comments on your own PRs is confusing.
-- **Skip duplicates**: Check existing review comments (Step 3) and skip findings that overlap with already-posted comments.
+- **Skip duplicates**: Check existing review comments (Step 3) and skip findings that target the same file path and line number (within ±3 lines) as an already-posted comment. When in doubt, skip — duplicate comments are worse than missing one.
 - **Rate limiting**: If there are more than 10 open PRs, process the 10 most recently updated first.
 - **Suggestion accuracy**: The `line` number in the review comment must reference the line in the PR diff (the new file version), not the old file. Use `side: "RIGHT"` always.
 - **Minimal fixes**: Suggestion blocks should change only the lines needed. Do not reformat or refactor surrounding code.
