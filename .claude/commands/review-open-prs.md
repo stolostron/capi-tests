@@ -80,15 +80,16 @@ For each finding, collect:
 - **line**: the line number in the **new version** of the file where the comment should appear
 - **severity**: critical / important / minor
 - **reasoning**: 2-4 sentences explaining the problem
-- **suggestion**: the exact replacement code (for the GitHub suggestion block)
 - **start_line** (optional): if the suggestion spans multiple lines, the starting line number
+
+The agent identifies problems but does **not** generate fixes — that happens in Step 5.
 
 ### Step 5: Generate fix for each finding
 
-For each finding from the code review:
+For each finding from Step 4:
 
 1. Read the relevant file section to understand full context
-2. Write the concrete fix (the replacement code for the suggestion block)
+2. Write the concrete fix (the exact replacement code for the GitHub suggestion block)
 3. Ensure the fix is minimal and correct — change only what's needed
 4. If a finding cannot be fixed mechanically (needs design decisions), mark it as `manual_only: true`
 
