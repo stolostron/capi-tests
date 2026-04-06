@@ -63,7 +63,7 @@ gh api repos/$OWNER/$REPO/pulls/<number>/comments \
 
 ### Step 4: Run code review
 
-Use the `pr-review-toolkit:code-reviewer` agent (via the Agent tool with `subagent_type: "pr-review-toolkit:code-reviewer"`).
+Use the Agent tool to launch the `pr-review-toolkit:code-reviewer` agent (with `subagent_type: "pr-review-toolkit:code-reviewer"`).
 
 Pass the PR number, full diff, and repository context. Instruct the agent to return findings in this structured format:
 
