@@ -49,7 +49,7 @@ When adding new dependencies:
 go get github.com/example/package@v1.2.3
 
 # Run security checks
-go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
 
 # Commit changes
 git add go.mod go.sum
@@ -117,13 +117,13 @@ The repository includes multiple security scanning workflows:
 
 ```bash
 # Official Go vulnerability checker
-go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
 
 # Nancy (Sonatype OSS Index) - requires API token for full access
-go list -json -m all | go run github.com/sonatype-nexus-community/nancy@latest sleuth
+go list -json -m all | go run github.com/sonatype-nexus-community/nancy@v1.2.0 sleuth
 
 # gosec static analysis
-go run github.com/securego/gosec/v2/cmd/gosec@latest ./...
+go run github.com/securego/gosec/v2/cmd/gosec@v2.25.0 ./...
 ```
 
 ### Dependabot
@@ -178,7 +178,7 @@ go mod tidy
 make test
 
 # Run security scans
-go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
 
 # Commit if all passes
 git add go.mod go.sum
@@ -197,7 +197,7 @@ For critical vulnerabilities:
    ```
 3. Run security scan to verify fix:
    ```bash
-   go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+   go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
    ```
 4. Run tests:
    ```bash

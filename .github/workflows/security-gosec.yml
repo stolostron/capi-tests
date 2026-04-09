@@ -198,7 +198,7 @@ jobs:
             echo "go test ./..."
             echo ""
             echo "# Run gosec locally"
-            echo "go install github.com/securego/gosec/v2/cmd/gosec@latest"
+            echo "go install github.com/securego/gosec/v2/cmd/gosec@v2.25.0"
             echo "gosec ./..."
             echo "\`\`\`"
             echo ""
