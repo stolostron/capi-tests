@@ -658,7 +658,7 @@ func NewTestConfig() *TestConfig {
 		WorkloadClusterName:      GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", defaultWorkloadCluster),
 		ClusterNamePrefix:        prefix,
 		NamePrefix:               GetEnvOrDefault("NAME_PREFIX", ""),
-		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.20"),
+		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.18"),
 		Region:                   GetEnvOrDefault(regionEnvVar, defaultRegion),
 		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),
 		Environment:              environment,
