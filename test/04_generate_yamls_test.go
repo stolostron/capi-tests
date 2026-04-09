@@ -202,6 +202,9 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	SetEnvVar(t, config.RegionEnvVar, config.Region) // Provider-specific: REGION for ARO, AWS_REGION for ROSA
 	SetEnvVar(t, "CS_CLUSTER_NAME", config.ClusterNamePrefix)
 	SetEnvVar(t, "OCP_VERSION", config.OCPVersion)
+	// ROSA gen.sh reads OPENSHIFT_VERSION (not OCP_VERSION) for the cluster version.
+	// Set both so the test's configured version reaches the generation script.
+	SetEnvVar(t, "OPENSHIFT_VERSION", config.OCPVersion)
 	// Pass namespace as NAMESPACE env var for YAML generation script
 	// This namespace will be embedded in generated YAMLs for Azure resources
 	SetEnvVar(t, "NAMESPACE", config.WorkloadClusterNamespace)
