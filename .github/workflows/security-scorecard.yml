@@ -1,0 +1,88 @@
+name: Security Scorecard
+
+on:
+  push:
+    branches: [ "main" ]
+  schedule:
+    # Run weekly on Monday at 4:30 AM UTC
+    - cron: '30 4 * * 1'
+  workflow_dispatch:
+
+# Scorecard requires no workflow-level write permissions per upstream docs:
+# https://github.com/ossf/scorecard-action#workflow-restrictions
+# Using read-all satisfies this constraint while granting read access for all scopes.
+permissions: read-all
+
+jobs:
+  scorecard:
+    name: OpenSSF Scorecard
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        persist-credentials: false
+
+    - name: Run OpenSSF Scorecard
+      uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
+      id: scorecard
+      with:
+        results_file: scorecard-results.sarif
+        results_format: sarif
+        publish_results: true
+
+    - name: Upload Scorecard results (SARIF)
+      if: always()
+      uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13 # v4
+      with:
+        sarif_file: scorecard-results.sarif
+      continue-on-error: true
+
+    - name: Upload Scorecard results (artifact)
+      if: always()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      with:
+        name: scorecard-results
+        path: scorecard-results.sarif
+        retention-days: 30
+      continue-on-error: true
+
+    - name: Generate summary
+      if: always()
+      env:
+        SCORECARD_OUTCOME: ${{ steps.scorecard.outcome }}
+      run: |
+        echo "# OpenSSF Scorecard Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "$SCORECARD_OUTCOME" = "failure" ]; then
+          echo "## ❌ Scorecard assessment failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The OpenSSF Scorecard action encountered errors. Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+        elif [ "$SCORECARD_OUTCOME" = "success" ]; then
+          echo "Supply chain security assessment completed." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## ❌ Scorecard assessment was skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "A prerequisite step failed. Scorecard did not run." >> $GITHUB_STEP_SUMMARY
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Results are available in the [Security tab](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/security/code-scanning)." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### What Scorecard checks" >> $GITHUB_STEP_SUMMARY
+        echo "- Pinned dependencies and GitHub Actions" >> $GITHUB_STEP_SUMMARY
+        echo "- Branch protection rules" >> $GITHUB_STEP_SUMMARY
+        echo "- SAST tool integration" >> $GITHUB_STEP_SUMMARY
+        echo "- Code review practices" >> $GITHUB_STEP_SUMMARY
+        echo "- Vulnerability disclosure policy" >> $GITHUB_STEP_SUMMARY
+        echo "- License and contributor requirements" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "View the badge and detailed results at [OpenSSF Scorecard Viewer](https://scorecard.dev/viewer/?uri=github.com/${GITHUB_REPOSITORY})." >> $GITHUB_STEP_SUMMARY

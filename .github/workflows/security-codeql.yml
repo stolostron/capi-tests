@@ -1,0 +1,87 @@
+name: Security CodeQL
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    # Run weekly on Monday at 4 AM UTC
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+# Note: CodeQL advanced setup requires disabling the "Default setup" in
+# Settings > Code security > Code scanning. Otherwise SARIF uploads will fail with:
+# "CodeQL analyses from advanced configurations cannot be processed when the default setup is enabled"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+    - name: Set up Go
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+      with:
+        go-version-file: 'go.mod'
+        cache: true
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@c10b8064de6f491fea524254123dbe5e09572f13 # v4
+      with:
+        languages: go
+        queries: security-and-quality
+
+    - name: Build
+      run: go build ./...
+      id: build
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@c10b8064de6f491fea524254123dbe5e09572f13 # v4
+      with:
+        category: '/language:go'
+      id: analyze
+
+    - name: Generate summary
+      if: always()
+      env:
+        BUILD_OUTCOME: ${{ steps.build.outcome }}
+        ANALYZE_OUTCOME: ${{ steps.analyze.outcome }}
+      run: |
+        echo "# CodeQL Analysis Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "$BUILD_OUTCOME" = "failure" ]; then
+          echo "## ⚠️ Build failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The Go build step failed. CodeQL analysis could not complete." >> $GITHUB_STEP_SUMMARY
+          echo "Check the workflow logs for build errors." >> $GITHUB_STEP_SUMMARY
+        elif [ "$ANALYZE_OUTCOME" = "failure" ]; then
+          echo "## ❌ Analysis failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "CodeQL analysis encountered errors. Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+        elif [ "$ANALYZE_OUTCOME" = "success" ]; then
+          echo "CodeQL semantic code analysis completed for **Go**." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## ❌ Workflow failed before analysis could run" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "A prerequisite step failed. Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Results are available in the [Security tab](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/security/code-scanning)." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### What CodeQL checks" >> $GITHUB_STEP_SUMMARY
+        echo "- SQL injection, XSS, and other injection flaws" >> $GITHUB_STEP_SUMMARY
+        echo "- Path traversal and unsafe file operations" >> $GITHUB_STEP_SUMMARY
+        echo "- Incorrect error handling" >> $GITHUB_STEP_SUMMARY
+        echo "- Resource leaks" >> $GITHUB_STEP_SUMMARY
+        echo "- Cryptographic misuse" >> $GITHUB_STEP_SUMMARY
