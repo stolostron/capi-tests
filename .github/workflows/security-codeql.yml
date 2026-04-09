@@ -52,20 +52,23 @@ jobs:
 
     - name: Generate summary
       if: always()
+      env:
+        BUILD_OUTCOME: ${{ steps.build.outcome }}
+        ANALYZE_OUTCOME: ${{ steps.analyze.outcome }}
       run: |
         echo "# CodeQL Analysis Results" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
 
-        if [ "${{ steps.build.outcome }}" = "failure" ]; then
+        if [ "$BUILD_OUTCOME" = "failure" ]; then
           echo "## ⚠️ Build failed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "The Go build step failed. CodeQL analysis could not complete." >> $GITHUB_STEP_SUMMARY
           echo "Check the workflow logs for build errors." >> $GITHUB_STEP_SUMMARY
-        elif [ "${{ steps.analyze.outcome }}" = "failure" ]; then
+        elif [ "$ANALYZE_OUTCOME" = "failure" ]; then
           echo "## ❌ Analysis failed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "CodeQL analysis encountered errors. Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
-        elif [ "${{ steps.analyze.outcome }}" = "success" ]; then
+        elif [ "$ANALYZE_OUTCOME" = "success" ]; then
           echo "CodeQL semantic code analysis completed for **Go**." >> $GITHUB_STEP_SUMMARY
         else
           echo "## ❌ Workflow failed before analysis could run" >> $GITHUB_STEP_SUMMARY

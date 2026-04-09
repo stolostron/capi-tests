@@ -56,15 +56,17 @@ jobs:
 
     - name: Generate summary
       if: always()
+      env:
+        SCORECARD_OUTCOME: ${{ steps.scorecard.outcome }}
       run: |
         echo "# OpenSSF Scorecard Results" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
 
-        if [ "${{ steps.scorecard.outcome }}" = "failure" ]; then
+        if [ "$SCORECARD_OUTCOME" = "failure" ]; then
           echo "## ❌ Scorecard assessment failed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "The OpenSSF Scorecard action encountered errors. Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
-        elif [ "${{ steps.scorecard.outcome }}" = "success" ]; then
+        elif [ "$SCORECARD_OUTCOME" = "success" ]; then
           echo "Supply chain security assessment completed." >> $GITHUB_STEP_SUMMARY
         else
           echo "## ❌ Scorecard assessment was skipped" >> $GITHUB_STEP_SUMMARY
