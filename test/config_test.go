@@ -150,6 +150,77 @@ func TestParseDeploymentTimeout_InvalidDuration(t *testing.T) {
 	}
 }
 
+func TestParseDeploymentStallTimeout_Default(t *testing.T) {
+	originalValue := os.Getenv("DEPLOYMENT_STALL_TIMEOUT")
+	_ = os.Unsetenv("DEPLOYMENT_STALL_TIMEOUT")
+	defer func() {
+		if originalValue != "" {
+			_ = os.Setenv("DEPLOYMENT_STALL_TIMEOUT", originalValue)
+		}
+	}()
+
+	timeout := parseDeploymentStallTimeout()
+	if timeout != DefaultDeploymentStallTimeout {
+		t.Errorf("Expected default stall timeout %v, got %v", DefaultDeploymentStallTimeout, timeout)
+	}
+	t.Logf("Default stall timeout: %v", timeout)
+}
+
+func TestParseDeploymentStallTimeout_ValidDuration(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected time.Duration
+	}{
+		{"15m", 15 * time.Minute},
+		{"30m", 30 * time.Minute},
+		{"1h", 1 * time.Hour},
+		{"0", 0},  // disables stall detection
+		{"0s", 0}, // disables stall detection
+		{"0m", 0}, // disables stall detection
+	}
+
+	originalValue := os.Getenv("DEPLOYMENT_STALL_TIMEOUT")
+	defer func() {
+		if originalValue != "" {
+			_ = os.Setenv("DEPLOYMENT_STALL_TIMEOUT", originalValue)
+		} else {
+			_ = os.Unsetenv("DEPLOYMENT_STALL_TIMEOUT")
+		}
+	}()
+
+	for _, tc := range testCases {
+		t.Run(tc.input, func(t *testing.T) {
+			_ = os.Setenv("DEPLOYMENT_STALL_TIMEOUT", tc.input)
+			timeout := parseDeploymentStallTimeout()
+			if timeout != tc.expected {
+				t.Errorf("For input '%s', expected %v, got %v", tc.input, tc.expected, timeout)
+			}
+		})
+	}
+}
+
+func TestParseDeploymentStallTimeout_InvalidDuration(t *testing.T) {
+	originalValue := os.Getenv("DEPLOYMENT_STALL_TIMEOUT")
+	defer func() {
+		if originalValue != "" {
+			_ = os.Setenv("DEPLOYMENT_STALL_TIMEOUT", originalValue)
+		} else {
+			_ = os.Unsetenv("DEPLOYMENT_STALL_TIMEOUT")
+		}
+	}()
+
+	invalidValues := []string{"invalid", "abc", "45", "1x"}
+	for _, val := range invalidValues {
+		t.Run(val, func(t *testing.T) {
+			_ = os.Setenv("DEPLOYMENT_STALL_TIMEOUT", val)
+			timeout := parseDeploymentStallTimeout()
+			if timeout != DefaultDeploymentStallTimeout {
+				t.Errorf("For invalid input '%s', expected default %v, got %v", val, DefaultDeploymentStallTimeout, timeout)
+			}
+		})
+	}
+}
+
 func TestIsKindMode(t *testing.T) {
 	testCases := []struct {
 		name     string

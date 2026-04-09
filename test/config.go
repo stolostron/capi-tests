@@ -29,6 +29,13 @@ const (
 	// MCE components need time to deploy controllers, pull images, and initialize.
 	DefaultMCEEnablementTimeout = 15 * time.Minute
 
+	// DefaultDeploymentStallTimeout is the default stall detection timeout.
+	// If the deployment makes no progress (control plane state, machine pool replicas,
+	// or infrastructure resource count unchanged) for this duration, the test fails early
+	// instead of waiting for the full DeploymentTimeout.
+	// Set to 0 to disable stall detection.
+	DefaultDeploymentStallTimeout = 30 * time.Minute
+
 	// DefaultNodeReadyTimeout is the default timeout for waiting for worker nodes to become available.
 	// In ARO HCP, the control plane becomes ready before worker nodes are provisioned.
 	// The AROMachinePool creates nodes after the HcpOpenShiftCluster is up.
@@ -358,9 +365,10 @@ type TestConfig struct {
 	GenScriptPath     string
 
 	// Timeouts
-	DeploymentTimeout    time.Duration
-	ASOControllerTimeout time.Duration
-	HelmInstallTimeout   time.Duration
+	DeploymentTimeout      time.Duration
+	DeploymentStallTimeout time.Duration // 0 disables stall detection
+	ASOControllerTimeout   time.Duration
+	HelmInstallTimeout     time.Duration
 
 	// Infrastructure providers
 	// InfraProviderName is the selected infrastructure provider ("aro" or "rosa").
@@ -565,9 +573,10 @@ func NewTestConfig() *TestConfig {
 		GenScriptPath:     GetEnvOrDefault("GEN_SCRIPT_PATH", defaultGenScriptPath),
 
 		// Timeouts
-		DeploymentTimeout:    parseDeploymentTimeout(),
-		ASOControllerTimeout: asoTimeout,
-		HelmInstallTimeout:   parseHelmInstallTimeout(),
+		DeploymentTimeout:      parseDeploymentTimeout(),
+		DeploymentStallTimeout: parseDeploymentStallTimeout(),
+		ASOControllerTimeout:   asoTimeout,
+		HelmInstallTimeout:     parseHelmInstallTimeout(),
 
 		// Infrastructure providers
 		InfraProviderName: infraProviderName,
@@ -614,6 +623,23 @@ func parseDeploymentTimeout() time.Duration {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: invalid DEPLOYMENT_TIMEOUT '%s', using default %v\n", timeoutStr, DefaultDeploymentTimeout)
 		return DefaultDeploymentTimeout
+	}
+	return timeout
+}
+
+// parseDeploymentStallTimeout parses the DEPLOYMENT_STALL_TIMEOUT environment variable.
+// Returns the parsed duration or defaults to DefaultDeploymentStallTimeout.
+// Set to "0" to disable stall detection entirely.
+func parseDeploymentStallTimeout() time.Duration {
+	timeoutStr := os.Getenv("DEPLOYMENT_STALL_TIMEOUT")
+	if timeoutStr == "" {
+		return DefaultDeploymentStallTimeout
+	}
+
+	timeout, err := time.ParseDuration(timeoutStr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: invalid DEPLOYMENT_STALL_TIMEOUT '%s', using default %v\n", timeoutStr, DefaultDeploymentStallTimeout)
+		return DefaultDeploymentStallTimeout
 	}
 	return timeout
 }

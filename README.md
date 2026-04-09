@@ -166,6 +166,7 @@ The test suite validates naming compliance during the Check Dependencies phase (
 ### Test Behavior
 
 - `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `60m`). Use Go duration format: `1h`, `45m`, `90m`, etc.
+- `DEPLOYMENT_STALL_TIMEOUT` - Stall detection timeout (default: `30m`). If the deployment makes no progress for this duration, the test fails early instead of waiting for the full timeout. Set to `0` to disable.
 - `TEST_VERBOSITY` - Test output verbosity (default: `-v` for verbose). Set to empty string for quiet output: `TEST_VERBOSITY= make test`
 
 #### Makefile Timeout Variables
