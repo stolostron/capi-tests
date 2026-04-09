@@ -359,11 +359,11 @@ if err := os.WriteFile(kubeconfigPath, decoded, 0600); err != nil {
 
 ```bash
 # Run gosec locally
-go install github.com/securego/gosec/v2/cmd/gosec@latest
+go install github.com/securego/gosec/v2/cmd/gosec@v2.25.0
 gosec ./...
 
 # Run govulncheck locally
-go install golang.org/x/vuln/cmd/govulncheck@latest
+go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
 govulncheck ./...
 
 # Check for secrets (requires git-secrets)

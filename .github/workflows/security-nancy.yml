@@ -40,8 +40,8 @@ jobs:
     - name: Run nancy dependency scanner
       id: nancy-scan
       run: |
-        # Install nancy
-        go install github.com/sonatype-nexus-community/nancy@latest
+        # Install nancy — pin to specific version to prevent supply chain attacks
+        go install github.com/sonatype-nexus-community/nancy@v1.2.0
 
         # Run nancy and capture output
         set +e
@@ -236,7 +236,7 @@ jobs:
             echo ""
             echo "\`\`\`bash"
             echo "# Install nancy"
-            echo "go install github.com/sonatype-nexus-community/nancy@latest"
+            echo "go install github.com/sonatype-nexus-community/nancy@v1.2.0"
             echo ""
             echo "# Generate dependency list"
             echo "go list -json -deps ./... > go.list"
