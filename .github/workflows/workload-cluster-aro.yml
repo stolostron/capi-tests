@@ -109,7 +109,7 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 240  # 2x TEST_TIMEOUT_MINUTES (120m * 2)
+    timeout-minutes: 280  # DEPLOY_CRS_TIMEOUT (130m) + DELETION_TIMEOUT (120m) + overhead (30m)
     environment: ${{ inputs.environment || 'aro-stage' }}
     env:
       # Cluster mode selection
@@ -268,11 +268,13 @@ jobs:
 
     - name: 'Run test-all'
       # Azure credentials and config are set at job level (see env: above)
-      env:
-        DEPLOYMENT_TIMEOUT: "${{ env.TEST_TIMEOUT_MINUTES }}m"
-        DEPLOY_CRS_TIMEOUT: "${{ env.TEST_TIMEOUT_MINUTES }}m"
-        DELETION_TIMEOUT: "${{ env.TEST_TIMEOUT_MINUTES }}m"
-      run: make test-all
+      # DEPLOY_CRS_TIMEOUT has a 10m buffer over DEPLOYMENT_TIMEOUT so the deployment
+      # loop can produce a graceful t.Fatalf before Go's test timer panics.
+      run: |
+        export DEPLOYMENT_TIMEOUT="${TEST_TIMEOUT_MINUTES}m"
+        export DEPLOY_CRS_TIMEOUT="$((TEST_TIMEOUT_MINUTES + 10))m"
+        export DELETION_TIMEOUT="${TEST_TIMEOUT_MINUTES}m"
+        make test-all
       continue-on-error: true
       id: phase3
 
@@ -475,5 +477,20 @@ jobs:
 
     - name: 'Cleanup resources'
       if: always()
-      run: FORCE=1 make clean-all
+      run: |
+        # Authenticate Azure CLI for resource cleanup using SP credentials
+        if [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ] && [ -n "$AZURE_TENANT_ID" ]; then
+          az login --service-principal \
+            -u "$AZURE_CLIENT_ID" \
+            -p "$AZURE_CLIENT_SECRET" \
+            --tenant "$AZURE_TENANT_ID" \
+            --output none && echo "Azure CLI authenticated for cleanup" \
+            || echo "Warning: Azure CLI login failed, Azure resource cleanup may be incomplete"
+          if [ -n "$AZURE_SUBSCRIPTION_ID" ]; then
+            if ! az account set --subscription "$AZURE_SUBSCRIPTION_ID" --output none; then
+              echo "Warning: failed to set Azure subscription ($AZURE_SUBSCRIPTION_ID); Azure cleanup may be incomplete"
+            fi
+          fi
+        fi
+        FORCE=1 make clean-all
       continue-on-error: true
