@@ -109,7 +109,7 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 240  # 2x TEST_TIMEOUT_MINUTES (120m * 2)
+    timeout-minutes: 280  # DEPLOY_CRS_TIMEOUT (130m) + DELETION_TIMEOUT (120m) + overhead (30m)
     environment: ${{ inputs.environment || 'aro-stage' }}
     env:
       # Cluster mode selection
