@@ -270,11 +270,11 @@ jobs:
       # Azure credentials and config are set at job level (see env: above)
       # DEPLOY_CRS_TIMEOUT has a 10m buffer over DEPLOYMENT_TIMEOUT so the deployment
       # loop can produce a graceful t.Fatalf before Go's test timer panics.
-      env:
-        DEPLOYMENT_TIMEOUT: "${{ env.TEST_TIMEOUT_MINUTES }}m"
-        DEPLOY_CRS_TIMEOUT: "${{ fromJSON(env.TEST_TIMEOUT_MINUTES) + 10 }}m"
-        DELETION_TIMEOUT: "${{ env.TEST_TIMEOUT_MINUTES }}m"
-      run: make test-all
+      run: |
+        export DEPLOYMENT_TIMEOUT="${TEST_TIMEOUT_MINUTES}m"
+        export DEPLOY_CRS_TIMEOUT="$((TEST_TIMEOUT_MINUTES + 10))m"
+        export DELETION_TIMEOUT="${TEST_TIMEOUT_MINUTES}m"
+        make test-all
       continue-on-error: true
       id: phase3
 
@@ -487,7 +487,9 @@ jobs:
             --output none && echo "Azure CLI authenticated for cleanup" \
             || echo "Warning: Azure CLI login failed, Azure resource cleanup may be incomplete"
           if [ -n "$AZURE_SUBSCRIPTION_ID" ]; then
-            az account set --subscription "$AZURE_SUBSCRIPTION_ID" || true
+            if ! az account set --subscription "$AZURE_SUBSCRIPTION_ID" --output none; then
+              echo "Warning: failed to set Azure subscription ($AZURE_SUBSCRIPTION_ID); Azure cleanup may be incomplete"
+            fi
           fi
         fi
         FORCE=1 make clean-all

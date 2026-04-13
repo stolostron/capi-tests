@@ -270,11 +270,11 @@ jobs:
       # AWS credentials and config are set at job level (see env: above)
       # DEPLOY_CRS_TIMEOUT has a 10m buffer over DEPLOYMENT_TIMEOUT so the deployment
       # loop can produce a graceful t.Fatalf before Go's test timer panics.
-      env:
-        DEPLOYMENT_TIMEOUT: "${{ env.TEST_TIMEOUT_MINUTES }}m"
-        DEPLOY_CRS_TIMEOUT: "${{ fromJSON(env.TEST_TIMEOUT_MINUTES) + 10 }}m"
-        DELETION_TIMEOUT: "${{ env.TEST_TIMEOUT_MINUTES }}m"
-      run: make test-all
+      run: |
+        export DEPLOYMENT_TIMEOUT="${TEST_TIMEOUT_MINUTES}m"
+        export DEPLOY_CRS_TIMEOUT="$((TEST_TIMEOUT_MINUTES + 10))m"
+        export DELETION_TIMEOUT="${TEST_TIMEOUT_MINUTES}m"
+        make test-all
       continue-on-error: true
       id: phase3
 
