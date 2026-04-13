@@ -272,7 +272,7 @@ jobs:
       # loop can produce a graceful t.Fatalf before Go's test timer panics.
       env:
         DEPLOYMENT_TIMEOUT: "${{ env.TEST_TIMEOUT_MINUTES }}m"
-        DEPLOY_CRS_TIMEOUT: "130m"
+        DEPLOY_CRS_TIMEOUT: "${{ fromJSON(env.TEST_TIMEOUT_MINUTES) + 10 }}m"
         DELETION_TIMEOUT: "${{ env.TEST_TIMEOUT_MINUTES }}m"
       run: make test-all
       continue-on-error: true
@@ -484,10 +484,10 @@ jobs:
             -u "$AZURE_CLIENT_ID" \
             -p "$AZURE_CLIENT_SECRET" \
             --tenant "$AZURE_TENANT_ID" \
-            --output none 2>/dev/null && echo "Azure CLI authenticated for cleanup" \
+            --output none && echo "Azure CLI authenticated for cleanup" \
             || echo "Warning: Azure CLI login failed, Azure resource cleanup may be incomplete"
           if [ -n "$AZURE_SUBSCRIPTION_ID" ]; then
-            az account set --subscription "$AZURE_SUBSCRIPTION_ID" 2>/dev/null || true
+            az account set --subscription "$AZURE_SUBSCRIPTION_ID" || true
           fi
         fi
         FORCE=1 make clean-all
