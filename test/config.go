@@ -541,7 +541,7 @@ func NewTestConfig() *TestConfig {
 		ManagementClusterName:    GetEnvOrDefault("MANAGEMENT_CLUSTER_NAME", defaultMgmtCluster),
 		WorkloadClusterName:      GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", defaultWorkloadCluster),
 		ClusterNamePrefix:        GetEnvOrDefault("CS_CLUSTER_NAME", fmt.Sprintf("%s-%s", capiUser, GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv))),
-		NamePrefix:               os.Getenv("NAME_PREFIX"), // Optional; set by capz-test-env.sh in CI
+		NamePrefix:               GetEnvOrDefault("NAME_PREFIX", ""), // Optional; set by capz-test-env.sh in CI
 		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.20"),
 		Region:                   GetEnvOrDefault(regionEnvVar, defaultRegion),
 		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),
