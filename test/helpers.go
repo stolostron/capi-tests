@@ -3566,6 +3566,23 @@ func ValidateAllConfigurations(t *testing.T, config *TestConfig) []ConfigValidat
 			result.IsValid = true
 		}
 		results = append(results, result)
+
+		// Validate NAME_PREFIX length (optional — only when set)
+		if config.NamePrefix != "" {
+			nodePoolName := config.NamePrefix + NodePoolSuffix
+			result = ConfigValidationResult{
+				Variable:   "NAME_PREFIX (node pool name)",
+				Value:      nodePoolName,
+				IsCritical: true,
+			}
+			if err := ValidateNamePrefix(config.NamePrefix); err != nil {
+				result.IsValid = false
+				result.Error = err
+			} else {
+				result.IsValid = true
+			}
+			results = append(results, result)
+		}
 	}
 
 	// Validate timeout values
