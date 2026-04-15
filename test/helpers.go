@@ -1709,16 +1709,21 @@ const NodePoolSuffix = "-mp1"
 // This ensures the resulting node pool name (${NAME_PREFIX}-mp1) stays within limits.
 const MaxNamePrefixLength = MaxNodePoolNameLength - len(NodePoolSuffix) // 11
 
-// ValidateNamePrefix checks if the NAME_PREFIX length is within the allowed limit
-// for ARO HCP node pool naming. The node pool Azure name is constructed as
-// ${NAME_PREFIX}-mp1 and must not exceed 15 characters.
+// aroHCPNodePoolNameRegex is the Azure-enforced pattern for ARO HCP node pool names.
+// Names must be 3-15 chars, start with a letter, end with alphanumeric, and contain
+// only letters, digits, and hyphens.
+var aroHCPNodePoolNameRegex = regexp.MustCompile(`^[a-zA-Z][-a-zA-Z0-9]{1,13}[a-zA-Z0-9]$`)
+
+// ValidateNamePrefix checks if the NAME_PREFIX is valid for ARO HCP node pool naming.
+// The node pool Azure name is constructed as ${NAME_PREFIX}-mp1 and must not exceed
+// 15 characters and must match the ARO HCP naming pattern.
 // Returns nil if NAME_PREFIX is empty (not set), as it's optional for local runs.
 func ValidateNamePrefix(namePrefix string) error {
 	if namePrefix == "" {
 		return nil
 	}
+	nodePoolName := namePrefix + NodePoolSuffix
 	if len(namePrefix) > MaxNamePrefixLength {
-		nodePoolName := namePrefix + NodePoolSuffix
 		return fmt.Errorf(
 			"NAME_PREFIX '%s' (%d chars) exceeds maximum length of %d characters\n"+
 				"  Node pool name would be '%s' (%d chars), exceeding ARO HCP limit of %d chars\n"+
@@ -1727,6 +1732,13 @@ func ValidateNamePrefix(namePrefix string) error {
 			namePrefix, len(namePrefix), MaxNamePrefixLength,
 			nodePoolName, len(nodePoolName), MaxNodePoolNameLength,
 			MaxNamePrefixLength)
+	}
+	if !aroHCPNodePoolNameRegex.MatchString(nodePoolName) {
+		return fmt.Errorf(
+			"NAME_PREFIX '%s' creates invalid node pool name '%s'\n"+
+				"  ARO HCP node pool names must match: ^[a-zA-Z][-a-zA-Z0-9]{1,13}[a-zA-Z0-9]$\n"+
+				"  Suggestion: start with a letter and use only letters, numbers, and '-'",
+			namePrefix, nodePoolName)
 	}
 	return nil
 }

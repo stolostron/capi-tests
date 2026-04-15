@@ -1596,8 +1596,8 @@ func TestValidateNamePrefix(t *testing.T) {
 		},
 		{
 			name:        "exactly 11 chars - at limit",
-			namePrefix:  "12345678901",
-			expectError: false, // "12345678901" + "-mp1" = 15 chars
+			namePrefix:  "a1234567890",
+			expectError: false, // "a1234567890" + "-mp1" = 15 chars
 		},
 		{
 			name:        "short prefix",
@@ -1606,14 +1606,14 @@ func TestValidateNamePrefix(t *testing.T) {
 		},
 		{
 			name:        "10 chars",
-			namePrefix:  "1234567890",
-			expectError: false, // "1234567890" + "-mp1" = 14 chars
+			namePrefix:  "a123456789",
+			expectError: false, // "a123456789" + "-mp1" = 14 chars
 		},
-		// Invalid cases
+		// Invalid - length
 		{
 			name:        "12 chars - one over limit",
-			namePrefix:  "123456789012",
-			expectError: true, // "123456789012" + "-mp1" = 16 chars
+			namePrefix:  "a12345678901",
+			expectError: true, // "a12345678901" + "-mp1" = 16 chars
 		},
 		{
 			name:        "15 chars - typical CI failure",
@@ -1622,8 +1622,19 @@ func TestValidateNamePrefix(t *testing.T) {
 		},
 		{
 			name:        "20 chars - way over",
-			namePrefix:  "12345678901234567890",
+			namePrefix:  "abcdefghijklmnopqrst",
 			expectError: true,
+		},
+		// Invalid - regex pattern
+		{
+			name:        "starts with digit",
+			namePrefix:  "1abc",
+			expectError: true, // "1abc-mp1" does not start with a letter
+		},
+		{
+			name:        "contains underscore",
+			namePrefix:  "ct_ab",
+			expectError: true, // "ct_ab-mp1" contains underscore
 		},
 	}
 
@@ -1673,13 +1684,13 @@ func TestValidateNamePrefix_Constants(t *testing.T) {
 	}
 
 	// Test boundary: exactly at the limit should pass
-	err := ValidateNamePrefix("12345678901") // 11 chars
+	err := ValidateNamePrefix("a1234567890") // 11 chars, starts with letter
 	if err != nil {
 		t.Errorf("ValidateNamePrefix with 11 chars should pass, got error: %v", err)
 	}
 
 	// Test boundary: one char over should fail
-	err = ValidateNamePrefix("123456789012") // 12 chars
+	err = ValidateNamePrefix("a12345678901") // 12 chars
 	if err == nil {
 		t.Error("ValidateNamePrefix with 12 chars should fail, got nil")
 	}
