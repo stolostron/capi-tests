@@ -269,7 +269,7 @@ find_ad_applications() {
     if [[ $? -ne 0 ]]; then
         print_error "Failed to list Azure AD Applications with prefix '${prefix}'" >&2
         echo "[]"
-        return
+        return 1
     fi
     echo "$apps_json"
 }
@@ -288,7 +288,7 @@ find_service_principals() {
     if [[ $? -ne 0 ]]; then
         print_error "Failed to list Service Principals with prefix '${prefix}'" >&2
         echo "[]"
-        return
+        return 1
     fi
     echo "$sps_json"
 }
@@ -739,7 +739,11 @@ main() {
             for ad_prefix in "${ad_prefixes[@]}"; do
                 echo ""
                 local apps_json
-                apps_json=$(find_ad_applications "$ad_prefix")
+                if ! apps_json=$(find_ad_applications "$ad_prefix"); then
+                    print_warning "Skipping AD Application cleanup for prefix '${ad_prefix}' due to query failure"
+                    apps_json="[]"
+                    query_failed=true
+                fi
 
                 if display_ad_applications "$apps_json"; then
                     found_any=true
@@ -748,7 +752,11 @@ main() {
 
                 echo ""
                 local sps_json
-                sps_json=$(find_service_principals "$ad_prefix")
+                if ! sps_json=$(find_service_principals "$ad_prefix"); then
+                    print_warning "Skipping Service Principal cleanup for prefix '${ad_prefix}' due to query failure"
+                    sps_json="[]"
+                    query_failed=true
+                fi
 
                 if display_service_principals "$sps_json"; then
                     found_any=true
@@ -803,7 +811,7 @@ main() {
     # Find and cleanup Azure AD Applications
     echo ""
     local apps_json
-    apps_json=$(find_ad_applications "$PREFIX")
+    apps_json=$(find_ad_applications "$PREFIX") || true
 
     if display_ad_applications "$apps_json"; then
         found_any=true
@@ -813,7 +821,7 @@ main() {
     # Find and cleanup Service Principals
     echo ""
     local sps_json
-    sps_json=$(find_service_principals "$PREFIX")
+    sps_json=$(find_service_principals "$PREFIX") || true
 
     if display_service_principals "$sps_json"; then
         found_any=true
