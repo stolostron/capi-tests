@@ -1287,6 +1287,7 @@ func tagAzureADApplications(t *testing.T, config *TestConfig) {
 
 	// Find AD apps matching our prefix
 	output, err := RunCommandQuiet(t, "az", "ad", "app", "list",
+		"--only-show-errors",
 		"--filter", fmt.Sprintf("startswith(displayName, '%s')", prefix),
 		"--query", "[].{appId: appId, displayName: displayName}",
 		"-o", "json")
@@ -1336,6 +1337,7 @@ func tagAzureServicePrincipals(t *testing.T, config *TestConfig) {
 
 	// Find SPs matching our prefix
 	output, err := RunCommandQuiet(t, "az", "ad", "sp", "list",
+		"--only-show-errors",
 		"--filter", fmt.Sprintf("startswith(displayName, '%s')", prefix),
 		"--query", "[].{id: id, displayName: displayName}",
 		"-o", "json")
