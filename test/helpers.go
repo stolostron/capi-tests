@@ -1696,28 +1696,20 @@ func ValidateDomainPrefix(user, environment string) error {
 	return nil
 }
 
-// MaxNodePoolNameLength is the maximum allowed length for ARO HCP node pool names.
-// Azure enforces this via the regex ^[a-zA-Z][-a-zA-Z0-9]{1,13}[a-zA-Z0-9]$ (3-15 chars).
+// Azure enforces ARO HCP node pool names via ^[a-zA-Z][-a-zA-Z0-9]{1,13}[a-zA-Z0-9]$ (3-15 chars).
 const MaxNodePoolNameLength = 15
 
-// NodePoolSuffix is the suffix appended to NAME_PREFIX to form the node pool Azure name.
-// The machine pool name is typically constructed as ${NAME_PREFIX}-mp1 by cluster-api-installer.
+// NodePoolSuffix is appended to NAME_PREFIX to form the node pool name (${NAME_PREFIX}-mp1).
 const NodePoolSuffix = "-mp1"
 
-// MaxNamePrefixLength is the maximum allowed length for NAME_PREFIX,
-// calculated as MaxNodePoolNameLength minus the length of NodePoolSuffix.
-// This ensures the resulting node pool name (${NAME_PREFIX}-mp1) stays within limits.
+// MaxNamePrefixLength ensures ${NAME_PREFIX}-mp1 stays within MaxNodePoolNameLength.
 const MaxNamePrefixLength = MaxNodePoolNameLength - len(NodePoolSuffix) // 11
 
 // aroHCPNodePoolNameRegex is the Azure-enforced pattern for ARO HCP node pool names.
-// Names must be 3-15 chars, start with a letter, end with alphanumeric, and contain
-// only letters, digits, and hyphens.
 var aroHCPNodePoolNameRegex = regexp.MustCompile(`^[a-zA-Z][-a-zA-Z0-9]{1,13}[a-zA-Z0-9]$`)
 
-// ValidateNamePrefix checks if the NAME_PREFIX is valid for ARO HCP node pool naming.
-// The node pool Azure name is constructed as ${NAME_PREFIX}-mp1 and must not exceed
-// 15 characters and must match the ARO HCP naming pattern.
-// Returns nil if NAME_PREFIX is empty (not set), as it's optional for local runs.
+// ValidateNamePrefix checks if NAME_PREFIX produces a valid ARO HCP node pool name
+// when combined with NodePoolSuffix. Returns nil if namePrefix is empty (optional).
 func ValidateNamePrefix(namePrefix string) error {
 	if namePrefix == "" {
 		return nil

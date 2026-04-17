@@ -694,7 +694,6 @@ func TestCheckDependencies_NamingConstraints(t *testing.T) {
 		}
 	})
 
-	// Validate NAME_PREFIX: ${NAME_PREFIX}-mp1 ≤ 15 chars (ARO HCP node pool limit)
 	t.Run("NamePrefix", func(t *testing.T) {
 		if config.NamePrefix == "" {
 			t.Skip("NAME_PREFIX not set (optional for local runs)")

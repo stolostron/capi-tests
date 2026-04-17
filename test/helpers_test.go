@@ -1587,54 +1587,80 @@ func TestValidateNamePrefix(t *testing.T) {
 		name        string
 		namePrefix  string
 		expectError bool
+		errorSubstr string // distinguishes length vs regex error path
 	}{
 		// Valid cases
 		{
-			name:        "empty - not set",
-			namePrefix:  "",
-			expectError: false,
+			name:       "empty - not set",
+			namePrefix: "",
 		},
 		{
-			name:        "exactly 11 chars - at limit",
-			namePrefix:  "a1234567890",
-			expectError: false, // "a1234567890" + "-mp1" = 15 chars
+			name:       "single char - minimum valid",
+			namePrefix: "a", // "a-mp1" = 5 chars
 		},
 		{
-			name:        "short prefix",
-			namePrefix:  "ct-ab12",
-			expectError: false, // "ct-ab12" + "-mp1" = 11 chars
+			name:       "short prefix",
+			namePrefix: "ct-ab12", // "ct-ab12-mp1" = 11 chars
 		},
 		{
-			name:        "10 chars",
-			namePrefix:  "a123456789",
-			expectError: false, // "a123456789" + "-mp1" = 14 chars
+			name:       "10 chars",
+			namePrefix: "a123456789", // "a123456789-mp1" = 14 chars
+		},
+		{
+			name:       "exactly 11 chars - at limit",
+			namePrefix: "a1234567890", // "a1234567890-mp1" = 15 chars
+		},
+		{
+			name:       "uppercase letters allowed",
+			namePrefix: "CapzTest", // "CapzTest-mp1" = 12 chars, regex allows [a-zA-Z]
+		},
+		{
+			name:       "trailing hyphen in prefix",
+			namePrefix: "ct-ab-", // "ct-ab--mp1" = 10 chars, double-hyphen is valid per Azure regex
 		},
 		// Invalid - length
 		{
 			name:        "12 chars - one over limit",
-			namePrefix:  "a12345678901",
-			expectError: true, // "a12345678901" + "-mp1" = 16 chars
+			namePrefix:  "a12345678901", // "a12345678901-mp1" = 16 chars
+			expectError: true,
+			errorSubstr: "exceeds maximum length",
 		},
 		{
 			name:        "15 chars - typical CI failure",
-			namePrefix:  "capz-tests-25b0",
-			expectError: true, // "capz-tests-25b0" + "-mp1" = 19 chars
+			namePrefix:  "capz-tests-25b0", // "capz-tests-25b0-mp1" = 19 chars
+			expectError: true,
+			errorSubstr: "exceeds maximum length",
 		},
 		{
 			name:        "20 chars - way over",
 			namePrefix:  "abcdefghijklmnopqrst",
 			expectError: true,
+			errorSubstr: "exceeds maximum length",
 		},
 		// Invalid - regex pattern
 		{
 			name:        "starts with digit",
-			namePrefix:  "1abc",
-			expectError: true, // "1abc-mp1" does not start with a letter
+			namePrefix:  "1abc", // "1abc-mp1" does not start with a letter
+			expectError: true,
+			errorSubstr: "invalid node pool name",
+		},
+		{
+			name:        "starts with hyphen",
+			namePrefix:  "-abc", // "-abc-mp1" first char is hyphen, not letter
+			expectError: true,
+			errorSubstr: "invalid node pool name",
 		},
 		{
 			name:        "contains underscore",
-			namePrefix:  "ct_ab",
-			expectError: true, // "ct_ab-mp1" contains underscore
+			namePrefix:  "ct_ab", // "ct_ab-mp1" contains underscore
+			expectError: true,
+			errorSubstr: "invalid node pool name",
+		},
+		{
+			name:        "contains dot",
+			namePrefix:  "ct.ab", // "ct.ab-mp1" dot not in allowed chars
+			expectError: true,
+			errorSubstr: "invalid node pool name",
 		},
 	}
 
@@ -1647,11 +1673,9 @@ func TestValidateNamePrefix(t *testing.T) {
 					t.Errorf("ValidateNamePrefix(%q) expected error for node pool name %q (%d chars), got nil",
 						tt.namePrefix, nodePoolName, len(nodePoolName))
 				} else {
-					for _, msg := range []string{"NAME_PREFIX", "node pool", "ARO HCP"} {
-						if !strings.Contains(err.Error(), msg) {
-							t.Errorf("ValidateNamePrefix(%q) error = %q, expected to contain %q",
-								tt.namePrefix, err.Error(), msg)
-						}
+					if !strings.Contains(err.Error(), tt.errorSubstr) {
+						t.Errorf("ValidateNamePrefix(%q) error = %q, expected to contain %q",
+							tt.namePrefix, err.Error(), tt.errorSubstr)
 					}
 				}
 			} else {
@@ -1681,18 +1705,6 @@ func TestValidateNamePrefix_Constants(t *testing.T) {
 	if MaxNamePrefixLength+len(NodePoolSuffix) != MaxNodePoolNameLength {
 		t.Errorf("MaxNamePrefixLength (%d) + len(NodePoolSuffix) (%d) != MaxNodePoolNameLength (%d)",
 			MaxNamePrefixLength, len(NodePoolSuffix), MaxNodePoolNameLength)
-	}
-
-	// Test boundary: exactly at the limit should pass
-	err := ValidateNamePrefix("a1234567890") // 11 chars, starts with letter
-	if err != nil {
-		t.Errorf("ValidateNamePrefix with 11 chars should pass, got error: %v", err)
-	}
-
-	// Test boundary: one char over should fail
-	err = ValidateNamePrefix("a12345678901") // 12 chars
-	if err == nil {
-		t.Error("ValidateNamePrefix with 12 chars should fail, got nil")
 	}
 }
 
