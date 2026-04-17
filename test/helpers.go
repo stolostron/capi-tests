@@ -889,27 +889,18 @@ func isWaitingCondition(cond ControlPlaneCondition) (bool, string) {
 	return false, ""
 }
 
-// permanentFailureReasons defines condition Reason values that indicate a permanent failure
-// (the controller has given up and will not retry). When a condition has Status=False and
-// one of these reasons WITHOUT matching any waitingPatterns, the deployment has failed
-// and waiting further is pointless.
+// permanentFailureReasons lists Reason values where the controller has given up (will not retry).
 var permanentFailureReasons = []string{
 	"Failed",
 }
 
 // isPermanentFailure checks if a condition indicates a permanent, non-recoverable failure.
-// A condition is a permanent failure when:
-//  1. Status is "False"
-//  2. Reason matches one of the permanentFailureReasons
-//  3. The condition is NOT a transient waiting state (checked via isWaitingCondition)
-//
-// Returns true and a description string if the condition is a permanent failure.
+// Returns true and a description if Status=False with a terminal reason that isn't a waiting state.
 func isPermanentFailure(cond ControlPlaneCondition) (bool, string) {
 	if cond.Status != "False" {
 		return false, ""
 	}
 
-	// Check if the reason matches a known permanent failure
 	reasonMatches := false
 	for _, reason := range permanentFailureReasons {
 		if strings.EqualFold(cond.Reason, reason) {
@@ -922,7 +913,6 @@ func isPermanentFailure(cond ControlPlaneCondition) (bool, string) {
 		return false, ""
 	}
 
-	// Even with a failure reason, check if the message indicates a transient waiting state
 	if isWaiting, _ := isWaitingCondition(cond); isWaiting {
 		return false, ""
 	}
@@ -934,19 +924,16 @@ func isPermanentFailure(cond ControlPlaneCondition) (bool, string) {
 	return true, desc
 }
 
-// CheckConditionsForPermanentFailure inspects a list of conditions (as []interface{} from JSON)
-// and returns an error if any condition indicates a permanent failure.
-// This enables fail-fast behavior: instead of waiting for the full deployment timeout,
-// the test can abort immediately when a controller reports a terminal failure.
+// CheckConditionsForPermanentFailure inspects []interface{} conditions (from untyped JSON)
+// and returns an error if any indicates a permanent failure.
 func CheckConditionsForPermanentFailure(conditionsInterface []interface{}) error {
 	if len(conditionsInterface) == 0 {
 		return nil
 	}
 
-	// Convert []interface{} to []ControlPlaneCondition via JSON round-trip
 	conditionsJSON, err := json.Marshal(conditionsInterface)
 	if err != nil {
-		return nil // Don't fail-fast on parse errors, let the caller handle it
+		return nil
 	}
 
 	var conditions []ControlPlaneCondition
@@ -957,7 +944,6 @@ func CheckConditionsForPermanentFailure(conditionsInterface []interface{}) error
 	return CheckTypedConditionsForPermanentFailure(conditions)
 }
 
-// CheckTypedConditionsForPermanentFailure inspects typed conditions for permanent failures.
 func CheckTypedConditionsForPermanentFailure(conditions []ControlPlaneCondition) error {
 	var failures []string
 	for _, cond := range conditions {
@@ -973,9 +959,7 @@ func CheckTypedConditionsForPermanentFailure(conditions []ControlPlaneCondition)
 	return fmt.Errorf("permanent failure detected:\n  %s", strings.Join(failures, "\n  "))
 }
 
-// CheckK8sConditionsForPermanentFailure inspects K8sCondition (from ClusterMonitorData) for permanent failures.
 func CheckK8sConditionsForPermanentFailure(conditions []K8sCondition) error {
-	// Convert to ControlPlaneCondition format (same fields)
 	typed := make([]ControlPlaneCondition, len(conditions))
 	for i, c := range conditions {
 		typed[i] = ControlPlaneCondition{
@@ -1042,7 +1026,6 @@ func FormatControlPlaneConditionsFromParsed(conditionsInterface []interface{}) s
 		return "  (no conditions available)"
 	}
 
-	// Convert []interface{} to []ControlPlaneCondition via JSON round-trip
 	conditionsJSON, err := json.Marshal(conditionsInterface)
 	if err != nil {
 		return fmt.Sprintf("  (failed to marshal conditions: %v)", err)
@@ -1064,7 +1047,6 @@ func FormatNonTrueConditionsFromParsed(conditionsInterface []interface{}) string
 		return ""
 	}
 
-	// Convert []interface{} to []ControlPlaneCondition via JSON round-trip
 	conditionsJSON, err := json.Marshal(conditionsInterface)
 	if err != nil {
 		return ""
