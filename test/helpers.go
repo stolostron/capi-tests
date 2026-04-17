@@ -889,6 +889,89 @@ func isWaitingCondition(cond ControlPlaneCondition) (bool, string) {
 	return false, ""
 }
 
+// permanentFailureReasons lists Reason values where the controller has given up (will not retry).
+var permanentFailureReasons = []string{
+	"Failed",
+}
+
+// isPermanentFailure checks if a condition indicates a permanent, non-recoverable failure.
+// Returns true and a description if Status=False with a terminal reason that isn't a waiting state.
+func isPermanentFailure(cond ControlPlaneCondition) (bool, string) {
+	if cond.Status != "False" {
+		return false, ""
+	}
+
+	reasonMatches := false
+	for _, reason := range permanentFailureReasons {
+		if strings.EqualFold(cond.Reason, reason) {
+			reasonMatches = true
+			break
+		}
+	}
+
+	if !reasonMatches {
+		return false, ""
+	}
+
+	if isWaiting, _ := isWaitingCondition(cond); isWaiting {
+		return false, ""
+	}
+
+	desc := fmt.Sprintf("%s: %s (%s)", cond.Type, cond.Status, cond.Reason)
+	if cond.Message != "" {
+		desc = fmt.Sprintf("%s - %s", desc, cond.Message)
+	}
+	return true, desc
+}
+
+// CheckConditionsForPermanentFailure inspects []interface{} conditions (from untyped JSON)
+// and returns an error if any indicates a permanent failure.
+func CheckConditionsForPermanentFailure(conditionsInterface []interface{}) error {
+	if len(conditionsInterface) == 0 {
+		return nil
+	}
+
+	conditionsJSON, err := json.Marshal(conditionsInterface)
+	if err != nil {
+		return nil
+	}
+
+	var conditions []ControlPlaneCondition
+	if err := json.Unmarshal(conditionsJSON, &conditions); err != nil {
+		return nil
+	}
+
+	return CheckTypedConditionsForPermanentFailure(conditions)
+}
+
+func CheckTypedConditionsForPermanentFailure(conditions []ControlPlaneCondition) error {
+	var failures []string
+	for _, cond := range conditions {
+		if failed, desc := isPermanentFailure(cond); failed {
+			failures = append(failures, desc)
+		}
+	}
+
+	if len(failures) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf("permanent failure detected:\n  %s", strings.Join(failures, "\n  "))
+}
+
+func CheckK8sConditionsForPermanentFailure(conditions []K8sCondition) error {
+	typed := make([]ControlPlaneCondition, len(conditions))
+	for i, c := range conditions {
+		typed[i] = ControlPlaneCondition{
+			Type:    c.Type,
+			Status:  c.Status,
+			Reason:  c.Reason,
+			Message: c.Message,
+		}
+	}
+	return CheckTypedConditionsForPermanentFailure(typed)
+}
+
 // FormatControlPlaneConditions formats control plane conditions for display (works for ARO, ROSA, etc.).
 // It parses the JSON output from kubectl and returns a formatted string showing
 // the status of each condition with visual indicators.
@@ -943,7 +1026,6 @@ func FormatControlPlaneConditionsFromParsed(conditionsInterface []interface{}) s
 		return "  (no conditions available)"
 	}
 
-	// Convert []interface{} to []ControlPlaneCondition via JSON round-trip
 	conditionsJSON, err := json.Marshal(conditionsInterface)
 	if err != nil {
 		return fmt.Sprintf("  (failed to marshal conditions: %v)", err)
@@ -965,7 +1047,6 @@ func FormatNonTrueConditionsFromParsed(conditionsInterface []interface{}) string
 		return ""
 	}
 
-	// Convert []interface{} to []ControlPlaneCondition via JSON round-trip
 	conditionsJSON, err := json.Marshal(conditionsInterface)
 	if err != nil {
 		return ""

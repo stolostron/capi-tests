@@ -1081,6 +1081,209 @@ func TestIsWaitingCondition(t *testing.T) {
 	}
 }
 
+func TestIsPermanentFailure(t *testing.T) {
+	tests := []struct {
+		name           string
+		condition      ControlPlaneCondition
+		expectedFailed bool
+	}{
+		{
+			name: "AgentPoolsReady Failed - permanent failure",
+			condition: ControlPlaneCondition{
+				Type:   "AgentPoolsReady",
+				Status: "False",
+				Reason: "Failed",
+			},
+			expectedFailed: true,
+		},
+		{
+			name: "Failed reason with message",
+			condition: ControlPlaneCondition{
+				Type:    "NetworkInfrastructureReady",
+				Status:  "False",
+				Reason:  "Failed",
+				Message: "resource deployment failed permanently",
+			},
+			expectedFailed: true,
+		},
+		{
+			name: "Failed reason case insensitive",
+			condition: ControlPlaneCondition{
+				Type:   "SomeCondition",
+				Status: "False",
+				Reason: "failed",
+			},
+			expectedFailed: true,
+		},
+		{
+			name: "True status - never a failure",
+			condition: ControlPlaneCondition{
+				Type:   "Ready",
+				Status: "True",
+				Reason: "Failed",
+			},
+			expectedFailed: false,
+		},
+		{
+			name: "ReconciliationFailed - not a permanent failure reason",
+			condition: ControlPlaneCondition{
+				Type:    "ExternalAuthReady",
+				Status:  "False",
+				Reason:  "ReconciliationFailed",
+				Message: "something went wrong",
+			},
+			expectedFailed: false,
+		},
+		{
+			name: "Failed reason but waiting pattern in message - not permanent",
+			condition: ControlPlaneCondition{
+				Type:    "ExternalAuthReady",
+				Status:  "False",
+				Reason:  "Failed",
+				Message: "requires at least one ready machine pool",
+			},
+			expectedFailed: false,
+		},
+		{
+			name: "Failed reason but 'waiting for' in message - not permanent",
+			condition: ControlPlaneCondition{
+				Type:    "SomeCondition",
+				Status:  "False",
+				Reason:  "Failed",
+				Message: "waiting for dependency to be available",
+			},
+			expectedFailed: false,
+		},
+		{
+			name: "Empty reason - not a permanent failure",
+			condition: ControlPlaneCondition{
+				Type:   "Ready",
+				Status: "False",
+			},
+			expectedFailed: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			failed, desc := isPermanentFailure(tt.condition)
+			if failed != tt.expectedFailed {
+				t.Errorf("isPermanentFailure() = %v, expected %v (desc: %q)", failed, tt.expectedFailed, desc)
+			}
+			if failed && desc == "" {
+				t.Error("isPermanentFailure() returned true but empty description")
+			}
+		})
+	}
+}
+
+func TestCheckConditionsForPermanentFailure(t *testing.T) {
+	tests := []struct {
+		name       string
+		conditions []interface{}
+		expectErr  bool
+	}{
+		{
+			name:       "nil conditions",
+			conditions: nil,
+			expectErr:  false,
+		},
+		{
+			name:       "empty conditions",
+			conditions: []interface{}{},
+			expectErr:  false,
+		},
+		{
+			name: "all conditions True",
+			conditions: []interface{}{
+				map[string]interface{}{"type": "Ready", "status": "True"},
+				map[string]interface{}{"type": "Available", "status": "True"},
+			},
+			expectErr: false,
+		},
+		{
+			name: "condition with Failed reason",
+			conditions: []interface{}{
+				map[string]interface{}{"type": "Ready", "status": "True"},
+				map[string]interface{}{"type": "AgentPoolsReady", "status": "False", "reason": "Failed"},
+			},
+			expectErr: true,
+		},
+		{
+			name: "ReconciliationFailed is not permanent",
+			conditions: []interface{}{
+				map[string]interface{}{
+					"type":    "ExternalAuthReady",
+					"status":  "False",
+					"reason":  "ReconciliationFailed",
+					"message": "something went wrong",
+				},
+			},
+			expectErr: false,
+		},
+		{
+			name: "Failed reason with waiting pattern is not permanent",
+			conditions: []interface{}{
+				map[string]interface{}{
+					"type":    "SomeCondition",
+					"status":  "False",
+					"reason":  "Failed",
+					"message": "waiting for dependency",
+				},
+			},
+			expectErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := CheckConditionsForPermanentFailure(tt.conditions)
+			if (err != nil) != tt.expectErr {
+				t.Errorf("CheckConditionsForPermanentFailure() error = %v, expectErr = %v", err, tt.expectErr)
+			}
+		})
+	}
+}
+
+func TestCheckK8sConditionsForPermanentFailure(t *testing.T) {
+	tests := []struct {
+		name       string
+		conditions []K8sCondition
+		expectErr  bool
+	}{
+		{
+			name:       "nil conditions",
+			conditions: nil,
+			expectErr:  false,
+		},
+		{
+			name: "permanent failure in K8sCondition",
+			conditions: []K8sCondition{
+				{Type: "Ready", Status: "True"},
+				{Type: "AgentPoolsReady", Status: "False", Reason: "Failed", Message: "agent pool creation failed"},
+			},
+			expectErr: true,
+		},
+		{
+			name: "no permanent failures",
+			conditions: []K8sCondition{
+				{Type: "Ready", Status: "True"},
+				{Type: "InProgress", Status: "False", Reason: "Provisioning"},
+			},
+			expectErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := CheckK8sConditionsForPermanentFailure(tt.conditions)
+			if (err != nil) != tt.expectErr {
+				t.Errorf("CheckK8sConditionsForPermanentFailure() error = %v, expectErr = %v", err, tt.expectErr)
+			}
+		})
+	}
+}
+
 func TestGetDomainPrefix(t *testing.T) {
 	tests := []struct {
 		name        string
