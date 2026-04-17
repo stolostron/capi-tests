@@ -617,11 +617,15 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 				if err := CheckConditionsForPermanentFailure(mp.Infrastructure.Conditions); err != nil {
 					PrintToTTY("\n❌ Permanent failure detected in %s conditions — aborting early\n", mp.Infrastructure.Kind)
 					PrintToTTY("   %v\n\n", err)
+					infraName := mp.Infrastructure.Name
+					if infraName == "" {
+						infraName = mp.Name
+					}
 					t.Fatalf("Permanent failure in %s conditions — deployment cannot recover.\n%v\n\n"+
 						"Check machine pool status:\n"+
 						"  kubectl --context %s -n %s get %s %s -o yaml",
 						mp.Infrastructure.Kind, err,
-						context, config.WorkloadClusterNamespace, strings.ToLower(mp.Infrastructure.Kind), mp.Name)
+						context, config.WorkloadClusterNamespace, strings.ToLower(mp.Infrastructure.Kind), infraName)
 					return
 				}
 			}
