@@ -757,16 +757,19 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 				currentMPReplicas = status.MachinePools[0].ReadyReplicas
 			}
 			infraReady := 0
+			infraTotal := 0
 			infraStatus := GetInfrastructureResourceStatusFromParsed(status.Infrastructure.Resources, status.Infrastructure.Conditions)
 			if infraStatus.TotalResources > 0 {
+				infraTotal = infraStatus.TotalResources
 				infraReady = infraStatus.ReadyResources
 			}
 
 			current := stallProgressState{
-				cpReady:            controlPlaneReady,
-				cpState:            currentCPState,
-				mpReadyReplicas:    currentMPReplicas,
-				infraResourceReady: infraReady,
+				cpReady:             controlPlaneReady,
+				cpState:             currentCPState,
+				mpReadyReplicas:     currentMPReplicas,
+				infraTotalResources: infraTotal,
+				infraResourceReady:  infraReady,
 			}
 
 			if current != lastProgress {
@@ -1436,10 +1439,11 @@ func toJSONArray(items []string) (string, error) {
 // stallProgressState tracks deployment progress for stall detection.
 // Uses only comparable types so Go's == operator works for change detection.
 type stallProgressState struct {
-	cpReady            bool
-	cpState            string
-	mpReadyReplicas    int
-	infraResourceReady int
+	cpReady             bool
+	cpState             string
+	mpReadyReplicas     int
+	infraTotalResources int
+	infraResourceReady  int
 }
 
 // checkStallTimeout fails the test if no deployment progress has been made within the stall timeout.
@@ -1455,8 +1459,8 @@ func checkStallTimeout(t *testing.T, stallEnabled bool, stallTimeout time.Durati
 	}
 
 	PrintToTTY("\n❌ Deployment stalled: no progress for %v\n", stallDuration.Round(time.Second))
-	PrintToTTY("   Last state: ControlPlane.Ready=%v, State=%q, MachinePool.ReadyReplicas=%d, InfraResources=%d\n\n",
-		lastProgress.cpReady, lastProgress.cpState, lastProgress.mpReadyReplicas, lastProgress.infraResourceReady)
+	PrintToTTY("   Last state: ControlPlane.Ready=%v, State=%q, MachinePool.ReadyReplicas=%d, InfraResources=%d/%d\n\n",
+		lastProgress.cpReady, lastProgress.cpState, lastProgress.mpReadyReplicas, lastProgress.infraResourceReady, lastProgress.infraTotalResources)
 
 	CollectAndDumpInfraDiagnostics(t, context, namespace, clusterName)
 
@@ -1464,12 +1468,12 @@ func checkStallTimeout(t *testing.T, stallEnabled bool, stallTimeout time.Durati
 		"  ControlPlane ready: %v\n"+
 		"  ControlPlane state: %s\n"+
 		"  MachinePool ready replicas: %d\n"+
-		"  Infrastructure resources ready: %d\n\n"+
+		"  Infrastructure resources: %d/%d\n\n"+
 		"This usually indicates an infrastructure-side issue (e.g., ARO HCP stuck in Reconciling).\n"+
 		"Check the cloud provider's service health dashboard.\n\n"+
 		"To increase stall timeout: export DEPLOYMENT_STALL_TIMEOUT=45m\n"+
 		"To disable stall detection: export DEPLOYMENT_STALL_TIMEOUT=0",
 		stallDuration.Round(time.Second), stallTimeout,
 		lastProgress.cpReady, lastProgress.cpState, lastProgress.mpReadyReplicas,
-		lastProgress.infraResourceReady)
+		lastProgress.infraResourceReady, lastProgress.infraTotalResources)
 }
