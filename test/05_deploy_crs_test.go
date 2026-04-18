@@ -538,19 +538,17 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	controlPlaneReady := false
 	machinePoolReady := false
 
-	// Stall detection: fail fast when deployment makes no progress
 	stallTimeout := config.DeploymentStallTimeout
 	stallEnabled := stallTimeout > 0
 	lastProgressTime := startTime
-	// Track state for stall detection (detect when nothing changes)
-	type progressState struct {
-		cpReady            bool
-		mpReadyReplicas    int
-		infraResourceReady int
-	}
-	lastProgress := progressState{}
+	lastProgress := stallProgressState{}
 	if stallEnabled {
-		PrintToTTY("Stall detection: enabled (timeout: %v)\n\n", stallTimeout)
+		if stallTimeout >= timeout {
+			PrintToTTY("Stall detection: enabled (timeout: %v) — WARNING: stall timeout >= deployment timeout (%v), stall detection will never trigger\n\n",
+				stallTimeout, timeout)
+		} else {
+			PrintToTTY("Stall detection: enabled (timeout: %v)\n\n", stallTimeout)
+		}
 	}
 
 	iteration := 0
@@ -592,6 +590,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 		jsonOutput, err := RunCommandQuiet(t, monitorScript, "--context", context, config.WorkloadClusterNamespace, provisionedClusterName)
 		if err != nil {
 			PrintToTTY("[%d] ⚠️  monitor-cluster-json.sh failed: %v\n", iteration, err)
+			checkStallTimeout(t, stallEnabled, stallTimeout, lastProgressTime, lastProgress, context, config.WorkloadClusterNamespace, provisionedClusterName)
 			time.Sleep(pollInterval)
 			continue
 		}
@@ -600,6 +599,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 		var status ClusterMonitorStatus
 		if err := json.Unmarshal([]byte(jsonOutput), &status); err != nil {
 			PrintToTTY("[%d] ⚠️  Failed to parse monitor output: %v\n", iteration, err)
+			checkStallTimeout(t, stallEnabled, stallTimeout, lastProgressTime, lastProgress, context, config.WorkloadClusterNamespace, provisionedClusterName)
 			time.Sleep(pollInterval)
 			continue
 		}
@@ -746,18 +746,19 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 			}
 		}
 
-		// Stall detection: check if meaningful progress was made since last iteration
 		if stallEnabled {
-			// Build current state snapshot
 			currentMPReplicas := 0
 			if len(status.MachinePools) > 0 {
+				// Only the first MachinePool is tracked — ARO/ROSA use a single pool
 				currentMPReplicas = status.MachinePools[0].ReadyReplicas
 			}
 			infraReady := 0
 			infraStatus := GetInfrastructureResourceStatusFromParsed(status.Infrastructure.Resources, status.Infrastructure.Conditions)
-			infraReady = infraStatus.ReadyResources
+			if infraStatus.TotalResources > 0 {
+				infraReady = infraStatus.ReadyResources
+			}
 
-			current := progressState{
+			current := stallProgressState{
 				cpReady:            controlPlaneReady,
 				mpReadyReplicas:    currentMPReplicas,
 				infraResourceReady: infraReady,
@@ -768,28 +769,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 				lastProgress = current
 			}
 
-			stallDuration := time.Since(lastProgressTime)
-			if stallDuration > stallTimeout {
-				PrintToTTY("\n❌ Deployment stalled: no progress for %v\n", stallDuration.Round(time.Second))
-				PrintToTTY("   Last state: ControlPlane.Ready=%v, MachinePool.ReadyReplicas=%d, InfraResources=%d/%d\n\n",
-					current.cpReady, current.mpReadyReplicas, infraReady, infraStatus.TotalResources)
-
-				// Dump diagnostics for not-ready infrastructure resources
-				CollectAndDumpInfraDiagnostics(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
-
-				t.Fatalf("Deployment stalled: no progress for %v (stall timeout: %v).\n"+
-					"  ControlPlane ready: %v\n"+
-					"  MachinePool ready replicas: %d\n"+
-					"  Infrastructure resources: %d/%d\n\n"+
-					"This usually indicates an infrastructure-side issue (e.g., ARO HCP stuck in Reconciling).\n"+
-					"Check the cloud provider's service health dashboard.\n\n"+
-					"To increase stall timeout: export DEPLOYMENT_STALL_TIMEOUT=45m\n"+
-					"To disable stall detection: export DEPLOYMENT_STALL_TIMEOUT=0",
-					stallDuration.Round(time.Second), stallTimeout,
-					current.cpReady, current.mpReadyReplicas,
-					infraReady, infraStatus.TotalResources)
-				return
-			}
+			checkStallTimeout(t, stallEnabled, stallTimeout, lastProgressTime, lastProgress, context, config.WorkloadClusterNamespace, provisionedClusterName)
 		}
 
 		// Both ready — done
@@ -1446,4 +1426,43 @@ func toJSONArray(items []string) (string, error) {
 		return "", fmt.Errorf("failed to marshal tag array: %w", err)
 	}
 	return string(data), nil
+}
+
+// stallProgressState tracks deployment progress for stall detection.
+// Uses only comparable types so Go's == operator works for change detection.
+type stallProgressState struct {
+	cpReady            bool
+	mpReadyReplicas    int
+	infraResourceReady int
+}
+
+// checkStallTimeout fails the test if no deployment progress has been made within the stall timeout.
+// Safe to call from error-recovery paths (e.g., monitor script failure) where status data is unavailable.
+func checkStallTimeout(t *testing.T, stallEnabled bool, stallTimeout time.Duration, lastProgressTime time.Time, lastProgress stallProgressState, context, namespace, clusterName string) {
+	t.Helper()
+	if !stallEnabled {
+		return
+	}
+	stallDuration := time.Since(lastProgressTime)
+	if stallDuration <= stallTimeout {
+		return
+	}
+
+	PrintToTTY("\n❌ Deployment stalled: no progress for %v\n", stallDuration.Round(time.Second))
+	PrintToTTY("   Last state: ControlPlane.Ready=%v, MachinePool.ReadyReplicas=%d, InfraResources=%d\n\n",
+		lastProgress.cpReady, lastProgress.mpReadyReplicas, lastProgress.infraResourceReady)
+
+	CollectAndDumpInfraDiagnostics(t, context, namespace, clusterName)
+
+	t.Fatalf("Deployment stalled: no progress for %v (stall timeout: %v).\n"+
+		"  ControlPlane ready: %v\n"+
+		"  MachinePool ready replicas: %d\n"+
+		"  Infrastructure resources ready: %d\n\n"+
+		"This usually indicates an infrastructure-side issue (e.g., ARO HCP stuck in Reconciling).\n"+
+		"Check the cloud provider's service health dashboard.\n\n"+
+		"To increase stall timeout: export DEPLOYMENT_STALL_TIMEOUT=45m\n"+
+		"To disable stall detection: export DEPLOYMENT_STALL_TIMEOUT=0",
+		stallDuration.Round(time.Second), stallTimeout,
+		lastProgress.cpReady, lastProgress.mpReadyReplicas,
+		lastProgress.infraResourceReady)
 }
