@@ -113,7 +113,7 @@ When using `INFRA_PROVIDER=rosa`, the following credentials are required:
   - **Note**: Tests automatically translate this to `KIND_CLUSTER_NAME` for the deployment script
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests` for ARO, `capa-tests` for ROSA). Keep short due to cloud provider length limits
-- `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation and Azure resource naming. If not set, auto-generates a unique value: `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c`) to enable parallel test runs. The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`. Max 12 characters (ExternalAuth ID constraint).
+- `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation and Azure resource naming. If not set, auto-generates a unique value: `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c`) to enable parallel test runs. The Azure resource group is named `${WORKLOAD_CLUSTER_NAME}-resgroup`. Max 12 characters (ExternalAuth ID constraint).
 - `OCP_VERSION` - OpenShift version (default: `4.18`)
 - `REGION` - Azure region (default: `uksouth`)
 - `AZURE_SUBSCRIPTION_NAME` - Azure subscription ID
@@ -407,7 +407,7 @@ The `make clean` command will interactively ask you to confirm deletion of:
 - Cluster-api-installer repository clone in `/tmp`
 - Kubeconfig files in `/tmp`
 - Results directory
-- **Azure resource group** (`${CS_CLUSTER_NAME}-resgroup`, e.g., `cate-stage-resgroup`)
+- **Azure resource group** (`${WORKLOAD_CLUSTER_NAME}-resgroup`, e.g., `capz-tests-resgroup`)
 
 This allows you to selectively clean up resources while preserving anything you want to keep.
 
@@ -419,7 +419,7 @@ For automated workflows (CI/CD, scripts) or quick full resets, use:
 - Uses synchronous `--yes` deletion (waits for completion before orphan cleanup)
 - Gracefully skips if Azure CLI is not installed or not logged in
 - Checks if resource group exists before attempting deletion
-- The resource group name is derived from `${CS_CLUSTER_NAME}-resgroup` (auto-generated, e.g., `cate-a1b2c-resgroup`)
+- The resource group name is derived from `${WORKLOAD_CLUSTER_NAME}-resgroup` (e.g., `capz-tests-resgroup`)
 
 **Tag-Based Cleanup (for parallel runs)**: All test runs automatically tag Azure resources with ownership metadata. Use tag-based queries to find and clean up resources:
 
@@ -435,7 +435,7 @@ Multiple users (or CI jobs) can run the test suite simultaneously against the sa
 
 **How it works**:
 - `CS_CLUSTER_NAME` is auto-generated as `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c`)
-- Each run creates its own Azure resource group (e.g., `cate-a1b2c-resgroup`)
+- Each run creates its own Azure resource group (e.g., `capz-tests-resgroup`)
 - All Azure resources are tagged with `capi-test-user`, `capi-test-env`, `capi-test-run-id`, and `capi-test-created-at`
 - The deployment state file (`.deployment-state.json`) tracks the generated prefix for cleanup
 

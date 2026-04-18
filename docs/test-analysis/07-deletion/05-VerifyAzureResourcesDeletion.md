@@ -24,7 +24,7 @@
    └── Check Azure CLI authenticated → Skip if not
 
 2. Derive resource group name:
-   └── resourceGroup = "${CS_CLUSTER_NAME}-resgroup"
+   └── resourceGroup = "${WORKLOAD_CLUSTER_NAME}-resgroup"
 
 3. Check resource group:
    │
@@ -42,13 +42,13 @@
 
 ## Resource Group Naming
 
-The Azure resource group name is derived from `CS_CLUSTER_NAME`:
+The Azure resource group name is derived from `WORKLOAD_CLUSTER_NAME`:
 
 ```
-CS_CLUSTER_NAME = ${CAPI_USER}-${DEPLOYMENT_ENV}
-Resource Group  = ${CS_CLUSTER_NAME}-resgroup
+WORKLOAD_CLUSTER_NAME = capz-tests (ARO) / capa-tests (ROSA)
+Resource Group        = ${WORKLOAD_CLUSTER_NAME}-resgroup
 
-Example: cate-stage-resgroup
+Example: capz-tests-resgroup
 ```
 
 ---
@@ -65,7 +65,7 @@ Example: cate-stage-resgroup
 
 ```
 === RUN   TestDeletion_VerifyAzureResourcesDeletion
-    Checking Azure resource group 'cate-stage-resgroup'...
-    Resource group 'cate-stage-resgroup' has been deleted
+    Checking Azure resource group 'capz-tests-resgroup'...
+    Resource group 'capz-tests-resgroup' has been deleted
 --- PASS: TestDeletion_VerifyAzureResourcesDeletion (1.23s)
 ```

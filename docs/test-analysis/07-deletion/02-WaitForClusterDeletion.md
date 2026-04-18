@@ -30,7 +30,7 @@
 Configuration:
 ├── Timeout: DEPLOYMENT_TIMEOUT (default 45m)
 ├── Poll interval: 30 seconds
-└── Resource group: ${CS_CLUSTER_NAME}-resgroup
+└── Resource group: ${WORKLOAD_CLUSTER_NAME}-resgroup
 
 Loop:
 │

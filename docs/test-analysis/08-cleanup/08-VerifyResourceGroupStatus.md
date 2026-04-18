@@ -23,7 +23,7 @@
    └── Azure authenticated → Skip if not
 
 2. Derive resource group name:
-   └── resourceGroup = "${CS_CLUSTER_NAME}-resgroup"
+   └── resourceGroup = "${WORKLOAD_CLUSTER_NAME}-resgroup"
 
 3. Check resource group:
    │

@@ -806,6 +806,9 @@ func TestDeploymentState_Namespace(t *testing.T) {
 		if state.WorkloadClusterNamespace != "capz-test-20260202-123456" {
 			t.Errorf("WorkloadClusterNamespace = %q, want %q", state.WorkloadClusterNamespace, "capz-test-20260202-123456")
 		}
+		if state.ResourceGroup != "test-workload-resgroup" {
+			t.Errorf("ResourceGroup = %q, want %q", state.ResourceGroup, "test-workload-resgroup")
+		}
 	})
 
 	t.Run("handles missing namespace field (backward compatibility)", func(t *testing.T) {

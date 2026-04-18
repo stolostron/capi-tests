@@ -81,7 +81,7 @@ Validate that cleanup operations work correctly for local resources (Kind cluste
 │  AZURE CLEANUP TESTS (6-11)                                       │
 │  ├── Azure CLI availability and version                           │
 │  ├── Azure authentication status                                  │
-│  ├── Resource group status (${CS_CLUSTER_NAME}-resgroup)          │
+│  ├── Resource group status (${WORKLOAD_CLUSTER_NAME}-resgroup)     │
 │  ├── Orphaned resources (Azure Resource Graph query)              │
 │  ├── AD Applications (az ad app list --filter)                    │
 │  └── Service Principals (az ad sp list --filter)                  │

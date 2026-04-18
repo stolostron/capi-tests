@@ -209,8 +209,8 @@ The `make clean` command is interactive by default and will prompt you to confir
 - Cluster-api-installer repository clone
 - Kubeconfig files
 - Results directory
-- Azure resource group (`${CS_CLUSTER_NAME}-resgroup`)
-- Orphaned Azure resources (resources with `${CS_CLUSTER_NAME}` prefix that survive RG deletion)
+- Azure resource group (`${WORKLOAD_CLUSTER_NAME}-resgroup`)
+- Orphaned Azure resources (resources with `${WORKLOAD_CLUSTER_NAME}` prefix that survive RG deletion)
 
 This prevents accidental deletion and allows selective cleanup.
 
@@ -221,7 +221,7 @@ For non-interactive cleanup (useful for CI/CD, scripted workflows, or quick rese
 **Azure Resource Cleanup (`make clean-azure`)**:
 
 The unified `make clean-azure` command cleans up all Azure resources in one operation:
-- Azure Resource Group (`${CS_CLUSTER_NAME}-resgroup`)
+- Azure Resource Group (`${WORKLOAD_CLUSTER_NAME}-resgroup`)
 - Orphaned ARM resources (Managed Identities, VNets, NSGs, DNS Zones)
 - Azure AD Applications (App Registrations)
 - Service Principals
@@ -236,8 +236,8 @@ FORCE=1 make clean-azure
 # Dry-run to see what would be deleted
 ./scripts/cleanup-azure-resources.sh --resource-group myapp-resgroup --prefix myapp --dry-run
 
-# Clean with custom prefix
-CS_CLUSTER_NAME=myprefix-stage make clean-azure
+# Clean with custom workload cluster name
+WORKLOAD_CLUSTER_NAME=my-cluster make clean-azure
 ```
 
 **Tag-Based Cleanup (for parallel runs)**:
@@ -259,7 +259,7 @@ make clean-my-resources
 ```
 
 Notes:
-- The resource group name is derived from `${CS_CLUSTER_NAME}-resgroup` where `CS_CLUSTER_NAME` is auto-generated as `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c-resgroup`)
+- The resource group name is derived from `${WORKLOAD_CLUSTER_NAME}-resgroup` where `WORKLOAD_CLUSTER_NAME` defaults to `capz-tests` for ARO, `capa-tests` for ROSA (e.g., `capz-tests-resgroup`)
 - Resource matching uses `startswith` by default (safer than `contains`). Use `--match-mode contains` for broader search.
 - Uses `az group delete --yes` for synchronous deletion (waits for completion before orphan cleanup)
 - Gracefully skips Azure cleanup if Azure CLI is not installed or not authenticated
@@ -368,7 +368,7 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
   - **Note**: Tests automatically translate this to `KIND_CLUSTER_NAME` for the deployment script
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests` for ARO, `capa-tests` for ROSA). Keep short as cloud providers may have length limits (e.g., Azure node pools max 15 chars including suffixes)
-- `CS_CLUSTER_NAME` - **C**luster **S**ervice cluster name prefix used for YAML generation and Azure resource naming. If not set, auto-generates a unique value: `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c`). This enables parallel test runs against the same Azure subscription without resource name collisions. The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`. This prefix is also used for the ExternalAuth resource ID (max 15 chars including `-ea` suffix, so CS_CLUSTER_NAME max 12 chars). When resuming a multi-phase test run, the prefix is automatically loaded from the deployment state file.
+- `CS_CLUSTER_NAME` - **C**luster **S**ervice cluster name prefix used for YAML generation and Azure resource naming. If not set, auto-generates a unique value: `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c`). This enables parallel test runs against the same Azure subscription without resource name collisions. The Azure resource group is named `${WORKLOAD_CLUSTER_NAME}-resgroup`. This prefix is also used for the ExternalAuth resource ID (max 15 chars including `-ea` suffix, so CS_CLUSTER_NAME max 12 chars). When resuming a multi-phase test run, the prefix is automatically loaded from the deployment state file.
 - `OCP_VERSION` - OpenShift version (default: `4.18`)
 - `REGION` - Azure region (default: `uksouth`)
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`). Used in Azure resource tags and domain prefix validation, but not included in the auto-generated `CS_CLUSTER_NAME`.
