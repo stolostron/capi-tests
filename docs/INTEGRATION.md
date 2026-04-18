@@ -217,7 +217,7 @@ MANAGEMENT_CLUSTER_NAME=capz-tests-stage  # For running tests (default for ARO; 
 KIND_CLUSTER_NAME=capz-tests-stage        # For direct script usage (advanced)
 CLUSTER_NAME=capz-tests-cluster           # Default for ARO; capa-tests-cluster for ROSA
 CS_CLUSTER_NAME=cate-stage  # Resource group will be ${CS_CLUSTER_NAME}-resgroup
-OCP_VERSION=4.21
+OCP_VERSION=4.18
 REGION=uksouth
 DEPLOYMENT_ENV=stage
 

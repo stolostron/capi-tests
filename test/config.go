@@ -32,7 +32,7 @@ const (
 	DefaultMCEEnablementTimeout = 15 * time.Minute
 
 	// DefaultDeploymentStallTimeout is the default stall detection timeout.
-	// If the deployment makes no progress (control plane state, machine pool replicas,
+	// If the deployment makes no progress (control plane ready status, machine pool replicas,
 	// or infrastructure resource count unchanged) for this duration, the test fails early
 	// instead of waiting for the full DeploymentTimeout.
 	// Set to 0 to disable stall detection.
@@ -752,6 +752,10 @@ func parseDeploymentStallTimeout() time.Duration {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: invalid DEPLOYMENT_STALL_TIMEOUT '%s', using default %v\n", timeoutStr, DefaultDeploymentStallTimeout)
 		return DefaultDeploymentStallTimeout
+	}
+	if timeout < 0 {
+		fmt.Fprintf(os.Stderr, "Warning: negative DEPLOYMENT_STALL_TIMEOUT '%s' treated as disabled (0)\n", timeoutStr)
+		return 0
 	}
 	return timeout
 }

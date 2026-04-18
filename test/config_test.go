@@ -221,6 +221,23 @@ func TestParseDeploymentStallTimeout_InvalidDuration(t *testing.T) {
 	}
 }
 
+func TestParseDeploymentStallTimeout_NegativeDuration(t *testing.T) {
+	originalValue := os.Getenv("DEPLOYMENT_STALL_TIMEOUT")
+	defer func() {
+		if originalValue != "" {
+			_ = os.Setenv("DEPLOYMENT_STALL_TIMEOUT", originalValue)
+		} else {
+			_ = os.Unsetenv("DEPLOYMENT_STALL_TIMEOUT")
+		}
+	}()
+
+	_ = os.Setenv("DEPLOYMENT_STALL_TIMEOUT", "-30m")
+	timeout := parseDeploymentStallTimeout()
+	if timeout != 0 {
+		t.Errorf("For negative input '-30m', expected 0 (disabled), got %v", timeout)
+	}
+}
+
 func TestIsKindMode(t *testing.T) {
 	testCases := []struct {
 		name     string

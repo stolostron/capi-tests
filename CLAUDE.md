@@ -369,7 +369,7 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests` for ARO, `capa-tests` for ROSA). Keep short as cloud providers may have length limits (e.g., Azure node pools max 15 chars including suffixes)
 - `CS_CLUSTER_NAME` - **C**luster **S**ervice cluster name prefix used for YAML generation and Azure resource naming. If not set, auto-generates a unique value: `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c`). This enables parallel test runs against the same Azure subscription without resource name collisions. The Azure resource group will be named `${CS_CLUSTER_NAME}-resgroup`. This prefix is also used for the ExternalAuth resource ID (max 15 chars including `-ea` suffix, so CS_CLUSTER_NAME max 12 chars). When resuming a multi-phase test run, the prefix is automatically loaded from the deployment state file.
-- `OCP_VERSION` - OpenShift version (default: `4.21`)
+- `OCP_VERSION` - OpenShift version (default: `4.18`)
 - `REGION` - Azure region (default: `uksouth`)
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`). Used in Azure resource tags and domain prefix validation, but not included in the auto-generated `CS_CLUSTER_NAME`.
 - `CAPI_USER` - User identifier for domain prefix (default: `cate`). Used as the base for auto-generated `CS_CLUSTER_NAME` (e.g., `cate-a1b2c`). Must be short enough that `${CAPI_USER}-${DEPLOYMENT_ENV}` does not exceed 15 characters.
@@ -403,8 +403,8 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 This is validated during Check Dependencies (phase 1) to prevent late deployment failures.
 
 ### Test Behavior
-- `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `45m`, format: Go duration like `1h`, `45m`)
-- `DEPLOYMENT_STALL_TIMEOUT` - Stall detection timeout: if no progress (control plane state, machine pool replicas, infrastructure resources) for this duration, the test fails early instead of waiting for the full deployment timeout (default: `30m`, set to `0` to disable)
+- `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `60m`, format: Go duration like `1h`, `45m`)
+- `DEPLOYMENT_STALL_TIMEOUT` - Stall detection timeout: if no progress (control plane ready status, machine pool replicas, infrastructure resources) for this duration, the test fails early instead of waiting for the full deployment timeout (default: `30m`, set to `0` to disable)
 
 ### MCE Component Management
 - `MCE_AUTO_ENABLE` - Auto-enable MCE CAPI/CAPZ components if not found on external cluster (default: `true` when `USE_KUBECONFIG` is set)

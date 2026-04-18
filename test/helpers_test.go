@@ -3338,6 +3338,11 @@ func TestTimeoutConstants(t *testing.T) {
 	if MaxDeploymentTimeout > 6*time.Hour {
 		t.Errorf("MaxDeploymentTimeout (%v) seems too long", MaxDeploymentTimeout)
 	}
+
+	if DefaultDeploymentStallTimeout >= DefaultDeploymentTimeout {
+		t.Errorf("DefaultDeploymentStallTimeout (%v) should be less than DefaultDeploymentTimeout (%v)",
+			DefaultDeploymentStallTimeout, DefaultDeploymentTimeout)
+	}
 }
 
 // TestConfigValidationResult tests the ConfigValidationResult struct.
