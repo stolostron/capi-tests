@@ -2242,7 +2242,7 @@ func TestFormatComponentVersions(t *testing.T) {
 			"test-mgmt",
 			"test-workload",
 			"eastus",
-			"test-prefix-resgroup",
+			"test-workload-resgroup",
 			"4.21",
 		}
 		for _, check := range checks {

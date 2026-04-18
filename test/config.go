@@ -413,7 +413,7 @@ type TestConfig struct {
 	// Cluster configuration
 	ManagementClusterName    string
 	WorkloadClusterName      string
-	ClusterNamePrefix        string // Used as CS_CLUSTER_NAME for YAML generation; resource group becomes ${ClusterNamePrefix}-resgroup
+	ClusterNamePrefix        string // Used as CS_CLUSTER_NAME for YAML generation
 	NamePrefix               string // NAME_PREFIX used for Azure resource naming (Key Vault, node pools); passed to YAML generation
 	OCPVersion               string
 	Region                   string
