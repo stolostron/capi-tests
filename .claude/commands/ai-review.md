@@ -723,17 +723,19 @@ Denied Findings:
 
 All CodeRabbit threads resolved: Yes/No
 All Qodo findings replied to: Yes/No
+PR Description: Updated / Already current / Skipped (user declined)
 ```
 
 ### Step 8: Update PR Description
 
 After all findings are processed, update the PR description to accurately reflect the final state of changes. The original description may be stale if the PR accumulated many review-fix commits.
 
+**Skip condition**: If zero findings were accepted across all review rounds (no commits pushed during the pipeline), the PR description has not gone stale. Report `PR Description: Already current (no changes made)` in the Step 7 summary and skip this step.
+
 1. **Read the PR template** (`.github/PULL_REQUEST_TEMPLATE.md`) to know the expected format.
 
 2. **Get the full diff** to understand all changes:
    ```bash
-   gh pr diff "$PR_NUMBER" --name-only
    gh pr diff "$PR_NUMBER"
    ```
 
@@ -751,7 +753,10 @@ After all findings are processed, update the PR description to accurately reflec
    - Preserve the `Generated with Claude Code` footer
    - Do NOT include CodeRabbit's auto-generated summary section — CodeRabbit will regenerate it on the next push
 
-5. **Print the new description** to the terminal for the user to review before applying.
+5. **Print the new description** to the terminal for the user to review before applying:
+   - If the user approves: proceed to sub-step 6
+   - If the user requests changes: incorporate feedback and re-print for approval
+   - If the user declines: skip the update and report `PR Description: Skipped (user declined)` in the Step 7 summary
 
 6. **Apply the update**:
    ```bash
@@ -759,11 +764,6 @@ After all findings are processed, update the PR description to accurately reflec
    <new description>
    EOF
    )"
-   ```
-
-7. **Report** in the summary:
-   ```
-   PR Description: Updated (was stale / already current)
    ```
 
 ## Important Guidelines
