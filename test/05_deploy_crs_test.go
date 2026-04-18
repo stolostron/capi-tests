@@ -752,9 +752,12 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 				currentCPState = *status.ControlPlane.State
 			}
 			currentMPReplicas := 0
+			currentMPState := ""
 			if len(status.MachinePools) > 0 {
-				// Only the first MachinePool is tracked — ARO/ROSA use a single pool
 				currentMPReplicas = status.MachinePools[0].ReadyReplicas
+				if status.MachinePools[0].Infrastructure != nil {
+					currentMPState = status.MachinePools[0].Infrastructure.ProvisioningState
+				}
 			}
 			infraReady := 0
 			infraTotal := 0
@@ -768,6 +771,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 				cpReady:             controlPlaneReady,
 				cpState:             currentCPState,
 				mpReadyReplicas:     currentMPReplicas,
+				mpProvisioningState: currentMPState,
 				infraTotalResources: infraTotal,
 				infraResourceReady:  infraReady,
 			}
@@ -1442,6 +1446,7 @@ type stallProgressState struct {
 	cpReady             bool
 	cpState             string
 	mpReadyReplicas     int
+	mpProvisioningState string
 	infraTotalResources int
 	infraResourceReady  int
 }
@@ -1459,8 +1464,9 @@ func checkStallTimeout(t *testing.T, stallEnabled bool, stallTimeout time.Durati
 	}
 
 	PrintToTTY("\n❌ Deployment stalled: no progress for %v\n", stallDuration.Round(time.Second))
-	PrintToTTY("   Last state: ControlPlane.Ready=%v, State=%q, MachinePool.ReadyReplicas=%d, InfraResources=%d/%d\n\n",
-		lastProgress.cpReady, lastProgress.cpState, lastProgress.mpReadyReplicas, lastProgress.infraResourceReady, lastProgress.infraTotalResources)
+	PrintToTTY("   Last state: ControlPlane.Ready=%v, State=%q, MachinePool.ReadyReplicas=%d, ProvisioningState=%q, InfraResources=%d/%d\n\n",
+		lastProgress.cpReady, lastProgress.cpState, lastProgress.mpReadyReplicas, lastProgress.mpProvisioningState,
+		lastProgress.infraResourceReady, lastProgress.infraTotalResources)
 
 	CollectAndDumpInfraDiagnostics(t, context, namespace, clusterName)
 
@@ -1468,12 +1474,14 @@ func checkStallTimeout(t *testing.T, stallEnabled bool, stallTimeout time.Durati
 		"  ControlPlane ready: %v\n"+
 		"  ControlPlane state: %s\n"+
 		"  MachinePool ready replicas: %d\n"+
+		"  MachinePool provisioning state: %s\n"+
 		"  Infrastructure resources: %d/%d\n\n"+
 		"This usually indicates an infrastructure-side issue (e.g., ARO HCP stuck in Reconciling).\n"+
 		"Check the cloud provider's service health dashboard.\n\n"+
 		"To increase stall timeout: export DEPLOYMENT_STALL_TIMEOUT=45m\n"+
 		"To disable stall detection: export DEPLOYMENT_STALL_TIMEOUT=0",
 		stallDuration.Round(time.Second), stallTimeout,
-		lastProgress.cpReady, lastProgress.cpState, lastProgress.mpReadyReplicas,
+		lastProgress.cpReady, lastProgress.cpState,
+		lastProgress.mpReadyReplicas, lastProgress.mpProvisioningState,
 		lastProgress.infraResourceReady, lastProgress.infraTotalResources)
 }
