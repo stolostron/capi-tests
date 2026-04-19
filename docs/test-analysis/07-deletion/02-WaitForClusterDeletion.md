@@ -84,7 +84,7 @@ Common causes:
 === RUN   TestDeletion_WaitForClusterDeletion
 Waiting for cluster 'cate-stage' to be deleted...
 Namespace: <namespace> | Timeout: 45m0s | Poll interval: 30s
-Azure Resource Group: cate-stage-resgroup
+Azure Resource Group: capz-tests-resgroup
 
 [1] Cluster: exists | AROControlPlane: deleting | MachinePool: deleting | RG: exists
 [2] Cluster: exists | AROControlPlane: deleted | MachinePool: deleting | RG: exists

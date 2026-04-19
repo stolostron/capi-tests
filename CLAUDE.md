@@ -260,7 +260,7 @@ make clean-my-resources
 
 Notes:
 - The resource group name is derived from `${WORKLOAD_CLUSTER_NAME}-resgroup` where `WORKLOAD_CLUSTER_NAME` defaults to `capz-tests` for ARO, `capa-tests` for ROSA (e.g., `capz-tests-resgroup`)
-- Resource matching uses `startswith` by default (safer than `contains`). Use `--match-mode contains` for broader search.
+- Resource matching uses `contains` mode for orphan cleanup via `make` targets. The cleanup script defaults to `startswith` when called directly; use `--match-mode contains` for broader search.
 - Uses `az group delete --yes` for synchronous deletion (waits for completion before orphan cleanup)
 - Gracefully skips Azure cleanup if Azure CLI is not installed or not authenticated
 
