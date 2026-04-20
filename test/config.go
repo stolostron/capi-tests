@@ -183,8 +183,6 @@ func NewAzureProvider(namespace string) InfraProvider {
 		RequiredTools:    []string{"az"},
 		RequiredScripts:  []string{"scripts/deploy-charts.sh", "scripts/aro-hcp/gen.sh"},
 		YAMLGenCredentials: []EnvVarRequirement{
-			{Name: "REGION", Desc: "Azure region for deployment", Sensitive: false},
-			{Name: "DEPLOYMENT_ENV", Desc: "Deployment environment identifier", Sensitive: false},
 			{Name: "AZURE_SUBSCRIPTION_ID", Desc: "Azure subscription ID", Sensitive: false},
 			{Name: "AZURE_TENANT_ID", Desc: "Azure tenant ID", Sensitive: false},
 			{Name: "AZURE_CLIENT_ID", Desc: "Azure service principal client ID", Sensitive: false},
