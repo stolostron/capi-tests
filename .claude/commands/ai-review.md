@@ -723,7 +723,48 @@ Denied Findings:
 
 All CodeRabbit threads resolved: Yes/No
 All Qodo findings replied to: Yes/No
+PR Description: Updated / Already current / Skipped (user declined)
 ```
+
+### Step 8: Update PR Description
+
+After all findings are processed, update the PR description to accurately reflect the final state of changes. The original description may be stale if the PR accumulated many review-fix commits.
+
+**Skip condition**: If zero findings were accepted across all review rounds (no commits pushed during the pipeline), the PR description has not gone stale. Report `PR Description: Already current (no changes made)` in the Step 7 summary and skip this step.
+
+1. **Read the PR template** (`.github/PULL_REQUEST_TEMPLATE.md`) to know the expected format.
+
+2. **Get the full diff** to understand all changes:
+   ```bash
+   gh pr diff "$PR_NUMBER"
+   ```
+
+3. **Read the current PR description**:
+   ```bash
+   CURRENT_BODY=$(gh pr view "$PR_NUMBER" --json body -q '.body')
+   ```
+
+4. **Regenerate the description** following the PR template format:
+   - Preserve any issue links (`Fixes #N`, Jira references) from the current description
+   - Summarize all changes from the diff (not just the original intent, but also all review fixes)
+   - Update the "Changes Made" section to be comprehensive
+   - Update "Configuration Changes" if any env vars were added/modified
+   - Keep "Additional Notes" relevant and up to date
+   - Preserve the `Generated with Claude Code` footer
+   - Do NOT include CodeRabbit's auto-generated summary section — CodeRabbit will regenerate it on the next push
+
+5. **Print the new description** to the terminal for the user to review before applying:
+   - If the user approves: proceed to sub-step 6
+   - If the user requests changes: incorporate feedback and re-print for approval
+   - If the user declines: skip the update and report `PR Description: Skipped (user declined)` in the Step 7 summary
+
+6. **Apply the update**:
+   ```bash
+   gh pr edit "$PR_NUMBER" --body "$(cat <<'EOF'
+   <new description>
+   EOF
+   )"
+   ```
 
 ## Important Guidelines
 
