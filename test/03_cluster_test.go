@@ -728,7 +728,6 @@ func TestKindCluster_CAPIControllerReady(t *testing.T) {
 			PrintToTTY("\n❌ Image pull errors detected — failing fast\n")
 			t.Fatalf("Controller pods have image pull errors in %s namespace.\n%v",
 				config.CAPINamespace, imgErr)
-			return
 		}
 
 		time.Sleep(pollInterval)
@@ -820,7 +819,6 @@ func TestKindCluster_InfraControllersReady(t *testing.T) {
 						PrintToTTY("\n❌ Image pull errors detected — failing fast\n")
 						t.Fatalf("%s controller pods have image pull errors.\n%v",
 							ctrl.DisplayName, imgErr)
-						return
 					}
 
 					time.Sleep(pollInterval)

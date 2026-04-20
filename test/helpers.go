@@ -2727,7 +2727,7 @@ func CheckPodsForImagePullErrors(t *testing.T, kubeContext, namespace string) er
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
 		"-n", namespace, "--request-timeout=10s",
 		"get", "pods",
-		"-o", "jsonpath={range .items[*]}{.metadata.name}{\"\\t\"}{range .status.containerStatuses[*]}{.state.waiting.reason}{\" \"}{end}{\"\\n\"}{end}")
+		"-o", "jsonpath={range .items[*]}{.metadata.name}{\"\\t\"}{range .status.containerStatuses[*]}{.state.waiting.reason}{\" \"}{end}{range .status.initContainerStatuses[*]}{.state.waiting.reason}{\" \"}{end}{\"\\n\"}{end}")
 	if err != nil {
 		return nil
 	}
