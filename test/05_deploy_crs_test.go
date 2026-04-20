@@ -1135,7 +1135,11 @@ func TestDeployment_VerifyAROClusterReady(t *testing.T) {
 			}
 		}
 
-		PrintToTTY("⏳ %s.Ready: %s (elapsed %v)\n", data.Infrastructure.Kind, status, elapsed.Round(time.Second))
+		displayKind := infraKind
+		if data != nil && data.Infrastructure.Kind != "" {
+			displayKind = data.Infrastructure.Kind
+		}
+		PrintToTTY("⏳ %s.Ready: %s (elapsed %v)\n", displayKind, status, elapsed.Round(time.Second))
 		time.Sleep(pollInterval)
 	}
 }
