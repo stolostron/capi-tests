@@ -271,7 +271,7 @@ func TestCleanup_VerifyResourceGroupStatus(t *testing.T) {
 		t.Skip("Not logged in to Azure CLI")
 	}
 
-	resourceGroup := fmt.Sprintf("%s-resgroup", config.ClusterNamePrefix)
+	resourceGroup := fmt.Sprintf("%s-resgroup", config.WorkloadClusterName)
 	PrintToTTY("Target resource group: %s\n\n", resourceGroup)
 
 	// Check if resource group exists
@@ -745,7 +745,7 @@ func TestCleanup_Summary(t *testing.T) {
 		if err != nil {
 			PrintToTTY("  (Not logged in - cannot check)\n")
 		} else {
-			resourceGroup := fmt.Sprintf("%s-resgroup", config.ClusterNamePrefix)
+			resourceGroup := fmt.Sprintf("%s-resgroup", config.WorkloadClusterName)
 			_, err := RunCommandQuiet(t, "az", "group", "show", "--name", resourceGroup)
 			if err == nil {
 				PrintToTTY("  Resource Group:   EXISTS (%s)\n", resourceGroup)

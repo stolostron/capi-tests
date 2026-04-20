@@ -23,7 +23,7 @@
    └── Azure authenticated → Skip if not
 
 2. Derive resource group name:
-   └── resourceGroup = "${CS_CLUSTER_NAME}-resgroup"
+   └── resourceGroup = "${WORKLOAD_CLUSTER_NAME}-resgroup"
 
 3. Check resource group:
    │
@@ -40,6 +40,6 @@
 
 ## Key Notes
 
-- Resource group name: `${CAPI_USER}-${DEPLOYMENT_ENV}-resgroup`
+- Resource group name: `${WORKLOAD_CLUSTER_NAME}-resgroup`
 - Directs users to `make clean-azure` for cleanup
 - Lists individual resources if the group still exists

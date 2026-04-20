@@ -119,11 +119,11 @@ make test-<phase>
 For deployment/infrastructure failures:
 
 ```bash
-# Check resource group exists (name is ${CS_CLUSTER_NAME}-resgroup, e.g., cate-stage-resgroup)
-az group show --name <CS_CLUSTER_NAME>-resgroup
+# Check resource group exists (name is ${WORKLOAD_CLUSTER_NAME}-resgroup, e.g., capz-tests-resgroup)
+az group show --name <WORKLOAD_CLUSTER_NAME>-resgroup
 
 # Check for conflicting resources
-az resource list --resource-group <CS_CLUSTER_NAME>-resgroup
+az resource list --resource-group <WORKLOAD_CLUSTER_NAME>-resgroup
 
 # Check quotas
 az vm list-usage --location <REGION> --output table

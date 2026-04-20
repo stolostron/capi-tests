@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-my-resources help summary scheduled-review
+.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-my-resources check-stale help summary scheduled-review
 
 # Use bash for shell commands (required for PIPESTATUS in test-all target)
 SHELL := /bin/bash
@@ -16,7 +16,12 @@ else
 MANAGEMENT_CLUSTER_NAME ?= capz-tests-stage
 endif
 CS_CLUSTER_NAME ?= $(CAPI_USER)-$(DEPLOYMENT_ENV)
-AZURE_RESOURCE_GROUP ?= $(CS_CLUSTER_NAME)-resgroup
+ifeq ($(INFRA_PROVIDER),rosa)
+WORKLOAD_CLUSTER_NAME ?= capa-tests
+else
+WORKLOAD_CLUSTER_NAME ?= capz-tests
+endif
+AZURE_RESOURCE_GROUP ?= $(WORKLOAD_CLUSTER_NAME)-resgroup
 
 # Deployment state file - written by tests to record actual deployed configuration
 DEPLOYMENT_STATE_FILE := .deployment-state.json
@@ -27,11 +32,13 @@ DEPLOYMENT_STATE_FILE := .deployment-state.json
 STATE_RESOURCE_GROUP := $(shell if [ -f $(DEPLOYMENT_STATE_FILE) ]; then cat $(DEPLOYMENT_STATE_FILE) | grep '"resource_group"' | sed 's/.*: *"\([^"]*\)".*/\1/'; fi)
 STATE_MANAGEMENT_CLUSTER := $(shell if [ -f $(DEPLOYMENT_STATE_FILE) ]; then cat $(DEPLOYMENT_STATE_FILE) | grep '"management_cluster_name"' | sed 's/.*: *"\([^"]*\)".*/\1/'; fi)
 STATE_CLUSTER_PREFIX := $(shell if [ -f $(DEPLOYMENT_STATE_FILE) ]; then cat $(DEPLOYMENT_STATE_FILE) | grep '"cluster_name_prefix"' | sed 's/.*: *"\([^"]*\)".*/\1/'; fi)
+STATE_WORKLOAD_CLUSTER := $(shell if [ -f $(DEPLOYMENT_STATE_FILE) ]; then cat $(DEPLOYMENT_STATE_FILE) | grep '"workload_cluster_name"' | sed 's/.*: *"\([^"]*\)".*/\1/'; fi)
 
 # Use state file values if available, otherwise use defaults
 CLEANUP_RESOURCE_GROUP := $(if $(STATE_RESOURCE_GROUP),$(STATE_RESOURCE_GROUP),$(AZURE_RESOURCE_GROUP))
 CLEANUP_MANAGEMENT_CLUSTER := $(if $(STATE_MANAGEMENT_CLUSTER),$(STATE_MANAGEMENT_CLUSTER),$(MANAGEMENT_CLUSTER_NAME))
 CLEANUP_CLUSTER_PREFIX := $(if $(STATE_CLUSTER_PREFIX),$(STATE_CLUSTER_PREFIX),$(CS_CLUSTER_NAME))
+CLEANUP_WORKLOAD_CLUSTER := $(if $(STATE_WORKLOAD_CLUSTER),$(STATE_WORKLOAD_CLUSTER),$(WORKLOAD_CLUSTER_NAME))
 
 # Test configuration
 GOTESTSUM_FORMAT ?= testname
@@ -490,17 +497,17 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 		fi; \
 		echo ""; \
 		echo "--- Orphaned Azure Resources ---"; \
-		echo "These are resources with prefix '$(CLEANUP_CLUSTER_PREFIX)' that may exist outside the resource group."; \
+		echo "These are resources with prefix '$(CLEANUP_WORKLOAD_CLUSTER)' that may exist outside the resource group."; \
 		echo ""; \
 		if ! command -v az >/dev/null 2>&1; then \
 			echo "⚠️  Azure CLI (az) not available - skipping orphaned resources cleanup"; \
 		elif ! az account show >/dev/null 2>&1; then \
 			echo "⚠️  Not logged in to Azure - skipping orphaned resources cleanup"; \
 		else \
-			read -p "Search for and delete orphaned Azure resources with prefix '$(CLEANUP_CLUSTER_PREFIX)'? [y/N] " -n 1 -r; \
+			read -p "Search for and delete orphaned Azure resources with prefix '$(CLEANUP_WORKLOAD_CLUSTER)'? [y/N] " -n 1 -r; \
 			echo ""; \
 			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-				./scripts/cleanup-azure-resources.sh --prefix "$(CLEANUP_CLUSTER_PREFIX)" || echo "Orphaned resources cleanup encountered an error"; \
+				./scripts/cleanup-azure-resources.sh --prefix "$(CLEANUP_WORKLOAD_CLUSTER)" --match-mode contains || echo "Orphaned resources cleanup encountered an error"; \
 			else \
 				echo "Skipped orphaned resources cleanup."; \
 				echo "Tip: Run 'make clean-azure' to clean all Azure resources (including orphaned)."; \
@@ -583,21 +590,24 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 clean-my-resources: ## List all Azure resources tagged as mine (capi-test-user=$CAPI_USER)
 	@./scripts/cleanup-azure-resources.sh --my-resources
 
+check-stale: ## Check for stale cloud resources left by tests (default: older than 24h)
+	@./scripts/check-stale-resources.sh --max-age 24
+
 clean-azure: ## Delete all Azure resources (resource group, orphaned resources, AD apps, service principals)
 	@if [ -f "$(DEPLOYMENT_STATE_FILE)" ]; then \
 		echo "📝 Using deployment state from $(DEPLOYMENT_STATE_FILE)"; \
 		echo ""; \
 	fi
 	@if [ "$(FORCE)" = "1" ]; then \
-		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CLEANUP_CLUSTER_PREFIX)" --force; \
+		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CLEANUP_WORKLOAD_CLUSTER)" --match-mode contains --force; \
 	else \
-		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CLEANUP_CLUSTER_PREFIX)"; \
+		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CLEANUP_WORKLOAD_CLUSTER)" --match-mode contains; \
 	fi
 
 # Internal target: force delete all Azure resources without prompting
 .PHONY: _clean-azure-force
 _clean-azure-force:
-	@./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CLEANUP_CLUSTER_PREFIX)" --force 2>/dev/null || true
+	@./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CLEANUP_WORKLOAD_CLUSTER)" --match-mode contains --force 2>/dev/null || true
 
 # Internal target: conditionally clean Azure resources (only for ARO)
 .PHONY: _clean-azure-conditional

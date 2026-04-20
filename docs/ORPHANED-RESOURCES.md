@@ -63,7 +63,7 @@ az graph query -q "Resources | where resourceGroup =~ '<RESOURCE_GROUP_NAME>' | 
 
 Example with JSON output:
 ```bash
-az graph query -q "Resources | where resourceGroup =~ 'cate-stage-resgroup' | project name, type" \
+az graph query -q "Resources | where resourceGroup =~ 'capz-tests-resgroup' | project name, type" \
   -o json | jq -r '.data[] | "\(.name) | \(.type)"'
 ```
 
@@ -80,10 +80,10 @@ If the resource exists, you'll see its details. If deleted, you'll get `Resource
 ## Example Output
 
 ```bash
-$ az group show --name cate-stage-resgroup -o table
-ERROR: (ResourceGroupNotFound) Resource group 'cate-stage-resgroup' could not be found.
+$ az group show --name capz-tests-resgroup -o table
+ERROR: (ResourceGroupNotFound) Resource group 'capz-tests-resgroup' could not be found.
 
-$ az graph query -q "Resources | where resourceGroup =~ 'cate-stage-resgroup' | project name, type" \
+$ az graph query -q "Resources | where resourceGroup =~ 'capz-tests-resgroup' | project name, type" \
     -o json | jq -r '.data[] | "\(.name) | \(.type)"'
 cate-<prefix>-cp-cloud-network-config-<hash> | microsoft.managedidentity/userassignedidentities
 cate-<prefix>-cp-cluster-api-azure-<hash> | microsoft.managedidentity/userassignedidentities

@@ -30,7 +30,7 @@
 Configuration:
 ├── Timeout: DEPLOYMENT_TIMEOUT (default 45m)
 ├── Poll interval: 30 seconds
-└── Resource group: ${CS_CLUSTER_NAME}-resgroup
+└── Resource group: ${WORKLOAD_CLUSTER_NAME}-resgroup
 
 Loop:
 │
@@ -84,7 +84,7 @@ Common causes:
 === RUN   TestDeletion_WaitForClusterDeletion
 Waiting for cluster 'cate-stage' to be deleted...
 Namespace: <namespace> | Timeout: 45m0s | Poll interval: 30s
-Azure Resource Group: cate-stage-resgroup
+Azure Resource Group: capz-tests-resgroup
 
 [1] Cluster: exists | AROControlPlane: deleting | MachinePool: deleting | RG: exists
 [2] Cluster: exists | AROControlPlane: deleted | MachinePool: deleting | RG: exists

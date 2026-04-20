@@ -2505,7 +2505,7 @@ func FormatComponentVersions(versions []ComponentVersion, config *TestConfig) st
 		if config.AzureSubscriptionName != "" {
 			fmt.Fprintf(&result, "  Subscription:       %s\n", config.AzureSubscriptionName)
 		}
-		fmt.Fprintf(&result, "  Resource Group:     %s-resgroup\n", config.ClusterNamePrefix)
+		fmt.Fprintf(&result, "  Resource Group:     %s-resgroup\n", config.WorkloadClusterName)
 		fmt.Fprintf(&result, "  OpenShift Version:  %s\n", config.OCPVersion)
 	}
 
@@ -2616,7 +2616,7 @@ const DeploymentStateFile = ".deployment-state.json"
 // regardless of current environment variables or config defaults.
 func WriteDeploymentState(config *TestConfig) error {
 	state := DeploymentState{
-		ResourceGroup:            fmt.Sprintf("%s-resgroup", config.ClusterNamePrefix),
+		ResourceGroup:            fmt.Sprintf("%s-resgroup", config.WorkloadClusterName),
 		ManagementClusterName:    config.ManagementClusterName,
 		WorkloadClusterName:      config.WorkloadClusterName,
 		WorkloadClusterNamespace: config.WorkloadClusterNamespace,
