@@ -2719,6 +2719,42 @@ type ControllerLogSummary struct {
 // MaxSampleMessages is the maximum number of error/warning messages to keep in summary.
 const MaxSampleMessages = 10
 
+// CheckPodsForImagePullErrors checks if any pods in the given namespace have ErrImagePull or
+// ImagePullBackOff status. Returns an error describing the affected pods if found, nil otherwise.
+func CheckPodsForImagePullErrors(t *testing.T, kubeContext, namespace string) error {
+	t.Helper()
+
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+		"-n", namespace, "--request-timeout=10s",
+		"get", "pods",
+		"-o", "jsonpath={range .items[*]}{.metadata.name}{\"\\t\"}{range .status.containerStatuses[*]}{.state.waiting.reason}{\" \"}{end}{\"\\n\"}{end}")
+	if err != nil {
+		return nil
+	}
+
+	var affectedPods []string
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.Contains(line, "ErrImagePull") || strings.Contains(line, "ImagePullBackOff") {
+			parts := strings.SplitN(line, "\t", 2)
+			if len(parts) > 0 {
+				affectedPods = append(affectedPods, parts[0])
+			}
+		}
+	}
+
+	if len(affectedPods) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf("pods with image pull errors in namespace %s: %s\n"+
+		"Ensure registry credentials are configured (e.g., Docker config for registry.redhat.io)",
+		namespace, strings.Join(affectedPods, ", "))
+}
+
 // GetControllerLogs retrieves logs from a controller deployment.
 // Returns the log output or an error if the logs cannot be retrieved.
 func GetControllerLogs(t *testing.T, kubeContext, namespace, deploymentName string, tailLines int) (string, error) {
