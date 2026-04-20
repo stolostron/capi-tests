@@ -693,6 +693,21 @@ func TestCheckDependencies_NamingConstraints(t *testing.T) {
 				externalAuthID, len(externalAuthID), MaxExternalAuthIDLength)
 		}
 	})
+
+	t.Run("NamePrefix", func(t *testing.T) {
+		if config.NamePrefix == "" {
+			t.Skip("NAME_PREFIX not set (optional for local runs)")
+			return
+		}
+		if err := ValidateNamePrefix(config.NamePrefix); err != nil {
+			t.Errorf("NAME_PREFIX validation failed:\n%v", err)
+		} else {
+			nodePoolName := config.NamePrefix + NodePoolSuffix
+			t.Logf("NAME_PREFIX '%s' (%d chars) is valid — node pool '%s' (%d chars, max: %d)",
+				config.NamePrefix, len(config.NamePrefix),
+				nodePoolName, len(nodePoolName), MaxNodePoolNameLength)
+		}
+	})
 }
 
 // TestCheckDependencies_DockerCredentialHelper checks that any Docker credential helpers

@@ -1777,6 +1777,45 @@ func ValidateDomainPrefix(user, environment string) error {
 	return nil
 }
 
+// Azure enforces ARO HCP node pool names via ^[a-zA-Z][-a-zA-Z0-9]{1,13}[a-zA-Z0-9]$ (3-15 chars).
+const MaxNodePoolNameLength = 15
+
+// NodePoolSuffix is appended to NAME_PREFIX to form the node pool name (${NAME_PREFIX}-mp1).
+const NodePoolSuffix = "-mp1"
+
+// MaxNamePrefixLength ensures ${NAME_PREFIX}-mp1 stays within MaxNodePoolNameLength.
+const MaxNamePrefixLength = MaxNodePoolNameLength - len(NodePoolSuffix) // 11
+
+// aroHCPNodePoolNameRegex is the Azure-enforced pattern for ARO HCP node pool names.
+var aroHCPNodePoolNameRegex = regexp.MustCompile(`^[a-zA-Z][-a-zA-Z0-9]{1,13}[a-zA-Z0-9]$`)
+
+// ValidateNamePrefix checks if NAME_PREFIX produces a valid ARO HCP node pool name
+// when combined with NodePoolSuffix. Returns nil if namePrefix is empty (optional).
+func ValidateNamePrefix(namePrefix string) error {
+	if namePrefix == "" {
+		return nil
+	}
+	nodePoolName := namePrefix + NodePoolSuffix
+	if len(namePrefix) > MaxNamePrefixLength {
+		return fmt.Errorf(
+			"NAME_PREFIX '%s' (%d chars) exceeds maximum length of %d characters\n"+
+				"  Node pool name would be '%s' (%d chars), exceeding ARO HCP limit of %d chars\n"+
+				"  ARO HCP node pool names must match: ^[a-zA-Z][-a-zA-Z0-9]{1,13}[a-zA-Z0-9]$\n"+
+				"  Suggestion: Use a shorter NAME_PREFIX (max %d chars)",
+			namePrefix, len(namePrefix), MaxNamePrefixLength,
+			nodePoolName, len(nodePoolName), MaxNodePoolNameLength,
+			MaxNamePrefixLength)
+	}
+	if !aroHCPNodePoolNameRegex.MatchString(nodePoolName) {
+		return fmt.Errorf(
+			"NAME_PREFIX '%s' creates invalid node pool name '%s'\n"+
+				"  ARO HCP node pool names must match: ^[a-zA-Z][-a-zA-Z0-9]{1,13}[a-zA-Z0-9]$\n"+
+				"  Suggestion: start with a letter and use only letters, numbers, and '-'",
+			namePrefix, nodePoolName)
+	}
+	return nil
+}
+
 // RFC1123NameRegex is a regex for RFC 1123 subdomain name validation.
 // Names must consist of lowercase alphanumeric characters or '-', and must start
 // and end with an alphanumeric character.
@@ -3612,6 +3651,23 @@ func ValidateAllConfigurations(t *testing.T, config *TestConfig) []ConfigValidat
 			result.IsValid = true
 		}
 		results = append(results, result)
+
+		// Validate NAME_PREFIX length (optional — only when set)
+		if config.NamePrefix != "" {
+			nodePoolName := config.NamePrefix + NodePoolSuffix
+			result = ConfigValidationResult{
+				Variable:   "NAME_PREFIX (node pool name)",
+				Value:      nodePoolName,
+				IsCritical: true,
+			}
+			if err := ValidateNamePrefix(config.NamePrefix); err != nil {
+				result.IsValid = false
+				result.Error = err
+			} else {
+				result.IsValid = true
+			}
+			results = append(results, result)
+		}
 	}
 
 	// Validate timeout values

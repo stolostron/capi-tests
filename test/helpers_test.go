@@ -1785,6 +1785,132 @@ func TestValidateExternalAuthID_Constants(t *testing.T) {
 	}
 }
 
+func TestValidateNamePrefix(t *testing.T) {
+	tests := []struct {
+		name        string
+		namePrefix  string
+		expectError bool
+		errorSubstr string // distinguishes length vs regex error path
+	}{
+		// Valid cases
+		{
+			name:       "empty - not set",
+			namePrefix: "",
+		},
+		{
+			name:       "single char - minimum valid",
+			namePrefix: "a", // "a-mp1" = 5 chars
+		},
+		{
+			name:       "short prefix",
+			namePrefix: "ct-ab12", // "ct-ab12-mp1" = 11 chars
+		},
+		{
+			name:       "10 chars",
+			namePrefix: "a123456789", // "a123456789-mp1" = 14 chars
+		},
+		{
+			name:       "exactly 11 chars - at limit",
+			namePrefix: "a1234567890", // "a1234567890-mp1" = 15 chars
+		},
+		{
+			name:       "uppercase letters allowed",
+			namePrefix: "CapzTest", // "CapzTest-mp1" = 12 chars, regex allows [a-zA-Z]
+		},
+		{
+			name:       "trailing hyphen in prefix",
+			namePrefix: "ct-ab-", // "ct-ab--mp1" = 10 chars, double-hyphen is valid per Azure regex
+		},
+		// Invalid - length
+		{
+			name:        "12 chars - one over limit",
+			namePrefix:  "a12345678901", // "a12345678901-mp1" = 16 chars
+			expectError: true,
+			errorSubstr: "exceeds maximum length",
+		},
+		{
+			name:        "15 chars - typical CI failure",
+			namePrefix:  "capz-tests-25b0", // "capz-tests-25b0-mp1" = 19 chars
+			expectError: true,
+			errorSubstr: "exceeds maximum length",
+		},
+		{
+			name:        "20 chars - way over",
+			namePrefix:  "abcdefghijklmnopqrst",
+			expectError: true,
+			errorSubstr: "exceeds maximum length",
+		},
+		// Invalid - regex pattern
+		{
+			name:        "starts with digit",
+			namePrefix:  "1abc", // "1abc-mp1" does not start with a letter
+			expectError: true,
+			errorSubstr: "invalid node pool name",
+		},
+		{
+			name:        "starts with hyphen",
+			namePrefix:  "-abc", // "-abc-mp1" first char is hyphen, not letter
+			expectError: true,
+			errorSubstr: "invalid node pool name",
+		},
+		{
+			name:        "contains underscore",
+			namePrefix:  "ct_ab", // "ct_ab-mp1" contains underscore
+			expectError: true,
+			errorSubstr: "invalid node pool name",
+		},
+		{
+			name:        "contains dot",
+			namePrefix:  "ct.ab", // "ct.ab-mp1" dot not in allowed chars
+			expectError: true,
+			errorSubstr: "invalid node pool name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateNamePrefix(tt.namePrefix)
+			if tt.expectError {
+				if err == nil {
+					nodePoolName := tt.namePrefix + NodePoolSuffix
+					t.Errorf("ValidateNamePrefix(%q) expected error for node pool name %q (%d chars), got nil",
+						tt.namePrefix, nodePoolName, len(nodePoolName))
+				} else {
+					if !strings.Contains(err.Error(), tt.errorSubstr) {
+						t.Errorf("ValidateNamePrefix(%q) error = %q, expected to contain %q",
+							tt.namePrefix, err.Error(), tt.errorSubstr)
+					}
+				}
+			} else {
+				if err != nil {
+					t.Errorf("ValidateNamePrefix(%q) unexpected error: %v",
+						tt.namePrefix, err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateNamePrefix_Constants(t *testing.T) {
+	if MaxNodePoolNameLength != 15 {
+		t.Errorf("MaxNodePoolNameLength = %d, expected 15", MaxNodePoolNameLength)
+	}
+
+	if NodePoolSuffix != "-mp1" {
+		t.Errorf("NodePoolSuffix = %q, expected \"-mp1\"", NodePoolSuffix)
+	}
+
+	if MaxNamePrefixLength != 11 {
+		t.Errorf("MaxNamePrefixLength = %d, expected 11 (15 - 4)", MaxNamePrefixLength)
+	}
+
+	// Verify the relationship: MaxNamePrefixLength + len(suffix) == MaxNodePoolNameLength
+	if MaxNamePrefixLength+len(NodePoolSuffix) != MaxNodePoolNameLength {
+		t.Errorf("MaxNamePrefixLength (%d) + len(NodePoolSuffix) (%d) != MaxNodePoolNameLength (%d)",
+			MaxNamePrefixLength, len(NodePoolSuffix), MaxNodePoolNameLength)
+	}
+}
+
 func TestIsRetryableKubectlError(t *testing.T) {
 	tests := []struct {
 		name     string
