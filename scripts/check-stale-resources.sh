@@ -54,8 +54,9 @@ print_warning() { [[ "$JSON_OUTPUT" == "true" ]] || echo -e "${YELLOW}[WARN]${NC
 print_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 
 usage() {
+    local exit_code="${1:-0}"
     sed -n '2,/^$/p' "$0" | grep '^#' | sed 's/^# \?//'
-    exit 0
+    exit "$exit_code"
 }
 
 # Parse arguments
@@ -89,7 +90,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             print_error "Unknown option: $1"
-            usage
+            usage 2
             ;;
     esac
 done
