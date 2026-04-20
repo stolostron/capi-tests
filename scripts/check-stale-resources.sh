@@ -36,8 +36,8 @@ set -euo pipefail
 
 # Defaults
 MAX_AGE_HOURS=24
-CHECK_AZURE=true
-CHECK_AWS=true
+CHECK_AZURE=false
+CHECK_AWS=false
 JSON_OUTPUT=false
 EXPLICIT_PROVIDER=false
 
@@ -72,12 +72,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --azure)
             CHECK_AZURE=true
-            CHECK_AWS=false
             EXPLICIT_PROVIDER=true
             shift
             ;;
         --aws)
-            CHECK_AZURE=false
             CHECK_AWS=true
             EXPLICIT_PROVIDER=true
             shift
@@ -95,6 +93,12 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Default: check both providers when none specified explicitly
+if [[ "$EXPLICIT_PROVIDER" == "false" ]]; then
+    CHECK_AZURE=true
+    CHECK_AWS=true
+fi
 
 # Compute threshold epoch once
 THRESHOLD_EPOCH=$(date -d "-${MAX_AGE_HOURS} hours" +%s 2>/dev/null) || {

@@ -102,7 +102,11 @@ jobs:
         SUMMARY=$(echo "$JSON_RESULT" | jq -r '.summary')
 
         echo "stale_found=$STALE" >> "$GITHUB_OUTPUT"
-        echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
+        {
+          echo 'summary<<SUMMARY_EOF'
+          echo "$SUMMARY"
+          echo 'SUMMARY_EOF'
+        } >> "$GITHUB_OUTPUT"
 
         # Write report to file (outputs have size limits)
         echo "$JSON_RESULT" > azure-report.json
@@ -184,7 +188,11 @@ jobs:
         SUMMARY=$(echo "$JSON_RESULT" | jq -r '.summary')
 
         echo "stale_found=$STALE" >> "$GITHUB_OUTPUT"
-        echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
+        {
+          echo 'summary<<SUMMARY_EOF'
+          echo "$SUMMARY"
+          echo 'SUMMARY_EOF'
+        } >> "$GITHUB_OUTPUT"
 
         echo "$JSON_RESULT" > aws-report.json
         {
@@ -322,6 +330,12 @@ jobs:
           -H "Content-Type: application/json" 2>/dev/null)
 
         EXISTING_KEY=$(echo "$SEARCH_RESULT" | jq -r '.issues[0].key // empty' 2>/dev/null)
+
+        # Validate Jira key format before using in API URL
+        if [ -n "$EXISTING_KEY" ] && ! echo "$EXISTING_KEY" | grep -qE '^[A-Z]+-[0-9]+$'; then
+          echo "::warning::Unexpected Jira issue key format: ${EXISTING_KEY} — skipping update"
+          EXISTING_KEY=""
+        fi
 
         if [ -n "$EXISTING_KEY" ]; then
           echo "Found existing Jira issue: ${EXISTING_KEY} — adding comment"
