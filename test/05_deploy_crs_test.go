@@ -526,6 +526,13 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 			continue
 		}
 
+		if data.ControlPlane.Kind != "" {
+			controlPlaneKind = data.ControlPlane.Kind
+		}
+		if data.ControlPlane.Name != "" {
+			controlPlaneName = data.ControlPlane.Name
+		}
+
 		// Fail-fast: check Cluster.Phase for terminal failure
 		if data.Cluster.Phase == ClusterPhaseFailed {
 			PrintToTTY("\n❌ Cluster phase is Failed — aborting early\n\n")
@@ -538,13 +545,13 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 
 		// Fail-fast: check ControlPlane conditions for permanent failures
 		if err := CheckK8sConditionsForPermanentFailure(data.ControlPlane.Conditions); err != nil {
-			PrintToTTY("\n❌ Permanent failure detected in %s conditions — aborting early\n", data.ControlPlane.Kind)
+			PrintToTTY("\n❌ Permanent failure detected in %s conditions — aborting early\n", controlPlaneKind)
 			PrintToTTY("   %v\n\n", err)
 			t.Fatalf("Permanent failure in %s conditions — deployment cannot recover.\n%v\n\n"+
 				"Check control plane status:\n"+
 				"  kubectl --context %s -n %s get %s %s -o yaml",
-				data.ControlPlane.Kind, err,
-				context, config.WorkloadClusterNamespace, strings.ToLower(data.ControlPlane.Kind), controlPlaneName)
+				controlPlaneKind, err,
+				context, config.WorkloadClusterNamespace, strings.ToLower(controlPlaneKind), controlPlaneName)
 			return
 		}
 
@@ -570,7 +577,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 
 		// Check ControlPlane ready status (works for ARO/ROSA dynamically)
 		if !controlPlaneReady {
-			cpKind := data.ControlPlane.Kind
+			cpKind := controlPlaneKind
 			cpState := data.ControlPlane.State
 
 			if data.ControlPlane.Ready {
@@ -585,7 +592,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 				}
 			}
 		} else {
-			PrintToTTY("[%d] ✅ %s.Ready: true\n", iteration, data.ControlPlane.Kind)
+			PrintToTTY("[%d] ✅ %s.Ready: true\n", iteration, controlPlaneKind)
 		}
 
 		// Check MachinePool status (only for providers that use them, like ARO)
@@ -701,7 +708,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 
 		// Both ready — done
 		if controlPlaneReady && machinePoolReady {
-			cpKind := data.ControlPlane.Kind
+			cpKind := controlPlaneKind
 			if len(data.MachinePools) > 0 {
 				PrintToTTY("\n✅ Control plane and machine pool are ready! (took %v)\n\n", elapsed.Round(time.Second))
 				t.Logf("Both %s and MachinePool ready (took %v)", cpKind, elapsed.Round(time.Second))
@@ -732,13 +739,13 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 		if len(data.ControlPlane.Conditions) > 0 {
 			if !controlPlaneReady {
 				// Not ready yet: show all conditions
-				PrintToTTY("[%d] 📋 %s conditions:\n", iteration, data.ControlPlane.Kind)
+				PrintToTTY("[%d] 📋 %s conditions:\n", iteration, controlPlaneKind)
 				PrintToTTY("%s", FormatK8sConditions(data.ControlPlane.Conditions))
 			} else {
 				// Ready: show only non-True conditions to highlight any lingering issues
 				nonTrueConditions := FormatNonTrueK8sConditions(data.ControlPlane.Conditions)
 				if strings.TrimSpace(nonTrueConditions) != "" {
-					PrintToTTY("[%d] ⚠️  %s conditions (not True):\n", iteration, data.ControlPlane.Kind)
+					PrintToTTY("[%d] ⚠️  %s conditions (not True):\n", iteration, controlPlaneKind)
 					PrintToTTY("%s", nonTrueConditions)
 				}
 			}
