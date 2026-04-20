@@ -217,7 +217,7 @@ MANAGEMENT_CLUSTER_NAME=capz-tests-stage  # For running tests (default for ARO; 
 KIND_CLUSTER_NAME=capz-tests-stage        # For direct script usage (advanced)
 CLUSTER_NAME=capz-tests-cluster           # Default for ARO; capa-tests-cluster for ROSA
 CS_CLUSTER_NAME=cate-stage  # Used for YAML generation and ExternalAuth
-OCP_VERSION=4.18
+OCP_VERSION=4.19
 REGION=uksouth
 DEPLOYMENT_ENV=stage
 

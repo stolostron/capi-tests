@@ -91,7 +91,7 @@ Tests are configured via environment variables:
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests-cluster` for ARO, `capa-tests-cluster` for ROSA)
 - `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation (default: `${CAPI_USER}-${DEPLOYMENT_ENV}`). The Azure resource group is named `${WORKLOAD_CLUSTER_NAME}-resgroup`.
-- `OCP_VERSION` - OpenShift version (default: `4.18`)
+- `OCP_VERSION` - OpenShift version (default: `4.19`)
 - `REGION` - Azure region (default: `uksouth`)
 - `AZURE_SUBSCRIPTION_NAME` - Azure subscription ID
 - `DEPLOYMENT_ENV` - Deployment environment (stage/prod) (default: `stage`)
