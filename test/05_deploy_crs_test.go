@@ -451,7 +451,9 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	initialData, initErr := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 	controlPlaneKind := "ControlPlane" // fallback if we can't determine
 	if initErr == nil {
-		controlPlaneKind = initialData.ControlPlane.Kind
+		if initialData.ControlPlane.Kind != "" {
+			controlPlaneKind = initialData.ControlPlane.Kind
+		}
 		if initialData.ControlPlane.Name != "" {
 			controlPlaneName = initialData.ControlPlane.Name
 		}
@@ -917,11 +919,15 @@ func TestDeployment_VerifyInfrastructureResources(t *testing.T) {
 		if err := CheckK8sConditionsForPermanentFailure(data.Infrastructure.Conditions); err != nil {
 			PrintToTTY("\n❌ Permanent failure detected in %s conditions — aborting early\n", data.Infrastructure.Kind)
 			PrintToTTY("   %v\n\n", err)
+			infraName := data.Infrastructure.Name
+			if infraName == "" {
+				infraName = provisionedClusterName
+			}
 			t.Fatalf("Permanent failure in %s conditions — deployment cannot recover.\n%v\n\n"+
 				"Check infrastructure status:\n"+
 				"  kubectl --context %s -n %s get %s %s -o yaml",
 				data.Infrastructure.Kind, err,
-				context, config.WorkloadClusterNamespace, strings.ToLower(data.Infrastructure.Kind), provisionedClusterName)
+				context, config.WorkloadClusterNamespace, strings.ToLower(data.Infrastructure.Kind), infraName)
 			return
 		}
 
