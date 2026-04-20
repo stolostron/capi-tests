@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-my-resources help summary scheduled-review
+.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-my-resources check-stale help summary scheduled-review
 
 # Use bash for shell commands (required for PIPESTATUS in test-all target)
 SHELL := /bin/bash
@@ -582,6 +582,9 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 
 clean-my-resources: ## List all Azure resources tagged as mine (capi-test-user=$CAPI_USER)
 	@./scripts/cleanup-azure-resources.sh --my-resources
+
+check-stale: ## Check for stale cloud resources left by tests (default: older than 24h)
+	@./scripts/check-stale-resources.sh --max-age 24
 
 clean-azure: ## Delete all Azure resources (resource group, orphaned resources, AD apps, service principals)
 	@if [ -f "$(DEPLOYMENT_STATE_FILE)" ]; then \
