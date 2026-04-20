@@ -322,19 +322,19 @@ jobs:
         TODAY=$(date +%Y-%m-%d)
         RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
-        # Build description from findings
-        DESCRIPTION="Stale cloud resources detected by automated scan on ${TODAY}.\n\n"
-        DESCRIPTION+="*Workflow run:* ${RUN_URL}\n"
-        DESCRIPTION+="*Threshold:* ${MAX_AGE_HOURS} hours\n\n"
+        # Build description from findings (use $'...' for actual newlines)
+        DESCRIPTION=$'Stale cloud resources detected by automated scan on '"${TODAY}"$'.\n\n'
+        DESCRIPTION+=$'*Workflow run:* '"${RUN_URL}"$'\n'
+        DESCRIPTION+=$'*Threshold:* '"${MAX_AGE_HOURS}"$' hours\n\n'
 
         if [ "$AZURE_STALE" = "true" ]; then
-          DESCRIPTION+="h3. Azure\n${AZURE_SUMMARY}\n\n"
+          DESCRIPTION+=$'h3. Azure\n'"${AZURE_SUMMARY}"$'\n\n'
         fi
         if [ "$AWS_STALE" = "true" ]; then
-          DESCRIPTION+="h3. AWS\n${AWS_SUMMARY}\n\n"
+          DESCRIPTION+=$'h3. AWS\n'"${AWS_SUMMARY}"$'\n\n'
         fi
 
-        DESCRIPTION+="Please investigate and clean up the leaked resources.\n"
+        DESCRIPTION+=$'Please investigate and clean up the leaked resources.\n'
         DESCRIPTION+="Use {{make clean-azure}} or {{./scripts/cleanup-azure-resources.sh}} for Azure cleanup."
 
         # Search for existing open stale-resources issue under ARO-24159
@@ -355,14 +355,14 @@ jobs:
         if [ -n "$EXISTING_KEY" ]; then
           echo "Found existing Jira issue: ${EXISTING_KEY} — adding comment"
 
-          COMMENT="Stale resources detected again on ${TODAY}.\n\n"
+          COMMENT=$'Stale resources detected again on '"${TODAY}"$'.\n\n'
           if [ "$AZURE_STALE" = "true" ]; then
-            COMMENT+="*Azure:* ${AZURE_SUMMARY}\n"
+            COMMENT+=$'*Azure:* '"${AZURE_SUMMARY}"$'\n'
           fi
           if [ "$AWS_STALE" = "true" ]; then
-            COMMENT+="*AWS:* ${AWS_SUMMARY}\n"
+            COMMENT+=$'*AWS:* '"${AWS_SUMMARY}"$'\n'
           fi
-          COMMENT+="\n*Workflow run:* ${RUN_URL}"
+          COMMENT+=$'\n*Workflow run:* '"${RUN_URL}"
 
           COMMENT_JSON=$(jq -n --arg body "$COMMENT" '{"body": $body}')
 
