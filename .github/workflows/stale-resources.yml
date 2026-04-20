@@ -1,0 +1,429 @@
+name: Stale Resource Detection
+
+# Scheduled workflow to detect stale cloud resources left by test runs.
+# Scans Azure and AWS for resources older than a configurable threshold.
+# On detection: fails the workflow and creates/updates a Jira issue.
+#
+# Requires:
+#   - Environment (aro-stage) with Azure credentials
+#   - Environment (rosa-stage) with AWS credentials
+#   - Repository secrets: JIRA_EMAIL, JIRA_API_TOKEN (for Jira integration)
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 6:00 AM UTC
+  workflow_dispatch:
+    inputs:
+      max_age_hours:
+        description: 'Staleness threshold in hours'
+        required: false
+        default: '24'
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  MAX_AGE_HOURS: ${{ inputs.max_age_hours || '24' }}
+
+jobs:
+  check-azure:
+    name: Check Azure Resources
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: aro-stage
+    env:
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+    outputs:
+      stale_found: ${{ steps.check.outputs.stale_found }}
+      report: ${{ steps.check.outputs.report }}
+      summary: ${{ steps.check.outputs.summary }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+    - name: Validate Azure credentials
+      id: azure-creds
+      run: |
+        CONFIGURED=true
+        missing=""
+        [ -z "$AZURE_TENANT_ID" ] && missing="$missing vars.AZURE_TENANT_ID"
+        [ -z "$AZURE_SUBSCRIPTION_ID" ] && missing="$missing vars.AZURE_SUBSCRIPTION_ID"
+        [ -z "$AZURE_CLIENT_ID" ] && missing="$missing vars.AZURE_CLIENT_ID"
+        [ -z "$AZURE_CLIENT_SECRET" ] && missing="$missing secrets.AZURE_CLIENT_SECRET"
+        if [ -n "$missing" ]; then
+          echo "::warning::Missing Azure credentials:$missing"
+          echo "Configure in Settings > Environments > aro-stage"
+          CONFIGURED=false
+        fi
+
+        echo "configured=$CONFIGURED" >> "$GITHUB_OUTPUT"
+        if [ "$CONFIGURED" = "false" ]; then
+          echo "::notice::Azure credentials not configured — skipping Azure check"
+          echo "stale_found=false" >> "$GITHUB_OUTPUT"
+          {
+            echo 'summary<<SUMMARY_EOF'
+            echo "Azure check skipped: credentials not configured"
+            echo 'SUMMARY_EOF'
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+    - name: Azure CLI login
+      if: steps.azure-creds.outputs.configured == 'true'
+      run: |
+        az login --service-principal \
+          --username "$AZURE_CLIENT_ID" \
+          --password "$AZURE_CLIENT_SECRET" \
+          --tenant "$AZURE_TENANT_ID" \
+          --output none
+        az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+
+    - name: Check for stale Azure resources
+      id: check
+      if: steps.azure-creds.outputs.configured == 'true'
+      run: |
+        set +e
+        RESULT=$(./scripts/check-stale-resources.sh --azure --json --max-age "$MAX_AGE_HOURS" 2>azure-check.stderr)
+        EXIT_CODE=$?
+        set -e
+
+        if [ "$EXIT_CODE" -eq 2 ]; then
+          echo "::error::Script error during Azure resource check"
+          cat azure-check.stderr >&2 || true
+          echo "stale_found=false" >> "$GITHUB_OUTPUT"
+          exit 1
+        fi
+
+        if ! echo "$RESULT" | jq -e . >/dev/null 2>&1; then
+          echo "::error::Invalid JSON output from check script"
+          cat azure-check.stderr >&2 || true
+          echo "stale_found=false" >> "$GITHUB_OUTPUT"
+          exit 1
+        fi
+        JSON_RESULT="$RESULT"
+
+        STALE=$(echo "$JSON_RESULT" | jq -r '.stale_found')
+        SUMMARY=$(echo "$JSON_RESULT" | jq -r '.summary')
+
+        echo "stale_found=$STALE" >> "$GITHUB_OUTPUT"
+        {
+          echo 'summary<<SUMMARY_EOF'
+          echo "$SUMMARY"
+          echo 'SUMMARY_EOF'
+        } >> "$GITHUB_OUTPUT"
+
+        # Write report to file (outputs have size limits)
+        echo "$JSON_RESULT" > azure-report.json
+        {
+          echo 'report<<REPORT_EOF'
+          echo "$JSON_RESULT"
+          echo 'REPORT_EOF'
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Upload Azure report
+      if: always() && steps.check.outputs.stale_found == 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: azure-stale-report
+        path: azure-report.json
+        retention-days: 30
+
+  check-aws:
+    name: Check AWS Resources
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: rosa-stage
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+    outputs:
+      stale_found: ${{ steps.check.outputs.stale_found }}
+      report: ${{ steps.check.outputs.report }}
+      summary: ${{ steps.check.outputs.summary }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+    - name: Validate AWS credentials
+      id: aws-creds
+      run: |
+        CONFIGURED=true
+        missing=""
+        [ -z "$AWS_ACCESS_KEY_ID" ] && missing="$missing secrets.AWS_ACCESS_KEY_ID"
+        [ -z "$AWS_SECRET_ACCESS_KEY" ] && missing="$missing secrets.AWS_SECRET_ACCESS_KEY"
+        if [ -n "$missing" ]; then
+          echo "::warning::Missing AWS credentials:$missing"
+          echo "Configure in Settings > Environments > rosa-stage"
+          CONFIGURED=false
+        fi
+
+        echo "configured=$CONFIGURED" >> "$GITHUB_OUTPUT"
+        if [ "$CONFIGURED" = "false" ]; then
+          echo "::notice::AWS credentials not configured — skipping AWS check"
+          echo "stale_found=false" >> "$GITHUB_OUTPUT"
+          {
+            echo 'summary<<SUMMARY_EOF'
+            echo "AWS check skipped: credentials not configured"
+            echo 'SUMMARY_EOF'
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+    - name: Check for stale AWS resources
+      id: check
+      if: steps.aws-creds.outputs.configured == 'true'
+      env:
+        AWS_DEFAULT_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      run: |
+        set +e
+        RESULT=$(./scripts/check-stale-resources.sh --aws --json --max-age "$MAX_AGE_HOURS" 2>aws-check.stderr)
+        EXIT_CODE=$?
+        set -e
+
+        if [ "$EXIT_CODE" -eq 2 ]; then
+          echo "::error::Script error during AWS resource check"
+          cat aws-check.stderr >&2 || true
+          echo "stale_found=false" >> "$GITHUB_OUTPUT"
+          exit 1
+        fi
+
+        if ! echo "$RESULT" | jq -e . >/dev/null 2>&1; then
+          echo "::error::Invalid JSON output from check script"
+          cat aws-check.stderr >&2 || true
+          echo "stale_found=false" >> "$GITHUB_OUTPUT"
+          exit 1
+        fi
+        JSON_RESULT="$RESULT"
+
+        STALE=$(echo "$JSON_RESULT" | jq -r '.stale_found')
+        SUMMARY=$(echo "$JSON_RESULT" | jq -r '.summary')
+
+        echo "stale_found=$STALE" >> "$GITHUB_OUTPUT"
+        {
+          echo 'summary<<SUMMARY_EOF'
+          echo "$SUMMARY"
+          echo 'SUMMARY_EOF'
+        } >> "$GITHUB_OUTPUT"
+
+        echo "$JSON_RESULT" > aws-report.json
+        {
+          echo 'report<<REPORT_EOF'
+          echo "$JSON_RESULT"
+          echo 'REPORT_EOF'
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Upload AWS report
+      if: always() && steps.check.outputs.stale_found == 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: aws-stale-report
+        path: aws-report.json
+        retention-days: 30
+
+  report:
+    name: Report Findings
+    needs: [check-azure, check-aws]
+    if: always() && (needs.check-azure.outputs.stale_found == 'true' || needs.check-aws.outputs.stale_found == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      AZURE_STALE: ${{ needs.check-azure.outputs.stale_found }}
+      AZURE_SUMMARY: ${{ needs.check-azure.outputs.summary }}
+      AZURE_REPORT: ${{ needs.check-azure.outputs.report }}
+      AWS_STALE: ${{ needs.check-aws.outputs.stale_found }}
+      AWS_SUMMARY: ${{ needs.check-aws.outputs.summary }}
+      AWS_REPORT: ${{ needs.check-aws.outputs.report }}
+    steps:
+    - name: Generate step summary
+      run: |
+        {
+          echo "# Stale Resource Detection Results"
+          echo ""
+          echo "**Threshold:** ${MAX_AGE_HOURS} hours"
+          echo ""
+
+          if [ "$AZURE_STALE" = "true" ]; then
+            echo "## Azure"
+            echo ""
+            echo "$AZURE_SUMMARY"
+            echo ""
+
+            # Resource groups table
+            RG_COUNT=$(echo "$AZURE_REPORT" | jq '.azure.resource_groups | length' 2>/dev/null || echo 0)
+            if [ "$RG_COUNT" -gt 0 ]; then
+              echo "### Resource Groups"
+              echo ""
+              echo "| Name | Location | Created At | User | Env |"
+              echo "|------|----------|------------|------|-----|"
+              echo "$AZURE_REPORT" | jq -r '.azure.resource_groups[] | "| \(.name) | \(.location) | \(.createdAt) | \(.user // "-") | \(.env // "-") |"' 2>/dev/null
+              echo ""
+            fi
+
+            # AD Applications table
+            APP_COUNT=$(echo "$AZURE_REPORT" | jq '.azure.ad_applications | length' 2>/dev/null || echo 0)
+            if [ "$APP_COUNT" -gt 0 ]; then
+              echo "### AD Applications"
+              echo ""
+              echo "| Display Name | App ID | Created At |"
+              echo "|-------------|--------|------------|"
+              echo "$AZURE_REPORT" | jq -r '.azure.ad_applications[] | "| \(.displayName) | \(.appId) | \(.createdAt) |"' 2>/dev/null
+              echo ""
+            fi
+
+            # Service Principals table
+            SP_COUNT=$(echo "$AZURE_REPORT" | jq '.azure.service_principals | length' 2>/dev/null || echo 0)
+            if [ "$SP_COUNT" -gt 0 ]; then
+              echo "### Service Principals"
+              echo ""
+              echo "| Display Name | App ID | Created At |"
+              echo "|-------------|--------|------------|"
+              echo "$AZURE_REPORT" | jq -r '.azure.service_principals[] | "| \(.displayName) | \(.appId) | \(.createdAt) |"' 2>/dev/null
+              echo ""
+            fi
+          fi
+
+          if [ "$AWS_STALE" = "true" ]; then
+            echo "## AWS"
+            echo ""
+            echo "$AWS_SUMMARY"
+            echo ""
+
+            VPC_COUNT=$(echo "$AWS_REPORT" | jq '.aws.vpcs | length' 2>/dev/null || echo 0)
+            if [ "$VPC_COUNT" -gt 0 ]; then
+              echo "### VPCs"
+              echo ""
+              echo "| VPC ID | Name | Created At |"
+              echo "|--------|------|------------|"
+              echo "$AWS_REPORT" | jq -r '.aws.vpcs[] | "| \(.vpcId) | \(.name) | \(.createdAt) |"' 2>/dev/null
+              echo ""
+            fi
+
+            STACK_COUNT=$(echo "$AWS_REPORT" | jq '.aws.cloudformation_stacks | length' 2>/dev/null || echo 0)
+            if [ "$STACK_COUNT" -gt 0 ]; then
+              echo "### CloudFormation Stacks"
+              echo ""
+              echo "| Stack Name | Created At | Status |"
+              echo "|-----------|------------|--------|"
+              echo "$AWS_REPORT" | jq -r '.aws.cloudformation_stacks[] | "| \(.StackName) | \(.CreationTime) | \(.StackStatus) |"' 2>/dev/null
+              echo ""
+            fi
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Create or update Jira issue
+      if: env.JIRA_EMAIL != '' && env.JIRA_API_TOKEN != ''
+      run: |
+        TODAY=$(date +%Y-%m-%d)
+        RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+        # Build description from findings (use $'...' for actual newlines)
+        DESCRIPTION=$'Stale cloud resources detected by automated scan on '"${TODAY}"$'.\n\n'
+        DESCRIPTION+=$'*Workflow run:* '"${RUN_URL}"$'\n'
+        DESCRIPTION+=$'*Threshold:* '"${MAX_AGE_HOURS}"$' hours\n\n'
+
+        if [ "$AZURE_STALE" = "true" ]; then
+          DESCRIPTION+=$'h3. Azure\n'"${AZURE_SUMMARY}"$'\n\n'
+        fi
+        if [ "$AWS_STALE" = "true" ]; then
+          DESCRIPTION+=$'h3. AWS\n'"${AWS_SUMMARY}"$'\n\n'
+        fi
+
+        DESCRIPTION+=$'Please investigate and clean up the leaked resources.\n'
+        DESCRIPTION+="Use {{make clean-azure}} or {{./scripts/cleanup-azure-resources.sh}} for Azure cleanup."
+
+        # Search for existing open stale-resources issue under ARO-24159
+        SEARCH_RESPONSE=$(curl -s -w "\n%{http_code}" -u "${JIRA_EMAIL}:${JIRA_API_TOKEN}" \
+          -G "https://redhat.atlassian.net/rest/api/3/search/jql" \
+          --data-urlencode "jql=parent = ARO-24159 AND summary ~ \"\\\"[Stale Resources]\\\"\" AND status != Closed" \
+          --data-urlencode "fields=key,summary,status" \
+          -H "Content-Type: application/json" 2>/dev/null)
+
+        SEARCH_HTTP_CODE=$(echo "$SEARCH_RESPONSE" | tail -1)
+        SEARCH_RESULT=$(echo "$SEARCH_RESPONSE" | sed '$d')
+        if [ "$SEARCH_HTTP_CODE" -lt 200 ] || [ "$SEARCH_HTTP_CODE" -ge 300 ]; then
+          echo "::warning::Jira search failed (HTTP ${SEARCH_HTTP_CODE}); skipping create/update to avoid duplicates"
+          exit 0
+        fi
+
+        EXISTING_KEY=$(echo "$SEARCH_RESULT" | jq -r '.issues[0].key // empty' 2>/dev/null)
+
+        # Validate Jira key format before using in API URL
+        if [ -n "$EXISTING_KEY" ] && ! echo "$EXISTING_KEY" | grep -qE '^[A-Z]+-[0-9]+$'; then
+          echo "::warning::Unexpected Jira issue key format: ${EXISTING_KEY} — skipping update"
+          EXISTING_KEY=""
+        fi
+
+        if [ -n "$EXISTING_KEY" ]; then
+          echo "Found existing Jira issue: ${EXISTING_KEY} — adding comment"
+
+          COMMENT=$'Stale resources detected again on '"${TODAY}"$'.\n\n'
+          if [ "$AZURE_STALE" = "true" ]; then
+            COMMENT+=$'*Azure:* '"${AZURE_SUMMARY}"$'\n'
+          fi
+          if [ "$AWS_STALE" = "true" ]; then
+            COMMENT+=$'*AWS:* '"${AWS_SUMMARY}"$'\n'
+          fi
+          COMMENT+=$'\n*Workflow run:* '"${RUN_URL}"
+
+          COMMENT_JSON=$(jq -n --arg body "$COMMENT" '{"body": $body}')
+
+          HTTP_CODE=$(curl -s -w "%{http_code}" -o /dev/null \
+            -u "${JIRA_EMAIL}:${JIRA_API_TOKEN}" \
+            -X POST "https://redhat.atlassian.net/rest/api/2/issue/${EXISTING_KEY}/comment" \
+            -H "Content-Type: application/json" \
+            -d "$COMMENT_JSON")
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "Comment added to ${EXISTING_KEY}"
+          else
+            echo "::warning::Failed to add comment to ${EXISTING_KEY} (HTTP ${HTTP_CODE})"
+          fi
+        else
+          echo "No existing Jira issue found — creating new subtask"
+
+          ISSUE_JSON=$(jq -n \
+            --arg summary "[Stale Resources] Leaked cloud resources detected (${TODAY})" \
+            --arg description "$DESCRIPTION" \
+            '{
+              "fields": {
+                "project": {"key": "ARO"},
+                "parent": {"key": "ARO-24159"},
+                "issuetype": {"name": "Sub-task"},
+                "summary": $summary,
+                "description": $description,
+                "labels": ["CAPZ", "QE"],
+                "components": [{"id": "37592"}],
+                "security": {"id": "10034"},
+                "assignee": {"accountId": "5fabb5fdecdae600685b01d6"},
+                "customfield_10464": {"id": "10608"}
+              }
+            }')
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -u "${JIRA_EMAIL}:${JIRA_API_TOKEN}" \
+            -X POST "https://redhat.atlassian.net/rest/api/2/issue" \
+            -H "Content-Type: application/json" \
+            -d "$ISSUE_JSON")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [ "$HTTP_CODE" -eq 201 ]; then
+            ISSUE_KEY=$(echo "$BODY" | jq -r '.key')
+            echo "Created Jira issue: ${ISSUE_KEY}"
+            echo "https://redhat.atlassian.net/browse/${ISSUE_KEY}"
+          else
+            echo "::warning::Failed to create Jira issue (HTTP ${HTTP_CODE}): ${BODY}"
+          fi
+        fi
+
+    - name: Fail workflow
+      run: |
+        echo "::error::Stale cloud resources detected — see step summary for details"
+        exit 1
