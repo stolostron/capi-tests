@@ -960,31 +960,30 @@ func CheckTypedConditionsForPermanentFailure(conditions []ControlPlaneCondition)
 	return fmt.Errorf("permanent failure detected:\n  %s", strings.Join(failures, "\n  "))
 }
 
-func CheckK8sConditionsForPermanentFailure(conditions []K8sCondition) error {
+func k8sToControlPlaneCondition(c K8sCondition) ControlPlaneCondition {
+	return ControlPlaneCondition{
+		Type:    c.Type,
+		Status:  c.Status,
+		Reason:  c.Reason,
+		Message: c.Message,
+	}
+}
+
+func k8sToControlPlaneConditions(conditions []K8sCondition) []ControlPlaneCondition {
 	typed := make([]ControlPlaneCondition, len(conditions))
 	for i, c := range conditions {
-		typed[i] = ControlPlaneCondition{
-			Type:    c.Type,
-			Status:  c.Status,
-			Reason:  c.Reason,
-			Message: c.Message,
-		}
+		typed[i] = k8sToControlPlaneCondition(c)
 	}
-	return CheckTypedConditionsForPermanentFailure(typed)
+	return typed
+}
+
+func CheckK8sConditionsForPermanentFailure(conditions []K8sCondition) error {
+	return CheckTypedConditionsForPermanentFailure(k8sToControlPlaneConditions(conditions))
 }
 
 // FormatK8sConditions formats K8sCondition slices for display.
 func FormatK8sConditions(conditions []K8sCondition) string {
-	typed := make([]ControlPlaneCondition, len(conditions))
-	for i, c := range conditions {
-		typed[i] = ControlPlaneCondition{
-			Type:    c.Type,
-			Status:  c.Status,
-			Reason:  c.Reason,
-			Message: c.Message,
-		}
-	}
-	return formatConditionsList(typed)
+	return formatConditionsList(k8sToControlPlaneConditions(conditions))
 }
 
 // FormatNonTrueK8sConditions formats only K8sConditions that are not "True".
@@ -996,12 +995,7 @@ func FormatNonTrueK8sConditions(conditions []K8sCondition) string {
 	var nonTrue []ControlPlaneCondition
 	for _, c := range conditions {
 		if c.Status != "True" {
-			nonTrue = append(nonTrue, ControlPlaneCondition{
-				Type:    c.Type,
-				Status:  c.Status,
-				Reason:  c.Reason,
-				Message: c.Message,
-			})
+			nonTrue = append(nonTrue, k8sToControlPlaneCondition(c))
 		}
 	}
 	if len(nonTrue) == 0 {
@@ -1015,14 +1009,7 @@ func FormatNonTrueK8sConditions(conditions []K8sCondition) string {
 // and converts K8sCondition directly to ControlPlaneCondition for conditions.
 func GetInfrastructureResourceStatusFromK8sConditions(resourcesInterface []interface{}, conditions []K8sCondition) InfrastructureResourceStatus {
 	result := GetInfrastructureResourceStatusFromParsed(resourcesInterface, nil)
-	for _, c := range conditions {
-		result.Conditions = append(result.Conditions, ControlPlaneCondition{
-			Type:    c.Type,
-			Status:  c.Status,
-			Reason:  c.Reason,
-			Message: c.Message,
-		})
-	}
+	result.Conditions = append(result.Conditions, k8sToControlPlaneConditions(conditions)...)
 	return result
 }
 
