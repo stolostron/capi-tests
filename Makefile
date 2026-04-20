@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-my-resources check-stale help summary scheduled-review
+.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-my-resources check-stale help summary scheduled-review
 
 # Use bash for shell commands (required for PIPESTATUS in test-all target)
 SHELL := /bin/bash
@@ -103,7 +103,8 @@ help: ## Display this help message
 	@echo "  5. make _deploy-crs      # Deploy CRs and verify deployment"
 	@echo "  6. make _verify-workload-cluster  # Verify deployed workload cluster"
 	@echo "  7. make _delete-workload-cluster  # Delete workload cluster and verify deletion"
-	@echo "  8. make _validate-cleanup         # Validate cleanup operations (optional, standalone)"
+	@echo "  8. make _mce-teardown             # Revert MCE components to original state (MCE clusters only)"
+	@echo "  9. make _validate-cleanup         # Validate cleanup operations (optional, standalone)"
 	@echo ""
 	@echo "Quick start:"
 	@echo ""
@@ -272,6 +273,27 @@ _delete-workload-cluster: check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
+_mce-teardown: check-gotestsum
+	@mkdir -p $(RESULTS_DIR)
+	@echo "=== Running MCE Teardown Tests ==="
+	@echo "Results will be saved to: $(RESULTS_DIR)"
+	@echo ""
+	@EXIT_CODE=0; \
+	TEST_RESULTS_DIR=$(CURDIR)/$(RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-mce-teardown.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestTeardown -timeout 30m || EXIT_CODE=$$?; \
+	mkdir -p $(LATEST_RESULTS_DIR); \
+	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
+	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
+	echo ""; \
+	echo "Test results saved to: $(RESULTS_DIR)/junit-mce-teardown.xml"; \
+	echo "Latest results copied to: $(LATEST_RESULTS_DIR)/"; \
+	if [ $$EXIT_CODE -eq 0 ]; then \
+		echo "✅ MCE Teardown Tests completed"; \
+	else \
+		echo "❌ MCE Teardown Tests failed"; \
+	fi; \
+	echo ""; \
+	exit $$EXIT_CODE
+
 _validate-cleanup: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Cleanup Validation Tests ==="
@@ -373,6 +395,9 @@ _test-all-impl:
 		echo ""; \
 		exit 1 \
 	)
+	@# MCE teardown: revert MCE components to original state (best-effort, non-blocking)
+	@# This is a safety net for local runs; Prow CI runs this via the post step.
+	@$(MAKE) --no-print-directory _mce-teardown RESULTS_DIR=$(RESULTS_DIR) || true
 	@echo ""
 	@echo "======================================="
 	@echo "=== All Test Phases Completed Successfully ==="

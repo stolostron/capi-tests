@@ -2605,6 +2605,7 @@ type DeploymentState struct {
 	Environment              string            `json:"environment"`
 	TestRunID                string            `json:"test_run_id,omitempty"`
 	AzureResourceTags        map[string]string `json:"azure_resource_tags,omitempty"`
+	MCEOriginalStates        map[string]bool   `json:"mce_original_states,omitempty"`
 }
 
 // DeploymentStateFile is the path to the deployment state file.
@@ -2615,6 +2616,9 @@ const DeploymentStateFile = ".deployment-state.json"
 // This allows cleanup commands to know which Azure resources were actually created,
 // regardless of current environment variables or config defaults.
 func WriteDeploymentState(config *TestConfig) error {
+	// Preserve data saved by other phases (e.g., MCE original states from phase 03)
+	existing, _ := ReadDeploymentState()
+
 	state := DeploymentState{
 		ResourceGroup:            fmt.Sprintf("%s-resgroup", config.WorkloadClusterName),
 		ManagementClusterName:    config.ManagementClusterName,
@@ -2626,6 +2630,10 @@ func WriteDeploymentState(config *TestConfig) error {
 		Environment:              config.Environment,
 		TestRunID:                config.TestRunID,
 		AzureResourceTags:        config.AzureResourceTags,
+	}
+
+	if existing != nil && len(existing.MCEOriginalStates) > 0 {
+		state.MCEOriginalStates = existing.MCEOriginalStates
 	}
 
 	data, err := json.MarshalIndent(state, "", "  ")
@@ -2703,6 +2711,58 @@ func DeleteDeploymentState() error {
 	}
 	return nil
 }
+
+// CaptureMCEComponentStates queries the current enabled/disabled state of the given MCE components.
+// Returns a map of component name to enabled state (true = enabled, false = disabled).
+func CaptureMCEComponentStates(t *testing.T, kubeContext string, componentNames []string) (map[string]bool, error) {
+	t.Helper()
+
+	states := make(map[string]bool, len(componentNames))
+	for _, name := range componentNames {
+		status, err := GetMCEComponentStatus(t, kubeContext, name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get status for %s: %w", name, err)
+		}
+		states[name] = status.Enabled
+	}
+	return states, nil
+}
+
+// SaveMCEOriginalStates persists the original MCE component states to the deployment state file.
+// If the file already exists, it merges MCE states (existing component entries are not overwritten).
+// If the file does not exist, it creates a minimal state file with only MCE data.
+func SaveMCEOriginalStates(states map[string]bool) error {
+	existing, err := ReadDeploymentState()
+	if err != nil {
+		return fmt.Errorf("failed to read existing deployment state: %w", err)
+	}
+
+	if existing == nil {
+		existing = &DeploymentState{}
+	}
+
+	if existing.MCEOriginalStates == nil {
+		existing.MCEOriginalStates = make(map[string]bool)
+	}
+
+	for name, enabled := range states {
+		if _, alreadySaved := existing.MCEOriginalStates[name]; !alreadySaved {
+			existing.MCEOriginalStates[name] = enabled
+		}
+	}
+
+	data, err := json.MarshalIndent(existing, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal deployment state: %w", err)
+	}
+
+	if err := os.WriteFile(DeploymentStateFile, data, 0600); err != nil {
+		return fmt.Errorf("failed to write deployment state file: %w", err)
+	}
+
+	return nil
+}
+
 
 // ControllerLogSummary holds summarized log information for a controller.
 type ControllerLogSummary struct {
