@@ -2605,6 +2605,7 @@ type DeploymentState struct {
 	Environment              string            `json:"environment"`
 	TestRunID                string            `json:"test_run_id,omitempty"`
 	AzureResourceTags        map[string]string `json:"azure_resource_tags,omitempty"`
+	MCEOriginalStates        map[string]bool   `json:"mce_original_states,omitempty"`
 }
 
 // DeploymentStateFile is the path to the deployment state file.
@@ -2701,6 +2702,108 @@ func DeleteDeploymentState() error {
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to delete deployment state file: %w", err)
 	}
+	return nil
+}
+
+// CaptureMCEComponentStates queries the current enabled/disabled state of the given MCE components.
+// Returns a map of component name to enabled state (true = enabled, false = disabled).
+func CaptureMCEComponentStates(t *testing.T, kubeContext string, componentNames []string) (map[string]bool, error) {
+	t.Helper()
+
+	states := make(map[string]bool, len(componentNames))
+	for _, name := range componentNames {
+		status, err := GetMCEComponentStatus(t, kubeContext, name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get status for %s: %w", name, err)
+		}
+		states[name] = status.Enabled
+	}
+	return states, nil
+}
+
+// SaveMCEOriginalStates persists the original MCE component states to the deployment state file.
+// If the file already exists, it merges MCE states (existing component entries are not overwritten).
+// If the file does not exist, it creates a minimal state file with only MCE data.
+func SaveMCEOriginalStates(states map[string]bool) error {
+	existing, err := ReadDeploymentState()
+	if err != nil {
+		return fmt.Errorf("failed to read existing deployment state: %w", err)
+	}
+
+	if existing == nil {
+		existing = &DeploymentState{}
+	}
+
+	if existing.MCEOriginalStates == nil {
+		existing.MCEOriginalStates = make(map[string]bool)
+	}
+
+	for name, enabled := range states {
+		if _, alreadySaved := existing.MCEOriginalStates[name]; !alreadySaved {
+			existing.MCEOriginalStates[name] = enabled
+		}
+	}
+
+	data, err := json.MarshalIndent(existing, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal deployment state: %w", err)
+	}
+
+	if err := os.WriteFile(DeploymentStateFile, data, 0600); err != nil {
+		return fmt.Errorf("failed to write deployment state file: %w", err)
+	}
+
+	return nil
+}
+
+// RestoreMCEOriginalStates reads the saved MCE original states from the deployment state file
+// and reverts each component to its pre-test state.
+func RestoreMCEOriginalStates(t *testing.T, kubeContext string) error {
+	t.Helper()
+
+	state, err := ReadDeploymentState()
+	if err != nil {
+		return fmt.Errorf("failed to read deployment state: %w", err)
+	}
+
+	if state == nil || len(state.MCEOriginalStates) == 0 {
+		return fmt.Errorf("no MCE original states found in deployment state file")
+	}
+
+	var revertErrors []string
+	var revertedComponents []string
+
+	for component, originalEnabled := range state.MCEOriginalStates {
+		current, err := GetMCEComponentStatus(t, kubeContext, component)
+		if err != nil {
+			revertErrors = append(revertErrors, fmt.Sprintf("%s: failed to get current status: %v", component, err))
+			continue
+		}
+
+		if current.Enabled == originalEnabled {
+			continue
+		}
+
+		if err := SetMCEComponentState(t, kubeContext, component, originalEnabled); err != nil {
+			revertErrors = append(revertErrors, fmt.Sprintf("%s: failed to revert: %v", component, err))
+			continue
+		}
+
+		action := "disabled"
+		if originalEnabled {
+			action = "enabled"
+		}
+		revertedComponents = append(revertedComponents, fmt.Sprintf("%s → %s", component, action))
+	}
+
+	if len(revertedComponents) > 0 {
+		t.Logf("Reverted MCE components: %v", revertedComponents)
+	}
+
+	if len(revertErrors) > 0 {
+		return fmt.Errorf("failed to revert %d MCE component(s): %v", len(revertErrors), revertErrors)
+	}
+
 	return nil
 }
 

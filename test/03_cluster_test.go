@@ -91,6 +91,21 @@ func TestExternalCluster_01b_MCEBaselineStatus(t *testing.T) {
 		"Validate and configure MCE components baseline (HyperShift disabled, core components enabled)")
 
 	PrintToTTY("\n=== Checking MCE component baseline status ===\n")
+
+	// Capture original states before any modifications for teardown
+	baselineComponentNames := make([]string, len(ExpectedMCEComponents))
+	for i, c := range ExpectedMCEComponents {
+		baselineComponentNames[i] = c.Name
+	}
+	originalStates, err := CaptureMCEComponentStates(t, context, baselineComponentNames)
+	if err != nil {
+		t.Logf("Warning: failed to capture MCE original states: %v", err)
+	} else if err := SaveMCEOriginalStates(originalStates); err != nil {
+		t.Logf("Warning: failed to save MCE original states: %v", err)
+	} else {
+		PrintToTTY("📝 Saved original MCE component states for teardown\n")
+	}
+
 	PrintToTTY("%-35s %s\n", "COMPONENT", "STATUS")
 	PrintToTTY("%s\n", strings.Repeat("-", 50))
 
@@ -221,6 +236,17 @@ func TestExternalCluster_02_EnsureMCEComponents(t *testing.T) {
 			components = append(components, p.MCEComponentName)
 		}
 	}
+
+	// Capture original states before any modifications for teardown
+	originalStates, captureErr := CaptureMCEComponentStates(t, context, components)
+	if captureErr != nil {
+		t.Logf("Warning: failed to capture MCE original states: %v", captureErr)
+	} else if err := SaveMCEOriginalStates(originalStates); err != nil {
+		t.Logf("Warning: failed to save MCE original states: %v", err)
+	} else {
+		PrintToTTY("📝 Saved original MCE component states for teardown\n")
+	}
+
 	enabledCount := 0
 	needsEnablement := false
 
