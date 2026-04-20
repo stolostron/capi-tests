@@ -338,11 +338,18 @@ jobs:
         DESCRIPTION+="Use {{make clean-azure}} or {{./scripts/cleanup-azure-resources.sh}} for Azure cleanup."
 
         # Search for existing open stale-resources issue under ARO-24159
-        SEARCH_RESULT=$(curl -s -u "${JIRA_EMAIL}:${JIRA_API_TOKEN}" \
+        SEARCH_RESPONSE=$(curl -s -w "\n%{http_code}" -u "${JIRA_EMAIL}:${JIRA_API_TOKEN}" \
           -G "https://redhat.atlassian.net/rest/api/3/search/jql" \
           --data-urlencode "jql=parent = ARO-24159 AND summary ~ \"\\\"[Stale Resources]\\\"\" AND status != Closed" \
           --data-urlencode "fields=key,summary,status" \
           -H "Content-Type: application/json" 2>/dev/null)
+
+        SEARCH_HTTP_CODE=$(echo "$SEARCH_RESPONSE" | tail -1)
+        SEARCH_RESULT=$(echo "$SEARCH_RESPONSE" | sed '$d')
+        if [ "$SEARCH_HTTP_CODE" -lt 200 ] || [ "$SEARCH_HTTP_CODE" -ge 300 ]; then
+          echo "::warning::Jira search failed (HTTP ${SEARCH_HTTP_CODE}); skipping create/update to avoid duplicates"
+          exit 0
+        fi
 
         EXISTING_KEY=$(echo "$SEARCH_RESULT" | jq -r '.issues[0].key // empty' 2>/dev/null)
 
