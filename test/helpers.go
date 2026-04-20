@@ -2729,6 +2729,8 @@ func CheckPodsForImagePullErrors(t *testing.T, kubeContext, namespace string) er
 		"get", "pods",
 		"-o", "jsonpath={range .items[*]}{.metadata.name}{\"\\t\"}{range .status.containerStatuses[*]}{.state.waiting.reason}{\" \"}{end}{range .status.initContainerStatuses[*]}{.state.waiting.reason}{\" \"}{end}{\"\\n\"}{end}")
 	if err != nil {
+		//nolint:nilerr // Best-effort check: don't fail readiness loops on transient kubectl errors.
+		t.Logf("Warning: skipping image pull error check in namespace %s: %v", namespace, err)
 		return nil
 	}
 
