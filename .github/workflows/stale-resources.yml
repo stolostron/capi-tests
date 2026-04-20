@@ -80,23 +80,24 @@ jobs:
       if: steps.azure-creds.outputs.configured == 'true'
       run: |
         set +e
-        RESULT=$(./scripts/check-stale-resources.sh --azure --json --max-age "$MAX_AGE_HOURS" 2>&1)
+        RESULT=$(./scripts/check-stale-resources.sh --azure --json --max-age "$MAX_AGE_HOURS" 2>azure-check.stderr)
         EXIT_CODE=$?
         set -e
 
         if [ "$EXIT_CODE" -eq 2 ]; then
           echo "::error::Script error during Azure resource check"
+          cat azure-check.stderr >&2 || true
           echo "stale_found=false" >> "$GITHUB_OUTPUT"
           exit 1
         fi
 
-        # Extract JSON from output (script may emit non-JSON lines to stderr)
-        JSON_RESULT=$(echo "$RESULT" | grep -E '^\{' | head -1)
-        if [ -z "$JSON_RESULT" ]; then
-          echo "::warning::No JSON output from check script"
+        if ! echo "$RESULT" | jq -e . >/dev/null 2>&1; then
+          echo "::error::Invalid JSON output from check script"
+          cat azure-check.stderr >&2 || true
           echo "stale_found=false" >> "$GITHUB_OUTPUT"
-          exit 0
+          exit 1
         fi
+        JSON_RESULT="$RESULT"
 
         STALE=$(echo "$JSON_RESULT" | jq -r '.stale_found')
         SUMMARY=$(echo "$JSON_RESULT" | jq -r '.summary')
@@ -167,22 +168,24 @@ jobs:
         AWS_DEFAULT_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
       run: |
         set +e
-        RESULT=$(./scripts/check-stale-resources.sh --aws --json --max-age "$MAX_AGE_HOURS" 2>&1)
+        RESULT=$(./scripts/check-stale-resources.sh --aws --json --max-age "$MAX_AGE_HOURS" 2>aws-check.stderr)
         EXIT_CODE=$?
         set -e
 
         if [ "$EXIT_CODE" -eq 2 ]; then
           echo "::error::Script error during AWS resource check"
+          cat aws-check.stderr >&2 || true
           echo "stale_found=false" >> "$GITHUB_OUTPUT"
           exit 1
         fi
 
-        JSON_RESULT=$(echo "$RESULT" | grep -E '^\{' | head -1)
-        if [ -z "$JSON_RESULT" ]; then
-          echo "::warning::No JSON output from check script"
+        if ! echo "$RESULT" | jq -e . >/dev/null 2>&1; then
+          echo "::error::Invalid JSON output from check script"
+          cat aws-check.stderr >&2 || true
           echo "stale_found=false" >> "$GITHUB_OUTPUT"
-          exit 0
+          exit 1
         fi
+        JSON_RESULT="$RESULT"
 
         STALE=$(echo "$JSON_RESULT" | jq -r '.stale_found')
         SUMMARY=$(echo "$JSON_RESULT" | jq -r '.summary')
