@@ -61,8 +61,14 @@ jobs:
 
         echo "configured=$CONFIGURED" >> "$GITHUB_OUTPUT"
         if [ "$CONFIGURED" = "false" ]; then
-          echo "::error::Azure credentials not configured — skipping Azure check"
-          exit 1
+          echo "::notice::Azure credentials not configured — skipping Azure check"
+          echo "stale_found=false" >> "$GITHUB_OUTPUT"
+          {
+            echo 'summary<<SUMMARY_EOF'
+            echo "Azure check skipped: credentials not configured"
+            echo 'SUMMARY_EOF'
+          } >> "$GITHUB_OUTPUT"
+          exit 0
         fi
 
     - name: Azure CLI login
@@ -157,8 +163,14 @@ jobs:
 
         echo "configured=$CONFIGURED" >> "$GITHUB_OUTPUT"
         if [ "$CONFIGURED" = "false" ]; then
-          echo "::error::AWS credentials not configured — skipping AWS check"
-          exit 1
+          echo "::notice::AWS credentials not configured — skipping AWS check"
+          echo "stale_found=false" >> "$GITHUB_OUTPUT"
+          {
+            echo 'summary<<SUMMARY_EOF'
+            echo "AWS check skipped: credentials not configured"
+            echo 'SUMMARY_EOF'
+          } >> "$GITHUB_OUTPUT"
+          exit 0
         fi
 
     - name: Check for stale AWS resources
