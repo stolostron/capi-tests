@@ -54,11 +54,15 @@ func TestMonitorCluster(t *testing.T) {
 		if len(data.MachinePools) > 0 {
 			t.Logf("Machine pools: %d", len(data.MachinePools))
 			for _, mp := range data.MachinePools {
+				infraKind := "unknown"
+				if mp.Infrastructure != nil {
+					infraKind = mp.Infrastructure.Kind
+				}
 				t.Logf("  - %s: %d/%d replicas ready (kind: %s)",
 					mp.Name,
 					mp.ReadyReplicas,
 					mp.Replicas,
-					mp.Infrastructure.Kind)
+					infraKind)
 			}
 		}
 
