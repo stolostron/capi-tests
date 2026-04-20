@@ -973,6 +973,59 @@ func CheckK8sConditionsForPermanentFailure(conditions []K8sCondition) error {
 	return CheckTypedConditionsForPermanentFailure(typed)
 }
 
+// FormatK8sConditions formats K8sCondition slices for display.
+func FormatK8sConditions(conditions []K8sCondition) string {
+	typed := make([]ControlPlaneCondition, len(conditions))
+	for i, c := range conditions {
+		typed[i] = ControlPlaneCondition{
+			Type:    c.Type,
+			Status:  c.Status,
+			Reason:  c.Reason,
+			Message: c.Message,
+		}
+	}
+	return formatConditionsList(typed)
+}
+
+// FormatNonTrueK8sConditions formats only K8sConditions that are not "True".
+// Returns empty string if all conditions are "True" or if there are no conditions.
+func FormatNonTrueK8sConditions(conditions []K8sCondition) string {
+	if len(conditions) == 0 {
+		return ""
+	}
+	var nonTrue []ControlPlaneCondition
+	for _, c := range conditions {
+		if c.Status != "True" {
+			nonTrue = append(nonTrue, ControlPlaneCondition{
+				Type:    c.Type,
+				Status:  c.Status,
+				Reason:  c.Reason,
+				Message: c.Message,
+			})
+		}
+	}
+	if len(nonTrue) == 0 {
+		return ""
+	}
+	return formatConditionsList(nonTrue)
+}
+
+// GetInfrastructureResourceStatusFromK8sConditions converts infrastructure data from ClusterMonitorData
+// into InfrastructureResourceStatus. Uses GetInfrastructureResourceStatusFromParsed for resource parsing
+// and converts K8sCondition directly to ControlPlaneCondition for conditions.
+func GetInfrastructureResourceStatusFromK8sConditions(resourcesInterface []interface{}, conditions []K8sCondition) InfrastructureResourceStatus {
+	result := GetInfrastructureResourceStatusFromParsed(resourcesInterface, nil)
+	for _, c := range conditions {
+		result.Conditions = append(result.Conditions, ControlPlaneCondition{
+			Type:    c.Type,
+			Status:  c.Status,
+			Reason:  c.Reason,
+			Message: c.Message,
+		})
+	}
+	return result
+}
+
 // FormatControlPlaneConditions formats control plane conditions for display (works for ARO, ROSA, etc.).
 // It parses the JSON output from kubectl and returns a formatted string showing
 // the status of each condition with visual indicators.
