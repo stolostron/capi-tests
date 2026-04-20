@@ -129,6 +129,13 @@ check_azure_stale() {
         return 0
     fi
 
+    if [[ -n "${AZURE_SUBSCRIPTION_ID:-}" ]]; then
+        az account set --subscription "$AZURE_SUBSCRIPTION_ID" >/dev/null 2>&1 || {
+            print_error "Failed to select Azure subscription '${AZURE_SUBSCRIPTION_ID}'"
+            exit 2
+        }
+    fi
+
     if ! az extension show --name resource-graph >/dev/null 2>&1; then
         print_info "Installing Azure Resource Graph extension..."
         az extension add --name resource-graph --yes 2>/dev/null
