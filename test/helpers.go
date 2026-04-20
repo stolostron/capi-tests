@@ -2616,6 +2616,9 @@ const DeploymentStateFile = ".deployment-state.json"
 // This allows cleanup commands to know which Azure resources were actually created,
 // regardless of current environment variables or config defaults.
 func WriteDeploymentState(config *TestConfig) error {
+	// Preserve data saved by other phases (e.g., MCE original states from phase 03)
+	existing, _ := ReadDeploymentState()
+
 	state := DeploymentState{
 		ResourceGroup:            fmt.Sprintf("%s-resgroup", config.WorkloadClusterName),
 		ManagementClusterName:    config.ManagementClusterName,
@@ -2627,6 +2630,10 @@ func WriteDeploymentState(config *TestConfig) error {
 		Environment:              config.Environment,
 		TestRunID:                config.TestRunID,
 		AzureResourceTags:        config.AzureResourceTags,
+	}
+
+	if existing != nil && len(existing.MCEOriginalStates) > 0 {
+		state.MCEOriginalStates = existing.MCEOriginalStates
 	}
 
 	data, err := json.MarshalIndent(state, "", "  ")
@@ -2756,56 +2763,6 @@ func SaveMCEOriginalStates(states map[string]bool) error {
 	return nil
 }
 
-// RestoreMCEOriginalStates reads the saved MCE original states from the deployment state file
-// and reverts each component to its pre-test state.
-func RestoreMCEOriginalStates(t *testing.T, kubeContext string) error {
-	t.Helper()
-
-	state, err := ReadDeploymentState()
-	if err != nil {
-		return fmt.Errorf("failed to read deployment state: %w", err)
-	}
-
-	if state == nil || len(state.MCEOriginalStates) == 0 {
-		return fmt.Errorf("no MCE original states found in deployment state file")
-	}
-
-	var revertErrors []string
-	var revertedComponents []string
-
-	for component, originalEnabled := range state.MCEOriginalStates {
-		current, err := GetMCEComponentStatus(t, kubeContext, component)
-		if err != nil {
-			revertErrors = append(revertErrors, fmt.Sprintf("%s: failed to get current status: %v", component, err))
-			continue
-		}
-
-		if current.Enabled == originalEnabled {
-			continue
-		}
-
-		if err := SetMCEComponentState(t, kubeContext, component, originalEnabled); err != nil {
-			revertErrors = append(revertErrors, fmt.Sprintf("%s: failed to revert: %v", component, err))
-			continue
-		}
-
-		action := "disabled"
-		if originalEnabled {
-			action = "enabled"
-		}
-		revertedComponents = append(revertedComponents, fmt.Sprintf("%s → %s", component, action))
-	}
-
-	if len(revertedComponents) > 0 {
-		t.Logf("Reverted MCE components: %v", revertedComponents)
-	}
-
-	if len(revertErrors) > 0 {
-		return fmt.Errorf("failed to revert %d MCE component(s): %v", len(revertErrors), revertErrors)
-	}
-
-	return nil
-}
 
 // ControllerLogSummary holds summarized log information for a controller.
 type ControllerLogSummary struct {
