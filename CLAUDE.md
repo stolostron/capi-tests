@@ -404,6 +404,7 @@ This is validated during Check Dependencies (phase 1) to prevent late deployment
 
 ### Test Behavior
 - `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `45m`, format: Go duration like `1h`, `45m`)
+- `DEPLOYMENT_STALL_TIMEOUT` - Stall detection timeout: if no progress (control plane state, machine pool replicas, infrastructure resources) for this duration, the test fails early instead of waiting for the full deployment timeout (default: `30m`, set to `0` to disable)
 
 ### MCE Component Management
 - `MCE_AUTO_ENABLE` - Auto-enable MCE CAPI/CAPZ components if not found on external cluster (default: `true` when `USE_KUBECONFIG` is set)
