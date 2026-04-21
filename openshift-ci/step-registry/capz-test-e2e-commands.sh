@@ -4,32 +4,7 @@ set -o nounset
 set -o pipefail
 set -o xtrace
 
-# Source Azure credentials from the CI cluster profile
-# Suppress xtrace to prevent credential values from appearing in build logs
-{ set +o xtrace; } 2>/dev/null
-AZURE_CLIENT_ID=$(jq -r .clientId "${CLUSTER_PROFILE_DIR}/osServicePrincipal.json")
-AZURE_CLIENT_SECRET=$(jq -r .clientSecret "${CLUSTER_PROFILE_DIR}/osServicePrincipal.json")
-AZURE_TENANT_ID=$(jq -r .tenantId "${CLUSTER_PROFILE_DIR}/osServicePrincipal.json")
-AZURE_SUBSCRIPTION_ID=$(jq -r .subscriptionId "${CLUSTER_PROFILE_DIR}/osServicePrincipal.json")
-export AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID
-echo "[capz-test-e2e] Azure credentials loaded from cluster profile"
-set -o xtrace
-
-# Use the CI-provisioned cluster via USE_KUBECONFIG
-# This skips Kind cluster creation (Phase 03) and uses the external cluster
-export USE_KUBECONFIG="${SHARED_DIR}/kubeconfig"
-
-# Override USE_K8S=false to prevent auto-switch to MCE namespaces.
-# Controllers installed via deploy-charts.sh use standard namespaces
-# (capi-system, capz-system), not multicluster-engine.
-export USE_K8S=false
-
-# CI-specific naming to avoid collisions
-export CAPI_USER=prow
-export DEPLOYMENT_ENV=ci
-
-# Point to the cloned cluster-api-installer repo from the install step
-export ARO_REPO_DIR="/tmp/cluster-api-installer-aro"
+source openshift-ci/capz-test-env.sh
 
 # Install gotestsum for JUnit XML output
 GOFLAGS='' go install gotest.tools/gotestsum@v1.13.0

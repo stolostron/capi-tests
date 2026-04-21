@@ -41,6 +41,10 @@ kubeconfig
 azure.json
 service-principal.json
 
+# Development artifacts (not committed)
+PROW_SESSION_NOTES.md
+project-dashboard.html
+
 # Local Claude instructions and commands (not committed)
 CLAUDE.local.md
 .claude/commands/sync-jira.md

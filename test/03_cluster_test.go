@@ -486,7 +486,7 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 		// Also save to artifact file for easy access.
 		if resultsDir != "" {
 			logPath := filepath.Join(resultsDir, "deploy-charts.log")
-			if writeErr := os.WriteFile(logPath, []byte(output), 0644); writeErr != nil { // #nosec G306 -- CI artifact log, operational output only
+			if writeErr := os.WriteFile(logPath, []byte(output), 0600); writeErr != nil {
 				t.Logf("Warning: failed to write deploy-charts log: %v", writeErr)
 			}
 		}
