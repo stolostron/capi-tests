@@ -32,7 +32,8 @@ usage() {
 # Resolve input to a local XML file
 resolve_input() {
     local input="$1"
-    local tmp_xml="/tmp/junit_operator_prow.xml"
+    local tmp_xml
+    tmp_xml="$(mktemp /tmp/junit_operator_prow.XXXXXX.xml)"
 
     if [[ -f "$input" ]]; then
         echo "$input"
@@ -121,11 +122,13 @@ parse_junit() {
         fi
         first=false
 
-        # Escape message for JSON
+        # Escape name and message for JSON
+        local escaped_name
+        escaped_name=$(printf '%s' "$step_name" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g' | tr '\n' ' ')
         local escaped_msg
         escaped_msg=$(echo "$msg" | head -20 | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g' | tr '\n' ' ' | cut -c1-500)
 
-        steps_json+="{\"name\":\"${step_name}\",\"time\":${time_val},\"failed\":${failed},\"message\":\"${escaped_msg}\"}"
+        steps_json+="{\"name\":\"${escaped_name}\",\"time\":${time_val},\"failed\":${failed},\"message\":\"${escaped_msg}\"}"
     done
 
     steps_json+="]"
