@@ -34,30 +34,36 @@ if [[ -d "${CAPZ_CREDS_DIR}" && -f "${CAPZ_CREDS_DIR}/AZURE_CLIENT_ID" ]]; then
   set -o xtrace
 fi
 
-export INFRA_PROVIDER=aro
-export CAPI_USER=prow
-export DEPLOYMENT_ENV=ci
+: "${INFRA_PROVIDER:=aro}"
+: "${CAPI_USER:=prow}"
+: "${DEPLOYMENT_ENV:=ci}"
+export INFRA_PROVIDER CAPI_USER DEPLOYMENT_ENV
 # ARO HCP is only available in a limited set of regions; LEASED_RESOURCE is
 # chosen by Prow from the azure4 pool and may not be one of them.  Hardcode
 # to uksouth so the workload cluster always lands in a supported region.
 # The IPI management cluster still uses LEASED_RESOURCE via ipi-azure-pre.
-export REGION="uksouth"
-export OPERATORS_UAMIS_SUFFIX_FILE="/tmp/operators-uamis-suffix.txt"
-export ARO_REPO_URL="https://github.com/marek-veber/cluster-api-installer.git"
-export ARO_REPO_BRANCH="capi-tests"
-export ARO_REPO_DIR="/tmp/cluster-api-installer-aro"
+: "${REGION:=uksouth}"
+export REGION
+: "${OPERATORS_UAMIS_SUFFIX_FILE:=/tmp/operators-uamis-suffix.txt}"
+export OPERATORS_UAMIS_SUFFIX_FILE
+: "${ARO_REPO_URL:=https://github.com/marek-veber/cluster-api-installer.git}"
+: "${ARO_REPO_BRANCH:=capi-tests}"
+: "${ARO_REPO_DIR:=/tmp/cluster-api-installer-aro}"
+export ARO_REPO_URL ARO_REPO_BRANCH ARO_REPO_DIR
 
 # Use the IPI-provisioned cluster kubeconfig (when available).
-if [[ -n "${SHARED_DIR:-}" ]]; then
+if [[ -n "${SHARED_DIR:-}" && -z "${USE_KUBECONFIG:-}" ]]; then
   export USE_KUBECONFIG="${SHARED_DIR}/kubeconfig"
 fi
 
 # Controllers are installed via deploy-charts.sh into standard namespaces
 # (capi-system, capz-system), not MCE's multicluster-engine namespace.
-export USE_K8S=false
+: "${USE_K8S:=false}"
+export USE_K8S
 
 # ARO HCP provisioning can take 60+ minutes in CI; increase from default 60m.
-export DEPLOYMENT_TIMEOUT=90m
+: "${DEPLOYMENT_TIMEOUT:=90m}"
+export DEPLOYMENT_TIMEOUT
 
 # Randomize NAME_PREFIX per run to avoid Azure Key Vault name collisions.
 # KV names are globally unique with mandatory soft-delete — reusing a static
