@@ -175,7 +175,7 @@ See `docs/INTEGRATION.md` for detailed integration patterns.
 - `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests-cluster` for ARO, `capa-tests-cluster` for ROSA)
 - `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation (default: `${CAPI_USER}-${DEPLOYMENT_ENV}`). The Azure resource group is named `${WORKLOAD_CLUSTER_NAME}-resgroup`.
 - `OCP_VERSION` - OpenShift version (default: `4.20`)
-- `OCP_VERSION_MP` - Full OpenShift version for MachinePool workers (default: `4.20.17`)
+- `OCP_VERSION_MP` - Full `x.y.z` OpenShift version for MachinePool workers (default: `4.20.17`)
 - `REGION` - Azure region (default: `uksouth`)
 - `AZURE_SUBSCRIPTION_NAME` - Azure subscription ID (required for deployment)
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`)
