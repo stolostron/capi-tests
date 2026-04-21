@@ -25,8 +25,19 @@ echo "============================================="
 # Copy generated YAMLs to SHARED_DIR so they persist for the deploy-crs step.
 # Each Prow step runs in a separate container; /tmp is not shared between them.
 OUTPUT_DIR="${ARO_REPO_DIR}/${WORKLOAD_CLUSTER_NAME:-capz-tests}-${DEPLOYMENT_ENV}"
-if [[ -d "${OUTPUT_DIR}" ]]; then
-  for f in "${OUTPUT_DIR}"/*; do
+if [[ ! -d "${OUTPUT_DIR}" ]]; then
+  echo "Expected generated manifests in ${OUTPUT_DIR}, but the directory was not created" >&2
+  exit 1
+fi
+
+shopt -s nullglob
+generated_files=("${OUTPUT_DIR}"/*)
+if [[ ${#generated_files[@]} -eq 0 ]]; then
+  echo "Generated manifest directory ${OUTPUT_DIR} is empty" >&2
+  exit 1
+fi
+
+for f in "${generated_files[@]}"; do
     basename_f="$(basename "${f}")"
     # Always copy to SHARED_DIR (raw, needed for deploy-crs step)
     cp "${f}" "${SHARED_DIR}/generated-${basename_f}"
@@ -40,10 +51,9 @@ if [[ -d "${OUTPUT_DIR}" ]]; then
         cp "${f}" "${ARTIFACT_DIR}/"
         ;;
     esac
-  done
-  echo "Copied generated YAMLs to SHARED_DIR and ARTIFACT_DIR (credentials redacted)"
-  ls -la "${SHARED_DIR}"/generated-*
-fi
+done
+echo "Copied generated YAMLs to SHARED_DIR and ARTIFACT_DIR (credentials redacted)"
+ls -la "${SHARED_DIR}"/generated-*
 
 # Copy JUnit XMLs to SHARED_DIR for cross-step summary aggregation
 if compgen -G "${ARTIFACT_DIR}/junit-*.xml" > /dev/null; then cp "${ARTIFACT_DIR}"/junit-*.xml "${SHARED_DIR}/"; fi
