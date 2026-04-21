@@ -2547,6 +2547,7 @@ func FormatComponentVersions(versions []ComponentVersion, config *TestConfig) st
 		}
 		fmt.Fprintf(&result, "  Resource Group:     %s-resgroup\n", config.WorkloadClusterName)
 		fmt.Fprintf(&result, "  OpenShift Version:  %s\n", config.OCPVersion)
+		fmt.Fprintf(&result, "  MachinePool Version: %s\n", config.OCPVersionMP)
 	}
 
 	// Used repositories

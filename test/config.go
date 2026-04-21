@@ -414,6 +414,7 @@ type TestConfig struct {
 	ClusterNamePrefix        string // Used as CS_CLUSTER_NAME for YAML generation
 	NamePrefix               string // NAME_PREFIX used for Azure resource naming (Key Vault, node pools); passed to YAML generation
 	OCPVersion               string
+	OCPVersionMP             string // Full x.y.z OpenShift version for MachinePool workers (from OCP_VERSION_MP env var)
 	Region                   string
 	AzureSubscriptionName    string // Azure subscription name (from AZURE_SUBSCRIPTION_NAME env var)
 	Environment              string
@@ -656,7 +657,8 @@ func NewTestConfig() *TestConfig {
 		WorkloadClusterName:      GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", defaultWorkloadCluster),
 		ClusterNamePrefix:        prefix,
 		NamePrefix:               GetEnvOrDefault("NAME_PREFIX", ""),
-		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.19"),
+		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.20"),
+		OCPVersionMP:             GetEnvOrDefault("OCP_VERSION_MP", "4.20.17"),
 		Region:                   GetEnvOrDefault(regionEnvVar, defaultRegion),
 		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),
 		Environment:              environment,

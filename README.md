@@ -114,7 +114,8 @@ When using `INFRA_PROVIDER=rosa`, the following credentials are required:
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests` for ARO, `capa-tests` for ROSA). Keep short due to cloud provider length limits
 - `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation and Azure resource naming. If not set, auto-generates a unique value: `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c`) to enable parallel test runs. The Azure resource group is named `${WORKLOAD_CLUSTER_NAME}-resgroup`. Max 12 characters (ExternalAuth ID constraint).
-- `OCP_VERSION` - OpenShift version (default: `4.19`)
+- `OCP_VERSION` - OpenShift version (default: `4.20`)
+- `OCP_VERSION_MP` - Full OpenShift version for MachinePool workers (default: `4.20.17`)
 - `REGION` - Azure region (default: `uksouth`)
 - `AZURE_SUBSCRIPTION_NAME` - Azure subscription ID
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`). Used in Azure resource tags and domain prefix validation.
