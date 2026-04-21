@@ -91,27 +91,36 @@ WORKLOAD_CLUSTER_NAMESPACE="${WORKLOAD_CLUSTER_NAMESPACE:-}"
 PROPS_FILE=$(mktemp)
 trap 'rm -f "$PROPS_FILE"' EXIT
 
+xml_escape() {
+    printf '%s' "$1" | sed \
+        -e 's/&/\&amp;/g' \
+        -e 's/"/\&quot;/g' \
+        -e "s/'/\&apos;/g" \
+        -e 's/</\&lt;/g' \
+        -e 's/>/\&gt;/g'
+}
+
 write_properties_file() {
     local indent="$1"
     local out="$2"
 
-    echo "${indent}<property name=\"ci.infra_provider\" value=\"${INFRA_PROVIDER}\"/>" > "$out"
-    echo "${indent}<property name=\"ci.deployment_env\" value=\"${DEPLOYMENT_ENV}\"/>" >> "$out"
-    echo "${indent}<property name=\"ci.region\" value=\"${REGION}\"/>" >> "$out"
-    echo "${indent}<property name=\"ci.capi_user\" value=\"${CAPI_USER}\"/>" >> "$out"
-    echo "${indent}<property name=\"ci.management_cluster\" value=\"${MANAGEMENT_CLUSTER_NAME}\"/>" >> "$out"
+    echo "${indent}<property name=\"ci.infra_provider\" value=\"$(xml_escape "${INFRA_PROVIDER}")\"/>" > "$out"
+    echo "${indent}<property name=\"ci.deployment_env\" value=\"$(xml_escape "${DEPLOYMENT_ENV}")\"/>" >> "$out"
+    echo "${indent}<property name=\"ci.region\" value=\"$(xml_escape "${REGION}")\"/>" >> "$out"
+    echo "${indent}<property name=\"ci.capi_user\" value=\"$(xml_escape "${CAPI_USER}")\"/>" >> "$out"
+    echo "${indent}<property name=\"ci.management_cluster\" value=\"$(xml_escape "${MANAGEMENT_CLUSTER_NAME}")\"/>" >> "$out"
 
     if [[ -n "$WORKLOAD_CLUSTER_NAMESPACE" ]]; then
-        echo "${indent}<property name=\"ci.workload_cluster_namespace\" value=\"${WORKLOAD_CLUSTER_NAMESPACE}\"/>" >> "$out"
+        echo "${indent}<property name=\"ci.workload_cluster_namespace\" value=\"$(xml_escape "${WORKLOAD_CLUSTER_NAMESPACE}")\"/>" >> "$out"
     fi
     if [[ -n "$OCP_VERSION" ]]; then
-        echo "${indent}<property name=\"ci.ocp_version\" value=\"${OCP_VERSION}\"/>" >> "$out"
+        echo "${indent}<property name=\"ci.ocp_version\" value=\"$(xml_escape "${OCP_VERSION}")\"/>" >> "$out"
     fi
     if [[ -n "$BUILD_ID" ]]; then
-        echo "${indent}<property name=\"ci.build_id\" value=\"${BUILD_ID}\"/>" >> "$out"
+        echo "${indent}<property name=\"ci.build_id\" value=\"$(xml_escape "${BUILD_ID}")\"/>" >> "$out"
     fi
     if [[ -n "$JOB_NAME" ]]; then
-        echo "${indent}<property name=\"ci.job_name\" value=\"${JOB_NAME}\"/>" >> "$out"
+        echo "${indent}<property name=\"ci.job_name\" value=\"$(xml_escape "${JOB_NAME}")\"/>" >> "$out"
     fi
 }
 

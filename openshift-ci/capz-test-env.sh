@@ -76,7 +76,7 @@ NAME_PREFIX_FILE="${SHARED_DIR:-/tmp}/name-prefix"
 if [[ -f "$NAME_PREFIX_FILE" ]]; then
   export NAME_PREFIX=$(cat "$NAME_PREFIX_FILE")
 else
-  export NAME_PREFIX="capz-$(openssl rand -hex 2)"
+  export NAME_PREFIX="capz-$(openssl rand -hex 3)"
   echo "$NAME_PREFIX" > "$NAME_PREFIX_FILE"
 fi
 

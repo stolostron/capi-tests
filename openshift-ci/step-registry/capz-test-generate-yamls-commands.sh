@@ -19,7 +19,7 @@ script -e -q -c "make _generate-yamls RESULTS_DIR=\"${ARTIFACT_DIR}\"" /dev/null
 
 # Diagnostic: show ARO_REPO_DIR contents after generation
 echo "=== ARO_REPO_DIR contents ==="
-ls -la "${ARO_REPO_DIR}/" | head -20
+ls -la "${ARO_REPO_DIR}/" | head -20 || true
 echo "============================================="
 
 # Copy generated YAMLs to SHARED_DIR so they persist for the deploy-crs step.

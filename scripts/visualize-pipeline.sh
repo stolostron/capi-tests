@@ -10,7 +10,6 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_FILE="${OUTPUT_FILE:-/tmp/prow-pipeline.html}"
 
 # Default PR context for build ID lookups
