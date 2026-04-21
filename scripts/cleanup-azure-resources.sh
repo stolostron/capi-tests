@@ -677,7 +677,7 @@ find_soft_deleted_vaults() {
     if [[ $? -ne 0 ]]; then
         print_error "Failed to list soft-deleted Key Vaults with prefix '${prefix}'" >&2
         echo "[]"
-        return
+        return 1
     fi
     echo "$vaults_json"
 }
@@ -925,6 +925,14 @@ main() {
         if [[ "$active_count" -gt 0 ]]; then
             found_any=true
             print_warning "Found ${active_count} active Key Vault(s) — deleting before RG removal..."
+            if [[ "$DRY_RUN" != "true" && "$FORCE" != "true" ]]; then
+                read -p "Delete ${active_count} active Key Vault(s) before RG removal? [y/N] " -n 1 -r
+                echo ""
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    print_info "Key Vault deletion cancelled"
+                    return 0
+                fi
+            fi
             while IFS='|' read -r name _location; do
                 [[ -z "$name" ]] && continue
                 if [[ "$DRY_RUN" == "true" ]]; then
@@ -945,9 +953,9 @@ main() {
 
     echo ""
     local vaults_json
-    vaults_json=$(find_soft_deleted_vaults "$PREFIX")
-
-    if display_soft_deleted_vaults "$vaults_json"; then
+    if ! vaults_json=$(find_soft_deleted_vaults "$PREFIX"); then
+        print_warning "Failed to query soft-deleted Key Vaults — skipping purge"
+    elif display_soft_deleted_vaults "$vaults_json"; then
         found_any=true
         purge_soft_deleted_vaults "$vaults_json"
     fi
