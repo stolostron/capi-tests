@@ -130,6 +130,7 @@ PHASE_ORDER=(
     "junit-verify"
     "junit-delete"
     "junit-cleanup"
+    "junit-mce-teardown"
 )
 
 # ============================================================================
