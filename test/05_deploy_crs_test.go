@@ -9,73 +9,6 @@ import (
 	"time"
 )
 
-// ClusterMonitorStatus represents the JSON output from monitor-cluster-json.sh
-type ClusterMonitorStatus struct {
-	Metadata struct {
-		Timestamp   string `json:"timestamp"`
-		Namespace   string `json:"namespace"`
-		ClusterName string `json:"clusterName"`
-	} `json:"metadata"`
-	Cluster struct {
-		Name                string        `json:"name"`
-		Namespace           string        `json:"namespace"`
-		Phase               string        `json:"phase"`
-		InfrastructureReady interface{}   `json:"infrastructureReady"` // can be bool or null
-		ControlPlaneReady   interface{}   `json:"controlPlaneReady"`   // can be bool or null
-		Conditions          []interface{} `json:"conditions"`
-	} `json:"cluster"`
-	Infrastructure struct {
-		Kind       string        `json:"kind"`
-		Name       string        `json:"name"`
-		Ready      interface{}   `json:"ready"` // can be bool or null
-		Conditions []interface{} `json:"conditions"`
-		Resources  []interface{} `json:"resources"`
-	} `json:"infrastructure"`
-	ControlPlane struct {
-		Kind          string        `json:"kind"`
-		Name          string        `json:"name"`
-		Ready         interface{}   `json:"ready"` // can be bool or null
-		Replicas      int           `json:"replicas"`
-		ReadyReplicas int           `json:"readyReplicas"`
-		State         *string       `json:"state"` // Control plane state (validating, installing, etc.)
-		Conditions    []interface{} `json:"conditions"`
-		Resources     []interface{} `json:"resources"`
-	} `json:"controlPlane"`
-	MachinePools []struct {
-		Name              string        `json:"name"`
-		Replicas          int           `json:"replicas"`
-		ReadyReplicas     int           `json:"readyReplicas"`
-		AvailableReplicas int           `json:"availableReplicas"`
-		Conditions        []interface{} `json:"conditions"`
-		Infrastructure    *struct {
-			Kind              string        `json:"kind"`
-			Name              string        `json:"name"`
-			Ready             interface{}   `json:"ready"` // can be bool or null
-			Replicas          int           `json:"replicas"`
-			ProvisioningState string        `json:"provisioningState"`
-			ProviderIDList    []string      `json:"providerIDList"`
-			ProviderIDCount   int           `json:"providerIDCount"`
-			Conditions        []interface{} `json:"conditions"`
-			Resources         []interface{} `json:"resources"`
-		} `json:"infrastructure"`
-	} `json:"machinePools"`
-	Nodes      interface{} `json:"nodes"`      // can be array or null
-	NodesError *string     `json:"nodesError"` // error message when failing to connect to cluster
-	Summary    struct {
-		ClusterName         string      `json:"clusterName"`
-		Namespace           string      `json:"namespace"`
-		Phase               string      `json:"phase"`
-		InfrastructureReady interface{} `json:"infrastructureReady"` // can be bool or null
-		ControlPlaneReady   interface{} `json:"controlPlaneReady"`   // can be bool or null
-		MachinePoolCount    int         `json:"machinePoolCount"`
-		NodeCount           int         `json:"nodeCount"`
-		Conditions          struct {
-			Ready int `json:"ready"`
-			Total int `json:"total"`
-		} `json:"conditions"`
-	} `json:"summary"`
-}
-
 // TestDeployment_00_CreateNamespace creates the workload cluster namespace before deploying resources.
 // The namespace is unique per test run (prefix + timestamp) to allow parallel test runs
 // and easy cleanup. This namespace is where CAPI CRs (Cluster, AROControlPlane, MachinePool)
@@ -515,14 +448,14 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	startTime := time.Now()
 
 	// Get initial status to determine actual control plane kind for display
-	monitorScript := "../scripts/monitor-cluster-json.sh"
-	initialJSON, _ := RunCommandQuiet(t, monitorScript, "--context", context, config.WorkloadClusterNamespace, provisionedClusterName)
-	var initialStatus ClusterMonitorStatus
+	initialData, initErr := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 	controlPlaneKind := "ControlPlane" // fallback if we can't determine
-	if err := json.Unmarshal([]byte(initialJSON), &initialStatus); err == nil {
-		controlPlaneKind = initialStatus.ControlPlane.Kind
-		if initialStatus.ControlPlane.Name != "" {
-			controlPlaneName = initialStatus.ControlPlane.Name
+	if initErr == nil {
+		if initialData.ControlPlane.Kind != "" {
+			controlPlaneKind = initialData.ControlPlane.Kind
+		}
+		if initialData.ControlPlane.Name != "" {
+			controlPlaneName = initialData.ControlPlane.Name
 		}
 	}
 
@@ -584,10 +517,8 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 
 		PrintToTTY("[%d] Checking deployment status...\n", iteration)
 
-		// Use monitor-cluster-json.sh to get status dynamically
-		// Note: Script is in the capi-tests repository, not the cloned cluster-api-installer repo
-		monitorScript := "../scripts/monitor-cluster-json.sh"
-		jsonOutput, err := RunCommandQuiet(t, monitorScript, "--context", context, config.WorkloadClusterNamespace, provisionedClusterName)
+		// Use MonitorCluster to get status dynamically
+		data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 		if err != nil {
 			PrintToTTY("[%d] ⚠️  monitor-cluster-json.sh failed: %v\n", iteration, err)
 			checkStallTimeout(t, stallEnabled, stallTimeout, lastProgressTime, lastProgress, context, config.WorkloadClusterNamespace, provisionedClusterName)
@@ -595,17 +526,15 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 			continue
 		}
 
-		// Parse JSON output
-		var status ClusterMonitorStatus
-		if err := json.Unmarshal([]byte(jsonOutput), &status); err != nil {
-			PrintToTTY("[%d] ⚠️  Failed to parse monitor output: %v\n", iteration, err)
-			checkStallTimeout(t, stallEnabled, stallTimeout, lastProgressTime, lastProgress, context, config.WorkloadClusterNamespace, provisionedClusterName)
-			time.Sleep(pollInterval)
-			continue
+		if data.ControlPlane.Kind != "" {
+			controlPlaneKind = data.ControlPlane.Kind
+		}
+		if data.ControlPlane.Name != "" {
+			controlPlaneName = data.ControlPlane.Name
 		}
 
 		// Fail-fast: check Cluster.Phase for terminal failure
-		if status.Cluster.Phase == ClusterPhaseFailed {
+		if data.Cluster.Phase == ClusterPhaseFailed {
 			PrintToTTY("\n❌ Cluster phase is Failed — aborting early\n\n")
 			t.Fatalf("Cluster phase is 'Failed' — deployment cannot recover.\n\n"+
 				"Check cluster status:\n"+
@@ -615,21 +544,21 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 		}
 
 		// Fail-fast: check ControlPlane conditions for permanent failures
-		if err := CheckConditionsForPermanentFailure(status.ControlPlane.Conditions); err != nil {
-			PrintToTTY("\n❌ Permanent failure detected in %s conditions — aborting early\n", status.ControlPlane.Kind)
+		if err := CheckK8sConditionsForPermanentFailure(data.ControlPlane.Conditions); err != nil {
+			PrintToTTY("\n❌ Permanent failure detected in %s conditions — aborting early\n", controlPlaneKind)
 			PrintToTTY("   %v\n\n", err)
 			t.Fatalf("Permanent failure in %s conditions — deployment cannot recover.\n%v\n\n"+
 				"Check control plane status:\n"+
 				"  kubectl --context %s -n %s get %s %s -o yaml",
-				status.ControlPlane.Kind, err,
-				context, config.WorkloadClusterNamespace, strings.ToLower(status.ControlPlane.Kind), controlPlaneName)
+				controlPlaneKind, err,
+				context, config.WorkloadClusterNamespace, strings.ToLower(controlPlaneKind), controlPlaneName)
 			return
 		}
 
 		// Fail-fast: check MachinePool infrastructure conditions for permanent failures
-		for _, mp := range status.MachinePools {
+		for _, mp := range data.MachinePools {
 			if mp.Infrastructure != nil {
-				if err := CheckConditionsForPermanentFailure(mp.Infrastructure.Conditions); err != nil {
+				if err := CheckK8sConditionsForPermanentFailure(mp.Infrastructure.Conditions); err != nil {
 					PrintToTTY("\n❌ Permanent failure detected in %s conditions — aborting early\n", mp.Infrastructure.Kind)
 					PrintToTTY("   %v\n\n", err)
 					infraName := mp.Infrastructure.Name
@@ -648,40 +577,33 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 
 		// Check ControlPlane ready status (works for ARO/ROSA dynamically)
 		if !controlPlaneReady {
-			cpKind := status.ControlPlane.Kind
-			cpReady := status.ControlPlane.Ready
-			cpState := status.ControlPlane.State
+			cpKind := controlPlaneKind
+			cpState := data.ControlPlane.State
 
-			if cpReady == nil {
-				if cpState != nil && *cpState != "" {
-					PrintToTTY("[%d] ⏳ %s.Ready: null (state: %s)\n", iteration, cpKind, *cpState)
-				} else {
-					PrintToTTY("[%d] ⏳ %s.Ready: null\n", iteration, cpKind)
-				}
-			} else if cpReadyBool, ok := cpReady.(bool); ok && cpReadyBool {
+			if data.ControlPlane.Ready {
 				controlPlaneReady = true
 				PrintToTTY("[%d] ✅ %s.Ready: true (took %v)\n", iteration, cpKind, elapsed.Round(time.Second))
 				t.Logf("%s.Ready=true (took %v)", cpKind, elapsed.Round(time.Second))
 			} else {
 				if cpState != nil && *cpState != "" {
-					PrintToTTY("[%d] ⏳ %s.Ready: %v (state: %s)\n", iteration, cpKind, cpReady, *cpState)
+					PrintToTTY("[%d] ⏳ %s.Ready: false (state: %s)\n", iteration, cpKind, *cpState)
 				} else {
-					PrintToTTY("[%d] ⏳ %s.Ready: %v\n", iteration, cpKind, cpReady)
+					PrintToTTY("[%d] ⏳ %s.Ready: false\n", iteration, cpKind)
 				}
 			}
 		} else {
-			PrintToTTY("[%d] ✅ %s.Ready: true\n", iteration, status.ControlPlane.Kind)
+			PrintToTTY("[%d] ✅ %s.Ready: true\n", iteration, controlPlaneKind)
 		}
 
 		// Check MachinePool status (only for providers that use them, like ARO)
 		if !machinePoolReady {
-			if len(status.MachinePools) == 0 {
+			if len(data.MachinePools) == 0 {
 				// No MachinePools (e.g., ROSA with embedded machine pool config)
 				machinePoolReady = true
 				PrintToTTY("[%d] ✅ MachinePool: not applicable (embedded in control plane)\n", iteration)
 			} else {
 				// ARO has MachinePools - display first one's status
-				mp := status.MachinePools[0]
+				mp := data.MachinePools[0]
 
 				// Check if MachinePool phase exists (derive from conditions or replicas)
 				var phase string
@@ -718,7 +640,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 					}
 					statusLine := strings.Join(statusParts, " ")
 
-					if infraReady == true {
+					if infraReady {
 						PrintToTTY("[%d] ✅ %s: %s\n", iteration, infraKind, statusLine)
 					} else {
 						PrintToTTY("[%d] ⏳ %s: %s\n", iteration, infraKind, statusLine)
@@ -729,9 +651,9 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 						// Show all conditions when not ready, only non-True when ready
 						if !ready {
 							PrintToTTY("[%d] 📋 %s conditions:\n", iteration, infraKind)
-							PrintToTTY("%s", FormatControlPlaneConditionsFromParsed(mp.Infrastructure.Conditions))
+							PrintToTTY("%s", FormatK8sConditions(mp.Infrastructure.Conditions))
 						} else {
-							nonTrueConditions := FormatNonTrueConditionsFromParsed(mp.Infrastructure.Conditions)
+							nonTrueConditions := FormatNonTrueK8sConditions(mp.Infrastructure.Conditions)
 							if strings.TrimSpace(nonTrueConditions) != "" {
 								PrintToTTY("[%d] ⚠️  %s conditions (not True):\n", iteration, infraKind)
 								PrintToTTY("%s", nonTrueConditions)
@@ -741,27 +663,27 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 				}
 			}
 		} else {
-			if len(status.MachinePools) > 0 {
+			if len(data.MachinePools) > 0 {
 				PrintToTTY("[%d] ✅ MachinePool: ready\n", iteration)
 			}
 		}
 
 		if stallEnabled {
 			currentCPState := ""
-			if status.ControlPlane.State != nil {
-				currentCPState = *status.ControlPlane.State
+			if data.ControlPlane.State != nil {
+				currentCPState = *data.ControlPlane.State
 			}
 			currentMPReplicas := 0
 			currentMPState := ""
-			if len(status.MachinePools) > 0 {
-				currentMPReplicas = status.MachinePools[0].ReadyReplicas
-				if status.MachinePools[0].Infrastructure != nil {
-					currentMPState = status.MachinePools[0].Infrastructure.ProvisioningState
+			if len(data.MachinePools) > 0 {
+				currentMPReplicas = data.MachinePools[0].ReadyReplicas
+				if data.MachinePools[0].Infrastructure != nil {
+					currentMPState = data.MachinePools[0].Infrastructure.ProvisioningState
 				}
 			}
 			infraReady := 0
 			infraTotal := 0
-			infraStatus := GetInfrastructureResourceStatusFromParsed(status.Infrastructure.Resources, status.Infrastructure.Conditions)
+			infraStatus := GetInfrastructureResourceStatusFromK8sConditions(data.Infrastructure.Resources, data.Infrastructure.Conditions)
 			if infraStatus.TotalResources > 0 {
 				infraTotal = infraStatus.TotalResources
 				infraReady = infraStatus.ReadyResources
@@ -786,8 +708,8 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 
 		// Both ready — done
 		if controlPlaneReady && machinePoolReady {
-			cpKind := status.ControlPlane.Kind
-			if len(status.MachinePools) > 0 {
+			cpKind := controlPlaneKind
+			if len(data.MachinePools) > 0 {
 				PrintToTTY("\n✅ Control plane and machine pool are ready! (took %v)\n\n", elapsed.Round(time.Second))
 				t.Logf("Both %s and MachinePool ready (took %v)", cpKind, elapsed.Round(time.Second))
 			} else {
@@ -795,17 +717,17 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 				t.Logf("%s ready (took %v)", cpKind, elapsed.Round(time.Second))
 			}
 
-			// Display final ControlPlane conditions that are not "True" (using already-parsed data from monitor script)
-			if len(status.ControlPlane.Conditions) > 0 {
-				nonTrueConditions := FormatNonTrueConditionsFromParsed(status.ControlPlane.Conditions)
+			// Display final ControlPlane conditions that are not "True"
+			if len(data.ControlPlane.Conditions) > 0 {
+				nonTrueConditions := FormatNonTrueK8sConditions(data.ControlPlane.Conditions)
 				if strings.TrimSpace(nonTrueConditions) != "" {
 					PrintToTTY("⚠️  Final %s conditions (not True):\n", cpKind)
 					PrintToTTY("%s", nonTrueConditions)
 				}
 			}
 
-			// Display final infrastructure status (using already-parsed data from monitor script)
-			finalInfra := GetInfrastructureResourceStatusFromParsed(status.Infrastructure.Resources, status.Infrastructure.Conditions)
+			// Display final infrastructure status
+			finalInfra := GetInfrastructureResourceStatusFromK8sConditions(data.Infrastructure.Resources, data.Infrastructure.Conditions)
 			if finalInfra.TotalResources > 0 {
 				ReportInfrastructureProgress(t, iteration, elapsed, time.Duration(0), finalInfra)
 			}
@@ -813,24 +735,24 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 			return
 		}
 
-		// Display control plane conditions (using already-parsed data from monitor script)
-		if len(status.ControlPlane.Conditions) > 0 {
+		// Display control plane conditions
+		if len(data.ControlPlane.Conditions) > 0 {
 			if !controlPlaneReady {
 				// Not ready yet: show all conditions
-				PrintToTTY("[%d] 📋 %s conditions:\n", iteration, status.ControlPlane.Kind)
-				PrintToTTY("%s", FormatControlPlaneConditionsFromParsed(status.ControlPlane.Conditions))
+				PrintToTTY("[%d] 📋 %s conditions:\n", iteration, controlPlaneKind)
+				PrintToTTY("%s", FormatK8sConditions(data.ControlPlane.Conditions))
 			} else {
 				// Ready: show only non-True conditions to highlight any lingering issues
-				nonTrueConditions := FormatNonTrueConditionsFromParsed(status.ControlPlane.Conditions)
+				nonTrueConditions := FormatNonTrueK8sConditions(data.ControlPlane.Conditions)
 				if strings.TrimSpace(nonTrueConditions) != "" {
-					PrintToTTY("[%d] ⚠️  %s conditions (not True):\n", iteration, status.ControlPlane.Kind)
+					PrintToTTY("[%d] ⚠️  %s conditions (not True):\n", iteration, controlPlaneKind)
 					PrintToTTY("%s", nonTrueConditions)
 				}
 			}
 		}
 
-		// Display infrastructure resource progress (using already-parsed data from monitor script)
-		infraStatus := GetInfrastructureResourceStatusFromParsed(status.Infrastructure.Resources, status.Infrastructure.Conditions)
+		// Display infrastructure resource progress
+		infraStatus := GetInfrastructureResourceStatusFromK8sConditions(data.Infrastructure.Resources, data.Infrastructure.Conditions)
 		if infraStatus.TotalResources > 0 {
 			ReportInfrastructureProgress(t, iteration, elapsed, remaining, infraStatus)
 		}
@@ -992,35 +914,32 @@ func TestDeployment_VerifyInfrastructureResources(t *testing.T) {
 
 		iteration++
 
-		// Use monitor-cluster-json.sh to get status
-		jsonOutput, err := RunCommandQuiet(t, "../scripts/monitor-cluster-json.sh", "--context", context, config.WorkloadClusterNamespace, provisionedClusterName)
+		// Use MonitorCluster to get status
+		data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 		if err != nil {
 			PrintToTTY("[%d] ⚠️  monitor-cluster-json.sh failed: %v\n", iteration, err)
 			time.Sleep(pollInterval)
 			continue
 		}
 
-		var status ClusterMonitorStatus
-		if err := json.Unmarshal([]byte(jsonOutput), &status); err != nil {
-			PrintToTTY("[%d] ⚠️  Failed to parse monitor output: %v\n", iteration, err)
-			time.Sleep(pollInterval)
-			continue
-		}
-
 		// Fail-fast: check infrastructure conditions for permanent failures
-		if err := CheckConditionsForPermanentFailure(status.Infrastructure.Conditions); err != nil {
-			PrintToTTY("\n❌ Permanent failure detected in %s conditions — aborting early\n", status.Infrastructure.Kind)
+		if err := CheckK8sConditionsForPermanentFailure(data.Infrastructure.Conditions); err != nil {
+			PrintToTTY("\n❌ Permanent failure detected in %s conditions — aborting early\n", data.Infrastructure.Kind)
 			PrintToTTY("   %v\n\n", err)
+			infraName := data.Infrastructure.Name
+			if infraName == "" {
+				infraName = provisionedClusterName
+			}
 			t.Fatalf("Permanent failure in %s conditions — deployment cannot recover.\n%v\n\n"+
 				"Check infrastructure status:\n"+
 				"  kubectl --context %s -n %s get %s %s -o yaml",
-				status.Infrastructure.Kind, err,
-				context, config.WorkloadClusterNamespace, strings.ToLower(status.Infrastructure.Kind), provisionedClusterName)
+				data.Infrastructure.Kind, err,
+				context, config.WorkloadClusterNamespace, strings.ToLower(data.Infrastructure.Kind), infraName)
 			return
 		}
 
 		// Get infrastructure status from already-parsed data
-		infraStatus := GetInfrastructureResourceStatusFromParsed(status.Infrastructure.Resources, status.Infrastructure.Conditions)
+		infraStatus := GetInfrastructureResourceStatusFromK8sConditions(data.Infrastructure.Resources, data.Infrastructure.Conditions)
 
 		if infraStatus.TotalResources == 0 {
 			PrintToTTY("[%d] ⚠️  No infrastructure resources found yet\n", iteration)
