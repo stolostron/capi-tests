@@ -932,7 +932,7 @@ func (c *TestConfig) GetExpectedFiles() []string {
 // must persist across CI steps. In Prow, SHARED_DIR is a volume shared between
 // all step containers. Outside Prow, falls back to os.TempDir().
 func (c *TestConfig) SharedTempDir() string {
-	if dir := os.Getenv("SHARED_DIR"); dir != "" {
+	if dir := GetEnvOrDefault("SHARED_DIR", ""); dir != "" {
 		return dir
 	}
 	return os.TempDir()
