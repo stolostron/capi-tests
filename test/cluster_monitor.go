@@ -233,6 +233,20 @@ func (d *ClusterMonitorData) FormatSummary() string {
 // MonitorClusterUntilReady polls the cluster status until it's ready or timeout is reached.
 // This is a generic monitoring function that works for any CAPI cluster.
 // Returns the final cluster data when ready.
+//
+// Usage:
+//
+//	data, err := MonitorClusterUntilReady(
+//		t,
+//		config.GetKubeContext(),
+//		config.WorkloadClusterNamespace,
+//		config.GetProvisionedClusterName(),
+//		config.DeploymentTimeout,
+//	)
+//	if err != nil {
+//		t.Fatalf("Cluster failed to become ready: %v", err)
+//	}
+//	t.Logf("Provider: %s, Nodes: %d ready", data.GetProviderType(), data.GetReadyNodeCount())
 func MonitorClusterUntilReady(t *testing.T, kubeContext, namespace, clusterName string, timeout time.Duration) (*ClusterMonitorData, error) {
 	t.Helper()
 
@@ -283,6 +297,20 @@ func MonitorClusterUntilReady(t *testing.T, kubeContext, namespace, clusterName 
 // MonitorControlPlaneUntilReady waits for the control plane to become ready.
 // This is useful when you want to proceed before worker nodes are available.
 // Returns the cluster data when control plane is ready.
+//
+// Usage:
+//
+//	data, err := MonitorControlPlaneUntilReady(
+//		t,
+//		config.GetKubeContext(),
+//		config.WorkloadClusterNamespace,
+//		config.GetProvisionedClusterName(),
+//		config.DeploymentTimeout,
+//	)
+//	if err != nil {
+//		t.Fatalf("Control plane failed to become ready: %v", err)
+//	}
+//	t.Logf("Control plane ready! Provider: %s", data.GetProviderType())
 func MonitorControlPlaneUntilReady(t *testing.T, kubeContext, namespace, clusterName string, timeout time.Duration) (*ClusterMonitorData, error) {
 	t.Helper()
 
