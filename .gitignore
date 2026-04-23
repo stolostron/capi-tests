@@ -13,8 +13,7 @@ bin/
 dist/
 *.test
 
-# Dependencies
-vendor/
+# Dependencies (vendor/ is committed for reproducible CI builds)
 
 # Test results
 *.log
@@ -41,6 +40,10 @@ kubeconfig
 # Azure credentials
 azure.json
 service-principal.json
+
+# Development artifacts (not committed)
+PROW_SESSION_NOTES.md
+project-dashboard.html
 
 # Local Claude instructions and commands (not committed)
 CLAUDE.local.md

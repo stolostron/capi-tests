@@ -1,0 +1,23 @@
+name: Build Prow Image
+
+on:
+  push:
+    branches: [main]
+    paths: [Dockerfile.prow]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build image
+      run: docker build -f Dockerfile.prow -t quay.io/rcap/capi-tests-prow:latest .
+
+    - name: Push to quay.io
+      env:
+        QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
+      run: |
+        mkdir -p ~/.docker
+        echo "{\"auths\":{\"quay.io\":{\"auth\":\"${QUAY_AUTH}\"}}}" > ~/.docker/config.json
+        docker push quay.io/rcap/capi-tests-prow:latest

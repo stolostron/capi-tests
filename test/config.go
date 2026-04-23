@@ -930,6 +930,16 @@ func (c *TestConfig) GetExpectedFiles() []string {
 	}
 }
 
+// SharedTempDir returns a directory suitable for storing temporary files that
+// must persist across CI steps. In Prow, SHARED_DIR is a volume shared between
+// all step containers. Outside Prow, falls back to os.TempDir().
+func (c *TestConfig) SharedTempDir() string {
+	if dir := GetEnvOrDefault("SHARED_DIR", ""); dir != "" {
+		return dir
+	}
+	return os.TempDir()
+}
+
 // GetKubeContext returns the kubectl context to use for the management cluster.
 // For external clusters, extracts current-context from the kubeconfig file.
 // For Kind clusters, returns "kind-{ManagementClusterName}".

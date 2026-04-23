@@ -56,7 +56,7 @@ TEST_VERBOSITY ?= -v
 # Individual phase timeouts (format: Go duration like 30m, 1h, etc.)
 CLUSTER_TIMEOUT ?= 30m
 GENERATE_YAMLS_TIMEOUT ?= 20m
-DEPLOY_CRS_TIMEOUT ?= 60m
+DEPLOY_CRS_TIMEOUT ?= 105m
 VERIFY_TIMEOUT ?= 20m
 DELETION_TIMEOUT ?= 60m
 
@@ -65,6 +65,15 @@ DELETION_TIMEOUT ?= 60m
 TIMESTAMP := $(shell date +%Y%m%d_%H%M%S)
 RESULTS_DIR := results/$(TIMESTAMP)
 LATEST_RESULTS_DIR := results/latest
+
+# Resolve TEST_RESULTS_DIR: use RESULTS_DIR as-is if absolute, else prepend CURDIR.
+# This ensures CI can pass RESULTS_DIR=${ARTIFACT_DIR} (an absolute path) without
+# the Makefile accidentally prefixing the repo root directory.
+ifeq ($(patsubst /%,/,$(RESULTS_DIR)),/)
+TEST_RESULTS_DIR := $(RESULTS_DIR)
+else
+TEST_RESULTS_DIR := $(CURDIR)/$(RESULTS_DIR)
+endif
 
 # Terminal output capture file
 TERMINAL_OUTPUT_FILE := terminal-output.log
@@ -75,7 +84,10 @@ export GOFLAGS=
 # Determine Go binary installation path
 # Prefer GOBIN if set, otherwise use GOPATH/bin, with fallback to $HOME/go/bin
 GOBIN := $(shell if [ -n "$$(go env GOBIN 2>/dev/null)" ]; then go env GOBIN; else echo "$$(go env GOPATH 2>/dev/null || echo "$$HOME/go")/bin"; fi)
-GOTESTSUM := $(GOBIN)/gotestsum --format='$(GOTESTSUM_FORMAT)'
+# Use gotestsum from PATH if available (e.g. installed by Dockerfile.prow to /usr/local/bin),
+# otherwise fall back to $(GOBIN)/gotestsum
+GOTESTSUM_BIN := $(shell command -v gotestsum 2>/dev/null || echo "$(GOBIN)/gotestsum")
+GOTESTSUM := $(GOTESTSUM_BIN) --format='$(GOTESTSUM_FORMAT)'
 
 # Default target - show help when running 'make' with no arguments
 .DEFAULT_GOAL := help
@@ -126,7 +138,7 @@ _check-dep: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	TEST_RESULTS_DIR=$(CURDIR)/$(RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-check-dep.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestCheckDependencies || EXIT_CODE=$$?; \
+	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-check-dep.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestCheckDependencies || EXIT_CODE=$$?; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
@@ -147,7 +159,7 @@ _setup: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	TEST_RESULTS_DIR=$(CURDIR)/$(RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-setup.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestSetup || EXIT_CODE=$$?; \
+	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-setup.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestSetup || EXIT_CODE=$$?; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
@@ -168,7 +180,7 @@ _management_cluster: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	TEST_RESULTS_DIR=$(CURDIR)/$(RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-cluster.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestExternalCluster|TestKindCluster" -timeout $(CLUSTER_TIMEOUT) -failfast || EXIT_CODE=$$?; \
+	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-cluster.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestExternalCluster|TestKindCluster" -timeout $(CLUSTER_TIMEOUT) -failfast || EXIT_CODE=$$?; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
@@ -189,7 +201,7 @@ _generate-yamls: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	TEST_RESULTS_DIR=$(CURDIR)/$(RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-generate-yamls.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestInfrastructure -timeout $(GENERATE_YAMLS_TIMEOUT) || EXIT_CODE=$$?; \
+	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-generate-yamls.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestInfrastructure -timeout $(GENERATE_YAMLS_TIMEOUT) || EXIT_CODE=$$?; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
@@ -211,11 +223,11 @@ _deploy-crs: check-gotestsum
 	@echo ""
 	@EXIT_CODE=0; \
 	echo "--- Phase 1: Apply resources (fail-fast) ---"; \
-	TEST_RESULTS_DIR=$(CURDIR)/$(RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-apply.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestDeployment_0|TestDeployment_Apply|TestDeployment_Provider" -timeout $(DEPLOY_CRS_TIMEOUT) -failfast || EXIT_CODE=$$?; \
+	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-apply.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestDeployment_0|TestDeployment_Apply|TestDeployment_Provider" -timeout $(DEPLOY_CRS_TIMEOUT) -failfast || EXIT_CODE=$$?; \
 	if [ $$EXIT_CODE -eq 0 ]; then \
 		echo ""; \
 		echo "--- Phase 2: Monitor deployment ---"; \
-		TEST_RESULTS_DIR=$(CURDIR)/$(RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-monitor.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestDeployment_Monitor|TestDeployment_Wait|TestDeployment_Verify|TestDeployment_Tag" -timeout $(DEPLOY_CRS_TIMEOUT) || EXIT_CODE=$$?; \
+		TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-monitor.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestDeployment_Monitor|TestDeployment_Wait|TestDeployment_Verify|TestDeployment_Tag" -timeout $(DEPLOY_CRS_TIMEOUT) || EXIT_CODE=$$?; \
 	fi; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
@@ -237,7 +249,7 @@ _verify-workload-cluster: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	TEST_RESULTS_DIR=$(CURDIR)/$(RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-verify.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestVerification -timeout $(VERIFY_TIMEOUT) || EXIT_CODE=$$?; \
+	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-verify.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestVerification -timeout $(VERIFY_TIMEOUT) || EXIT_CODE=$$?; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
@@ -258,7 +270,7 @@ _delete-workload-cluster: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	TEST_RESULTS_DIR=$(CURDIR)/$(RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-delete.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestDeletion -timeout $(DELETION_TIMEOUT) || EXIT_CODE=$$?; \
+	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-delete.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestDeletion -timeout $(DELETION_TIMEOUT) || EXIT_CODE=$$?; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
@@ -279,7 +291,7 @@ _mce-teardown: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	TEST_RESULTS_DIR=$(CURDIR)/$(RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-mce-teardown.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestTeardown -timeout 30m || EXIT_CODE=$$?; \
+	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-mce-teardown.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestTeardown -timeout 30m || EXIT_CODE=$$?; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
@@ -300,7 +312,7 @@ _validate-cleanup: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	TEST_RESULTS_DIR=$(CURDIR)/$(RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-cleanup.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestCleanup -timeout 30m || EXIT_CODE=$$?; \
+	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-cleanup.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestCleanup -timeout 30m || EXIT_CODE=$$?; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
@@ -678,7 +690,7 @@ install-gotestsum: ## Install gotestsum for test summaries
 	fi
 
 check-gotestsum: ## Check if gotestsum is installed, install if missing
-	@test -f $(GOBIN)/gotestsum || $(MAKE) install-gotestsum
+	@command -v gotestsum >/dev/null 2>&1 || test -f $(GOBIN)/gotestsum || $(MAKE) install-gotestsum
 
 fix-docker-config: ## Fix Docker credential helper configuration issues
 	@DOCKER_CONFIG_DIR="$${DOCKER_CONFIG:-$$HOME/.docker}"; \
@@ -729,9 +741,11 @@ fix-docker-config: ## Fix Docker credential helper configuration issues
 
 summary: ## Generate test results summary from latest results
 	@if [ -d "$(LATEST_RESULTS_DIR)" ]; then \
+		./scripts/enrich-junit-xml.sh $(LATEST_RESULTS_DIR); \
 		./scripts/generate-summary.sh $(LATEST_RESULTS_DIR); \
 	elif [ -n "$$(ls -d results/2* 2>/dev/null | tail -1)" ]; then \
 		LATEST_RUN=$$(ls -d results/2* 2>/dev/null | tail -1); \
+		./scripts/enrich-junit-xml.sh "$$LATEST_RUN"; \
 		./scripts/generate-summary.sh "$$LATEST_RUN"; \
 	else \
 		echo "Error: No test results found. Run 'make test-all' first."; \
@@ -740,6 +754,14 @@ summary: ## Generate test results summary from latest results
 
 scheduled-review: ## Run AI-powered review of new issues and PRs (requires ANTHROPIC_API_KEY)
 	@./scripts/scheduled-review.sh $(SCHEDULED_REVIEW_ARGS)
+
+visualize: ## Generate HTML pipeline visualization from Prow JUnit XML (usage: make visualize BUILD_ID=<id>)
+	@if [ -z "$(BUILD_ID)" ]; then \
+		echo "Usage: make visualize BUILD_ID=<prow-build-id>"; \
+		echo "Example: make visualize BUILD_ID=2032475992039100416"; \
+		exit 1; \
+	fi
+	@./scripts/visualize-pipeline.sh "$(BUILD_ID)"
 
 fmt: ## Format Go code
 	go fmt ./...
