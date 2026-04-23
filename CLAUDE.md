@@ -369,7 +369,8 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests` for ARO, `capa-tests` for ROSA). Keep short as cloud providers may have length limits (e.g., Azure node pools max 15 chars including suffixes)
 - `CS_CLUSTER_NAME` - **C**luster **S**ervice cluster name prefix used for YAML generation and Azure resource naming. If not set, auto-generates a unique value: `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c`). This enables parallel test runs against the same Azure subscription without resource name collisions. The Azure resource group is named `${WORKLOAD_CLUSTER_NAME}-resgroup`. This prefix is also used for the ExternalAuth resource ID (max 15 chars including `-ea` suffix, so CS_CLUSTER_NAME max 12 chars). When resuming a multi-phase test run, the prefix is automatically loaded from the deployment state file.
-- `OCP_VERSION` - OpenShift version (default: `4.19`)
+- `OCP_VERSION` - OpenShift version (default: `4.20`)
+- `OCP_VERSION_MP` - Full `x.y.z` OpenShift version for MachinePool workers (default: `4.20.17`)
 - `REGION` - Azure region (default: `uksouth`)
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`). Used in Azure resource tags and domain prefix validation, but not included in the auto-generated `CS_CLUSTER_NAME`.
 - `CAPI_USER` - User identifier for domain prefix (default: `cate`). Used as the base for auto-generated `CS_CLUSTER_NAME` (e.g., `cate-a1b2c`). Must be short enough that `${CAPI_USER}-${DEPLOYMENT_ENV}` does not exceed 15 characters.

@@ -2547,6 +2547,7 @@ func FormatComponentVersions(versions []ComponentVersion, config *TestConfig) st
 		}
 		fmt.Fprintf(&result, "  Resource Group:     %s-resgroup\n", config.WorkloadClusterName)
 		fmt.Fprintf(&result, "  OpenShift Version:  %s\n", config.OCPVersion)
+		fmt.Fprintf(&result, "  MP OCP Version:     %s\n", config.OCPVersionMP)
 	}
 
 	// Used repositories
@@ -2802,7 +2803,6 @@ func SaveMCEOriginalStates(states map[string]bool) error {
 
 	return nil
 }
-
 
 // ControllerLogSummary holds summarized log information for a controller.
 type ControllerLogSummary struct {
