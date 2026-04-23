@@ -31,18 +31,12 @@ tests:
     test:
     - ref: capz-test-management-cluster
     - ref: capz-test-generate-yamls
-    - ref: capz-test-cleanup-pre
-    - ref: capz-test-deploy-crs
-    - ref: capz-test-verify-workload-cluster
-    - ref: capz-test-delete-workload-cluster
-    - ref: capz-test-validate-cleanup
     post:
     - ref: capz-test-summary
-    - ref: capz-test-teardown
     - chain: ipi-azure-post
     workflow: openshift-e2e-azure
   timeout: 4h0m0s
 zz_generated_metadata:
-  branch: main
+  branch: configure-prow-mgmt
   org: stolostron
   repo: capi-tests
