@@ -40,6 +40,22 @@ func TestInfrastructure_01_ValidateCredentials(t *testing.T) {
 		t.Skip("No provider credential environment variables to validate")
 	}
 
+	// For Azure providers, auto-extract credentials from CLI before validation.
+	// This mirrors Phase 01's auth-mode awareness: when az login is active,
+	// subscription/tenant IDs are auto-extracted and SP credentials are not required.
+	spOnlyVars := map[string]bool{}
+	if config.HasProvider("aro") {
+		if err := EnsureAzureCredentialsSet(t); err != nil {
+			t.Logf("Azure CLI credential extraction failed: %v", err)
+		}
+		authMode := DetectAzureAuthMode(t)
+		t.Logf("Azure auth mode: %s", GetAzureAuthDescription(authMode))
+		if authMode == AzureAuthModeCLI {
+			spOnlyVars["AZURE_CLIENT_ID"] = true
+			spOnlyVars["AZURE_CLIENT_SECRET"] = true
+		}
+	}
+
 	var allMissing []EnvVarRequirement
 	for _, provider := range config.InfraProviders {
 		if len(provider.YAMLGenCredentials) == 0 {
@@ -51,6 +67,10 @@ func TestInfrastructure_01_ValidateCredentials(t *testing.T) {
 
 		var missing []EnvVarRequirement
 		for _, envReq := range provider.YAMLGenCredentials {
+			if spOnlyVars[envReq.Name] {
+				PrintToTTY("  ⏭️  %s: skipped (not required for Azure CLI auth)\n", envReq.Name)
+				continue
+			}
 			value := os.Getenv(envReq.Name)
 			if value == "" {
 				missing = append(missing, envReq)
