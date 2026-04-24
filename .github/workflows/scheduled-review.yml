@@ -1,0 +1,83 @@
+name: Scheduled Review
+
+on:
+  schedule:
+    # Run daily at 8:00 AM UTC (Monday-Friday)
+    - cron: '0 8 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+
+jobs:
+  review:
+    name: Daily Issue & PR Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        fetch-depth: 0
+
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: '20'
+
+    - name: Install Claude Code
+      run: npm install -g @anthropic-ai/claude-code
+
+    # Authentication to GCP for Vertex AI.
+    # Option A: Workload Identity Federation (recommended, no long-lived secrets)
+    #   Requires GCP setup: create a Workload Identity Pool + Provider for GitHub Actions.
+    #   See: https://github.com/google-github-actions/auth#workload-identity-federation
+    # Option B: Service Account Key JSON (simpler setup, less secure)
+    #   Store the JSON key as GCP_SA_KEY repository secret.
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@ba79af03959ebeac9769e648f473a284504d9193 # v2.1.10
+      with:
+        # --- Option A: Workload Identity Federation (uncomment and fill in) ---
+        # workload_identity_provider: 'projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/<POOL_ID>/providers/<PROVIDER_ID>'
+        # service_account: '<SA_NAME>@<PROJECT_ID>.iam.gserviceaccount.com'
+        # --- Option B: Service Account Key JSON (uncomment) ---
+        # credentials_json: '${{ secrets.GCP_SA_KEY }}'
+        credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+    - name: Run scheduled review
+      env:
+        CLAUDE_CODE_USE_VERTEX: "1"
+        ANTHROPIC_VERTEX_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        CLOUD_ML_REGION: "global"
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        claude -p "$(cat .claude/commands/scheduled-review.md)" \
+          --allowedTools "Bash,Read,Write,Edit,Glob,Grep,Agent" \
+          2>&1 | tee review-output.md
+
+    - name: Write summary
+      if: always()
+      run: |
+        echo "# Scheduled Review Results" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        if [ -f review-output.md ]; then
+          # Extract the summary table if present, otherwise show last 100 lines
+          if grep -q "Daily Repository Review" review-output.md; then
+            sed -n '/Daily Repository Review/,$p' review-output.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            tail -100 review-output.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+        else
+          echo "No output generated" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Upload review output
+      if: always()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      with:
+        name: scheduled-review-output
+        path: review-output.md
+        retention-days: 30
