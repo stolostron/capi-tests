@@ -402,7 +402,7 @@ func getClusterNamePrefix(capiUser string) string {
 // 3. Generate unique name: ${workloadClusterName}-${runID}-resgroup
 func getResourceGroupName(workloadClusterName, runID string) string {
 	resourceGroupNameOnce.Do(func() {
-		if rg := os.Getenv("RESOURCEGROUPNAME"); rg != "" {
+		if rg := GetEnvOrDefault("RESOURCEGROUPNAME", ""); rg != "" {
 			resourceGroupName = rg
 			return
 		}
