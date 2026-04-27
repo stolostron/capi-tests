@@ -9,7 +9,7 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Build image
       run: docker build -f Dockerfile.prow -t quay.io/rcap/capi-tests-prow:latest .
