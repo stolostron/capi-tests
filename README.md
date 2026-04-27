@@ -114,7 +114,7 @@ When using `INFRA_PROVIDER=rosa`, the following credentials are required:
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests` for ARO, `capa-tests` for ROSA). Keep short due to cloud provider length limits
 - `RESOURCEGROUPNAME` - Azure resource group name. If not set, auto-generates a unique name per test run: `${WORKLOAD_CLUSTER_NAME}-${runID}-resgroup` (e.g., `capz-tests-a1b2c-resgroup`). This prevents parallel test runs from interfering with each other's Azure resources. When set explicitly, uses the provided value as-is. On resume, loaded from the deployment state file.
-- `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation and Azure resource naming. If not set, auto-generates a unique value: `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c`) to enable parallel test runs. The Azure resource group is named `${WORKLOAD_CLUSTER_NAME}-resgroup`. Max 12 characters (ExternalAuth ID constraint).
+- `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation and Azure resource naming. If not set, auto-generates a unique value: `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c`) to enable parallel test runs. The Azure resource group name is controlled by `RESOURCEGROUPNAME` (see above). Max 12 characters (ExternalAuth ID constraint).
 - `OCP_VERSION` - OpenShift version (default: `4.20`)
 - `OCP_VERSION_MP` - Full `x.y.z` OpenShift version for MachinePool workers (default: `4.20.17`)
 - `REGION` - Azure region (default: `uksouth`)
