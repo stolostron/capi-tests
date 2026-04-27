@@ -21,7 +21,12 @@ WORKLOAD_CLUSTER_NAME ?= capa-tests
 else
 WORKLOAD_CLUSTER_NAME ?= capz-tests
 endif
+# RESOURCEGROUPNAME env var takes precedence (set by Go tests or Prow CI for unique per-run names)
+ifdef RESOURCEGROUPNAME
+AZURE_RESOURCE_GROUP ?= $(RESOURCEGROUPNAME)
+else
 AZURE_RESOURCE_GROUP ?= $(WORKLOAD_CLUSTER_NAME)-resgroup
+endif
 
 # Deployment state file - written by tests to record actual deployed configuration
 DEPLOYMENT_STATE_FILE := .deployment-state.json

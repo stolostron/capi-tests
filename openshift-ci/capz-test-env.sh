@@ -80,6 +80,17 @@ else
   echo "$NAME_PREFIX" > "$NAME_PREFIX_FILE"
 fi
 
+# Randomize RESOURCEGROUPNAME per run to prevent parallel jobs from
+# interfering with each other's Azure resource groups.
+# Same SHARED_DIR pattern as NAME_PREFIX above.
+RESOURCEGROUPNAME_FILE="${SHARED_DIR:-/tmp}/resource-group-name"
+if [[ -f "$RESOURCEGROUPNAME_FILE" ]]; then
+  export RESOURCEGROUPNAME=$(cat "$RESOURCEGROUPNAME_FILE")
+else
+  export RESOURCEGROUPNAME="capz-tests-$(openssl rand -hex 3)-resgroup"
+  echo "$RESOURCEGROUPNAME" > "$RESOURCEGROUPNAME_FILE"
+fi
+
 # WORKLOAD_CLUSTER_NAMESPACE is set at the steps.env level in the ci-operator
 # config, so all steps share the same fixed namespace without needing to pass
 # it through SHARED_DIR files.

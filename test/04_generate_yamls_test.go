@@ -221,6 +221,7 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	SetEnvVar(t, "WORKLOAD_CLUSTER_NAME", config.WorkloadClusterName)
 	SetEnvVar(t, config.RegionEnvVar, config.Region) // Provider-specific: REGION for ARO, AWS_REGION for ROSA
 	SetEnvVar(t, "CS_CLUSTER_NAME", config.ClusterNamePrefix)
+	SetEnvVar(t, "RESOURCEGROUPNAME", config.ResourceGroupName)
 	SetEnvVar(t, "OCP_VERSION", config.OCPVersion)
 	SetEnvVar(t, "OCP_VERSION_MP", config.OCPVersionMP)
 	// ROSA gen.sh reads OPENSHIFT_VERSION (not OCP_VERSION) for the cluster version.
@@ -310,7 +311,7 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 		// Resource group may not exist yet (created by CAPI during deployment),
 		// so failure here is expected — Phase 05 will retry after deployment.
 		if len(config.AzureResourceTags) > 0 && CommandExists("az") {
-			PrintToTTY("🏷️  Tagging resource group %s-resgroup...\n", config.ClusterNamePrefix)
+			PrintToTTY("🏷️  Tagging resource group %s...\n", config.ResourceGroupName)
 			if err := TagAzureResourceGroup(t, config); err != nil {
 				t.Logf("Resource group tagging deferred (RG may not exist yet, Phase 05 will retry): %v", err)
 			}
