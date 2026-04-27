@@ -3848,6 +3848,13 @@ func ValidateAllConfigurations(t *testing.T, config *TestConfig) []ConfigValidat
 		}
 	}
 
+	// Display resource group name (informational, no validation needed)
+	results = append(results, ConfigValidationResult{
+		Variable: "RESOURCEGROUPNAME",
+		Value:    config.ResourceGroupName,
+		IsValid:  true,
+	})
+
 	// Validate timeout values
 	timeoutResult := ConfigValidationResult{
 		Variable:   "DEPLOYMENT_TIMEOUT",
