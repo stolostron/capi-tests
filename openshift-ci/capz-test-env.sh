@@ -85,9 +85,11 @@ fi
 # Same SHARED_DIR pattern as NAME_PREFIX above.
 RESOURCEGROUPNAME_FILE="${SHARED_DIR:-/tmp}/resource-group-name"
 if [[ -f "$RESOURCEGROUPNAME_FILE" ]]; then
-  export RESOURCEGROUPNAME=$(cat "$RESOURCEGROUPNAME_FILE")
+  RESOURCEGROUPNAME="$(cat "$RESOURCEGROUPNAME_FILE")"
+  export RESOURCEGROUPNAME
 else
-  export RESOURCEGROUPNAME="capz-tests-$(openssl rand -hex 3)-resgroup"
+  RESOURCEGROUPNAME="capz-tests-$(openssl rand -hex 3)-resgroup"
+  export RESOURCEGROUPNAME
   echo "$RESOURCEGROUPNAME" > "$RESOURCEGROUPNAME_FILE"
 fi
 
