@@ -31,10 +31,9 @@ const (
 	// MCE components need time to deploy controllers, pull images, and initialize.
 	DefaultMCEEnablementTimeout = 15 * time.Minute
 
-	// DefaultDeploymentStallTimeout is the default stall detection timeout.
-	// If the deployment makes no progress (control plane ready status, machine pool replicas,
-	// or infrastructure resource count unchanged) for this duration, the test fails early
-	// instead of waiting for the full DeploymentTimeout.
+	// DefaultDeploymentStallTimeout is the default stall detection timeout for the infrastructure phase.
+	// After infrastructure resources are fully reconciled, the timeout doubles (2x) for the
+	// post-infrastructure phase where the hosted control plane provisioning is opaque.
 	// Set to 0 to disable stall detection.
 	DefaultDeploymentStallTimeout = 30 * time.Minute
 
