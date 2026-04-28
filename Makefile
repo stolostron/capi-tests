@@ -37,13 +37,11 @@ DEPLOYMENT_STATE_FILE := .deployment-state.json
 STATE_RESOURCE_GROUP := $(shell if [ -f $(DEPLOYMENT_STATE_FILE) ]; then cat $(DEPLOYMENT_STATE_FILE) | grep '"resource_group"' | sed 's/.*: *"\([^"]*\)".*/\1/'; fi)
 STATE_MANAGEMENT_CLUSTER := $(shell if [ -f $(DEPLOYMENT_STATE_FILE) ]; then cat $(DEPLOYMENT_STATE_FILE) | grep '"management_cluster_name"' | sed 's/.*: *"\([^"]*\)".*/\1/'; fi)
 STATE_CLUSTER_PREFIX := $(shell if [ -f $(DEPLOYMENT_STATE_FILE) ]; then cat $(DEPLOYMENT_STATE_FILE) | grep '"cluster_name_prefix"' | sed 's/.*: *"\([^"]*\)".*/\1/'; fi)
-STATE_WORKLOAD_CLUSTER := $(shell if [ -f $(DEPLOYMENT_STATE_FILE) ]; then cat $(DEPLOYMENT_STATE_FILE) | grep '"workload_cluster_name"' | sed 's/.*: *"\([^"]*\)".*/\1/'; fi)
 
 # Use state file values if available, otherwise use defaults
 CLEANUP_RESOURCE_GROUP := $(if $(STATE_RESOURCE_GROUP),$(STATE_RESOURCE_GROUP),$(AZURE_RESOURCE_GROUP))
 CLEANUP_MANAGEMENT_CLUSTER := $(if $(STATE_MANAGEMENT_CLUSTER),$(STATE_MANAGEMENT_CLUSTER),$(MANAGEMENT_CLUSTER_NAME))
 CLEANUP_CLUSTER_PREFIX := $(if $(STATE_CLUSTER_PREFIX),$(STATE_CLUSTER_PREFIX),$(CS_CLUSTER_NAME))
-CLEANUP_WORKLOAD_CLUSTER := $(if $(STATE_WORKLOAD_CLUSTER),$(STATE_WORKLOAD_CLUSTER),$(WORKLOAD_CLUSTER_NAME))
 
 # Test configuration
 GOTESTSUM_FORMAT ?= testname
