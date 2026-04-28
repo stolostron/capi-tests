@@ -40,8 +40,6 @@ permissions:
 
 env:
   INFRA_PROVIDER: aro
-  ARO_REPO_URL: https://github.com/marek-veber/cluster-api-installer.git
-  ARO_REPO_BRANCH: capi-tests
   ARO_REPO_DIR: /tmp/cluster-api-installer-aro
   USE_KIND: "true"
   QUAY_AUTH: ${{ secrets.QUAY_AUTH }}

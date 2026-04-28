@@ -44,13 +44,10 @@ permissions:
 
 env:
   INFRA_PROVIDER: aro
-  ARO_REPO_URL: https://github.com/marek-veber/cluster-api-installer.git
-  ARO_REPO_BRANCH: capi-tests
   ARO_REPO_DIR: /tmp/cluster-api-installer-aro
   TEST_TIMEOUT_MINUTES: 120
   # Global variables (not environment-specific)
   QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
-  CAPI_USER: mv2
 
 jobs:
   check-changes:
