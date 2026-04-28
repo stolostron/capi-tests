@@ -785,6 +785,7 @@ func TestDeploymentState_Namespace(t *testing.T) {
 			ManagementClusterName:    "test-mgmt",
 			WorkloadClusterName:      "test-workload",
 			WorkloadClusterNamespace: "capz-test-20260202-123456",
+			ResourceGroupName:        "test-workload-resgroup",
 			Region:                   "uksouth",
 			CAPIUser:                 "testuser",
 			Environment:              "test",

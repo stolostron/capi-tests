@@ -2545,7 +2545,7 @@ func FormatComponentVersions(versions []ComponentVersion, config *TestConfig) st
 		if config.AzureSubscriptionName != "" {
 			fmt.Fprintf(&result, "  Subscription:       %s\n", config.AzureSubscriptionName)
 		}
-		fmt.Fprintf(&result, "  Resource Group:     %s-resgroup\n", config.WorkloadClusterName)
+		fmt.Fprintf(&result, "  Resource Group:     %s\n", config.ResourceGroupName)
 		fmt.Fprintf(&result, "  OpenShift Version:  %s\n", config.OCPVersion)
 		fmt.Fprintf(&result, "  MP OCP Version:     %s\n", config.OCPVersionMP)
 	}
@@ -2661,7 +2661,7 @@ func WriteDeploymentState(config *TestConfig) error {
 	existing, _ := ReadDeploymentState()
 
 	state := DeploymentState{
-		ResourceGroup:            fmt.Sprintf("%s-resgroup", config.WorkloadClusterName),
+		ResourceGroup:            config.ResourceGroupName,
 		ManagementClusterName:    config.ManagementClusterName,
 		WorkloadClusterName:      config.WorkloadClusterName,
 		WorkloadClusterNamespace: config.WorkloadClusterNamespace,
@@ -2694,7 +2694,7 @@ func WriteDeploymentState(config *TestConfig) error {
 func TagAzureResourceGroup(t *testing.T, config *TestConfig) error {
 	t.Helper()
 
-	resourceGroup := fmt.Sprintf("%s-resgroup", config.ClusterNamePrefix)
+	resourceGroup := config.ResourceGroupName
 
 	tagPairs := sortedTagPairs(config.AzureResourceTags, "=")
 
@@ -3847,6 +3847,13 @@ func ValidateAllConfigurations(t *testing.T, config *TestConfig) []ConfigValidat
 			results = append(results, result)
 		}
 	}
+
+	// Display resource group name (informational, no validation needed)
+	results = append(results, ConfigValidationResult{
+		Variable: "RESOURCEGROUPNAME",
+		Value:    config.ResourceGroupName,
+		IsValid:  true,
+	})
 
 	// Validate timeout values
 	timeoutResult := ConfigValidationResult{

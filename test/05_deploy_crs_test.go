@@ -1243,7 +1243,7 @@ func TestDeployment_TagAzureResources(t *testing.T) {
 
 	PrintToTTY("\n=== Tagging Azure Resources ===\n")
 
-	PrintToTTY("Tagging resource group %s-resgroup...\n", config.ClusterNamePrefix)
+	PrintToTTY("Tagging resource group %s...\n", config.ResourceGroupName)
 	if err := TagAzureResourceGroup(t, config); err != nil {
 		t.Logf("Warning: failed to tag resource group: %v", err)
 	}

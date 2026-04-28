@@ -249,6 +249,9 @@ var (
 	clusterNamePrefix     string
 	clusterNamePrefixOnce sync.Once
 
+	resourceGroupName     string
+	resourceGroupNameOnce sync.Once
+
 	// cachedAzureResourceTags holds tags loaded from the deployment state file on resume.
 	// nil means tags were not loaded from state (fresh run or explicit CS_CLUSTER_NAME),
 	// so fresh tags will be generated.
@@ -389,6 +392,44 @@ func getClusterNamePrefix(capiUser string) string {
 	return clusterNamePrefix
 }
 
+// getResourceGroupName returns the Azure resource group name for this test run.
+// When RESOURCEGROUPNAME is not set, a unique name is generated per test run
+// to prevent parallel runs from interfering with each other's Azure resources.
+//
+// Resolution order:
+// 1. RESOURCEGROUPNAME env var (explicit override)
+// 2. Existing deployment state file in RepoDir (auto-resume from previous run)
+// 3. Generate unique name: ${workloadClusterName}-${runID}-resgroup
+func getResourceGroupName(workloadClusterName, runID string) string {
+	resourceGroupNameOnce.Do(func() {
+		if rg := GetEnvOrDefault("RESOURCEGROUPNAME", ""); rg != "" {
+			resourceGroupName = rg
+			return
+		}
+
+		repoDir := getDefaultRepoDir()
+		stateFilePath := filepath.Join(repoDir, ".deployment-state.json")
+		// #nosec G304 - path constructed from repo directory and fixed filename (.deployment-state.json)
+		if data, err := os.ReadFile(stateFilePath); err == nil {
+			var state struct {
+				ResourceGroup string `json:"resource_group"`
+			}
+			if err := json.Unmarshal(data, &state); err == nil && state.ResourceGroup != "" {
+				resourceGroupName = state.ResourceGroup
+				return
+			}
+		}
+
+		if runID != "" {
+			resourceGroupName = fmt.Sprintf("%s-%s-resgroup", workloadClusterName, runID)
+		} else {
+			resourceGroupName = fmt.Sprintf("%s-resgroup", workloadClusterName)
+		}
+	})
+
+	return resourceGroupName
+}
+
 // generateRunID creates a random hex string of the specified length.
 // Uses crypto/rand for unpredictable values. Panics if crypto/rand fails,
 // as this indicates a serious system issue (e.g., /dev/urandom unavailable)
@@ -423,6 +464,7 @@ type TestConfig struct {
 	TestLabelPrefix          string            // Provider-specific label prefix for test namespaces (e.g., "capz-test" for ARO, "capa-test" for ROSA)
 	TestRunID                string            // Unique run identifier extracted from ClusterNamePrefix (the part after CAPI_USER-). Empty when prefix does not start with CAPI_USER-.
 	AzureResourceTags        map[string]string // Azure tags applied to all created resources for cleanup queries
+	ResourceGroupName        string            // Azure resource group name (env: RESOURCEGROUPNAME, default: ${WorkloadClusterName}-${runID}-resgroup)
 	CAPINamespace            string            // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
 	CAPZNamespace            string            // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" when USE_K8S=true)
 
@@ -634,6 +676,10 @@ func NewTestConfig() *TestConfig {
 		testRunID = strings.TrimPrefix(prefix, userPrefix)
 	}
 
+	// Resolve workload cluster name and resource group name
+	workloadClusterName := GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", defaultWorkloadCluster)
+	rgName := getResourceGroupName(workloadClusterName, testRunID)
+
 	// Build Azure resource tags for cleanup and ownership tracking.
 	// On resume, use cached tags from the deployment state to preserve the original created-at timestamp.
 	azureTags := cachedAzureResourceTags
@@ -654,7 +700,7 @@ func NewTestConfig() *TestConfig {
 
 		// Cluster defaults
 		ManagementClusterName:    GetEnvOrDefault("MANAGEMENT_CLUSTER_NAME", defaultMgmtCluster),
-		WorkloadClusterName:      GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", defaultWorkloadCluster),
+		WorkloadClusterName:      workloadClusterName,
 		ClusterNamePrefix:        prefix,
 		NamePrefix:               GetEnvOrDefault("NAME_PREFIX", ""),
 		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.20"),
@@ -667,6 +713,7 @@ func NewTestConfig() *TestConfig {
 		TestLabelPrefix:          testLabelPrefix,
 		TestRunID:                testRunID,
 		AzureResourceTags:        azureTags,
+		ResourceGroupName:        rgName,
 		CAPINamespace:            getControllerNamespace("CAPI_NAMESPACE", "capi-system"),
 		CAPZNamespace:            providerNamespace,
 

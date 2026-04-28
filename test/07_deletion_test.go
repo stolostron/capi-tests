@@ -109,7 +109,7 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 	// Azure resource group name (only for ARO provider)
 	resourceGroup := ""
 	if config.HasProvider("aro") {
-		resourceGroup = fmt.Sprintf("%s-resgroup", config.WorkloadClusterName)
+		resourceGroup = config.ResourceGroupName
 	}
 
 	PrintTestHeader(t, "TestDeletion_WaitForClusterDeletion",
@@ -313,7 +313,7 @@ func TestDeletion_VerifyAzureResourcesDeletion(t *testing.T) {
 		t.Skip("Not logged in to Azure CLI")
 	}
 
-	resourceGroup := fmt.Sprintf("%s-resgroup", config.WorkloadClusterName)
+	resourceGroup := config.ResourceGroupName
 
 	PrintToTTY("Checking Azure resource group '%s'...\n", resourceGroup)
 	t.Logf("Checking if Azure resource group '%s' still exists", resourceGroup)

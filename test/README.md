@@ -97,7 +97,8 @@ Tests are configured via environment variables:
   - **Note**: Tests automatically translate this to `KIND_CLUSTER_NAME` for the deployment script
   - Use this variable for configuring tests; `KIND_CLUSTER_NAME` is set internally
 - `WORKLOAD_CLUSTER_NAME` - Workload cluster name (default: `capz-tests` for ARO, `capa-tests` for ROSA)
-- `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation (default: `${CAPI_USER}-${random5hex}`). The Azure resource group is named `${WORKLOAD_CLUSTER_NAME}-resgroup`.
+- `RESOURCEGROUPNAME` - Azure resource group name. If not set, auto-generates a unique name per test run: `${WORKLOAD_CLUSTER_NAME}-${runID}-resgroup` (e.g., `capz-tests-a1b2c-resgroup`). This prevents parallel test runs from interfering with each other's Azure resources. When set explicitly, uses the provided value as-is. On resume, loaded from the deployment state file.
+- `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation (default: `${CAPI_USER}-${random5hex}`). The Azure resource group name is controlled by `RESOURCEGROUPNAME` (see above).
 - `OCP_VERSION` - OpenShift version (default: `4.20`)
 - `OCP_VERSION_MP` - Full `x.y.z` OpenShift version for MachinePool workers (default: `4.20.17`)
 - `REGION` - Azure region (default: `uksouth`)
