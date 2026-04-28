@@ -171,6 +171,12 @@ func TestDetectStallPhase(t *testing.T) {
 			}
 
 			if !tt.enabled {
+				if result.phase != "" {
+					t.Errorf("phase = %q, want empty when disabled", result.phase)
+				}
+				if result.effectiveTimeout != 0 {
+					t.Errorf("effectiveTimeout = %v, want 0 when disabled", result.effectiveTimeout)
+				}
 				return
 			}
 
