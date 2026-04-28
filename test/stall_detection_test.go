@@ -6,7 +6,7 @@ import (
 )
 
 func TestDetectStallPhase(t *testing.T) {
-	const baseTimeout = 30 * time.Minute
+	const baseTimeout = DefaultDeploymentStallTimeout
 
 	tests := []struct {
 		name             string
