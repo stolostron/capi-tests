@@ -476,11 +476,15 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	lastProgressTime := startTime
 	lastProgress := stallProgressState{}
 	if stallEnabled {
+		postInfraTimeout := stallTimeout * 2
 		if stallTimeout >= timeout {
 			PrintToTTY("Stall detection: enabled (infra: %v, post-infra: %v) — WARNING: stall timeout >= deployment timeout (%v), stall detection will never trigger\n\n",
-				stallTimeout, stallTimeout*2, timeout)
+				stallTimeout, postInfraTimeout, timeout)
+		} else if postInfraTimeout >= timeout {
+			PrintToTTY("Stall detection: enabled (infra: %v, post-infra: %v) — WARNING: post-infra stall timeout >= deployment timeout (%v), stall detection will not trigger during post-infrastructure phase\n\n",
+				stallTimeout, postInfraTimeout, timeout)
 		} else {
-			PrintToTTY("Stall detection: enabled (infra: %v, post-infra: %v)\n\n", stallTimeout, stallTimeout*2)
+			PrintToTTY("Stall detection: enabled (infra: %v, post-infra: %v)\n\n", stallTimeout, postInfraTimeout)
 		}
 	}
 
@@ -521,6 +525,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 		data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 		if err != nil {
 			PrintToTTY("[%d] ⚠️  monitor-cluster-json.sh failed: %v\n", iteration, err)
+			// lastProgress used as currentProgress: no fresh data, so preserve the phase from the last successful check.
 			checkStallTimeout(t, stallEnabled, stallTimeout, lastProgressTime, lastProgress, lastProgress, context, config.WorkloadClusterNamespace, provisionedClusterName)
 			time.Sleep(pollInterval)
 			continue
