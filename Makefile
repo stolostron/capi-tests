@@ -539,17 +539,17 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 		fi; \
 		echo ""; \
 		echo "--- Orphaned Azure Resources ---"; \
-		echo "These are resources with prefix '$(CLEANUP_WORKLOAD_CLUSTER)' that may exist outside the resource group."; \
+		echo "These are resources with prefix '$(CLEANUP_CLUSTER_PREFIX)' that may exist outside the resource group."; \
 		echo ""; \
 		if ! command -v az >/dev/null 2>&1; then \
 			echo "⚠️  Azure CLI (az) not available - skipping orphaned resources cleanup"; \
 		elif ! az account show >/dev/null 2>&1; then \
 			echo "⚠️  Not logged in to Azure - skipping orphaned resources cleanup"; \
 		else \
-			read -p "Search for and delete orphaned Azure resources with prefix '$(CLEANUP_WORKLOAD_CLUSTER)'? [y/N] " -n 1 -r; \
+			read -p "Search for and delete orphaned Azure resources with prefix '$(CLEANUP_CLUSTER_PREFIX)'? [y/N] " -n 1 -r; \
 			echo ""; \
 			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-				./scripts/cleanup-azure-resources.sh --prefix "$(CLEANUP_WORKLOAD_CLUSTER)" --match-mode contains || echo "Orphaned resources cleanup encountered an error"; \
+				./scripts/cleanup-azure-resources.sh --prefix "$(CLEANUP_CLUSTER_PREFIX)" --match-mode contains || echo "Orphaned resources cleanup encountered an error"; \
 			else \
 				echo "Skipped orphaned resources cleanup."; \
 				echo "Tip: Run 'make clean-azure' to clean all Azure resources (including orphaned)."; \
@@ -641,15 +641,15 @@ clean-azure: ## Delete all Azure resources (resource group, orphaned resources, 
 		echo ""; \
 	fi
 	@if [ "$(FORCE)" = "1" ]; then \
-		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CLEANUP_WORKLOAD_CLUSTER)" --match-mode contains --force; \
+		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CLEANUP_CLUSTER_PREFIX)" --match-mode contains --force; \
 	else \
-		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CLEANUP_WORKLOAD_CLUSTER)" --match-mode contains; \
+		./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CLEANUP_CLUSTER_PREFIX)" --match-mode contains; \
 	fi
 
 # Internal target: force delete all Azure resources without prompting
 .PHONY: _clean-azure-force
 _clean-azure-force:
-	@./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CLEANUP_WORKLOAD_CLUSTER)" --match-mode contains --force 2>/dev/null || true
+	@./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CLEANUP_CLUSTER_PREFIX)" --match-mode contains --force 2>/dev/null || true
 
 # Internal target: conditionally clean Azure resources (only for ARO)
 .PHONY: _clean-azure-conditional
