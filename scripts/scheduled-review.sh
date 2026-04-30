@@ -106,7 +106,7 @@ if [[ ! -f "$COMMAND_FILE" ]]; then
     exit 1
 fi
 
-PROMPT=$(cat "$COMMAND_FILE")
+PROMPT=$(sed '1{/^---$/d}' "$COMMAND_FILE" | sed '1,/^---$/d')
 
 # Adjust time window if not default
 if [[ "$HOURS" != "24" ]]; then
