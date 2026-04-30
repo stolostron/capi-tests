@@ -264,24 +264,27 @@ func TestCleanup_VerifyOrphanedNamespaces(t *testing.T) {
 		return
 	}
 
-	if len(namespaces) == 0 {
+	var orphaned []string
+	for _, ns := range namespaces {
+		if ns != config.WorkloadClusterNamespace {
+			orphaned = append(orphaned, ns)
+		}
+	}
+
+	if len(orphaned) == 0 {
 		PrintToTTY("No orphaned test namespaces found (clean state)\n\n")
 		t.Log("No orphaned test namespaces found")
 		return
 	}
 
-	PrintToTTY("Found %d test namespace(s):\n", len(namespaces))
-	for _, ns := range namespaces {
-		if ns == config.WorkloadClusterNamespace {
-			PrintToTTY("  - %s (current test run)\n", ns)
-		} else {
-			PrintToTTY("  - %s (orphaned from previous run)\n", ns)
-		}
+	PrintToTTY("Found %d orphaned test namespace(s):\n", len(orphaned))
+	for _, ns := range orphaned {
+		PrintToTTY("  - %s\n", ns)
 	}
 
-	PrintToTTY("\nTo clean up all test namespaces:\n")
+	PrintToTTY("\nTo clean up all orphaned test namespaces:\n")
 	PrintToTTY("  kubectl --context %s delete namespace -l %s=true\n\n", context, config.TestLabelPrefix)
-	t.Logf("Found %d test namespace(s) on management cluster", len(namespaces))
+	t.Logf("Found %d orphaned test namespace(s) on management cluster", len(orphaned))
 }
 
 // ============================================================================
