@@ -3519,11 +3519,15 @@ func GetTestNamespaces(t *testing.T, kubeContext string) ([]string, error) {
 }
 
 // GetNamespaceResources returns a summary of resources remaining in a namespace.
+// Queries both built-in resources and CAPI custom resources that are the primary
+// inhabitants of workload cluster namespaces.
 func GetNamespaceResources(t *testing.T, kubeContext, namespace string) (string, error) {
 	t.Helper()
 
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
-		"-n", namespace, "get", "all", "--no-headers", "--ignore-not-found")
+		"-n", namespace, "get",
+		"clusters.cluster.x-k8s.io,machinepools.cluster.x-k8s.io,secrets,configmaps,all",
+		"--no-headers", "--ignore-not-found")
 	if err != nil {
 		return "", fmt.Errorf("failed to list resources in namespace %s: %w", namespace, err)
 	}
