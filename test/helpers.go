@@ -3511,12 +3511,12 @@ func GetTestNamespaces(t *testing.T, kubeContext string) ([]string, error) {
 		return nil, fmt.Errorf("failed to list test namespaces with label %s: %w", labelSelector, err)
 	}
 
-	trimmed := strings.TrimSpace(output)
-	if trimmed == "" {
+	filtered := filterKubectlWarnings(output)
+	if filtered == "" {
 		return []string{}, nil
 	}
 
-	return strings.Fields(trimmed), nil
+	return strings.Fields(filtered), nil
 }
 
 // GetNamespaceResources returns a summary of resources remaining in a namespace.
@@ -3533,7 +3533,21 @@ func GetNamespaceResources(t *testing.T, kubeContext, namespace string) (string,
 		return "", fmt.Errorf("failed to list resources in namespace %s: %w", namespace, err)
 	}
 
-	return strings.TrimSpace(output), nil
+	return filterKubectlWarnings(output), nil
+}
+
+// filterKubectlWarnings removes kubectl "Warning:" lines from command output
+// to prevent them from being misinterpreted as resource names or data.
+func filterKubectlWarnings(output string) string {
+	var lines []string
+	for _, line := range strings.Split(output, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "Warning:") {
+			continue
+		}
+		lines = append(lines, trimmed)
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 // ============================================================================
