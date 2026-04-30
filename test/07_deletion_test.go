@@ -365,11 +365,15 @@ func TestDeletion_DeleteNamespace(t *testing.T) {
 		"Delete workload cluster namespace from management cluster")
 
 	// Check if namespace exists
-	_, err := RunCommandQuiet(t, "kubectl", "--context", context,
+	output, err := RunCommandQuiet(t, "kubectl", "--context", context,
 		"get", "namespace", config.WorkloadClusterNamespace)
 	if err != nil {
-		PrintToTTY("Namespace '%s' not found (already deleted or never created)\n\n", config.WorkloadClusterNamespace)
-		t.Skipf("Namespace '%s' not found", config.WorkloadClusterNamespace)
+		errMsg := strings.ToLower(output + " " + err.Error())
+		if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "notfound") {
+			PrintToTTY("Namespace '%s' not found (already deleted or never created)\n\n", config.WorkloadClusterNamespace)
+			t.Skipf("Namespace '%s' not found", config.WorkloadClusterNamespace)
+		}
+		t.Fatalf("Failed to check namespace '%s': %v (output: %s)", config.WorkloadClusterNamespace, err, output)
 	}
 
 	// Check if namespace still has CAPI resources (safety check)
@@ -382,7 +386,7 @@ func TestDeletion_DeleteNamespace(t *testing.T) {
 	PrintToTTY("Deleting namespace '%s'...\n", config.WorkloadClusterNamespace)
 	t.Logf("Deleting namespace '%s'", config.WorkloadClusterNamespace)
 
-	output, err := RunCommand(t, "kubectl", "--context", context,
+	output, err = RunCommand(t, "kubectl", "--context", context,
 		"delete", "namespace", config.WorkloadClusterNamespace, "--wait=true", "--timeout=5m")
 	if err != nil {
 		PrintToTTY("❌ Failed to delete namespace: %v\n", err)
