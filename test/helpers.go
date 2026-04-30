@@ -3505,7 +3505,8 @@ func GetTestNamespaces(t *testing.T, kubeContext string) ([]string, error) {
 
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
 		"get", "namespaces", "-l", labelSelector,
-		"-o", "jsonpath={.items[*].metadata.name}")
+		"-o", "jsonpath={.items[*].metadata.name}",
+		"--request-timeout=10s")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list test namespaces with label %s: %w", labelSelector, err)
 	}
@@ -3527,7 +3528,7 @@ func GetNamespaceResources(t *testing.T, kubeContext, namespace string) (string,
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
 		"-n", namespace, "get",
 		"clusters.cluster.x-k8s.io,machinepools.cluster.x-k8s.io,secrets,configmaps,all",
-		"--no-headers", "--ignore-not-found")
+		"--no-headers", "--ignore-not-found", "--request-timeout=10s")
 	if err != nil {
 		return "", fmt.Errorf("failed to list resources in namespace %s: %w", namespace, err)
 	}
