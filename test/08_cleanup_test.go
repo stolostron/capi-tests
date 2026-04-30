@@ -200,6 +200,85 @@ func TestCleanup_VerifyDeploymentStateFile(t *testing.T) {
 }
 
 // ============================================================================
+// Namespace Cleanup Tests
+// ============================================================================
+
+// TestCleanup_VerifyNamespaceRemoval verifies the current test run's namespace was cleaned up.
+func TestCleanup_VerifyNamespaceRemoval(t *testing.T) {
+	config := NewTestConfig()
+
+	PrintTestHeader(t, "TestCleanup_VerifyNamespaceRemoval",
+		"Verify workload cluster namespace was removed")
+
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	}
+
+	context := config.GetKubeContext()
+
+	_, err := RunCommandQuiet(t, "kubectl", "--context", context,
+		"get", "namespace", config.WorkloadClusterNamespace)
+	if err != nil {
+		PrintToTTY("Namespace '%s' not found (clean state)\n\n", config.WorkloadClusterNamespace)
+		t.Logf("Namespace '%s' does not exist - cleanup verified", config.WorkloadClusterNamespace)
+		return
+	}
+
+	PrintToTTY("⚠️  Namespace '%s' still exists on management cluster\n", config.WorkloadClusterNamespace)
+
+	resources, resErr := GetNamespaceResources(t, context, config.WorkloadClusterNamespace)
+	if resErr == nil && resources != "" {
+		PrintToTTY("Resources in namespace:\n%s\n", resources)
+	} else {
+		PrintToTTY("Namespace appears empty\n")
+	}
+
+	PrintToTTY("\nUse 'kubectl --context %s delete namespace %s' to remove\n\n", context, config.WorkloadClusterNamespace)
+	t.Logf("Namespace '%s' still exists after test run", config.WorkloadClusterNamespace)
+}
+
+// TestCleanup_VerifyOrphanedNamespaces checks for leftover test namespaces from previous runs.
+// These are identified by the test label (e.g., "capz-test=true" for ARO).
+func TestCleanup_VerifyOrphanedNamespaces(t *testing.T) {
+	config := NewTestConfig()
+
+	PrintTestHeader(t, "TestCleanup_VerifyOrphanedNamespaces",
+		fmt.Sprintf("Check for orphaned test namespaces (label: %s=true)", config.TestLabelPrefix))
+
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	}
+
+	context := config.GetKubeContext()
+
+	namespaces, err := GetTestNamespaces(t, context)
+	if err != nil {
+		PrintToTTY("⚠️  Could not list test namespaces: %v\n\n", err)
+		t.Logf("Warning: Could not list test namespaces: %v", err)
+		return
+	}
+
+	if len(namespaces) == 0 {
+		PrintToTTY("No orphaned test namespaces found (clean state)\n\n")
+		t.Log("No orphaned test namespaces found")
+		return
+	}
+
+	PrintToTTY("Found %d test namespace(s):\n", len(namespaces))
+	for _, ns := range namespaces {
+		if ns == config.WorkloadClusterNamespace {
+			PrintToTTY("  - %s (current test run)\n", ns)
+		} else {
+			PrintToTTY("  - %s (orphaned from previous run)\n", ns)
+		}
+	}
+
+	PrintToTTY("\nTo clean up all test namespaces:\n")
+	PrintToTTY("  kubectl --context %s delete namespace -l %s=true\n\n", context, config.TestLabelPrefix)
+	t.Logf("Found %d test namespace(s) on management cluster", len(namespaces))
+}
+
+// ============================================================================
 // Azure Cleanup Tests
 // ============================================================================
 
@@ -735,6 +814,26 @@ func TestCleanup_Summary(t *testing.T) {
 		PrintToTTY("  Deploy State:     EXISTS\n")
 	} else {
 		PrintToTTY("  Deploy State:     CLEAN\n")
+	}
+
+	// Management cluster namespaces
+	PrintToTTY("\n--- Management Cluster Namespaces ---\n")
+
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	}
+
+	context := config.GetKubeContext()
+	testNamespaces, nsErr := GetTestNamespaces(t, context)
+	if nsErr != nil {
+		PrintToTTY("  Test Namespaces:  (could not check: %v)\n", nsErr)
+	} else if len(testNamespaces) == 0 {
+		PrintToTTY("  Test Namespaces:  CLEAN\n")
+	} else {
+		PrintToTTY("  Test Namespaces:  %d found\n", len(testNamespaces))
+		for _, ns := range testNamespaces {
+			PrintToTTY("    - %s\n", ns)
+		}
 	}
 
 	PrintToTTY("\n--- Azure Resources ---\n")

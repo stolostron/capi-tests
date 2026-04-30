@@ -3492,6 +3492,46 @@ func ReportDeletionProgress(t *testing.T, iteration int, elapsed, remaining time
 }
 
 // ============================================================================
+// Namespace Cleanup Functions
+// ============================================================================
+
+// GetTestNamespaces returns all namespaces created by the test suite, identified by the
+// provider-specific test label (e.g., "capz-test=true" for ARO, "capa-test=true" for ROSA).
+func GetTestNamespaces(t *testing.T, kubeContext string) ([]string, error) {
+	t.Helper()
+
+	config := NewTestConfig()
+	labelSelector := fmt.Sprintf("%s=true", config.TestLabelPrefix)
+
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+		"get", "namespaces", "-l", labelSelector,
+		"-o", "jsonpath={.items[*].metadata.name}")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list test namespaces with label %s: %w", labelSelector, err)
+	}
+
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" {
+		return []string{}, nil
+	}
+
+	return strings.Fields(trimmed), nil
+}
+
+// GetNamespaceResources returns a summary of resources remaining in a namespace.
+func GetNamespaceResources(t *testing.T, kubeContext, namespace string) (string, error) {
+	t.Helper()
+
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+		"-n", namespace, "get", "all", "--no-headers", "--ignore-not-found")
+	if err != nil {
+		return "", fmt.Errorf("failed to list resources in namespace %s: %w", namespace, err)
+	}
+
+	return strings.TrimSpace(output), nil
+}
+
+// ============================================================================
 // Configuration Validation Functions
 // ============================================================================
 //
