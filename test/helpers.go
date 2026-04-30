@@ -3492,12 +3492,12 @@ func ReportDeletionProgress(t *testing.T, iteration int, elapsed, remaining time
 }
 
 // ============================================================================
-// Namespace Cleanup Functions
+// Management Cluster K8s Test Namespace Functions
 // ============================================================================
 
-// GetTestNamespaces returns all namespaces created by the test suite, identified by the
+// GetManagementClusterK8sTestNamespaces returns all namespaces created by the test suite, identified by the
 // provider-specific test label (e.g., "capz-test=true" for ARO, "capa-test=true" for ROSA).
-func GetTestNamespaces(t *testing.T, kubeContext string) ([]string, error) {
+func GetManagementClusterK8sTestNamespaces(t *testing.T, kubeContext string) ([]string, error) {
 	t.Helper()
 
 	config := NewTestConfig()
@@ -3519,10 +3519,10 @@ func GetTestNamespaces(t *testing.T, kubeContext string) ([]string, error) {
 	return strings.Fields(filtered), nil
 }
 
-// GetNamespaceResources returns a summary of resources remaining in a namespace.
+// GetManagementClusterK8sTestNamespaceResources returns a summary of resources remaining in a namespace.
 // Queries both built-in resources and CAPI custom resources that are the primary
 // inhabitants of workload cluster namespaces.
-func GetNamespaceResources(t *testing.T, kubeContext, namespace string) (string, error) {
+func GetManagementClusterK8sTestNamespaceResources(t *testing.T, kubeContext, namespace string) (string, error) {
 	t.Helper()
 
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,

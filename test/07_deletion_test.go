@@ -349,10 +349,10 @@ func TestDeletion_VerifyAzureResourcesDeletion(t *testing.T) {
 	}
 }
 
-// TestDeletion_DeleteNamespace deletes the workload cluster namespace after all resources
+// TestDeletion_DeleteManagementClusterK8sTestNamespace deletes the workload cluster namespace after all resources
 // have been deleted. Each test run creates a unique namespace (e.g., capz-test-20260202-135526)
 // that must be cleaned up to prevent namespace accumulation on the management cluster.
-func TestDeletion_DeleteNamespace(t *testing.T) {
+func TestDeletion_DeleteManagementClusterK8sTestNamespace(t *testing.T) {
 	config := NewTestConfig()
 
 	if config.IsExternalCluster() {
@@ -361,7 +361,7 @@ func TestDeletion_DeleteNamespace(t *testing.T) {
 
 	context := config.GetKubeContext()
 
-	PrintTestHeader(t, "TestDeletion_DeleteNamespace",
+	PrintTestHeader(t, "TestDeletion_DeleteManagementClusterK8sTestNamespace",
 		"Delete workload cluster namespace from management cluster")
 
 	// Check if namespace exists
@@ -377,7 +377,7 @@ func TestDeletion_DeleteNamespace(t *testing.T) {
 	}
 
 	// Check if namespace still has CAPI resources (safety check)
-	resources, resErr := GetNamespaceResources(t, context, config.WorkloadClusterNamespace)
+	resources, resErr := GetManagementClusterK8sTestNamespaceResources(t, context, config.WorkloadClusterNamespace)
 	if resErr == nil && resources != "" {
 		PrintToTTY("⚠️  Namespace '%s' still contains resources:\n%s\n\n", config.WorkloadClusterNamespace, resources)
 		t.Logf("Warning: namespace still contains resources, proceeding with deletion anyway")

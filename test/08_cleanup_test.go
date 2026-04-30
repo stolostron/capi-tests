@@ -200,14 +200,14 @@ func TestCleanup_VerifyDeploymentStateFile(t *testing.T) {
 }
 
 // ============================================================================
-// Namespace Cleanup Tests
+// Management Cluster K8s Test Namespace Cleanup Tests
 // ============================================================================
 
-// TestCleanup_VerifyNamespaceRemoval verifies the current test run's namespace was cleaned up.
-func TestCleanup_VerifyNamespaceRemoval(t *testing.T) {
+// TestCleanup_VerifyManagementClusterK8sTestNamespaceRemoval verifies the current test run's namespace was cleaned up.
+func TestCleanup_VerifyManagementClusterK8sTestNamespaceRemoval(t *testing.T) {
 	config := NewTestConfig()
 
-	PrintTestHeader(t, "TestCleanup_VerifyNamespaceRemoval",
+	PrintTestHeader(t, "TestCleanup_VerifyManagementClusterK8sTestNamespaceRemoval",
 		"Verify workload cluster namespace was removed")
 
 	if config.IsExternalCluster() {
@@ -232,7 +232,7 @@ func TestCleanup_VerifyNamespaceRemoval(t *testing.T) {
 
 	PrintToTTY("⚠️  Namespace '%s' still exists on management cluster\n", config.WorkloadClusterNamespace)
 
-	resources, resErr := GetNamespaceResources(t, context, config.WorkloadClusterNamespace)
+	resources, resErr := GetManagementClusterK8sTestNamespaceResources(t, context, config.WorkloadClusterNamespace)
 	if resErr == nil && resources != "" {
 		PrintToTTY("Resources in namespace:\n%s\n", resources)
 	} else {
@@ -243,12 +243,12 @@ func TestCleanup_VerifyNamespaceRemoval(t *testing.T) {
 	t.Logf("Namespace '%s' still exists after test run", config.WorkloadClusterNamespace)
 }
 
-// TestCleanup_VerifyOrphanedNamespaces checks for leftover test namespaces from previous runs.
+// TestCleanup_VerifyOrphanedManagementClusterK8sTestNamespaces checks for leftover test namespaces from previous runs.
 // These are identified by the test label (e.g., "capz-test=true" for ARO).
-func TestCleanup_VerifyOrphanedNamespaces(t *testing.T) {
+func TestCleanup_VerifyOrphanedManagementClusterK8sTestNamespaces(t *testing.T) {
 	config := NewTestConfig()
 
-	PrintTestHeader(t, "TestCleanup_VerifyOrphanedNamespaces",
+	PrintTestHeader(t, "TestCleanup_VerifyOrphanedManagementClusterK8sTestNamespaces",
 		fmt.Sprintf("Check for orphaned test namespaces (label: %s=true)", config.TestLabelPrefix))
 
 	if config.IsExternalCluster() {
@@ -257,7 +257,7 @@ func TestCleanup_VerifyOrphanedNamespaces(t *testing.T) {
 
 	context := config.GetKubeContext()
 
-	namespaces, err := GetTestNamespaces(t, context)
+	namespaces, err := GetManagementClusterK8sTestNamespaces(t, context)
 	if err != nil {
 		PrintToTTY("⚠️  Could not list test namespaces: %v\n\n", err)
 		t.Logf("Warning: Could not list test namespaces: %v", err)
@@ -833,7 +833,7 @@ func TestCleanup_Summary(t *testing.T) {
 	}
 
 	context := config.GetKubeContext()
-	testNamespaces, nsErr := GetTestNamespaces(t, context)
+	testNamespaces, nsErr := GetManagementClusterK8sTestNamespaces(t, context)
 	if nsErr != nil {
 		PrintToTTY("  Test Namespaces:  (could not check: %v)\n", nsErr)
 	} else if len(testNamespaces) == 0 {
