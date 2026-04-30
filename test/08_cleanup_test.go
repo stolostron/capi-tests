@@ -216,11 +216,17 @@ func TestCleanup_VerifyNamespaceRemoval(t *testing.T) {
 
 	context := config.GetKubeContext()
 
-	_, err := RunCommandQuiet(t, "kubectl", "--context", context,
+	output, err := RunCommandQuiet(t, "kubectl", "--context", context,
 		"get", "namespace", config.WorkloadClusterNamespace)
 	if err != nil {
-		PrintToTTY("Namespace '%s' not found (clean state)\n\n", config.WorkloadClusterNamespace)
-		t.Logf("Namespace '%s' does not exist - cleanup verified", config.WorkloadClusterNamespace)
+		errMsg := strings.ToLower(output + " " + err.Error())
+		if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "notfound") {
+			PrintToTTY("Namespace '%s' not found (clean state)\n\n", config.WorkloadClusterNamespace)
+			t.Logf("Namespace '%s' does not exist - cleanup verified", config.WorkloadClusterNamespace)
+			return
+		}
+		PrintToTTY("⚠️  Could not check namespace '%s': %v\n\n", config.WorkloadClusterNamespace, err)
+		t.Logf("Warning: could not verify namespace removal: %v", err)
 		return
 	}
 
