@@ -453,10 +453,15 @@ func TestDeletion_Summary(t *testing.T) {
 	}
 
 	// Check namespace status
-	_, nsErr := RunCommandQuiet(t, "kubectl", "--context", context,
+	nsOutput, nsErr := RunCommandQuiet(t, "kubectl", "--context", context,
 		"get", "namespace", config.WorkloadClusterNamespace)
 	if nsErr != nil {
-		PrintToTTY("✅ Namespace '%s' deleted\n", config.WorkloadClusterNamespace)
+		errMsg := strings.ToLower(nsOutput + " " + nsErr.Error())
+		if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "notfound") {
+			PrintToTTY("✅ Namespace '%s' deleted\n", config.WorkloadClusterNamespace)
+		} else {
+			PrintToTTY("⚠️  Could not determine namespace status: %v\n", nsErr)
+		}
 	} else {
 		PrintToTTY("⚠️  Namespace '%s' still exists\n", config.WorkloadClusterNamespace)
 	}
