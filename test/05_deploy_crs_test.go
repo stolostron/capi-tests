@@ -1381,15 +1381,20 @@ type stallProgressState struct {
 	infraComplete       bool
 }
 
-// checkStallTimeout fails the test if no deployment progress has been made within the stall timeout.
-// Uses two-phase detection: the configured timeout during infrastructure provisioning, and 2x the
-// configured timeout after infrastructure completes (when waiting for the hosted control plane,
-// which is an opaque Azure-side operation that can take 30-45+ minutes).
-// Safe to call from error-recovery paths (e.g., monitor script failure) where status data is unavailable.
-func checkStallTimeout(t *testing.T, stallEnabled bool, stallTimeout time.Duration, lastProgressTime time.Time, lastProgress, currentProgress stallProgressState, context, namespace, clusterName string) {
-	t.Helper()
+// stallResult holds the outcome of stall phase detection.
+type stallResult struct {
+	stalled          bool
+	effectiveTimeout time.Duration
+	phase            string
+	stallDuration    time.Duration
+}
+
+// detectStallPhase determines whether the deployment has stalled and which phase it is in.
+// Infrastructure phase uses the configured timeout; post-infrastructure phase (infra done,
+// waiting for HCP) uses 2x the configured timeout since HCP provisioning is opaque.
+func detectStallPhase(stallEnabled bool, stallTimeout time.Duration, stallDuration time.Duration, currentProgress stallProgressState) stallResult {
 	if !stallEnabled {
-		return
+		return stallResult{}
 	}
 
 	effectiveTimeout := stallTimeout
@@ -1399,8 +1404,22 @@ func checkStallTimeout(t *testing.T, stallEnabled bool, stallTimeout time.Durati
 		phase = "post-infrastructure"
 	}
 
-	stallDuration := time.Since(lastProgressTime)
-	if stallDuration <= effectiveTimeout {
+	return stallResult{
+		stalled:          stallDuration > effectiveTimeout,
+		effectiveTimeout: effectiveTimeout,
+		phase:            phase,
+		stallDuration:    stallDuration,
+	}
+}
+
+// checkStallTimeout fails the test if no deployment progress has been made within the stall timeout.
+// Uses two-phase detection via detectStallPhase.
+// Safe to call from error-recovery paths (e.g., monitor script failure) where status data is unavailable.
+func checkStallTimeout(t *testing.T, stallEnabled bool, stallTimeout time.Duration, lastProgressTime time.Time, lastProgress, currentProgress stallProgressState, context, namespace, clusterName string) {
+	t.Helper()
+
+	result := detectStallPhase(stallEnabled, stallTimeout, time.Since(lastProgressTime), currentProgress)
+	if !result.stalled {
 		return
 	}
 
@@ -1409,7 +1428,7 @@ func checkStallTimeout(t *testing.T, stallEnabled bool, stallTimeout time.Durati
 		infraStatus += " (done)"
 	}
 
-	PrintToTTY("\n❌ Deployment stalled: no progress for %v (%s phase, timeout: %v)\n", stallDuration.Round(time.Second), phase, effectiveTimeout)
+	PrintToTTY("\n❌ Deployment stalled: no progress for %v (%s phase, timeout: %v)\n", result.stallDuration.Round(time.Second), result.phase, result.effectiveTimeout)
 	PrintToTTY("   Infrastructure: %s\n", infraStatus)
 	PrintToTTY("   Blocked on: ControlPlane.Ready=%v, MachinePool replicas=%d, ProvisioningState=%q\n\n",
 		lastProgress.cpReady, lastProgress.mpReadyReplicas, lastProgress.mpProvisioningState)
@@ -1426,7 +1445,7 @@ func checkStallTimeout(t *testing.T, stallEnabled bool, stallTimeout time.Durati
 		"Check the cloud provider's service health dashboard.\n\n"+
 		"To increase stall timeout: export DEPLOYMENT_STALL_TIMEOUT=45m\n"+
 		"To disable stall detection: export DEPLOYMENT_STALL_TIMEOUT=0",
-		stallDuration.Round(time.Second), phase, effectiveTimeout,
+		result.stallDuration.Round(time.Second), result.phase, result.effectiveTimeout,
 		infraStatus,
 		lastProgress.cpReady, lastProgress.cpState,
 		lastProgress.mpReadyReplicas, lastProgress.mpProvisioningState)
