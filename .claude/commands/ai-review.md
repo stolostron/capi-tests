@@ -1,10 +1,10 @@
 ---
-description: Full pipeline - self-review, wait for AI reviewers (CodeRabbit, Qodo), process all findings with individual commits
+description: Full pipeline - self-review, security review, wait for AI reviewers (CodeRabbit, Qodo), process all findings with individual commits
 ---
 
 # AI Review Pipeline
 
-Full pipeline command that runs Claude Code self-review, waits for AI code reviewers (CodeRabbit and Qodo), and processes all findings - accepting or denying each one with individual commits per fix. Every finding gets a reply and is resolved.
+Full pipeline command that runs Claude Code self-review, security review, waits for AI code reviewers (CodeRabbit and Qodo), and processes all findings - accepting or denying each one with individual commits per fix. Every finding gets a reply and is resolved.
 
 Supersedes the former `/coderabbit-review` command.
 
@@ -95,9 +95,44 @@ Before external AI reviews, run Claude Code's own code review to catch issues ea
      git push
      ```
 
-4. **If no issues found**, skip to Step 3:
+4. **If no issues found**, skip to Step 2b:
    ```
-   Self-review: No issues found. Proceeding to wait for AI reviewers.
+   Self-review: No issues found. Proceeding to security review.
+   ```
+
+### Step 2b: Security Review
+
+After self-review fixes are committed and pushed, run a security-focused review to catch vulnerabilities before external AI reviewers see the code.
+
+1. **Invoke the `/security-review` skill**:
+   - Use the Skill tool to invoke `security-review`
+   - This performs a comprehensive security review of the pending changes on the current branch
+   - It checks for: command injection, credential exposure, path traversal, insecure defaults, OWASP top 10 issues, and other security vulnerabilities
+
+2. **Implement security fixes**:
+   - For each security issue found:
+     - Read the affected file and understand the vulnerability
+     - Implement the fix
+     - Stage specific files: `git add <file1> <file2>`
+     - Commit with descriptive message:
+       ```bash
+       git commit -m "$(cat <<'EOF'
+       fix: address security finding - <description of fix>
+
+       Security review finding addressed before external review.
+
+       Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+       EOF
+       )"
+       ```
+   - Push all security fixes:
+     ```bash
+     git push
+     ```
+
+3. **If no security issues found**, skip to Step 3:
+   ```
+   Security review: No issues found. Proceeding to wait for AI reviewers.
    ```
 
 ### Steps 3-6: CodeRabbit Review Loop
@@ -689,6 +724,10 @@ AI Review Pipeline Summary - PR #<number>
 ========================================
 
 Self-Review:
+- Findings found: X
+- Fixes committed: Y
+
+Security Review:
 - Findings found: X
 - Fixes committed: Y
 
