@@ -97,7 +97,7 @@ Never hardcode values - always use `GetEnvOrDefault()` for new configuration.
 - `ExtractCurrentContext` / `GetExistingClusterNames` / `CheckForMismatchedClusters`
 
 **Azure utilities:**
-- `EnsureAzureCredentialsSet` / `DetectAzureAuthMode` / `HasServicePrincipalCredentials` / `GetAzureAuthDescription`
+- `EnsureAzureCredentialsSet` / `EnsureAzureCliLogin` / `DetectAzureAuthMode` / `HasServicePrincipalCredentials` / `GetAzureAuthDescription`
 - `DetectAzureError` / `FormatAzureError` - Azure error detection and formatting
 
 **AWS/ROSA utilities:**

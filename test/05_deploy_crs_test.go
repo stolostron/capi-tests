@@ -1247,6 +1247,10 @@ func TestDeployment_TagAzureResources(t *testing.T) {
 		return
 	}
 
+	if err := EnsureAzureCliLogin(t); err != nil {
+		t.Skipf("Skipping Azure resource tagging: Azure CLI auth unavailable: %v", err)
+	}
+
 	PrintToTTY("\n=== Tagging Azure Resources ===\n")
 
 	PrintToTTY("Tagging resource group %s...\n", config.ResourceGroupName)
