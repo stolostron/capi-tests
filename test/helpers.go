@@ -3258,7 +3258,7 @@ func EnsureAzureCliLogin(t *testing.T) error {
 
 	if _, err := RunCommandQuiet(t, "az", "account", "show"); err != nil {
 		if !HasServicePrincipalCredentials() {
-			return fmt.Errorf("Azure CLI not logged in and no service principal credentials available (need AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)")
+			return fmt.Errorf("azure CLI not logged in and no service principal credentials available (need AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)")
 		}
 
 		clientID := os.Getenv("AZURE_CLIENT_ID")
