@@ -389,6 +389,12 @@ func TestDeletion_DeleteManagementClusterK8sTestNamespace(t *testing.T) {
 	output, err = RunCommand(t, "kubectl", "--context", context,
 		"delete", "namespace", config.WorkloadClusterNamespace, "--wait=true", "--timeout=5m")
 	if err != nil {
+		errMsg := strings.ToLower(output + " " + err.Error())
+		if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "notfound") {
+			PrintToTTY("Namespace '%s' already deleted\n\n", config.WorkloadClusterNamespace)
+			t.Logf("Namespace '%s' already deleted before delete call completed", config.WorkloadClusterNamespace)
+			return
+		}
 		PrintToTTY("❌ Failed to delete namespace: %v\n", err)
 		PrintToTTY("Output: %s\n\n", output)
 		t.Fatalf("Failed to delete namespace '%s': %v\nOutput: %s\n\n"+
