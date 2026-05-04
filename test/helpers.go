@@ -3272,7 +3272,8 @@ func EnsureAzureCliLogin(t *testing.T) error {
 		"--service-principal",
 		"-u", clientID,
 		"-p", clientSecret,
-		"--tenant", tenantID); err != nil {
+		"--tenant", tenantID,
+		"--allow-no-subscriptions"); err != nil {
 		return fmt.Errorf("az login with service principal failed: %w", err)
 	}
 
