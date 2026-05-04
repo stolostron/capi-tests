@@ -349,6 +349,70 @@ func TestDeletion_VerifyAzureResourcesDeletion(t *testing.T) {
 	}
 }
 
+// TestDeletion_DeleteManagementClusterK8sTestNamespace deletes the workload cluster namespace after all resources
+// have been deleted. Each test run creates a unique namespace (e.g., capz-test-20260202-135526)
+// that must be cleaned up to prevent namespace accumulation on the management cluster.
+func TestDeletion_DeleteManagementClusterK8sTestNamespace(t *testing.T) {
+	config := NewTestConfig()
+
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	}
+
+	context := config.GetKubeContext()
+
+	PrintTestHeader(t, "TestDeletion_DeleteManagementClusterK8sTestNamespace",
+		"Delete workload cluster namespace from management cluster")
+
+	// Check if namespace exists
+	output, err := RunCommandQuiet(t, "kubectl", "--context", context,
+		"get", "namespace", config.WorkloadClusterNamespace)
+	if err != nil {
+		errMsg := strings.ToLower(output + " " + err.Error())
+		if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "notfound") {
+			PrintToTTY("Namespace '%s' not found (already deleted or never created)\n\n", config.WorkloadClusterNamespace)
+			t.Skipf("Namespace '%s' not found", config.WorkloadClusterNamespace)
+		}
+		t.Fatalf("Failed to check namespace '%s': %v (output: %s)", config.WorkloadClusterNamespace, err, output)
+	}
+
+	// Check if namespace still has CAPI resources (safety check)
+	resources, resErr := GetManagementClusterK8sTestNamespaceResources(t, context, config.WorkloadClusterNamespace)
+	if resErr != nil {
+		PrintToTTY("⚠️  Could not list resources in namespace '%s': %v\n\n", config.WorkloadClusterNamespace, resErr)
+		t.Logf("Warning: failed to list namespace resources before deletion: %v", resErr)
+	} else if resources != "" {
+		PrintToTTY("⚠️  Namespace '%s' still contains resources:\n%s\n\n", config.WorkloadClusterNamespace, resources)
+		t.Logf("Warning: namespace still contains resources, proceeding with deletion anyway")
+	}
+
+	PrintToTTY("Deleting namespace '%s'...\n", config.WorkloadClusterNamespace)
+	t.Logf("Deleting namespace '%s'", config.WorkloadClusterNamespace)
+
+	output, err = RunCommand(t, "kubectl", "--context", context,
+		"delete", "namespace", config.WorkloadClusterNamespace, "--wait=true", "--timeout=5m")
+	if err != nil {
+		errMsg := strings.ToLower(output + " " + err.Error())
+		if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "notfound") {
+			PrintToTTY("Namespace '%s' already deleted\n\n", config.WorkloadClusterNamespace)
+			t.Logf("Namespace '%s' already deleted before delete call completed", config.WorkloadClusterNamespace)
+			return
+		}
+		PrintToTTY("❌ Failed to delete namespace: %v\n", err)
+		PrintToTTY("Output: %s\n\n", output)
+		t.Fatalf("Failed to delete namespace '%s': %v\nOutput: %s\n\n"+
+			"Troubleshooting:\n"+
+			"  1. Check for stuck finalizers: kubectl --context %s get namespace %s -o yaml\n"+
+			"  2. Manual cleanup: kubectl --context %s delete namespace %s",
+			config.WorkloadClusterNamespace, err, output,
+			context, config.WorkloadClusterNamespace,
+			context, config.WorkloadClusterNamespace)
+	}
+
+	PrintToTTY("✅ Namespace '%s' deleted successfully\n\n", config.WorkloadClusterNamespace)
+	t.Logf("Deleted namespace: %s", config.WorkloadClusterNamespace)
+}
+
 // TestDeletion_Summary provides a summary of the deletion process.
 func TestDeletion_Summary(t *testing.T) {
 	config := NewTestConfig()
@@ -395,6 +459,20 @@ func TestDeletion_Summary(t *testing.T) {
 		if machinePoolCount > 0 {
 			PrintToTTY("⚠️  %d MachinePool resource(s) remain\n", machinePoolCount)
 		}
+	}
+
+	// Check namespace status
+	nsOutput, nsErr := RunCommandQuiet(t, "kubectl", "--context", context,
+		"get", "namespace", config.WorkloadClusterNamespace)
+	if nsErr != nil {
+		errMsg := strings.ToLower(nsOutput + " " + nsErr.Error())
+		if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "notfound") {
+			PrintToTTY("✅ Namespace '%s' deleted\n", config.WorkloadClusterNamespace)
+		} else {
+			PrintToTTY("⚠️  Could not determine namespace status: %v\n", nsErr)
+		}
+	} else {
+		PrintToTTY("⚠️  Namespace '%s' still exists\n", config.WorkloadClusterNamespace)
 	}
 
 	// Summary message

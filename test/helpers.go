@@ -3492,6 +3492,65 @@ func ReportDeletionProgress(t *testing.T, iteration int, elapsed, remaining time
 }
 
 // ============================================================================
+// Management Cluster K8s Test Namespace Functions
+// ============================================================================
+
+// GetManagementClusterK8sTestNamespaces returns all namespaces created by the test suite, identified by the
+// provider-specific test label (e.g., "capz-test=true" for ARO, "capa-test=true" for ROSA).
+func GetManagementClusterK8sTestNamespaces(t *testing.T, kubeContext string) ([]string, error) {
+	t.Helper()
+
+	config := NewTestConfig()
+	labelSelector := fmt.Sprintf("%s=true", config.TestLabelPrefix)
+
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+		"get", "namespaces", "-l", labelSelector,
+		"-o", "jsonpath={.items[*].metadata.name}",
+		"--request-timeout=10s")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list test namespaces with label %s: %w", labelSelector, err)
+	}
+
+	filtered := filterKubectlWarnings(output)
+	if filtered == "" {
+		return []string{}, nil
+	}
+
+	return strings.Fields(filtered), nil
+}
+
+// GetManagementClusterK8sTestNamespaceResources returns a summary of resources remaining in a namespace.
+// Queries both built-in resources and CAPI custom resources that are the primary
+// inhabitants of workload cluster namespaces.
+func GetManagementClusterK8sTestNamespaceResources(t *testing.T, kubeContext, namespace string) (string, error) {
+	t.Helper()
+
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+		"-n", namespace, "get",
+		"clusters.cluster.x-k8s.io,machinepools.cluster.x-k8s.io,secrets,configmaps,all",
+		"--no-headers", "--ignore-not-found", "--request-timeout=10s")
+	if err != nil {
+		return "", fmt.Errorf("failed to list resources in namespace %s: %w", namespace, err)
+	}
+
+	return filterKubectlWarnings(output), nil
+}
+
+// filterKubectlWarnings removes kubectl "Warning:" lines from command output
+// to prevent them from being misinterpreted as resource names or data.
+func filterKubectlWarnings(output string) string {
+	var lines []string
+	for _, line := range strings.Split(output, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "Warning:") {
+			continue
+		}
+		lines = append(lines, trimmed)
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+// ============================================================================
 // Configuration Validation Functions
 // ============================================================================
 //

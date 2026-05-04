@@ -9,14 +9,14 @@ func TestDetectStallPhase(t *testing.T) {
 	const baseTimeout = DefaultDeploymentStallTimeout
 
 	tests := []struct {
-		name             string
-		enabled          bool
-		stallTimeout     time.Duration
-		stallDuration    time.Duration
-		progress         stallProgressState
-		wantStalled      bool
-		wantPhase        string
-		wantEffective    time.Duration
+		name          string
+		enabled       bool
+		stallTimeout  time.Duration
+		stallDuration time.Duration
+		progress      stallProgressState
+		wantStalled   bool
+		wantPhase     string
+		wantEffective time.Duration
 	}{
 		{
 			name:    "disabled returns not stalled",
