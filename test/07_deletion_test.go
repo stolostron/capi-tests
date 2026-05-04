@@ -378,7 +378,10 @@ func TestDeletion_DeleteManagementClusterK8sTestNamespace(t *testing.T) {
 
 	// Check if namespace still has CAPI resources (safety check)
 	resources, resErr := GetManagementClusterK8sTestNamespaceResources(t, context, config.WorkloadClusterNamespace)
-	if resErr == nil && resources != "" {
+	if resErr != nil {
+		PrintToTTY("⚠️  Could not list resources in namespace '%s': %v\n\n", config.WorkloadClusterNamespace, resErr)
+		t.Logf("Warning: failed to list namespace resources before deletion: %v", resErr)
+	} else if resources != "" {
 		PrintToTTY("⚠️  Namespace '%s' still contains resources:\n%s\n\n", config.WorkloadClusterNamespace, resources)
 		t.Logf("Warning: namespace still contains resources, proceeding with deletion anyway")
 	}
