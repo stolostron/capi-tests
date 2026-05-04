@@ -1247,11 +1247,15 @@ func TestDeployment_TagAzureResources(t *testing.T) {
 		return
 	}
 
+	if err := EnsureAzureCliLogin(t); err != nil {
+		t.Fatalf("Azure CLI login required for resource tagging: %v", err)
+	}
+
 	PrintToTTY("\n=== Tagging Azure Resources ===\n")
 
 	PrintToTTY("Tagging resource group %s...\n", config.ResourceGroupName)
 	if err := TagAzureResourceGroup(t, config); err != nil {
-		t.Logf("Warning: failed to tag resource group: %v", err)
+		t.Errorf("Failed to tag resource group: %v", err)
 	}
 	tagAzureADApplications(t, config)
 	tagAzureServicePrincipals(t, config)

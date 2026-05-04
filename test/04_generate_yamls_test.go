@@ -311,9 +311,13 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 		// Resource group may not exist yet (created by CAPI during deployment),
 		// so failure here is expected — Phase 05 will retry after deployment.
 		if len(config.AzureResourceTags) > 0 && CommandExists("az") {
-			PrintToTTY("🏷️  Tagging resource group %s...\n", config.ResourceGroupName)
-			if err := TagAzureResourceGroup(t, config); err != nil {
-				t.Logf("Resource group tagging deferred (RG may not exist yet, Phase 05 will retry): %v", err)
+			if err := EnsureAzureCliLogin(t); err != nil {
+				t.Logf("Resource group tagging deferred (Azure CLI auth unavailable, Phase 05 will retry): %v", err)
+			} else {
+				PrintToTTY("🏷️  Tagging resource group %s...\n", config.ResourceGroupName)
+				if err := TagAzureResourceGroup(t, config); err != nil {
+					t.Logf("Resource group tagging deferred (RG may not exist yet, Phase 05 will retry): %v", err)
+				}
 			}
 		}
 

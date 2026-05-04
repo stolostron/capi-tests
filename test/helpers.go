@@ -3248,6 +3248,44 @@ func GetAzureAuthDescription(mode AzureAuthMode) string {
 	}
 }
 
+// EnsureAzureCliLogin ensures the Azure CLI has an active login session.
+// If not already logged in, it attempts service principal login using
+// AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, and AZURE_TENANT_ID env vars.
+// After login, sets the active subscription if AZURE_SUBSCRIPTION_ID is set.
+func EnsureAzureCliLogin(t *testing.T) error {
+	t.Helper()
+
+	if _, err := RunCommandQuiet(t, "az", "account", "show"); err == nil {
+		return nil
+	}
+
+	if !HasServicePrincipalCredentials() {
+		return fmt.Errorf("Azure CLI not logged in and no service principal credentials available (need AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)")
+	}
+
+	clientID := os.Getenv("AZURE_CLIENT_ID")
+	clientSecret := os.Getenv("AZURE_CLIENT_SECRET")
+	tenantID := os.Getenv("AZURE_TENANT_ID")
+
+	t.Log("Azure CLI not logged in, authenticating with service principal...")
+	if _, err := RunCommandQuiet(t, "az", "login",
+		"--service-principal",
+		"-u", clientID,
+		"-p", clientSecret,
+		"--tenant", tenantID); err != nil {
+		return fmt.Errorf("az login with service principal failed: %w", err)
+	}
+
+	if subID := os.Getenv("AZURE_SUBSCRIPTION_ID"); subID != "" {
+		if _, err := RunCommandQuiet(t, "az", "account", "set", "--subscription", subID); err != nil {
+			t.Logf("Warning: could not set subscription %s: %v", subID, err)
+		}
+	}
+
+	t.Log("Azure CLI authenticated via service principal")
+	return nil
+}
+
 // DeletionResourceStatus holds the status of resources being deleted.
 // ARODeletionStatus contains ARO-specific deletion status fields.
 type ARODeletionStatus struct {
