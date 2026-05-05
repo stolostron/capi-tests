@@ -26,6 +26,21 @@ updates:
           - "minor"
           - "patch"
 
+  # Docker (Dockerfile.prow) — keep pinned image digests up to date
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(docker):"
+    labels:
+      - "dependencies"
+      - "docker"
+
   # GitHub Actions dependencies
   - package-ecosystem: "github-actions"
     directory: "/"
