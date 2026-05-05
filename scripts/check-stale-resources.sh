@@ -263,11 +263,11 @@ check_azure_resource_groups_by_convention() {
         local resource_count
         local resources_json
         resources_json=$(az resource list --resource-group "$rg_name" \
-            --query "[].createdTime" -o json 2>/dev/null) || resources_json="[]"
+            --query "[].{createdTime: createdTime}" -o json 2>/dev/null) || resources_json="[]"
         resource_count=$(echo "$resources_json" | jq 'length')
 
         if [[ "$resource_count" -gt 0 ]]; then
-            created_at=$(echo "$resources_json" | jq -r '[.[] | select(. != null and . != "")] | sort | .[0] // empty')
+            created_at=$(echo "$resources_json" | jq -r '[.[] | .createdTime | select(. != null and . != "")] | sort | .[0] // empty')
         fi
 
         if [[ -z "$created_at" || "$created_at" == "null" ]]; then
