@@ -146,10 +146,13 @@ check_azure_stale() {
     # 1. Resource groups with capi-test-created-at tag
     check_azure_resource_groups
 
-    # 2. AD Applications with capi-test prefix patterns
+    # 2. Resource groups by naming convention (catches untagged orphans from Prow CI, failed runs)
+    check_azure_resource_groups_by_convention
+
+    # 3. AD Applications with capi-test prefix patterns
     check_azure_ad_apps
 
-    # 3. Service Principals with capi-test prefix patterns
+    # 4. Service Principals with capi-test prefix patterns
     check_azure_service_principals
 }
 
@@ -203,6 +206,133 @@ check_azure_resource_groups() {
         fi
     else
         print_success "No stale resource groups (checked ${total} tagged groups)"
+    fi
+}
+
+check_azure_resource_groups_by_convention() {
+    print_info "Scanning Azure resource groups by naming convention (untagged orphan detection)..."
+
+    local tagged_rg_names
+    tagged_rg_names=$(echo "$AZURE_RGS_JSON" | jq -r '.[].name' 2>/dev/null || echo "")
+
+    local all_rgs_json
+    all_rgs_json=$(az group list \
+        --query "[].{name: name, location: location, tags: tags}" \
+        -o json 2>/dev/null) || {
+        print_warning "Failed to list Azure resource groups for convention check"
+        return 0
+    }
+
+    # Match resource groups created by our test suite:
+    #   capz-tests-resgroup, capz-tests-abc12-resgroup, capa-tests-xyz-resgroup
+    #   capz_node_*_rg (Azure-managed node resource groups)
+    # Exclude RGs that already have capi-test-created-at tag (handled by tagged detection)
+    local convention_rgs
+    convention_rgs=$(echo "$all_rgs_json" | jq '[
+        .[] | select(
+            (.name | test("^cap[az]-tests(-[a-f0-9]+-)?resgroup$"))
+            or
+            (.name | test("^capz_node_.*_rg$"))
+        )
+        | select(.tags == null or .tags."capi-test-created-at" == null)
+    ]')
+
+    local total
+    total=$(echo "$convention_rgs" | jq 'length')
+
+    if [[ "$total" -eq 0 ]]; then
+        print_success "No untagged resource groups matching naming convention"
+        return 0
+    fi
+
+    print_info "Found ${total} untagged resource group(s) matching naming convention — checking age..."
+
+    local stale_convention_rgs="[]"
+
+    while IFS= read -r rg; do
+        local rg_name rg_location
+        rg_name=$(echo "$rg" | jq -r '.name')
+        rg_location=$(echo "$rg" | jq -r '.location')
+
+        # Skip if already found by tagged detection
+        if echo "$tagged_rg_names" | grep -qx "$rg_name" 2>/dev/null; then
+            continue
+        fi
+
+        local created_at=""
+        local resource_count
+        local resources_json
+        resources_json=$(az resource list --resource-group "$rg_name" \
+            --query "[].createdTime" -o json 2>/dev/null) || resources_json="[]"
+        resource_count=$(echo "$resources_json" | jq 'length')
+
+        if [[ "$resource_count" -gt 0 ]]; then
+            created_at=$(echo "$resources_json" | jq -r 'sort | .[0]')
+        fi
+
+        # For empty RGs, check activity log for RG creation event
+        if [[ -z "$created_at" || "$created_at" == "null" ]] && [[ "$resource_count" -eq 0 ]]; then
+            created_at=$(az monitor activity-log list \
+                --resource-group "$rg_name" \
+                --offset "90d" \
+                --query "[?operationName.value=='Microsoft.Resources/subscriptions/resourceGroups/write'] | sort_by(@, &eventTimestamp) | [0].eventTimestamp" \
+                -o tsv 2>/dev/null) || created_at=""
+        fi
+
+        # Unknown age — flag as stale (empty untagged RG matching our naming is almost certainly orphaned)
+        if [[ -z "$created_at" || "$created_at" == "null" || "$created_at" == "None" ]]; then
+            local enriched
+            enriched=$(jq -n \
+                --arg name "$rg_name" \
+                --arg location "$rg_location" \
+                --arg createdAt "unknown" \
+                --arg user "-" \
+                --arg env "-" \
+                --arg detection "convention (unknown age)" \
+                --argjson resourceCount "$resource_count" \
+                '{name: $name, location: $location, createdAt: $createdAt, user: $user, env: $env, detection: $detection, resourceCount: $resourceCount}')
+            stale_convention_rgs=$(echo "$stale_convention_rgs" | jq --argjson rg "$enriched" '. + [$rg]')
+            continue
+        fi
+
+        local created_epoch
+        created_epoch=$(date -d "$created_at" +%s 2>/dev/null) || continue
+
+        if [[ "$created_epoch" -lt "$THRESHOLD_EPOCH" ]]; then
+            local enriched
+            enriched=$(jq -n \
+                --arg name "$rg_name" \
+                --arg location "$rg_location" \
+                --arg createdAt "$created_at" \
+                --arg user "-" \
+                --arg env "-" \
+                --arg detection "convention" \
+                --argjson resourceCount "$resource_count" \
+                '{name: $name, location: $location, createdAt: $createdAt, user: $user, env: $env, detection: $detection, resourceCount: $resourceCount}')
+            stale_convention_rgs=$(echo "$stale_convention_rgs" | jq --argjson rg "$enriched" '. + [$rg]')
+        fi
+    done < <(echo "$convention_rgs" | jq -c '.[]')
+
+    local stale_count
+    stale_count=$(echo "$stale_convention_rgs" | jq 'length')
+
+    if [[ "$stale_count" -gt 0 ]]; then
+        STALE_FOUND=true
+        AZURE_RGS_JSON=$(echo "$AZURE_RGS_JSON" | jq --argjson convention "$stale_convention_rgs" '. + $convention')
+
+        if [[ "$JSON_OUTPUT" != "true" ]]; then
+            echo ""
+            print_warning "Found ${stale_count} stale untagged Azure resource group(s) (by naming convention):"
+            echo ""
+            printf "%-45s | %-15s | %-25s | %-5s | %-25s\n" "NAME" "LOCATION" "CREATED AT" "RES#" "DETECTION"
+            printf "%s\n" "$(printf '%.0s-' {1..122})"
+            echo "$stale_convention_rgs" | jq -r '.[] | "\(.name)|\(.location)|\(.createdAt)|\(.resourceCount)|\(.detection)"' | while IFS='|' read -r name loc created rescount detection; do
+                printf "%-45s | %-15s | %-25s | %-5s | %-25s\n" "${name:0:45}" "${loc:0:15}" "${created:0:25}" "${rescount:0:5}" "${detection:0:25}"
+            done
+            echo ""
+        fi
+    else
+        print_success "No stale untagged resource groups (checked ${total} by naming convention)"
     fi
 }
 
