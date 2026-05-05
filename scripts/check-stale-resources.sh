@@ -224,13 +224,13 @@ check_azure_resource_groups_by_convention() {
     }
 
     # Match resource groups created by our test suite:
-    #   capz-tests-resgroup, capz-tests-abc12-resgroup, capa-tests-xyz-resgroup
+    #   capz-tests-resgroup, capz-tests-abc12-resgroup, capa-tests-d3a0f-resgroup
     #   capz_node_*_rg (Azure-managed node resource groups)
     # Exclude RGs that already have capi-test-created-at tag (handled by tagged detection)
     local convention_rgs
     convention_rgs=$(echo "$all_rgs_json" | jq '[
         .[] | select(
-            (.name | test("^cap[az]-tests(-[a-f0-9]+-)?resgroup$"))
+            (.name | test("^cap[az]-tests(-[a-f0-9]+)?-resgroup$"))
             or
             (.name | test("^capz_node_.*_rg$"))
         )
