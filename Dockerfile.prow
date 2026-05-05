@@ -1,4 +1,4 @@
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.24-openshift-4.20
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.24-openshift-4.20@sha256:fbb858fcea45f9d382a7163734cf10983b48584cd163175050a5397aa176ea18
 
 # Tool versions - pin all versions for reproducible builds
 ARG KUBECTL_VERSION=v1.35.2
