@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths: [Dockerfile.prow]
 
+permissions: read-all
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest

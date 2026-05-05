@@ -12,14 +12,16 @@ on:
 
 permissions:
   contents: read
-  security-events: write
-  issues: write
 
 jobs:
   govulncheck:
     name: Go Vulnerability Check
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+      issues: write
 
     steps:
     - name: Checkout code

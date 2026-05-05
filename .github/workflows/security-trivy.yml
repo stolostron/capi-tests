@@ -12,14 +12,16 @@ on:
 
 permissions:
   contents: read
-  security-events: write
-  issues: write
 
 jobs:
   trivy:
     name: Trivy Security Scanner
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+      issues: write
 
     steps:
     - name: Checkout code
