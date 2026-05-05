@@ -53,36 +53,3 @@ jobs:
         path: scorecard-results.sarif
         retention-days: 30
       continue-on-error: true
-
-    - name: Generate summary
-      if: always()
-      env:
-        SCORECARD_OUTCOME: ${{ steps.scorecard.outcome }}
-      run: |
-        echo "# OpenSSF Scorecard Results" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-
-        if [ "$SCORECARD_OUTCOME" = "failure" ]; then
-          echo "## ❌ Scorecard assessment failed" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The OpenSSF Scorecard action encountered errors. Check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
-        elif [ "$SCORECARD_OUTCOME" = "success" ]; then
-          echo "Supply chain security assessment completed." >> $GITHUB_STEP_SUMMARY
-        else
-          echo "## ❌ Scorecard assessment was skipped" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "A prerequisite step failed. Scorecard did not run." >> $GITHUB_STEP_SUMMARY
-        fi
-
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "Results are available in the [Security tab](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/security/code-scanning)." >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### What Scorecard checks" >> $GITHUB_STEP_SUMMARY
-        echo "- Pinned dependencies and GitHub Actions" >> $GITHUB_STEP_SUMMARY
-        echo "- Branch protection rules" >> $GITHUB_STEP_SUMMARY
-        echo "- SAST tool integration" >> $GITHUB_STEP_SUMMARY
-        echo "- Code review practices" >> $GITHUB_STEP_SUMMARY
-        echo "- Vulnerability disclosure policy" >> $GITHUB_STEP_SUMMARY
-        echo "- License and contributor requirements" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "View the badge and detailed results at [OpenSSF Scorecard Viewer](https://scorecard.dev/viewer/?uri=github.com/${GITHUB_REPOSITORY})." >> $GITHUB_STEP_SUMMARY
