@@ -267,11 +267,10 @@ check_azure_resource_groups_by_convention() {
         resource_count=$(echo "$resources_json" | jq 'length')
 
         if [[ "$resource_count" -gt 0 ]]; then
-            created_at=$(echo "$resources_json" | jq -r 'sort | .[0]')
+            created_at=$(echo "$resources_json" | jq -r '[.[] | select(. != null and . != "")] | sort | .[0] // empty')
         fi
 
-        # For empty RGs, check activity log for RG creation event
-        if [[ -z "$created_at" || "$created_at" == "null" ]] && [[ "$resource_count" -eq 0 ]]; then
+        if [[ -z "$created_at" || "$created_at" == "null" ]]; then
             created_at=$(az monitor activity-log list \
                 --resource-group "$rg_name" \
                 --offset "90d" \
@@ -279,8 +278,10 @@ check_azure_resource_groups_by_convention() {
                 -o tsv 2>/dev/null) || created_at=""
         fi
 
-        # Unknown age — flag as stale (empty untagged RG matching our naming is almost certainly orphaned)
         if [[ -z "$created_at" || "$created_at" == "null" || "$created_at" == "None" ]]; then
+            if [[ "$resource_count" -gt 0 ]]; then
+                continue
+            fi
             local enriched
             enriched=$(jq -n \
                 --arg name "$rg_name" \
