@@ -7,6 +7,7 @@ This directory contains reference copies of the OpenShift CI configuration files
 ```
 openshift-ci/
 ├── README.md                          # This file
+├── .config.prowgen                    # Slack reporter configuration
 ├── ci-operator-config.yaml            # ci-operator config reference
 └── step-registry/
     ├── capz-test-check-dependencies-ref.yaml        # Step reference YAML
@@ -20,6 +21,7 @@ openshift-ci/
 
 | Local reference file | openshift/release destination |
 |---------------------|-------------------------------|
+| `.config.prowgen` | `ci-operator/config/stolostron/capi-tests/.config.prowgen` |
 | `ci-operator-config.yaml` | `ci-operator/config/stolostron/capi-tests/stolostron-capi-tests-main.yaml` |
 | `step-registry/capz-test-check-dependencies-ref.yaml` | `ci-operator/step-registry/capz/test/check-dependencies/capz-test-check-dependencies-ref.yaml` |
 | `step-registry/capz-test-check-dependencies-commands.sh` | `ci-operator/step-registry/capz/test/check-dependencies/capz-test-check-dependencies-commands.sh` |
@@ -49,8 +51,10 @@ cd release
 ### 2. Copy files to their destinations
 
 ```bash
-# ci-operator config
+# ci-operator config + Slack reporter
 mkdir -p ci-operator/config/stolostron/capi-tests
+cp <path-to-capi-tests>/openshift-ci/.config.prowgen \
+   ci-operator/config/stolostron/capi-tests/.config.prowgen
 cp <path-to-capi-tests>/openshift-ci/ci-operator-config.yaml \
    ci-operator/config/stolostron/capi-tests/stolostron-capi-tests-main.yaml
 
