@@ -9,7 +9,7 @@ import (
 func writeTempFile(t *testing.T, content []byte) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "fuzz.yaml")
-	if err := os.WriteFile(path, content, 0644); err != nil {
+	if err := os.WriteFile(path, content, 0600); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
 	}
 	return path
