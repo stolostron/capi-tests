@@ -415,10 +415,13 @@ jobs:
 
     - name: Sanitize branch name for artifact
       if: always()
+      env:
+        ARO_REPO_BRANCH_INPUT: ${{ inputs.aro_repo_branch }}
       run: |
-        BRANCH="${{ inputs.aro_repo_branch }}"
+        BRANCH="$ARO_REPO_BRANCH_INPUT"
         if [ -n "$BRANCH" ]; then
-          echo "ARTIFACT_BRANCH_SUFFIX=-${BRANCH//\//-}" >> "$GITHUB_ENV"
+          SANITIZED=$(printf '%s' "$BRANCH" | sed -E 's/[^A-Za-z0-9._-]+/-/g')
+          echo "ARTIFACT_BRANCH_SUFFIX=-${SANITIZED}" >> "$GITHUB_ENV"
         else
           echo "ARTIFACT_BRANCH_SUFFIX=" >> "$GITHUB_ENV"
         fi
