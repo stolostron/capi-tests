@@ -1,0 +1,92 @@
+name: Security Fuzz
+
+on:
+  push:
+    branches: [ "**" ]
+    paths:
+      - 'test/**'
+      - 'go.mod'
+      - 'go.sum'
+  pull_request:
+    branches: [ "**" ]
+    paths:
+      - 'test/**'
+      - 'go.mod'
+      - 'go.sum'
+  schedule:
+    # Run daily at 3:15 AM UTC with extended fuzz time
+    - cron: '15 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Go Fuzz Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+    - name: Set up Go
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+      with:
+        go-version-file: 'go.mod'
+        cache: true
+
+    - name: Determine fuzz duration
+      id: fuzz-config
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+      run: |
+        if [ "$EVENT_NAME" = "schedule" ]; then
+          echo "duration=120s" >> "$GITHUB_OUTPUT"
+        else
+          echo "duration=30s" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Run fuzz tests
+      env:
+        FUZZ_DURATION: ${{ steps.fuzz-config.outputs.duration }}
+      run: |
+        FUZZ_TARGETS=$(grep -rn '^func Fuzz' test/helpers_fuzz_test.go | sed 's/.*func \(Fuzz[a-zA-Z0-9_]*\).*/\1/')
+        FAILED=0
+
+        echo "# Fuzz Test Results" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "| Target | Duration | Result |" >> "$GITHUB_STEP_SUMMARY"
+        echo "|--------|----------|--------|" >> "$GITHUB_STEP_SUMMARY"
+
+        for TARGET in $FUZZ_TARGETS; do
+          echo "=== Running $TARGET for $FUZZ_DURATION ==="
+          if go test ./test -run='^$' -fuzz="^${TARGET}$" -fuzztime="$FUZZ_DURATION" 2>&1; then
+            echo "| $TARGET | $FUZZ_DURATION | :white_check_mark: Pass |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| $TARGET | $FUZZ_DURATION | :x: Fail |" >> "$GITHUB_STEP_SUMMARY"
+            FAILED=1
+          fi
+          echo ""
+        done
+
+        if [ "$FAILED" -eq 1 ]; then
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo ":x: **Some fuzz tests found failures.** Check logs above for crashing inputs." >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+        fi
+
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo ":white_check_mark: **All fuzz tests passed.**" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload fuzz corpus
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: fuzz-corpus
+        path: test/testdata/fuzz/
+        retention-days: 30
+        if-no-files-found: ignore
