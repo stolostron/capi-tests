@@ -85,7 +85,7 @@ jobs:
       contents: read
     if: github.event_name != 'schedule' || true
     outputs:
-      has_changes: ${{ github.event_name != 'schedule' || steps.check.outputs.has_changes == 'true' }}
+      has_changes: ${{ inputs.aro_repo_branch != '' || github.event_name != 'schedule' || steps.check.outputs.has_changes == 'true' }}
     steps:
     - name: Check for changes since last successful run
       id: check
