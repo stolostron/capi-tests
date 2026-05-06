@@ -304,10 +304,14 @@ jobs:
 
     - name: Generate test summary
       if: always()
+      env:
+        BRANCH_LABEL: ${{ inputs.aro_repo_branch || 'main' }}
       run: |
         python3 - << 'PYEOF'
         import xml.etree.ElementTree as ET
         import glob, os, sys
+
+        branch_label = os.environ.get("BRANCH_LABEL", "main")
 
         phase_names = {
             "check-dep": "Check Dependencies",
@@ -325,7 +329,7 @@ jobs:
         if not files:
             summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null")
             with open(summary_path, "a") as s:
-                s.write("# Full Cluster (ARO)(${{ inputs.aro_repo_branch || 'main' }}) Results\n\n")
+                s.write(f"# Full Cluster (ARO)({branch_label}) Results\n\n")
                 s.write("No test results found\n")
             sys.exit(0)
 
@@ -333,7 +337,7 @@ jobs:
         summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null")
 
         with open(summary_path, "a") as summary:
-            summary.write("# Full Cluster (ARO)(${{ inputs.aro_repo_branch || 'main' }}) Results\n\n")
+            summary.write(f"# Full Cluster (ARO)({branch_label}) Results\n\n")
 
             for f in files:
                 phase_key = os.path.basename(f).replace("junit-", "").replace(".xml", "")
