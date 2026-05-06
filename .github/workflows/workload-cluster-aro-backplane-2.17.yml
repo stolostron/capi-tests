@@ -1,0 +1,15 @@
+name: Full Cluster Deployment (ARO)(backplane-2.17)
+
+# Runs Full Cluster Deployment against the backplane-2.17 branch of cluster-api-installer.
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/workload-cluster-aro.yml
+    with:
+      aro_repo_branch: backplane-2.17
+    secrets:
+      QUAY_AUTH: ${{ secrets.QUAY_AUTH }}

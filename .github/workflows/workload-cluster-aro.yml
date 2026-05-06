@@ -1,4 +1,4 @@
-name: Full Cluster Deployment (ARO)
+name: Full Cluster Deployment (ARO)(main)
 
 # Full end-to-end cluster deployment workflow (management cluster + workload cluster).
 # This workflow deploys a Kind management cluster and provisions an ARO HCP workload cluster.
@@ -6,6 +6,7 @@ name: Full Cluster Deployment (ARO)
 # Triggers:
 #   - Nightly at 2:00 AM UTC (cancelled/grey if no code changes since last successful run)
 #   - Manual dispatch
+#   - Reusable workflow call (used by branch-specific caller workflows)
 #
 # Requires:
 #   - Environment (aro-stage) with:
@@ -37,6 +38,31 @@ on:
         options:
           - kind
           - mce
+      aro_repo_branch:
+        description: 'cluster-api-installer branch to test against'
+        required: false
+        type: string
+        default: ''
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: false
+        type: string
+        default: 'aro-stage'
+      cluster_mode:
+        description: 'Management cluster mode'
+        required: false
+        type: string
+        default: 'kind'
+      aro_repo_branch:
+        description: 'cluster-api-installer branch to test against'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      QUAY_AUTH:
+        required: true
 
 permissions:
   contents: read
@@ -45,6 +71,7 @@ permissions:
 env:
   INFRA_PROVIDER: aro
   ARO_REPO_DIR: /tmp/cluster-api-installer-aro
+  ARO_REPO_BRANCH: ${{ inputs.aro_repo_branch }}
   TEST_TIMEOUT_MINUTES: 120
   # Global variables (not environment-specific)
   QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
@@ -102,7 +129,7 @@ jobs:
         sleep 5
 
   management-cluster:
-    name: Full Cluster (${{ inputs.cluster_mode || 'kind' }} → ARO)
+    name: Full Cluster (${{ inputs.cluster_mode || 'kind' }} → ARO)(${{ inputs.aro_repo_branch || 'main' }})
     needs: check-changes
     if: needs.check-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
@@ -298,7 +325,7 @@ jobs:
         if not files:
             summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null")
             with open(summary_path, "a") as s:
-                s.write("# Full Cluster (ARO) Results\n\n")
+                s.write("# Full Cluster (ARO)(${{ inputs.aro_repo_branch || 'main' }}) Results\n\n")
                 s.write("No test results found\n")
             sys.exit(0)
 
@@ -306,7 +333,7 @@ jobs:
         summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null")
 
         with open(summary_path, "a") as summary:
-            summary.write("# Full Cluster (ARO) Results\n\n")
+            summary.write("# Full Cluster (ARO)(${{ inputs.aro_repo_branch || 'main' }}) Results\n\n")
 
             for f in files:
                 phase_key = os.path.basename(f).replace("junit-", "").replace(".xml", "")
@@ -386,7 +413,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        name: test-results-full-cluster-aro
+        name: test-results-full-cluster-aro${{ inputs.aro_repo_branch && format('-{0}', inputs.aro_repo_branch) || '' }}
         path: results/
         retention-days: 30
 
@@ -394,7 +421,7 @@ jobs:
       if: always() && steps.secrets.outputs.configured == 'true' && (steps.phase3.outcome == 'failure')
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        WORKFLOW_NAME: Full Cluster (ARO)
+        WORKFLOW_NAME: Full Cluster (ARO)(${{ inputs.aro_repo_branch || 'main' }})
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         REF_NAME: ${{ github.ref_name }}
         COMMIT_SHA: ${{ github.sha }}
