@@ -770,6 +770,10 @@ FUZZ_TIME ?= 30s
 
 fuzz: ## Run Go fuzz tests (FUZZ_TIME=30s by default)
 	@FUZZ_TARGETS=$$(grep -rn '^func Fuzz' test/helpers_fuzz_test.go | sed 's/.*func \(Fuzz[a-zA-Z0-9_]*\).*/\1/'); \
+	if [ -z "$$FUZZ_TARGETS" ]; then \
+		echo "No fuzz targets found in test/helpers_fuzz_test.go" >&2; \
+		exit 1; \
+	fi; \
 	for TARGET in $$FUZZ_TARGETS; do \
 		echo "=== Fuzzing $$TARGET for $(FUZZ_TIME) ==="; \
 		go test ./test -run='^$$' -fuzz="^$${TARGET}$$" -fuzztime=$(FUZZ_TIME) || exit 1; \
