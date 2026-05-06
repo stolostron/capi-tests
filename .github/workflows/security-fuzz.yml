@@ -57,6 +57,11 @@ jobs:
         FUZZ_TARGETS=$(grep -rn '^func Fuzz' test/helpers_fuzz_test.go | sed 's/.*func \(Fuzz[a-zA-Z0-9_]*\).*/\1/')
         FAILED=0
 
+        if [ -z "$FUZZ_TARGETS" ]; then
+          echo ":x: **No fuzz targets discovered in test/helpers_fuzz_test.go**" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+        fi
+
         echo "# Fuzz Test Results" >> "$GITHUB_STEP_SUMMARY"
         echo "" >> "$GITHUB_STEP_SUMMARY"
         echo "| Target | Duration | Result |" >> "$GITHUB_STEP_SUMMARY"
