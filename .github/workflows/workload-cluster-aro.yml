@@ -413,11 +413,21 @@ jobs:
                     print(f"::error file={test_file},title=Test Failed::{name} failed")
         PYEOF
 
+    - name: Sanitize branch name for artifact
+      if: always()
+      run: |
+        BRANCH="${{ inputs.aro_repo_branch }}"
+        if [ -n "$BRANCH" ]; then
+          echo "ARTIFACT_BRANCH_SUFFIX=-${BRANCH//\//-}" >> "$GITHUB_ENV"
+        else
+          echo "ARTIFACT_BRANCH_SUFFIX=" >> "$GITHUB_ENV"
+        fi
+
     - name: Upload test results
       if: always()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        name: test-results-full-cluster-aro${{ inputs.aro_repo_branch && format('-{0}', inputs.aro_repo_branch) || '' }}
+        name: test-results-full-cluster-aro${{ env.ARTIFACT_BRANCH_SUFFIX }}
         path: results/
         retention-days: 30
 
