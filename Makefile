@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-my-resources check-stale help summary scheduled-review
+.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-my-resources check-stale help summary scheduled-review fuzz
 
 # Use bash for shell commands (required for PIPESTATUS in test-all target)
 SHELL := /bin/bash
@@ -765,6 +765,21 @@ visualize: ## Generate HTML pipeline visualization from Prow JUnit XML (usage: m
 		exit 1; \
 	fi
 	@./scripts/visualize-pipeline.sh "$(BUILD_ID)"
+
+FUZZ_TIME ?= 30s
+
+fuzz: ## Run Go fuzz tests (FUZZ_TIME=30s by default)
+	@FUZZ_TARGETS=$$(grep -rn '^func Fuzz' test/helpers_fuzz_test.go | sed 's/.*func \(Fuzz[a-zA-Z0-9_]*\).*/\1/'); \
+	if [ -z "$$FUZZ_TARGETS" ]; then \
+		echo "No fuzz targets found in test/helpers_fuzz_test.go" >&2; \
+		exit 1; \
+	fi; \
+	for TARGET in $$FUZZ_TARGETS; do \
+		echo "=== Fuzzing $$TARGET for $(FUZZ_TIME) ==="; \
+		go test ./test -run='^$$' -fuzz="^$${TARGET}$$" -fuzztime=$(FUZZ_TIME) || exit 1; \
+		echo ""; \
+	done; \
+	echo "=== All fuzz tests passed ==="
 
 fmt: ## Format Go code
 	go fmt ./...
