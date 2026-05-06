@@ -7,6 +7,11 @@ on:
     - cron: '0 5 * * *'
   workflow_dispatch:
 
+permissions:
+  actions: write
+  contents: read
+  issues: write
+
 jobs:
   deploy:
     uses: ./.github/workflows/workload-cluster-aro.yml
