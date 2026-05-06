@@ -2,13 +2,13 @@ name: Security Fuzz
 
 on:
   push:
-    branches: [ "**" ]
+    branches: ["**"]
     paths:
       - 'test/**'
       - 'go.mod'
       - 'go.sum'
   pull_request:
-    branches: [ "**" ]
+    branches: ["**"]
     paths:
       - 'test/**'
       - 'go.mod'
