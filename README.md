@@ -17,6 +17,10 @@
 [![Trivy](https://github.com/stolostron/capi-tests/actions/workflows/security-trivy.yml/badge.svg)](https://github.com/stolostron/capi-tests/actions/workflows/security-trivy.yml)
 [![nancy](https://github.com/stolostron/capi-tests/actions/workflows/security-nancy.yml/badge.svg)](https://github.com/stolostron/capi-tests/actions/workflows/security-nancy.yml)
 
+**Quality:**
+
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12771/badge)](https://www.bestpractices.dev/projects/12771)
+
 Go-based CAPI test suite supporting ARO (CAPZ/ASO) and ROSA (CAPA) deployment paths.
 
 ## Overview
