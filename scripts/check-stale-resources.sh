@@ -217,7 +217,7 @@ check_azure_resource_groups_by_convention() {
 
     local all_rgs_json
     all_rgs_json=$(az group list \
-        --query "[].{name: name, location: location, tags: tags, managedBy: managedBy}" \
+        --query "[].{name: name, location: location, tags: tags}" \
         -o json 2>/dev/null) || {
         print_warning "Failed to list Azure resource groups for convention check"
         return 0
@@ -225,16 +225,16 @@ check_azure_resource_groups_by_convention() {
 
     # Match resource groups created by our test suite:
     #   capz-tests-resgroup, capz-tests-abc12-resgroup, capa-tests-d3a0f-resgroup
-    # Exclude:
-    #   - RGs with capi-test-created-at tag (handled by tagged detection)
-    #   - RGs with managedBy set (Azure-managed node RGs like capz_node_*_rg)
+    #   capz_node_*_rg (Azure-managed node resource groups)
+    # Exclude RGs that already have capi-test-created-at tag (handled by tagged detection)
     local convention_rgs
     convention_rgs=$(echo "$all_rgs_json" | jq '[
         .[] | select(
             (.name | test("^cap[az]-tests(-[a-f0-9]+)?-resgroup$"))
+            or
+            (.name | test("^capz_node_.*_rg$"))
         )
         | select(.tags == null or .tags."capi-test-created-at" == null)
-        | select(.managedBy == null or .managedBy == "")
     ]')
 
     local total
