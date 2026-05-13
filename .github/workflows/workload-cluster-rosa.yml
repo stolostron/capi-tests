@@ -91,7 +91,6 @@ jobs:
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
         fi
 
-
   management-cluster:
     name: Full Cluster (${{ inputs.cluster_mode || 'kind' }} → ROSA)
     needs: check-changes

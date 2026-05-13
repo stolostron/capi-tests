@@ -116,7 +116,6 @@ jobs:
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
         fi
 
-
   management-cluster:
     name: Full Cluster (${{ inputs.cluster_mode || 'kind' }} → ARO)(${{ inputs.aro_repo_branch || 'main' }})
     needs: check-changes
