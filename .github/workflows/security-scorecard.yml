@@ -3,6 +3,8 @@ name: Security Scorecard
 on:
   push:
     branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
   schedule:
     # Run weekly on Monday at 4:30 AM UTC
     - cron: '30 4 * * 1'
