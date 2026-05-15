@@ -2325,9 +2325,13 @@ func FormatAzureError(info *AzureErrorInfo) string {
 func RequireClusterResource(t *testing.T, kubeContext, namespace, clusterName string) {
 	t.Helper()
 
-	_, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "get", "cluster", clusterName)
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "get", "cluster", clusterName)
 	if err != nil {
-		t.Skipf("Cluster resource %q not found in namespace %s (prior deployment phase may have failed)", clusterName, namespace)
+		errText := strings.ToLower(output + " " + err.Error())
+		if strings.Contains(errText, "not found") || strings.Contains(errText, "no resources found") {
+			t.Skipf("Cluster resource %q not found in namespace %s (prior deployment phase may have failed)", clusterName, namespace)
+		}
+		t.Fatalf("Failed to check Cluster resource %q in namespace %s: %v\nOutput: %s", clusterName, namespace, err, output)
 	}
 
 	phase, err := GetClusterPhase(t, kubeContext, namespace, clusterName)
