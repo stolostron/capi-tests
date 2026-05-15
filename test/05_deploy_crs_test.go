@@ -796,6 +796,8 @@ func TestDeployment_WaitForExternalAuthReady(t *testing.T) {
 	context := config.GetKubeContext()
 	provisionedClusterName := config.GetProvisionedClusterName()
 
+	RequireClusterResource(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
+
 	timeout := 10 * time.Minute
 	pollInterval := 15 * time.Second
 	startTime := time.Now()
@@ -890,6 +892,8 @@ func TestDeployment_VerifyInfrastructureResources(t *testing.T) {
 
 	context := config.GetKubeContext()
 	provisionedClusterName := config.GetProvisionedClusterName()
+
+	RequireClusterResource(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 
 	timeout := config.DeploymentTimeout
 	pollInterval := 30 * time.Second
@@ -998,6 +1002,8 @@ func TestDeployment_VerifyAROClusterReady(t *testing.T) {
 	context := config.GetKubeContext()
 	provisionedClusterName := config.GetProvisionedClusterName()
 
+	RequireClusterResource(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
+
 	timeout := 5 * time.Minute
 	pollInterval := 10 * time.Second
 	startTime := time.Now()
@@ -1081,6 +1087,8 @@ func TestDeployment_VerifyClusterProvisioned(t *testing.T) {
 	context := config.GetKubeContext()
 	provisionedClusterName := config.GetProvisionedClusterName()
 
+	RequireClusterResource(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
+
 	timeout := 5 * time.Minute
 	pollInterval := 10 * time.Second
 	startTime := time.Now()
@@ -1158,6 +1166,8 @@ func TestDeployment_VerifyClusterInfrastructureReady(t *testing.T) {
 
 	context := config.GetKubeContext()
 	provisionedClusterName := config.GetProvisionedClusterName()
+
+	RequireClusterResource(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 
 	timeout := 5 * time.Minute
 	pollInterval := 10 * time.Second
