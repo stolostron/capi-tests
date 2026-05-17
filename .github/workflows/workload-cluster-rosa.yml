@@ -110,6 +110,7 @@ jobs:
       OCM_CLIENT_ID: ${{ vars.OCM_CLIENT_ID }}
       OCM_CLIENT_SECRET: ${{ secrets.OCM_CLIENT_SECRET }}
       DEPLOYMENT_ENV: ${{ vars.DEPLOYMENT_ENV }}
+      OCP_VERSION: ${{ vars.OCP_VERSION }}
 
       # MCE credentials (only required when cluster_mode=mce)
       MCE_API_URL: ${{ vars.MCE_API_URL }}
