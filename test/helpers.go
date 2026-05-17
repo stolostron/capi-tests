@@ -2320,6 +2320,26 @@ func FormatAzureError(info *AzureErrorInfo) string {
 	return result.String()
 }
 
+// RequireClusterResource skips the test if the CAPI Cluster resource does not exist or is in a Failed phase.
+// Use this at the top of verification tests that depend on earlier deployment phases succeeding.
+func RequireClusterResource(t *testing.T, kubeContext, namespace, clusterName string) {
+	t.Helper()
+
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "get", "cluster", clusterName)
+	if err != nil {
+		errText := strings.ToLower(output + " " + err.Error())
+		if strings.Contains(errText, "not found") || strings.Contains(errText, "no resources found") {
+			t.Skipf("Cluster resource %q not found in namespace %s (prior deployment phase may have failed)", clusterName, namespace)
+		}
+		t.Fatalf("Failed to check Cluster resource %q in namespace %s: %v\nOutput: %s", clusterName, namespace, err, output)
+	}
+
+	phase, err := GetClusterPhase(t, kubeContext, namespace, clusterName)
+	if err == nil && phase == ClusterPhaseFailed {
+		t.Skipf("Cluster %q is in Failed phase — skipping (deployment failed in a prior phase)", clusterName)
+	}
+}
+
 // GetClusterPhase retrieves the current phase of a CAPI Cluster resource.
 // Returns the phase string (e.g., "Provisioning", "Provisioned", "Failed") or an error.
 // This is useful for checking if a cluster is ready before attempting operations that
