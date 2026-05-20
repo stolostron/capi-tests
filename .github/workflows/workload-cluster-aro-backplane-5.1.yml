@@ -1,0 +1,20 @@
+name: Full Cluster Deployment (ARO)(backplane-5.1)
+
+# Runs Full Cluster Deployment against the backplane-5.1 branch of cluster-api-installer.
+# Prepared for upcoming backplane 5.1 branches.
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/workload-cluster-aro.yml
+    with:
+      aro_repo_branch: backplane-5.1
+    secrets: inherit

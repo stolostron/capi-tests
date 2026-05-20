@@ -1,7 +1,7 @@
-name: Full Cluster Deployment (ARO)(backplane-5.x)
+name: Full Cluster Deployment (ARO)(backplane-5.0)
 
-# Runs Full Cluster Deployment against the backplane-5.x branch of cluster-api-installer.
-# Prepared for upcoming backplane 5.x branches.
+# Runs Full Cluster Deployment against the backplane-5.0 branch of cluster-api-installer.
+# Prepared for upcoming backplane 5.0 branches.
 on:
   schedule:
     - cron: '0 5 * * *'
