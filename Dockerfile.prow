@@ -28,7 +28,7 @@ RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
     if [ -d /etc/yum.repos.art/ci ]; then \
       cp /etc/yum.repos.d/azure-cli.repo /etc/yum.repos.art/ci/; \
     fi && \
-    dnf install -y azure-cli jq gettext libxml2 bc python3-cffi && dnf clean all
+    dnf install -y azure-cli jq gettext libxml2 bc python3-cffi podman && dnf clean all
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
