@@ -253,7 +253,6 @@ func TestCheckDependencies_DockerDaemonRunning(t *testing.T) {
 		}
 
 		t.Fatalf("Docker daemon is not running or not accessible.\n%s\n\nError: %v", helpMessage, err)
-		return
 	}
 
 	serverVersion := strings.TrimSpace(output)
@@ -283,14 +282,12 @@ func TestCheckDependencies_PythonVersion(t *testing.T) {
 			"  - Using pyenv: pyenv install 3.14.2 && pyenv global 3.14.2\n" +
 			"  - Using dnf (Fedora): sudo dnf install python3\n" +
 			"  - Using apt (Ubuntu/Debian): sudo apt install python3")
-		return
 	}
 
 	// Get Python version
 	output, err := RunCommand(t, pythonCmd, "--version")
 	if err != nil {
 		t.Fatalf("Failed to get Python version: %v", err)
-		return
 	}
 
 	// Parse version string (e.g., "Python 3.12.4" or "Python 3.13.0")
@@ -302,13 +299,11 @@ func TestCheckDependencies_PythonVersion(t *testing.T) {
 	parts := strings.Fields(versionStr)
 	if len(parts) < 2 {
 		t.Fatalf("Could not parse Python version from: %s", versionStr)
-		return
 	}
 
 	versionParts := strings.Split(parts[1], ".")
 	if len(versionParts) < 2 {
 		t.Fatalf("Could not parse Python version numbers from: %s", parts[1])
-		return
 	}
 
 	// Parse major, minor, and patch version
@@ -316,12 +311,10 @@ func TestCheckDependencies_PythonVersion(t *testing.T) {
 	_, err = Sscanf(versionParts[0], "%d", &major)
 	if err != nil {
 		t.Fatalf("Could not parse Python major version from: %s", versionParts[0])
-		return
 	}
 	_, err = Sscanf(versionParts[1], "%d", &minor)
 	if err != nil {
 		t.Fatalf("Could not parse Python minor version from: %s", versionParts[1])
-		return
 	}
 	// Parse patch version if present (default to 0)
 	if len(versionParts) >= 3 {
@@ -341,7 +334,6 @@ func TestCheckDependencies_PythonVersion(t *testing.T) {
 			"  - Using pyenv: pyenv install 3.14.2 && pyenv global 3.14.2\n"+
 			"  - Update your system Python to a newer patch version",
 			versionStr)
-		return
 	}
 
 	// Python 3.14.2 is the tested version - pass without warning
@@ -640,7 +632,6 @@ func TestCheckDependencies_Clusterctl_IsAvailable(t *testing.T) {
 		t.Fatalf("clusterctl is required on macOS but was not found.\n\n" +
 			"Install with: brew install clusterctl\n\n" +
 			"See the warning above for detailed instructions.")
-		return
 	}
 
 	// On Linux/other platforms, warn but don't fail

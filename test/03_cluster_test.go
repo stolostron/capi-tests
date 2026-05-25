@@ -184,7 +184,6 @@ func TestExternalCluster_01b_MCEBaselineStatus(t *testing.T) {
 				PrintToTTY("   - %s\n", e)
 			}
 			t.Fatalf("Failed to configure MCE components: %v", fixErrors)
-			return
 		}
 
 		// Report successful changes
@@ -392,7 +391,6 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 			if err != nil {
 				PrintToTTY("❌ Failed to generate Kind config: %v\n", err)
 				t.Fatalf("Failed to generate Kind config: %v", err)
-				return
 			}
 			if kindConfigPath != "" {
 				PrintToTTY("✅ Kind config generated: %s\n", kindConfigPath)
