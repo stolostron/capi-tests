@@ -1,0 +1,9 @@
+annotations:
+  - checks:
+      - token-permissions
+    reasons:
+      - reason: not-applicable
+        details: >-
+          security-events:write is required for uploading SARIF results from
+          security scanners (gosec, scorecard). issues:write is required for
+          auto-creating GitHub issues on security findings.
