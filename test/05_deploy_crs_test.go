@@ -49,7 +49,6 @@ func TestDeployment_00_CreateNamespace(t *testing.T) {
 	if err != nil {
 		PrintToTTY("❌ Failed to create namespace: %v\n", err)
 		t.Fatalf("Failed to create namespace '%s': %v\nOutput: %s", config.WorkloadClusterNamespace, err, output)
-		return
 	}
 
 	PrintToTTY("✅ Namespace '%s' created successfully\n\n", config.WorkloadClusterNamespace)
@@ -308,7 +307,6 @@ func TestDeployment_ProviderCredentialsConfigured(t *testing.T) {
 				PrintToTTY("\nThe YAML generation did not create the credentials secret.\n")
 				PrintToTTY("Please check that TestDeployment_ApplyClusterYAMLs completed successfully.\n\n")
 				t.Fatalf("%s secret not found: %v", secretName, err)
-				return
 			}
 			PrintToTTY("✅ Secret exists\n\n")
 
@@ -332,7 +330,6 @@ func TestDeployment_ProviderCredentialsConfigured(t *testing.T) {
 				PrintToTTY("\n❌ %s credentials validation FAILED\n", provider.Name)
 				PrintToTTY("Missing fields: %v\n\n", missingFields)
 				t.Fatalf("%s credentials not configured: missing %v", provider.Name, missingFields)
-				return
 			}
 
 			PrintToTTY("\n✅ %s credentials validation PASSED\n\n", provider.Name)
@@ -545,7 +542,6 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 				"Check cluster status:\n"+
 				"  kubectl --context %s -n %s get cluster %s -o yaml",
 				context, config.WorkloadClusterNamespace, provisionedClusterName)
-			return
 		}
 
 		// Fail-fast: check ControlPlane conditions for permanent failures
@@ -557,7 +553,6 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 				"  kubectl --context %s -n %s get %s %s -o yaml",
 				controlPlaneKind, err,
 				context, config.WorkloadClusterNamespace, strings.ToLower(controlPlaneKind), controlPlaneName)
-			return
 		}
 
 		// Fail-fast: check MachinePool infrastructure conditions for permanent failures
@@ -575,7 +570,6 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 						"  kubectl --context %s -n %s get %s %s -o yaml",
 						mp.Infrastructure.Kind, err,
 						context, config.WorkloadClusterNamespace, strings.ToLower(mp.Infrastructure.Kind), infraName)
-					return
 				}
 			}
 		}
@@ -815,7 +809,6 @@ func TestDeployment_WaitForExternalAuthReady(t *testing.T) {
 				"Check control plane conditions:\n"+
 				"  kubectl --context %s -n %s get arocontrolplane -o yaml",
 				elapsed.Round(time.Second), context, config.WorkloadClusterNamespace)
-			return
 		}
 
 		data, err := MonitorCluster(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
@@ -834,7 +827,6 @@ func TestDeployment_WaitForExternalAuthReady(t *testing.T) {
 				"  kubectl --context %s -n %s get %s -o yaml",
 				data.ControlPlane.Kind, err,
 				context, config.WorkloadClusterNamespace, strings.ToLower(data.ControlPlane.Kind))
-			return
 		}
 
 		// Search for ExternalAuthReady in control plane conditions
@@ -919,7 +911,6 @@ func TestDeployment_VerifyInfrastructureResources(t *testing.T) {
 				"Check AROCluster status:\n"+
 				"  kubectl --context %s -n %s get arocluster %s -o yaml",
 				elapsed.Round(time.Second), context, config.WorkloadClusterNamespace, provisionedClusterName)
-			return
 		}
 
 		iteration++
@@ -945,7 +936,6 @@ func TestDeployment_VerifyInfrastructureResources(t *testing.T) {
 				"  kubectl --context %s -n %s get %s %s -o yaml",
 				data.Infrastructure.Kind, err,
 				context, config.WorkloadClusterNamespace, strings.ToLower(data.Infrastructure.Kind), infraName)
-			return
 		}
 
 		// Get infrastructure status from already-parsed data
@@ -1030,7 +1020,6 @@ func TestDeployment_VerifyAROClusterReady(t *testing.T) {
 			t.Fatalf("Timeout after %v waiting for %s.Ready=true.\n"+
 				"  kubectl --context %s -n %s get %s %s -o yaml",
 				elapsed.Round(time.Second), infraKind, context, config.WorkloadClusterNamespace, infraResourceType, provisionedClusterName)
-			return
 		}
 
 		// Use monitoring script to get infrastructure status
@@ -1062,7 +1051,6 @@ func TestDeployment_VerifyAROClusterReady(t *testing.T) {
 					"  kubectl --context %s -n %s get %s %s -o yaml",
 					data.Infrastructure.Kind, failErr,
 					context, config.WorkloadClusterNamespace, infraResourceType, provisionedClusterName)
-				return
 			}
 		}
 
@@ -1107,7 +1095,6 @@ func TestDeployment_VerifyClusterProvisioned(t *testing.T) {
 			t.Fatalf("Timeout after %v waiting for cluster.status.initialization.infrastructureProvisioned=true.\n"+
 				"  kubectl --context %s -n %s get cluster %s -o yaml",
 				elapsed.Round(time.Second), context, config.WorkloadClusterNamespace, provisionedClusterName)
-			return
 		}
 
 		// Use monitoring script to get cluster infrastructure status
@@ -1137,7 +1124,6 @@ func TestDeployment_VerifyClusterProvisioned(t *testing.T) {
 					"Check cluster status:\n"+
 					"  kubectl --context %s -n %s get cluster %s -o yaml",
 					context, config.WorkloadClusterNamespace, provisionedClusterName)
-				return
 			}
 			if failErr := CheckK8sConditionsForPermanentFailure(data.Cluster.Conditions); failErr != nil {
 				PrintToTTY("\n❌ Permanent failure detected in Cluster conditions — aborting early\n")
@@ -1146,7 +1132,6 @@ func TestDeployment_VerifyClusterProvisioned(t *testing.T) {
 					"Check cluster status:\n"+
 					"  kubectl --context %s -n %s get cluster %s -o yaml",
 					failErr, context, config.WorkloadClusterNamespace, provisionedClusterName)
-				return
 			}
 		}
 
@@ -1187,7 +1172,6 @@ func TestDeployment_VerifyClusterInfrastructureReady(t *testing.T) {
 			t.Fatalf("Timeout after %v waiting for Cluster InfrastructureReady=True.\n"+
 				"  kubectl --context %s -n %s get cluster %s -o yaml",
 				elapsed.Round(time.Second), context, config.WorkloadClusterNamespace, provisionedClusterName)
-			return
 		}
 
 		// Use monitoring script to get cluster infrastructure ready condition
@@ -1217,7 +1201,6 @@ func TestDeployment_VerifyClusterInfrastructureReady(t *testing.T) {
 					"Check cluster status:\n"+
 					"  kubectl --context %s -n %s get cluster %s -o yaml",
 					context, config.WorkloadClusterNamespace, provisionedClusterName)
-				return
 			}
 			if failErr := CheckK8sConditionsForPermanentFailure(data.Cluster.Conditions); failErr != nil {
 				PrintToTTY("\n❌ Permanent failure detected in Cluster conditions — aborting early\n")
@@ -1226,7 +1209,6 @@ func TestDeployment_VerifyClusterInfrastructureReady(t *testing.T) {
 					"Check cluster status:\n"+
 					"  kubectl --context %s -n %s get cluster %s -o yaml",
 					failErr, context, config.WorkloadClusterNamespace, provisionedClusterName)
-				return
 			}
 		}
 
