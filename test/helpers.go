@@ -3311,6 +3311,7 @@ func EnsureAzureCliLogin(t *testing.T) error {
 type ARODeletionStatus struct {
 	ResourceGroup    string
 	RGExists         bool
+	RGChecked        bool
 	RGProvisionState string
 }
 
@@ -3419,13 +3420,23 @@ func GetDeletionResourceStatus(t *testing.T, kubeContext, namespace, clusterName
 				ResourceGroup: actualResourceGroup,
 			}
 
-			// Check Azure resource group status if az CLI is available
 			if CommandExists("az") {
 				output, err := RunCommandQuiet(t, "az", "group", "show", "--name", actualResourceGroup,
 					"--query", "properties.provisioningState", "-o", "tsv")
 				if err == nil && strings.TrimSpace(output) != "" {
 					aroStatus.RGExists = true
+					aroStatus.RGChecked = true
 					aroStatus.RGProvisionState = strings.TrimSpace(output)
+				} else if err != nil {
+					errOutput := strings.ToLower(output + " " + err.Error())
+					if strings.Contains(errOutput, "resourcegroupnotfound") ||
+						strings.Contains(errOutput, "could not be found") ||
+						(strings.Contains(errOutput, "resource group") && strings.Contains(errOutput, "not found")) {
+						aroStatus.RGExists = false
+						aroStatus.RGChecked = true
+					} else {
+						t.Logf("Warning: Could not determine Azure RG status: %v", err)
+					}
 				}
 			}
 
@@ -3505,11 +3516,12 @@ func FormatDeletionProgress(status DeletionResourceStatus) string {
 		sb.WriteString(formatRow("✅", "MachinePool", "Deleted"))
 	}
 
-	// ARO-specific: Azure resource group (only show for ARO provider)
 	if status.AROProviderSpecific != nil {
 		aroStatus := status.AROProviderSpecific
 		if aroStatus.ResourceGroup != "" {
-			if aroStatus.RGExists {
+			if !aroStatus.RGChecked {
+				sb.WriteString(formatRow("❓", "Azure RG", fmt.Sprintf("%s (unknown)", aroStatus.ResourceGroup)))
+			} else if aroStatus.RGExists {
 				stateInfo := aroStatus.RGProvisionState
 				if stateInfo == "" {
 					stateInfo = "exists"
@@ -3540,13 +3552,18 @@ func ReportDeletionProgress(t *testing.T, iteration int, elapsed, remaining time
 		iteration, elapsed.Round(time.Second), remaining.Round(time.Second), percentage)
 	PrintToTTY("%s", FormatDeletionProgress(status))
 
-	// Log summary for test output
-	azureRGExists := false
+	azureRGStatus := "n/a"
 	if status.AROProviderSpecific != nil {
-		azureRGExists = status.AROProviderSpecific.RGExists
+		if !status.AROProviderSpecific.RGChecked {
+			azureRGStatus = "unknown"
+		} else if status.AROProviderSpecific.RGExists {
+			azureRGStatus = "exists"
+		} else {
+			azureRGStatus = "deleted"
+		}
 	}
-	t.Logf("Deletion progress: cluster=%v, cp=%s(%d), mp=%d, azureRG=%v",
-		status.ClusterExists, status.ControlPlaneKind, status.ControlPlaneCount, status.MachinePoolCount, azureRGExists)
+	t.Logf("Deletion progress: cluster=%v, cp=%s(%d), mp=%d, azureRG=%s",
+		status.ClusterExists, status.ControlPlaneKind, status.ControlPlaneCount, status.MachinePoolCount, azureRGStatus)
 }
 
 // ============================================================================
