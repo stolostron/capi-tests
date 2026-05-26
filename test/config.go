@@ -747,7 +747,7 @@ func NewTestConfig() *TestConfig {
 		MCEEnablementTimeout: parseMCEEnablementTimeout(),
 
 		// Chart deployment
-		DeployCharts: parseDeployCharts(),
+		DeployCharts: deployCharts,
 	}
 }
 
@@ -873,7 +873,7 @@ func parseMCEEnablementTimeout() time.Duration {
 // Returns true if DEPLOY_CHARTS=true, false otherwise.
 // Default: false
 func parseDeployCharts() bool {
-	return os.Getenv("DEPLOY_CHARTS") == "true"
+	return GetEnvOrDefault("DEPLOY_CHARTS", "false") == "true"
 }
 
 // GetOutputDirName returns the output directory name for generated infrastructure files
