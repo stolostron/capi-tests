@@ -349,6 +349,19 @@ func TestNewAzureProvider(t *testing.T) {
 	}
 }
 
+func TestNewAzureProvider_ASOCredentialNameOverride(t *testing.T) {
+	t.Setenv("ASO_CREDENTIAL_NAME", "custom-credential")
+
+	p := NewAzureProvider("capz-system")
+
+	if p.CredentialSecret == nil {
+		t.Fatal("Expected credential secret to be defined")
+	}
+	if p.CredentialSecret.Name != "custom-credential" {
+		t.Errorf("Expected custom-credential, got %q", p.CredentialSecret.Name)
+	}
+}
+
 func TestNewAzureProvider_Namespace(t *testing.T) {
 	p := NewAzureProvider("custom-namespace")
 
