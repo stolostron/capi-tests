@@ -1060,6 +1060,17 @@ func TestIsWaitingCondition(t *testing.T) {
 			expectedDesc:    "",
 		},
 		{
+			name: "False with could not find message",
+			condition: ControlPlaneCondition{
+				Type:    "HcpClusterReady",
+				Status:  "False",
+				Reason:  "Failed",
+				Message: `[Warning] extension failed to produce resources for export: could not find secret to save to 'Name: "capz-tests-kubeconfig", Key: "value"'`,
+			},
+			expectedWaiting: true,
+			expectedDesc:    "Waiting for resource creation",
+		},
+		{
 			name: "Case insensitive matching",
 			condition: ControlPlaneCondition{
 				Type:    "SomeCondition",
@@ -1155,6 +1166,16 @@ func TestIsPermanentFailure(t *testing.T) {
 				Status:  "False",
 				Reason:  "Failed",
 				Message: "waiting for dependency to be available",
+			},
+			expectedFailed: false,
+		},
+		{
+			name: "Failed reason but 'could not find' in message - not permanent",
+			condition: ControlPlaneCondition{
+				Type:    "HcpClusterReady",
+				Status:  "False",
+				Reason:  "Failed",
+				Message: `[Warning] extension failed to produce resources for export: could not find secret to save to 'Name: "capz-tests-kubeconfig", Key: "value"'`,
 			},
 			expectedFailed: false,
 		},

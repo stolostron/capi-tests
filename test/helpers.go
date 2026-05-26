@@ -865,6 +865,7 @@ var waitingPatterns = []WaitingPattern{
 	{Pattern: "waiting for", Description: "Waiting for dependency"},
 	{Pattern: "will be requeued", Description: "Waiting (will retry)"},
 	{Pattern: "not found", Description: "Waiting for resource creation"},
+	{Pattern: "could not find", Description: "Waiting for resource creation"},
 	{Pattern: "is not ready", Description: "Waiting for dependency"},
 	{Pattern: "not yet available", Description: "Waiting for availability"},
 	{Pattern: "still being created", Description: "Waiting for creation"},
