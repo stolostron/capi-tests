@@ -634,8 +634,8 @@ func TestCheckDependencies_Clusterctl_IsAvailable(t *testing.T) {
 			"See the warning above for detailed instructions.")
 	}
 
-	// On Linux/other platforms, warn but don't fail
-	// cluster-api-installer's Makefile will download clusterctl to its bin directory
+	// On Linux/other platforms, mark as failed but continue (t.Errorf, not t.Fatalf)
+	// so the missing dependency is visible in test output
 	var installInstructions string
 	switch runtime.GOOS {
 	case "linux":
@@ -647,7 +647,7 @@ func TestCheckDependencies_Clusterctl_IsAvailable(t *testing.T) {
 			"  See https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl"
 	}
 
-	t.Logf("clusterctl not found in system PATH.\n\n"+
+	t.Errorf("clusterctl not found in system PATH.\n\n"+
 		"clusterctl is required for cluster monitoring (TestDeployment_MonitorCluster) and\n"+
 		"kubeconfig retrieval (TestVerification_GetKubeconfig).\n\n"+
 		"It will be looked for in cluster-api-installer's bin directory during test execution.\n"+
