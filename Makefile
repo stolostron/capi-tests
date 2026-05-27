@@ -28,8 +28,12 @@ else
 AZURE_RESOURCE_GROUP ?= $(WORKLOAD_CLUSTER_NAME)-resgroup
 endif
 
-# Deployment state file - written by tests to record actual deployed configuration
-DEPLOYMENT_STATE_FILE := .deployment-state.json
+# Repository directory for cluster-api-installer (matches Go default in test/config.go:getDefaultRepoDir)
+ARO_REPO_DIR ?= $(shell echo $${TMPDIR:-/tmp})/cluster-api-installer-aro
+
+# Deployment state file - written by Go tests to config.RepoDir during execution.
+# Must point to the repo dir because Go tests os.Chdir(config.RepoDir) before writing.
+DEPLOYMENT_STATE_FILE := $(ARO_REPO_DIR)/.deployment-state.json
 
 # Read from deployment state file if it exists (for cleanup to target correct resources)
 # This ensures cleanup targets the same resources that were actually deployed,
@@ -462,7 +466,7 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 			echo "Management cluster '$(CLEANUP_MANAGEMENT_CLUSTER)' not found (already clean)."; \
 		fi; \
 		echo ""; \
-	REPO_DIR="$${TMPDIR:-/tmp}/cluster-api-installer-aro"; \
+	REPO_DIR="$(ARO_REPO_DIR)"; \
 		if [ -d "$$REPO_DIR" ]; then \
 			echo "Directory $$REPO_DIR exists."; \
 			read -p "Delete $$REPO_DIR? [y/N] " -n 1 -r; \
@@ -591,7 +595,7 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 	fi
 	@echo ""
 	@# Delete cluster-api-installer directory (use TMPDIR for cross-platform support)
-	@REPO_DIR="$${TMPDIR:-/tmp}/cluster-api-installer-aro"; \
+	@REPO_DIR="$(ARO_REPO_DIR)"; \
 	if [ -d "$$REPO_DIR" ]; then \
 		echo "Deleting $$REPO_DIR..."; \
 		rm -rf "$$REPO_DIR" || echo "Failed to delete directory"; \
