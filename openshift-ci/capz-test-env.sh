@@ -11,6 +11,12 @@ if [[ -n "${CLUSTER_PROFILE_DIR:-}" && -f "${CLUSTER_PROFILE_DIR}/osServicePrinc
   AZURE_CLIENT_SECRET=$(jq -r .clientSecret "${CLUSTER_PROFILE_DIR}/osServicePrincipal.json")
   AZURE_TENANT_ID=$(jq -r .tenantId "${CLUSTER_PROFILE_DIR}/osServicePrincipal.json")
   AZURE_SUBSCRIPTION_ID=$(jq -r .subscriptionId "${CLUSTER_PROFILE_DIR}/osServicePrincipal.json")
+  for var in AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
+    if [[ -z "${!var}" || "${!var}" == "null" ]]; then
+      echo "[capz-test-env] ERROR: ${var} is missing or null in ${CLUSTER_PROFILE_DIR}/osServicePrincipal.json" >&2
+      exit 1
+    fi
+  done
   export AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID
   echo "[capz-test-env] Azure credentials loaded from cluster profile"
   set -o xtrace
@@ -29,6 +35,12 @@ if [[ -d "${CAPZ_CREDS_DIR}" && -f "${CAPZ_CREDS_DIR}/AZURE_CLIENT_ID" ]]; then
   AZURE_CLIENT_SECRET=$(cat "${CAPZ_CREDS_DIR}/AZURE_CLIENT_SECRET")
   AZURE_TENANT_ID=$(cat "${CAPZ_CREDS_DIR}/AZURE_TENANT_ID")
   AZURE_SUBSCRIPTION_ID=$(cat "${CAPZ_CREDS_DIR}/AZURE_SUBSCRIPTION_ID")
+  for var in AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
+    if [[ -z "${!var}" || "${!var}" == "null" ]]; then
+      echo "[capz-test-env] ERROR: ${var} is missing or null in ${CAPZ_CREDS_DIR}" >&2
+      exit 1
+    fi
+  done
   export AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID
   echo "[capz-test-env] Azure credentials overridden with CAPZ vault credentials"
   set -o xtrace
