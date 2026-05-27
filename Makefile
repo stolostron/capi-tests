@@ -466,7 +466,7 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 			echo "Management cluster '$(CLEANUP_MANAGEMENT_CLUSTER)' not found (already clean)."; \
 		fi; \
 		echo ""; \
-	REPO_DIR="$${TMPDIR:-/tmp}/cluster-api-installer-aro"; \
+	REPO_DIR="$(ARO_REPO_DIR)"; \
 		if [ -d "$$REPO_DIR" ]; then \
 			echo "Directory $$REPO_DIR exists."; \
 			read -p "Delete $$REPO_DIR? [y/N] " -n 1 -r; \
@@ -595,7 +595,7 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 	fi
 	@echo ""
 	@# Delete cluster-api-installer directory (use TMPDIR for cross-platform support)
-	@REPO_DIR="$${TMPDIR:-/tmp}/cluster-api-installer-aro"; \
+	@REPO_DIR="$(ARO_REPO_DIR)"; \
 	if [ -d "$$REPO_DIR" ]; then \
 		echo "Deleting $$REPO_DIR..."; \
 		rm -rf "$$REPO_DIR" || echo "Failed to delete directory"; \
