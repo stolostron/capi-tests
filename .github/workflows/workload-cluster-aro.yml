@@ -43,6 +43,16 @@ on:
         required: false
         type: string
         default: ''
+      capz_pr_no:
+        description: 'CAPZ PR number for image override (optional)'
+        required: false
+        type: string
+        default: ''
+      aso_pr_no:
+        description: 'ASO PR number for image override (optional)'
+        required: false
+        type: string
+        default: ''
   workflow_call:
     inputs:
       environment:
@@ -60,6 +70,16 @@ on:
         required: false
         type: string
         default: ''
+      capz_pr_no:
+        description: 'CAPZ PR number for image override (optional)'
+        required: false
+        type: string
+        default: ''
+      aso_pr_no:
+        description: 'ASO PR number for image override (optional)'
+        required: false
+        type: string
+        default: ''
     secrets:
       QUAY_AUTH:
         required: true
@@ -72,6 +92,8 @@ env:
   INFRA_PROVIDER: aro
   ARO_REPO_DIR: /tmp/cluster-api-installer-aro
   ARO_REPO_BRANCH: ${{ inputs.aro_repo_branch }}
+  CAPZ_PR_NO: ${{ inputs.capz_pr_no }}
+  ASO_PR_NO: ${{ inputs.aso_pr_no }}
   TEST_TIMEOUT_MINUTES: 120
   # Global variables (not environment-specific)
   QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
