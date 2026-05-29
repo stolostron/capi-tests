@@ -562,6 +562,28 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 			echo "Skipping Azure cleanup (INFRA_PROVIDER=$(INFRA_PROVIDER), not aro)"; \
 		fi; \
 		echo ""; \
+		if [ "$(INFRA_PROVIDER)" = "rosa" ]; then \
+			echo "--- AWS Resources ---"; \
+			echo ""; \
+		if ! command -v aws >/dev/null 2>&1; then \
+			echo "⚠️  AWS CLI (aws) not available - skipping AWS cleanup"; \
+		elif ! aws sts get-caller-identity >/dev/null 2>&1; then \
+			echo "⚠️  Not authenticated to AWS - skipping AWS cleanup"; \
+			echo "   Run 'aws configure' to authenticate"; \
+		else \
+			read -p "Search for and delete tagged AWS resources? [y/N] " -n 1 -r; \
+			echo ""; \
+			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+				./scripts/cleanup-aws-resources.sh || echo "AWS resources cleanup encountered an error"; \
+			else \
+				echo "Skipped AWS resource cleanup."; \
+				echo "Tip: Run 'make clean-aws' to clean all AWS resources."; \
+			fi; \
+		fi; \
+		else \
+			echo "Skipping AWS cleanup (INFRA_PROVIDER=$(INFRA_PROVIDER), not rosa)"; \
+		fi; \
+		echo ""; \
 		if [ -f "$(DEPLOYMENT_STATE_FILE)" ]; then \
 			echo "Removing deployment state file..."; \
 			rm -f "$(DEPLOYMENT_STATE_FILE)"; \
