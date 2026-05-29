@@ -310,7 +310,7 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 		// Tag Azure resource group for parallel run cleanup queries.
 		// Resource group may not exist yet (created by CAPI during deployment),
 		// so failure here is expected — Phase 05 will retry after deployment.
-		if len(config.AzureResourceTags) > 0 && CommandExists("az") {
+		if len(config.ResourceTags) > 0 && CommandExists("az") {
 			if err := EnsureAzureCliLogin(t); err != nil {
 				t.Logf("Resource group tagging deferred (Azure CLI auth unavailable, Phase 05 will retry): %v", err)
 			} else {

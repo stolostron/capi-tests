@@ -2666,7 +2666,7 @@ type DeploymentState struct {
 	User                     string            `json:"user"`
 	Environment              string            `json:"environment"`
 	TestRunID                string            `json:"test_run_id,omitempty"`
-	AzureResourceTags        map[string]string `json:"azure_resource_tags,omitempty"`
+	ResourceTags             map[string]string `json:"resource_tags,omitempty"`
 	MCEOriginalStates        map[string]bool   `json:"mce_original_states,omitempty"`
 }
 
@@ -2691,7 +2691,7 @@ func WriteDeploymentState(config *TestConfig) error {
 		User:                     config.CAPIUser,
 		Environment:              config.Environment,
 		TestRunID:                config.TestRunID,
-		AzureResourceTags:        config.AzureResourceTags,
+		ResourceTags:             config.ResourceTags,
 	}
 
 	if existing != nil && len(existing.MCEOriginalStates) > 0 {
@@ -2717,7 +2717,7 @@ func TagAzureResourceGroup(t *testing.T, config *TestConfig) error {
 
 	resourceGroup := config.ResourceGroupName
 
-	tagPairs := sortedTagPairs(config.AzureResourceTags, "=")
+	tagPairs := sortedTagPairs(config.ResourceTags, "=")
 
 	args := []string{"group", "update", "--name", resourceGroup, "--tags"}
 	args = append(args, tagPairs...)
@@ -2726,6 +2726,100 @@ func TagAzureResourceGroup(t *testing.T, config *TestConfig) error {
 		return fmt.Errorf("could not tag resource group %s: %w", resourceGroup, err)
 	}
 	t.Logf("Tagged resource group %s with %d tags", resourceGroup, len(tagPairs))
+	return nil
+}
+
+// TagAWSCloudFormationStacks tags CloudFormation stacks in the given region with ownership metadata.
+// Discovers stacks by name pattern (contains "capa-" or "rosa-") and applies capi-test-* tags.
+func TagAWSCloudFormationStacks(t *testing.T, config *TestConfig, region string) error {
+	t.Helper()
+
+	output, err := RunCommandQuiet(t, "aws", "cloudformation", "describe-stacks",
+		"--region", region,
+		"--query", "Stacks[?StackStatus=='CREATE_COMPLETE' || StackStatus=='UPDATE_COMPLETE'].{StackName: StackName, StackId: StackId}",
+		"--output", "json")
+	if err != nil {
+		return fmt.Errorf("failed to list CloudFormation stacks: %w", err)
+	}
+
+	var stacks []struct {
+		StackName string `json:"StackName"`
+		StackID   string `json:"StackId"`
+	}
+	if err := json.Unmarshal([]byte(output), &stacks); err != nil {
+		return fmt.Errorf("failed to parse CloudFormation stacks: %w", err)
+	}
+
+	tagged := 0
+	for _, stack := range stacks {
+		if !strings.Contains(stack.StackName, "capa-") && !strings.Contains(stack.StackName, "rosa-") {
+			continue
+		}
+
+		args := []string{"cloudformation", "update-stack",
+			"--stack-name", stack.StackName,
+			"--use-previous-template",
+			"--region", region,
+			"--tags"}
+		for _, pair := range sortedTagPairs(config.ResourceTags, "=") {
+			parts := strings.SplitN(pair, "=", 2)
+			args = append(args, fmt.Sprintf("Key=%s,Value=%s", parts[0], parts[1]))
+		}
+
+		if _, err := RunCommandQuiet(t, "aws", args...); err != nil {
+			t.Logf("Warning: could not tag CloudFormation stack %s: %v", stack.StackName, err)
+		} else {
+			tagged++
+			PrintToTTY("  Tagged CloudFormation stack: %s\n", stack.StackName)
+		}
+	}
+	if tagged > 0 {
+		t.Logf("Tagged %d CloudFormation stack(s)", tagged)
+	}
+	return nil
+}
+
+// TagAWSVPCs tags CAPA-created VPCs in the given region with ownership metadata.
+// Discovers VPCs by CAPA tag key pattern and applies capi-test-* tags.
+func TagAWSVPCs(t *testing.T, config *TestConfig, region string) error {
+	t.Helper()
+
+	output, err := RunCommandQuiet(t, "aws", "ec2", "describe-vpcs",
+		"--region", region,
+		"--filters", "Name=tag-key,Values=sigs.k8s.io/cluster-api-provider-aws/cluster/*",
+		"--query", "Vpcs[].VpcId",
+		"--output", "json")
+	if err != nil {
+		return fmt.Errorf("failed to list CAPA VPCs: %w", err)
+	}
+
+	var vpcIDs []string
+	if err := json.Unmarshal([]byte(output), &vpcIDs); err != nil {
+		return fmt.Errorf("failed to parse VPC list: %w", err)
+	}
+
+	if len(vpcIDs) == 0 {
+		t.Log("No CAPA-tagged VPCs found to tag")
+		return nil
+	}
+
+	args := []string{"ec2", "create-tags",
+		"--region", region,
+		"--resources"}
+	args = append(args, vpcIDs...)
+	args = append(args, "--tags")
+	for _, pair := range sortedTagPairs(config.ResourceTags, "=") {
+		parts := strings.SplitN(pair, "=", 2)
+		args = append(args, fmt.Sprintf("Key=%s,Value=%s", parts[0], parts[1]))
+	}
+
+	if _, err := RunCommandQuiet(t, "aws", args...); err != nil {
+		return fmt.Errorf("failed to tag VPCs: %w", err)
+	}
+	t.Logf("Tagged %d VPC(s)", len(vpcIDs))
+	for _, id := range vpcIDs {
+		PrintToTTY("  Tagged VPC: %s\n", id)
+	}
 	return nil
 }
 
@@ -2759,6 +2853,16 @@ func ReadDeploymentState() (*DeploymentState, error) {
 	var state DeploymentState
 	if err := json.Unmarshal(data, &state); err != nil {
 		return nil, fmt.Errorf("failed to parse deployment state file: %w", err)
+	}
+
+	// Backward compatibility: older state files use "azure_resource_tags" instead of "resource_tags".
+	if state.ResourceTags == nil {
+		var legacy struct {
+			AzureResourceTags map[string]string `json:"azure_resource_tags,omitempty"`
+		}
+		if err := json.Unmarshal(data, &legacy); err == nil && legacy.AzureResourceTags != nil {
+			state.ResourceTags = legacy.AzureResourceTags
+		}
 	}
 
 	return &state, nil
