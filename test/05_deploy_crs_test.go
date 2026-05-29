@@ -1271,6 +1271,11 @@ func TestDeployment_TagAWSResources(t *testing.T) {
 		return
 	}
 
+	if err := EnsureAWSCredentialsSet(t); err != nil {
+		t.Skipf("Skipping AWS resource tagging: %v", err)
+		return
+	}
+
 	if config.InfraProviderName != "rosa" {
 		t.Skipf("AWS resource tagging only applies to ROSA provider")
 		return
