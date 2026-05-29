@@ -19,5 +19,6 @@ ref:
       use this value instead of generating a timestamp-based namespace.
   timeout: 45m
   documentation: |-
-    Validates the IPI-provisioned cluster and deploys CAPI/CAPZ/ASO
-    controllers via DEPLOY_CHARTS=true using deploy-charts.sh.
+    Validates the IPI-provisioned cluster as a CAPI management cluster.
+    When DEPLOY_CHARTS is true, deploys CAPI/CAPZ/ASO controllers via
+    deploy-charts.sh; otherwise expects pre-installed controllers.
