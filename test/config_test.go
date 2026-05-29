@@ -673,6 +673,51 @@ func TestTestConfig_AllRequiredScripts(t *testing.T) {
 	}
 }
 
+func TestGetCAPIUser_FallbackToOSUser(t *testing.T) {
+	testCases := []struct {
+		name     string
+		capiUser string
+		osUser   string
+		expected string
+	}{
+		{
+			name:     "CAPI_USER takes precedence",
+			capiUser: "custom",
+			osUser:   "rcap",
+			expected: "custom",
+		},
+		{
+			name:     "falls back to USER when CAPI_USER unset",
+			capiUser: "",
+			osUser:   "rcap",
+			expected: "rcap",
+		},
+		{
+			name:     "falls back to DefaultCAPIUser when both unset",
+			capiUser: "",
+			osUser:   "",
+			expected: DefaultCAPIUser,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("CAPI_USER", tc.capiUser)
+			if tc.osUser != "" {
+				t.Setenv("USER", tc.osUser)
+			} else {
+				t.Setenv("USER", "")
+			}
+
+			result := getCAPIUser()
+			if result != tc.expected {
+				t.Errorf("getCAPIUser() = %q, expected %q (CAPI_USER=%q, USER=%q)",
+					result, tc.expected, tc.capiUser, tc.osUser)
+			}
+		})
+	}
+}
+
 func TestClusterMode_Kind(t *testing.T) {
 	// Save and restore environment
 	origClusterMode := os.Getenv("CLUSTER_MODE")

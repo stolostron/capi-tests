@@ -276,9 +276,10 @@ func getDefaultRepoDir() string {
 }
 
 // getCAPIUser returns the user identifier from CAPI_USER env var,
-// falling back to DefaultCAPIUser.
+// falling back to the OS username ($USER) for local-run attribution,
+// then to DefaultCAPIUser as a last resort.
 func getCAPIUser() string {
-	return GetEnvOrDefault("CAPI_USER", DefaultCAPIUser)
+	return GetEnvOrDefault("CAPI_USER", GetEnvOrDefault("USER", DefaultCAPIUser))
 }
 
 // getWorkloadClusterNamespace returns the namespace for workload cluster resources.
