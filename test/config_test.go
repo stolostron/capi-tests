@@ -698,6 +698,24 @@ func TestGetCAPIUser_FallbackToOSUser(t *testing.T) {
 			osUser:   "",
 			expected: DefaultCAPIUser,
 		},
+		{
+			name:     "sanitizes USER with underscores",
+			capiUser: "",
+			osUser:   "john_doe",
+			expected: "john-doe",
+		},
+		{
+			name:     "sanitizes USER with uppercase",
+			capiUser: "",
+			osUser:   "Jane",
+			expected: "jane",
+		},
+		{
+			name:     "CAPI_USER is NOT sanitized (user responsibility)",
+			capiUser: "John_Doe",
+			osUser:   "rcap",
+			expected: "John_Doe",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -713,6 +731,31 @@ func TestGetCAPIUser_FallbackToOSUser(t *testing.T) {
 			if result != tc.expected {
 				t.Errorf("getCAPIUser() = %q, expected %q (CAPI_USER=%q, USER=%q)",
 					result, tc.expected, tc.capiUser, tc.osUser)
+			}
+		})
+	}
+}
+
+func TestSanitizeToRFC1123(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected string
+	}{
+		{"rcap", "rcap"},
+		{"john_doe", "john-doe"},
+		{"Jane", "jane"},
+		{"user.name", "user-name"},
+		{"ADMIN", "admin"},
+		{"a__b--c", "a-b-c"},
+		{"---", ""},
+		{"", ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.input, func(t *testing.T) {
+			result := SanitizeToRFC1123(tc.input)
+			if result != tc.expected {
+				t.Errorf("SanitizeToRFC1123(%q) = %q, expected %q", tc.input, result, tc.expected)
 			}
 		})
 	}
