@@ -748,11 +748,11 @@ fix-docker-config: ## Fix Docker credential helper configuration issues
 
 summary: ## Generate test results summary from latest results
 	@if [ -d "$(LATEST_RESULTS_DIR)" ]; then \
-		./scripts/enrich-junit-xml.sh $(LATEST_RESULTS_DIR); \
+		./scripts/enrich-junit-xml.sh $(LATEST_RESULTS_DIR) || echo "WARNING: JUnit enrichment failed, continuing with summary"; \
 		./scripts/generate-summary.sh $(LATEST_RESULTS_DIR); \
 	elif [ -n "$$(ls -d results/2* 2>/dev/null | tail -1)" ]; then \
 		LATEST_RUN=$$(ls -d results/2* 2>/dev/null | tail -1); \
-		./scripts/enrich-junit-xml.sh "$$LATEST_RUN"; \
+		./scripts/enrich-junit-xml.sh "$$LATEST_RUN" || echo "WARNING: JUnit enrichment failed, continuing with summary"; \
 		./scripts/generate-summary.sh "$$LATEST_RUN"; \
 	else \
 		echo "Error: No test results found. Run 'make test-all' first."; \
