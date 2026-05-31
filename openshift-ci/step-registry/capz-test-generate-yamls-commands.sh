@@ -22,8 +22,9 @@ echo "=== ARO_REPO_DIR contents ==="
 ls -la "${ARO_REPO_DIR}/" | head -20 || true
 echo "============================================="
 
-# Copy generated YAMLs to SHARED_DIR so they persist for the deploy-crs step.
-# Each Prow step runs in a separate container; /tmp is not shared between them.
+# Copy generated YAMLs to SHARED_DIR for artifact preservation and potential
+# use by downstream steps. Each Prow step runs in a separate container;
+# /tmp is not shared between them.
 OUTPUT_DIR="${ARO_REPO_DIR}/${WORKLOAD_CLUSTER_NAME:-capz-tests}-${DEPLOYMENT_ENV}"
 if [[ ! -d "${OUTPUT_DIR}" ]]; then
   echo "Expected generated manifests in ${OUTPUT_DIR}, but the directory was not created" >&2
@@ -39,7 +40,7 @@ fi
 
 for f in "${generated_files[@]}"; do
     basename_f="$(basename "${f}")"
-    # Always copy to SHARED_DIR (raw, needed for deploy-crs step)
+    # Always copy to SHARED_DIR (raw, for downstream steps)
     cp "${f}" "${SHARED_DIR}/generated-${basename_f}"
     # Skip credential files from public artifacts
     case "${basename_f}" in
