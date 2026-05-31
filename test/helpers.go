@@ -2788,13 +2788,14 @@ func TagAWSCloudFormationStacks(t *testing.T, config *TestConfig, region string)
 }
 
 // TagAWSVPCs tags CAPA-created VPCs in the given region with ownership metadata.
-// Discovers VPCs by CAPA tag key pattern and applies capi-test-* tags.
+// Discovers VPCs by the exact CAPA ownership tag key for our cluster name.
 func TagAWSVPCs(t *testing.T, config *TestConfig, region string) error {
 	t.Helper()
 
+	capaTagKey := fmt.Sprintf("sigs.k8s.io/cluster-api-provider-aws/cluster/%s", config.WorkloadClusterName)
 	output, err := RunCommandQuiet(t, "aws", "ec2", "describe-vpcs",
 		"--region", region,
-		"--filters", "Name=tag-key,Values=sigs.k8s.io/cluster-api-provider-aws/cluster/*",
+		"--filters", fmt.Sprintf("Name=tag-key,Values=%s", capaTagKey),
 		"--query", "Vpcs[].VpcId",
 		"--output", "json")
 	if err != nil {
