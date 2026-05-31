@@ -128,7 +128,7 @@ cleanup_cloudformation_stacks() {
     local stacks_json
     stacks_json=$(aws cloudformation describe-stacks \
         --region "$REGION" \
-        --query "Stacks[?StackStatus=='CREATE_COMPLETE' || StackStatus=='UPDATE_COMPLETE'].{StackName: StackName, Tags: Tags, CreationTime: CreationTime}" \
+        --query "Stacks[?StackStatus=='CREATE_COMPLETE' || StackStatus=='UPDATE_COMPLETE' || StackStatus=='ROLLBACK_COMPLETE'].{StackName: StackName, Tags: Tags, CreationTime: CreationTime}" \
         --output json 2>/dev/null) || {
         print_warning "Failed to query CloudFormation stacks"
         return 0
