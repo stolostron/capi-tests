@@ -289,16 +289,35 @@ delete_vpc() {
         aws ec2 delete-security-group --group-id "$sg" --region "$REGION" 2>/dev/null || true
     done
 
-    # Delete NAT gateways
+    # Delete NAT gateways (async — must wait before VPC deletion)
     local nat_gws
     nat_gws=$(aws ec2 describe-nat-gateways \
         --region "$REGION" \
         --filter "Name=vpc-id,Values=${vpc_id}" "Name=state,Values=available" \
         --query "NatGateways[].NatGatewayId" \
         --output text 2>/dev/null) || nat_gws=""
+    local has_nat_gws=false
     for nat in $nat_gws; do
         aws ec2 delete-nat-gateway --nat-gateway-id "$nat" --region "$REGION" 2>/dev/null || true
+        has_nat_gws=true
     done
+
+    # Wait for NAT gateways to finish deleting before removing the VPC
+    if [[ "$has_nat_gws" == "true" ]]; then
+        print_info "Waiting for NAT gateways to delete (up to 2 minutes)..."
+        local wait_attempts=0
+        while [[ $wait_attempts -lt 12 ]]; do
+            local active_nats
+            active_nats=$(aws ec2 describe-nat-gateways \
+                --region "$REGION" \
+                --filter "Name=vpc-id,Values=${vpc_id}" "Name=state,Values=deleting,available" \
+                --query "NatGateways[].NatGatewayId" \
+                --output text 2>/dev/null) || break
+            [[ -z "$active_nats" || "$active_nats" == "None" ]] && break
+            sleep 10
+            wait_attempts=$((wait_attempts + 1))
+        done
+    fi
 
     # Delete the VPC
     if aws ec2 delete-vpc --vpc-id "$vpc_id" --region "$REGION" 2>/dev/null; then

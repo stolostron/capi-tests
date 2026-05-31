@@ -9,6 +9,7 @@ CAPI_USER_DEFAULT := $(shell grep 'DefaultCAPIUser = ' test/config.go | grep -o 
 CAPI_USER ?= $(CAPI_USER_DEFAULT)
 DEPLOYMENT_ENV ?= stage
 REGION ?= uksouth
+AWS_REGION ?= us-east-1
 INFRA_PROVIDER ?= aro
 ifeq ($(INFRA_PROVIDER),rosa)
 MANAGEMENT_CLUSTER_NAME ?= capa-tests-stage
@@ -669,15 +670,15 @@ _clean-azure-conditional:
 
 clean-aws: ## Delete all AWS resources tagged with capi-test-* ownership tags
 	@if [ "$(FORCE)" = "1" ]; then \
-		./scripts/cleanup-aws-resources.sh --region "$(REGION)" --force; \
+		./scripts/cleanup-aws-resources.sh --region "$(AWS_REGION)" --force; \
 	else \
-		./scripts/cleanup-aws-resources.sh --region "$(REGION)"; \
+		./scripts/cleanup-aws-resources.sh --region "$(AWS_REGION)"; \
 	fi
 
 # Internal target: force delete all AWS resources without prompting
 .PHONY: _clean-aws-force
 _clean-aws-force:
-	@./scripts/cleanup-aws-resources.sh --region "$(REGION)" --force 2>/dev/null || true
+	@./scripts/cleanup-aws-resources.sh --region "$(AWS_REGION)" --force 2>/dev/null || true
 
 # Internal target: conditionally clean AWS resources (only for ROSA)
 .PHONY: _clean-aws-conditional

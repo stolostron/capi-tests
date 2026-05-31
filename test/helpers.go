@@ -2730,7 +2730,8 @@ func TagAzureResourceGroup(t *testing.T, config *TestConfig) error {
 }
 
 // TagAWSCloudFormationStacks tags CloudFormation stacks in the given region with ownership metadata.
-// Discovers stacks by name pattern (contains "capa-" or "rosa-") and applies capi-test-* tags.
+// Discovers stacks by name pattern (contains "capa-" or "rosa-") and applies capi-test-* tags
+// using the Resource Groups Tagging API (additive, does not replace existing stack tags).
 func TagAWSCloudFormationStacks(t *testing.T, config *TestConfig, region string) error {
 	t.Helper()
 
@@ -2750,31 +2751,38 @@ func TagAWSCloudFormationStacks(t *testing.T, config *TestConfig, region string)
 		return fmt.Errorf("failed to parse CloudFormation stacks: %w", err)
 	}
 
-	tagged := 0
+	var stackARNs []string
 	for _, stack := range stacks {
 		if !strings.Contains(stack.StackName, "capa-") && !strings.Contains(stack.StackName, "rosa-") {
 			continue
 		}
+		stackARNs = append(stackARNs, stack.StackID)
+	}
 
-		args := []string{"cloudformation", "update-stack",
-			"--stack-name", stack.StackName,
-			"--use-previous-template",
-			"--region", region,
-			"--tags"}
-		for _, pair := range sortedTagPairs(config.ResourceTags, "=") {
-			parts := strings.SplitN(pair, "=", 2)
-			args = append(args, fmt.Sprintf("Key=%s,Value=%s", parts[0], parts[1]))
-		}
+	if len(stackARNs) == 0 {
+		t.Log("No matching CloudFormation stacks found to tag")
+		return nil
+	}
 
-		if _, err := RunCommandQuiet(t, "aws", args...); err != nil {
-			t.Logf("Warning: could not tag CloudFormation stack %s: %v", stack.StackName, err)
-		} else {
-			tagged++
+	tagJSON, err := json.Marshal(config.ResourceTags)
+	if err != nil {
+		return fmt.Errorf("failed to marshal tags: %w", err)
+	}
+
+	args := []string{"resourcegroupstaggingapi", "tag-resources",
+		"--region", region,
+		"--tags", string(tagJSON),
+		"--resource-arn-list"}
+	args = append(args, stackARNs...)
+
+	if _, err := RunCommandQuiet(t, "aws", args...); err != nil {
+		return fmt.Errorf("failed to tag CloudFormation stacks: %w", err)
+	}
+	t.Logf("Tagged %d CloudFormation stack(s)", len(stackARNs))
+	for _, stack := range stacks {
+		if strings.Contains(stack.StackName, "capa-") || strings.Contains(stack.StackName, "rosa-") {
 			PrintToTTY("  Tagged CloudFormation stack: %s\n", stack.StackName)
 		}
-	}
-	if tagged > 0 {
-		t.Logf("Tagged %d CloudFormation stack(s)", tagged)
 	}
 	return nil
 }
