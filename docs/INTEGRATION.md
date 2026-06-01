@@ -192,6 +192,70 @@ jobs:
 - No external dependencies
 - Audit trail for changes
 
+## Variable Flow: capi-tests → gen.sh
+
+When capi-tests runs the YAML generation phase (`04_generate_yamls_test.go`), it sets environment variables that `gen.sh` in cluster-api-installer consumes. The mapping is not one-to-one — variable names differ between the two repos, and `gen.sh` applies its own defaulting and override logic.
+
+### ARO Variable Mapping (scripts/aro-hcp/gen.sh)
+
+| capi-tests config field | Env var set by capi-tests | gen.sh variable | gen.sh behavior |
+|------------------------|--------------------------|-----------------|-----------------|
+| `CAPIUser` | `USER` | `USER` | Defaults to `user1` if not set. Used for service principal naming. |
+| `ClusterNamePrefix` | `CS_CLUSTER_NAME` | `CS_CLUSTER_NAME` | Overridden by `WORKLOAD_CLUSTER_NAME` if set (line 68). Falls back to `$USER-$ENV`. |
+| `WorkloadClusterName` | `WORKLOAD_CLUSTER_NAME` | _(consumed via CS_CLUSTER_NAME)_ | Takes precedence over `CS_CLUSTER_NAME` in gen.sh override logic. |
+| `NamePrefix` | `NAME_PREFIX` | `NAME_PREFIX` | Defaults to `CS_CLUSTER_NAME`. Truncated to 14 chars. Used for VNet, NSG, Key Vault naming. |
+| `ResourceGroupName` | `RESOURCEGROUPNAME` | `RESOURCEGROUPNAME` | Defaults to `$CS_CLUSTER_NAME-resgroup`. |
+| `Environment` | `DEPLOYMENT_ENV` | `ENV` | gen.sh maps `DEPLOYMENT_ENV` → `ENV` (line 22). |
+| `Region` | `REGION` | `REGION` | Defaults to `westus3` in gen.sh. |
+| `WorkloadClusterNamespace` | `NAMESPACE` | `NAMESPACE` | Defaults to `default` in gen.sh. |
+| `OCPVersion` | `OCP_VERSION` | `OCP_VERSION` | Defaults to `4.20`. |
+| `OCPVersionMP` | `OCP_VERSION_MP` | `OCP_VERSION_MP` | Defaults to `$OCP_VERSION.17`. |
+
+### Known Naming Mismatches
+
+These are intentional mismatches between the two repos that exist for historical reasons:
+
+- **`CAPI_USER` vs `USER`**: capi-tests uses `CAPI_USER` internally (to avoid colliding with the OS `$USER`), then passes it to gen.sh as `USER` — which gen.sh expects as a plain `$USER` env var.
+- **`DEPLOYMENT_ENV` vs `ENV`**: capi-tests uses `DEPLOYMENT_ENV`; gen.sh maps it to `ENV` on line 22 (`ENV=${ENV:-${DEPLOYMENT_ENV}}`).
+
+### gen.sh Override Behavior (CS_CLUSTER_NAME)
+
+gen.sh line 68 applies this override chain:
+
+```bash
+export CS_CLUSTER_NAME=${WORKLOAD_CLUSTER_NAME:-"$CS_CLUSTER_NAME"}
+export CS_CLUSTER_NAME=${CS_CLUSTER_NAME:-$USER-$ENV}
+```
+
+Since capi-tests always sets both `WORKLOAD_CLUSTER_NAME` and `CS_CLUSTER_NAME` before calling gen.sh, `WORKLOAD_CLUSTER_NAME` wins. In practice this means Azure resources are named using `WORKLOAD_CLUSTER_NAME` (e.g., `capz-tests`), not the auto-generated `CS_CLUSTER_NAME` prefix (e.g., `cate-a1b2c`). The `CS_CLUSTER_NAME` value is still used by capi-tests for cleanup tagging and resource group naming.
+
+### ROSA Differences (scripts/rosa-hcp/gen.sh)
+
+The ROSA gen.sh uses different variable names:
+
+| ARO gen.sh | ROSA gen.sh | Notes |
+|-----------|-------------|-------|
+| `CS_CLUSTER_NAME` | `CLUSTER_NAME` | ROSA uses `CLUSTER_NAME`, not `CS_CLUSTER_NAME` |
+| `OCP_VERSION` | `OPENSHIFT_VERSION` | capi-tests sets both for compatibility |
+| `REGION` | `AWS_REGION` | Provider-specific region variable |
+
+### Reference: capi-tests env var setup
+
+The authoritative mapping is in `test/04_generate_yamls_test.go` (lines 219-232):
+
+```go
+SetEnvVar(t, "DEPLOYMENT_ENV", config.Environment)
+SetEnvVar(t, "USER", config.CAPIUser)
+SetEnvVar(t, "WORKLOAD_CLUSTER_NAME", config.WorkloadClusterName)
+SetEnvVar(t, config.RegionEnvVar, config.Region)
+SetEnvVar(t, "CS_CLUSTER_NAME", config.ClusterNamePrefix)
+SetEnvVar(t, "RESOURCEGROUPNAME", config.ResourceGroupName)
+SetEnvVar(t, "OCP_VERSION", config.OCPVersion)
+SetEnvVar(t, "OCP_VERSION_MP", config.OCPVersionMP)
+SetEnvVar(t, "OPENSHIFT_VERSION", config.OCPVersion)
+SetEnvVar(t, "NAMESPACE", config.WorkloadClusterNamespace)
+```
+
 ## Configuration Management
 
 ### Environment Variable Precedence
@@ -211,12 +275,8 @@ ARO_REPO_BRANCH=ARO-ASO
 ARO_REPO_DIR=/tmp/cluster-api-installer-aro
 
 # Cluster Configuration
-# Note: When running tests, use MANAGEMENT_CLUSTER_NAME (tests translate to KIND_CLUSTER_NAME internally)
-# When using deployment scripts directly, use KIND_CLUSTER_NAME as shown below
-MANAGEMENT_CLUSTER_NAME=capz-tests-stage  # For running tests (default for ARO; capa-tests-stage for ROSA)
-KIND_CLUSTER_NAME=capz-tests-stage        # For direct script usage (advanced)
-CLUSTER_NAME=capz-tests-cluster           # Default for ARO; capa-tests-cluster for ROSA
-CS_CLUSTER_NAME=cate-stage  # Used for YAML generation and ExternalAuth
+MANAGEMENT_CLUSTER_NAME=capz-tests-stage  # Default for ARO; capa-tests-stage for ROSA
+# CS_CLUSTER_NAME is auto-generated if not set (e.g., cate-a1b2c). Only set for resume scenarios.
 OCP_VERSION=4.20
 OCP_VERSION_MP=4.20.17
 REGION=uksouth
