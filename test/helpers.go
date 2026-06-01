@@ -2951,7 +2951,7 @@ func SaveMCEOriginalStates(states map[string]bool) error {
 
 // RestoreMCEOriginalStates reads saved MCE component states from the deployment state file
 // and reverts any components that have been changed back to their original state.
-// Designed for use in t.Cleanup — logs warnings on failure but never calls t.Fatal.
+// Safe for cleanup paths — uses t.Errorf (non-fatal) on revert failures so subsequent steps still run.
 func RestoreMCEOriginalStates(t *testing.T, kubeContext string) {
 	t.Helper()
 
@@ -3001,7 +3001,7 @@ func RestoreMCEOriginalStates(t *testing.T, kubeContext string) {
 
 	if len(failed) > 0 {
 		PrintToTTY("⚠️  Failed to restore %d MCE component(s): %v\n", len(failed), failed)
-		t.Logf("MCE restore WARNING: failed to revert %d component(s): %v", len(failed), failed)
+		t.Errorf("MCE restore: failed to revert %d component(s): %v", len(failed), failed)
 	}
 
 	PrintToTTY("\n")
