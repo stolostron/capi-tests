@@ -2949,6 +2949,64 @@ func SaveMCEOriginalStates(states map[string]bool) error {
 	return nil
 }
 
+// RestoreMCEOriginalStates reads saved MCE component states from the deployment state file
+// and reverts any components that have been changed back to their original state.
+// Safe for cleanup paths — uses t.Errorf (non-fatal) on revert failures so subsequent steps still run.
+func RestoreMCEOriginalStates(t *testing.T, kubeContext string) {
+	t.Helper()
+
+	state, err := ReadDeploymentState()
+	if err != nil {
+		t.Logf("MCE restore: failed to read deployment state: %v", err)
+		return
+	}
+
+	if state == nil || len(state.MCEOriginalStates) == 0 {
+		t.Log("MCE restore: no original states saved, nothing to revert")
+		return
+	}
+
+	PrintToTTY("\n=== MCE component restore (cleanup) ===\n")
+
+	var reverted, failed []string
+
+	for component, originalEnabled := range state.MCEOriginalStates {
+		current, err := GetMCEComponentStatus(t, kubeContext, component)
+		if err != nil {
+			failed = append(failed, fmt.Sprintf("%s: query failed: %v", component, err))
+			continue
+		}
+
+		if current.Enabled == originalEnabled {
+			continue
+		}
+
+		if err := SetMCEComponentState(t, kubeContext, component, originalEnabled); err != nil {
+			failed = append(failed, fmt.Sprintf("%s: revert failed: %v", component, err))
+		} else {
+			stateStr := "disabled"
+			if originalEnabled {
+				stateStr = "enabled"
+			}
+			reverted = append(reverted, fmt.Sprintf("%s → %s", component, stateStr))
+		}
+	}
+
+	if len(reverted) > 0 {
+		PrintToTTY("✅ Restored %d MCE component(s): %v\n", len(reverted), reverted)
+		t.Logf("MCE restore: reverted %d component(s): %v", len(reverted), reverted)
+	} else if len(failed) == 0 {
+		PrintToTTY("✅ All MCE components already in original state\n")
+	}
+
+	if len(failed) > 0 {
+		PrintToTTY("⚠️  Failed to restore %d MCE component(s): %v\n", len(failed), failed)
+		t.Errorf("MCE restore: failed to revert %d component(s): %v", len(failed), failed)
+	}
+
+	PrintToTTY("\n")
+}
+
 // ControllerLogSummary holds summarized log information for a controller.
 type ControllerLogSummary struct {
 	Name       string   // Controller name (e.g., "CAPZ", "ASO", "CAPI")
