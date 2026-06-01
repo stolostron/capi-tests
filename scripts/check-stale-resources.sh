@@ -250,9 +250,11 @@ check_azure_resource_groups_by_convention() {
     local stale_convention_rgs="[]"
 
     while IFS= read -r rg; do
-        local rg_name rg_location
+        local rg_name rg_location rg_user rg_env
         rg_name=$(echo "$rg" | jq -r '.name')
         rg_location=$(echo "$rg" | jq -r '.location')
+        rg_user=$(echo "$rg" | jq -r '.tags."capi-test-user" // "-"')
+        rg_env=$(echo "$rg" | jq -r '.tags."capi-test-env" // "-"')
 
         # Skip if already found by tagged detection
         if echo "$tagged_rg_names" | grep -qx "$rg_name" 2>/dev/null; then
@@ -287,8 +289,8 @@ check_azure_resource_groups_by_convention() {
                 --arg name "$rg_name" \
                 --arg location "$rg_location" \
                 --arg createdAt "unknown" \
-                --arg user "-" \
-                --arg env "-" \
+                --arg user "$rg_user" \
+                --arg env "$rg_env" \
                 --arg detection "convention (unknown age)" \
                 --argjson resourceCount "$resource_count" \
                 '{name: $name, location: $location, createdAt: $createdAt, user: $user, env: $env, detection: $detection, resourceCount: $resourceCount}')
@@ -305,8 +307,8 @@ check_azure_resource_groups_by_convention() {
                 --arg name "$rg_name" \
                 --arg location "$rg_location" \
                 --arg createdAt "$created_at" \
-                --arg user "-" \
-                --arg env "-" \
+                --arg user "$rg_user" \
+                --arg env "$rg_env" \
                 --arg detection "convention" \
                 --argjson resourceCount "$resource_count" \
                 '{name: $name, location: $location, createdAt: $createdAt, user: $user, env: $env, detection: $detection, resourceCount: $resourceCount}')
@@ -325,10 +327,10 @@ check_azure_resource_groups_by_convention() {
             echo ""
             print_warning "Found ${stale_count} stale untagged Azure resource group(s) (by naming convention):"
             echo ""
-            printf "%-45s | %-15s | %-25s | %-5s | %-25s\n" "NAME" "LOCATION" "CREATED AT" "RES#" "DETECTION"
-            printf "%s\n" "$(printf '%.0s-' {1..122})"
-            echo "$stale_convention_rgs" | jq -r '.[] | "\(.name)|\(.location)|\(.createdAt)|\(.resourceCount)|\(.detection)"' | while IFS='|' read -r name loc created rescount detection; do
-                printf "%-45s | %-15s | %-25s | %-5s | %-25s\n" "${name:0:45}" "${loc:0:15}" "${created:0:25}" "${rescount:0:5}" "${detection:0:25}"
+            printf "%-45s | %-15s | %-25s | %-10s | %-5s | %-25s\n" "NAME" "LOCATION" "CREATED AT" "USER" "RES#" "DETECTION"
+            printf "%s\n" "$(printf '%.0s-' {1..135})"
+            echo "$stale_convention_rgs" | jq -r '.[] | "\(.name)|\(.location)|\(.createdAt)|\(.user // "-")|\(.resourceCount)|\(.detection)"' | while IFS='|' read -r name loc created user rescount detection; do
+                printf "%-45s | %-15s | %-25s | %-10s | %-5s | %-25s\n" "${name:0:45}" "${loc:0:15}" "${created:0:25}" "${user:0:10}" "${rescount:0:5}" "${detection:0:25}"
             done
             echo ""
         fi

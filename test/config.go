@@ -276,9 +276,18 @@ func getDefaultRepoDir() string {
 }
 
 // getCAPIUser returns the user identifier from CAPI_USER env var,
-// falling back to DefaultCAPIUser.
+// falling back to the OS username ($USER) sanitized for RFC 1123 compliance,
+// then to DefaultCAPIUser as a last resort.
 func getCAPIUser() string {
-	return GetEnvOrDefault("CAPI_USER", DefaultCAPIUser)
+	if v := os.Getenv("CAPI_USER"); v != "" {
+		return v
+	}
+	if v := os.Getenv("USER"); v != "" {
+		if s := SanitizeToRFC1123(v); s != "" {
+			return s
+		}
+	}
+	return DefaultCAPIUser
 }
 
 // getWorkloadClusterNamespace returns the namespace for workload cluster resources.

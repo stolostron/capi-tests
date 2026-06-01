@@ -1863,6 +1863,17 @@ func ValidateNamePrefix(namePrefix string) error {
 // and end with an alphanumeric character.
 var RFC1123NameRegex = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 
+// SanitizeToRFC1123 converts an arbitrary string into an RFC 1123 compliant name.
+// Lowercases, replaces non-alphanumeric characters with hyphens, collapses
+// consecutive hyphens, and trims leading/trailing hyphens.
+// Returns empty string if the input sanitizes to nothing.
+func SanitizeToRFC1123(name string) string {
+	s := strings.ToLower(name)
+	s = regexp.MustCompile(`[^a-z0-9]+`).ReplaceAllString(s, "-")
+	s = strings.Trim(s, "-")
+	return s
+}
+
 // ValidateRFC1123Name validates that a name complies with RFC 1123 subdomain naming.
 // RFC 1123 subdomain names must:
 // - Consist of lowercase alphanumeric characters or '-'

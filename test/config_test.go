@@ -673,6 +673,94 @@ func TestTestConfig_AllRequiredScripts(t *testing.T) {
 	}
 }
 
+func TestGetCAPIUser_FallbackToOSUser(t *testing.T) {
+	testCases := []struct {
+		name     string
+		capiUser string
+		osUser   string
+		expected string
+	}{
+		{
+			name:     "CAPI_USER takes precedence",
+			capiUser: "custom",
+			osUser:   "rcap",
+			expected: "custom",
+		},
+		{
+			name:     "falls back to USER when CAPI_USER unset",
+			capiUser: "",
+			osUser:   "rcap",
+			expected: "rcap",
+		},
+		{
+			name:     "falls back to DefaultCAPIUser when both unset",
+			capiUser: "",
+			osUser:   "",
+			expected: DefaultCAPIUser,
+		},
+		{
+			name:     "sanitizes USER with underscores",
+			capiUser: "",
+			osUser:   "john_doe",
+			expected: "john-doe",
+		},
+		{
+			name:     "sanitizes USER with uppercase",
+			capiUser: "",
+			osUser:   "Jane",
+			expected: "jane",
+		},
+		{
+			name:     "CAPI_USER is NOT sanitized (user responsibility)",
+			capiUser: "John_Doe",
+			osUser:   "rcap",
+			expected: "John_Doe",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("CAPI_USER", tc.capiUser)
+			if tc.osUser != "" {
+				t.Setenv("USER", tc.osUser)
+			} else {
+				t.Setenv("USER", "")
+			}
+
+			result := getCAPIUser()
+			if result != tc.expected {
+				t.Errorf("getCAPIUser() = %q, expected %q (CAPI_USER=%q, USER=%q)",
+					result, tc.expected, tc.capiUser, tc.osUser)
+			}
+		})
+	}
+}
+
+func TestSanitizeToRFC1123(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected string
+	}{
+		{"rcap", "rcap"},
+		{"john_doe", "john-doe"},
+		{"Jane", "jane"},
+		{"user.name", "user-name"},
+		{"ADMIN", "admin"},
+		{"a__b--c", "a-b-c"},
+		{"---", ""},
+		{"", ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.input, func(t *testing.T) {
+			result := SanitizeToRFC1123(tc.input)
+			if result != tc.expected {
+				t.Errorf("SanitizeToRFC1123(%q) = %q, expected %q", tc.input, result, tc.expected)
+			}
+		})
+	}
+}
+
 func TestClusterMode_Kind(t *testing.T) {
 	// Save and restore environment
 	origClusterMode := os.Getenv("CLUSTER_MODE")
