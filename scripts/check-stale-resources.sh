@@ -561,7 +561,7 @@ check_aws_cloudformation() {
     local stacks_json
     stacks_json=$(aws cloudformation describe-stacks \
         --region "$region" \
-        --query "Stacks[?StackStatus=='CREATE_COMPLETE' || StackStatus=='UPDATE_COMPLETE' || StackStatus=='ROLLBACK_COMPLETE'].{StackName: StackName, CreationTime: CreationTime, StackStatus: StackStatus, Tags: Tags}" \
+        --query "Stacks[?StackStatus=='CREATE_COMPLETE' || StackStatus=='UPDATE_COMPLETE' || StackStatus=='ROLLBACK_COMPLETE' || StackStatus=='UPDATE_ROLLBACK_COMPLETE' || StackStatus=='CREATE_FAILED' || StackStatus=='DELETE_FAILED'].{StackName: StackName, CreationTime: CreationTime, StackStatus: StackStatus, Tags: Tags}" \
         --output json 2>/dev/null) || {
         print_warning "Failed to query AWS CloudFormation stacks"
         return 0
