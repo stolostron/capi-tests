@@ -380,44 +380,60 @@ _test-all-impl:
 		echo ""; \
 		exit 1 \
 	)
-	@$(MAKE) --no-print-directory _management_cluster RESULTS_DIR=$(RESULTS_DIR) || ( \
+	@# Phases 03-08 are wrapped so MCE teardown always runs, even on failure.
+	@# MCE components must be restored to their pre-test state regardless of outcome.
+	@SUITE_EXIT=0; \
+	$(MAKE) --no-print-directory _management_cluster RESULTS_DIR=$(RESULTS_DIR) || { \
 		echo ""; \
 		echo "❌ ERROR: Cluster deployment phase failed. Cannot continue with test suite."; \
 		echo "   Previous stages (check dependencies, setup) completed successfully."; \
 		echo ""; \
-		exit 1 \
-	)
-	@$(MAKE) --no-print-directory _generate-yamls RESULTS_DIR=$(RESULTS_DIR) || ( \
+		SUITE_EXIT=1; \
+	}; \
+	if [ $$SUITE_EXIT -eq 0 ]; then \
+		$(MAKE) --no-print-directory _generate-yamls RESULTS_DIR=$(RESULTS_DIR) || { \
+			echo ""; \
+			echo "❌ ERROR: YAML generation phase failed. Cannot continue with test suite."; \
+			echo "   Previous stages (check dependencies, setup, cluster) completed successfully."; \
+			echo ""; \
+			SUITE_EXIT=1; \
+		}; \
+	fi; \
+	if [ $$SUITE_EXIT -eq 0 ]; then \
+		$(MAKE) --no-print-directory _deploy-crs RESULTS_DIR=$(RESULTS_DIR) || { \
+			echo ""; \
+			echo "❌ ERROR: CR deployment phase failed. Cannot continue with test suite."; \
+			echo "   Previous stages (check dependencies, setup, cluster, YAML generation) completed successfully."; \
+			echo ""; \
+			SUITE_EXIT=1; \
+		}; \
+	fi; \
+	if [ $$SUITE_EXIT -eq 0 ]; then \
+		$(MAKE) --no-print-directory _verify-workload-cluster RESULTS_DIR=$(RESULTS_DIR) || { \
+			echo ""; \
+			echo "❌ ERROR: Workload cluster verification phase failed."; \
+			echo "   Previous stages completed successfully but workload cluster verification encountered issues."; \
+			echo ""; \
+			SUITE_EXIT=1; \
+		}; \
+	fi; \
+	if [ $$SUITE_EXIT -eq 0 ]; then \
+		$(MAKE) --no-print-directory _delete-workload-cluster RESULTS_DIR=$(RESULTS_DIR) || { \
+			echo ""; \
+			echo "❌ ERROR: Workload cluster deletion phase failed."; \
+			echo "   Previous stages completed successfully but cluster deletion encountered issues."; \
+			echo ""; \
+			SUITE_EXIT=1; \
+		}; \
+	fi; \
+	echo ""; \
+	echo "=== MCE teardown (always runs) ==="; \
+	$(MAKE) --no-print-directory _mce-teardown RESULTS_DIR=$(RESULTS_DIR) || true; \
+	if [ $$SUITE_EXIT -ne 0 ]; then \
 		echo ""; \
-		echo "❌ ERROR: YAML generation phase failed. Cannot continue with test suite."; \
-		echo "   Previous stages (check dependencies, setup, cluster) completed successfully."; \
-		echo ""; \
-		exit 1 \
-	)
-	@$(MAKE) --no-print-directory _deploy-crs RESULTS_DIR=$(RESULTS_DIR) || ( \
-		echo ""; \
-		echo "❌ ERROR: CR deployment phase failed. Cannot continue with test suite."; \
-		echo "   Previous stages (check dependencies, setup, cluster, YAML generation) completed successfully."; \
-		echo ""; \
-		exit 1 \
-	)
-	@$(MAKE) --no-print-directory _verify-workload-cluster RESULTS_DIR=$(RESULTS_DIR) || ( \
-		echo ""; \
-		echo "❌ ERROR: Workload cluster verification phase failed."; \
-		echo "   Previous stages completed successfully but workload cluster verification encountered issues."; \
-		echo ""; \
-		exit 1 \
-	)
-	@$(MAKE) --no-print-directory _delete-workload-cluster RESULTS_DIR=$(RESULTS_DIR) || ( \
-		echo ""; \
-		echo "❌ ERROR: Workload cluster deletion phase failed."; \
-		echo "   Previous stages completed successfully but cluster deletion encountered issues."; \
-		echo ""; \
-		exit 1 \
-	)
-	@# MCE teardown: revert MCE components to original state (best-effort, non-blocking)
-	@# This is a safety net for local runs; Prow CI runs this via the post step.
-	@$(MAKE) --no-print-directory _mce-teardown RESULTS_DIR=$(RESULTS_DIR) || true
+		echo "❌ Test suite failed (see errors above)"; \
+		exit 1; \
+	fi
 	@echo ""
 	@echo "======================================="
 	@echo "=== All Test Phases Completed Successfully ==="

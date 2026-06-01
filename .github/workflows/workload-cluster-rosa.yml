@@ -464,6 +464,11 @@ jobs:
         fi
         exit $EXIT
 
+    - name: 'Restore MCE component states'
+      if: always()
+      run: make _mce-teardown || true
+      continue-on-error: true
+
     - name: 'Cleanup resources'
       if: always()
       run: FORCE=1 make clean-all
