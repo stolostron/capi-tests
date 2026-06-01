@@ -6,7 +6,6 @@ set -o xtrace
 
 source openshift-ci/capz-test-env.sh
 
-# Diagnostic: print the capi-tests commit so we can verify which version CI used
 echo "=== capi-tests source commit ==="
 git log --oneline -1 || echo "(not a git repo)"
 echo "================================"
@@ -17,7 +16,6 @@ echo "================================"
 export TEST_RESULTS_DIR="${ARTIFACT_DIR}"
 script -e -q -c "make _generate-yamls RESULTS_DIR=\"${ARTIFACT_DIR}\"" /dev/null
 
-# Diagnostic: show ARO_REPO_DIR contents after generation
 echo "=== ARO_REPO_DIR contents ==="
 ls -la "${ARO_REPO_DIR}/" | head -20 || true
 echo "============================================="
