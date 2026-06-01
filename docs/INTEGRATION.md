@@ -201,11 +201,11 @@ When capi-tests runs the YAML generation phase (`04_generate_yamls_test.go`), it
 | capi-tests config field | Env var set by capi-tests | gen.sh variable | gen.sh behavior |
 |------------------------|--------------------------|-----------------|-----------------|
 | `CAPIUser` | `USER` | `USER` | Defaults to `user1` if not set. Used for service principal naming. |
-| `ClusterNamePrefix` | `CS_CLUSTER_NAME` | `CS_CLUSTER_NAME` | Overridden by `WORKLOAD_CLUSTER_NAME` if set (line 68). Falls back to `$USER-$ENV`. |
+| `ClusterNamePrefix` | `CS_CLUSTER_NAME` | `CS_CLUSTER_NAME` | Overridden by `WORKLOAD_CLUSTER_NAME` if set. Falls back to `$USER-$ENV`. |
 | `WorkloadClusterName` | `WORKLOAD_CLUSTER_NAME` | _(consumed via CS_CLUSTER_NAME)_ | Takes precedence over `CS_CLUSTER_NAME` in gen.sh override logic. |
-| `NamePrefix` | `NAME_PREFIX` | `NAME_PREFIX` | Defaults to `CS_CLUSTER_NAME`. Truncated to 14 chars. Used for VNet, NSG, Key Vault naming. |
+| `NamePrefix` | _(not set; inherited from environment)_ | `NAME_PREFIX` | Defaults to `CS_CLUSTER_NAME`. Truncated to 14 chars. Used for VNet, NSG, Key Vault naming. |
 | `ResourceGroupName` | `RESOURCEGROUPNAME` | `RESOURCEGROUPNAME` | Defaults to `$CS_CLUSTER_NAME-resgroup`. |
-| `Environment` | `DEPLOYMENT_ENV` | `ENV` | gen.sh maps `DEPLOYMENT_ENV` → `ENV` (line 22). |
+| `Environment` | `DEPLOYMENT_ENV` | `ENV` | gen.sh maps `DEPLOYMENT_ENV` → `ENV`. |
 | `Region` | `REGION` | `REGION` | Defaults to `westus3` in gen.sh. |
 | `WorkloadClusterNamespace` | `NAMESPACE` | `NAMESPACE` | Defaults to `default` in gen.sh. |
 | `OCPVersion` | `OCP_VERSION` | `OCP_VERSION` | Defaults to `4.20`. |
@@ -216,11 +216,11 @@ When capi-tests runs the YAML generation phase (`04_generate_yamls_test.go`), it
 These are intentional mismatches between the two repos that exist for historical reasons:
 
 - **`CAPI_USER` vs `USER`**: capi-tests uses `CAPI_USER` internally (to avoid colliding with the OS `$USER`), then passes it to gen.sh as `USER` — which gen.sh expects as a plain `$USER` env var.
-- **`DEPLOYMENT_ENV` vs `ENV`**: capi-tests uses `DEPLOYMENT_ENV`; gen.sh maps it to `ENV` on line 22 (`ENV=${ENV:-${DEPLOYMENT_ENV}}`).
+- **`DEPLOYMENT_ENV` vs `ENV`**: capi-tests uses `DEPLOYMENT_ENV`; gen.sh maps it to `ENV` (`ENV=${ENV:-${DEPLOYMENT_ENV}}`).
 
 ### gen.sh Override Behavior (CS_CLUSTER_NAME)
 
-gen.sh line 68 applies this override chain:
+gen.sh applies this override chain:
 
 ```bash
 export CS_CLUSTER_NAME=${WORKLOAD_CLUSTER_NAME:-"$CS_CLUSTER_NAME"}
@@ -235,13 +235,13 @@ The ROSA gen.sh uses different variable names:
 
 | ARO gen.sh | ROSA gen.sh | Notes |
 |-----------|-------------|-------|
-| `CS_CLUSTER_NAME` | `CLUSTER_NAME` | ROSA uses `CLUSTER_NAME`, not `CS_CLUSTER_NAME` |
+| `CS_CLUSTER_NAME` | `CLUSTER_NAME` | capi-tests sets `CS_CLUSTER_NAME`; ROSA gen.sh maps it internally to `CLUSTER_NAME` |
 | `OCP_VERSION` | `OPENSHIFT_VERSION` | capi-tests sets both for compatibility |
 | `REGION` | `AWS_REGION` | Provider-specific region variable |
 
 ### Reference: capi-tests env var setup
 
-The authoritative mapping is in `test/04_generate_yamls_test.go` (lines 219-232):
+The authoritative mapping is in `test/04_generate_yamls_test.go`, in the `TestInfrastructure_GenerateResources` function (search for the `SetEnvVar` calls):
 
 ```go
 SetEnvVar(t, "DEPLOYMENT_ENV", config.Environment)
