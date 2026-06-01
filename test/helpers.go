@@ -2995,7 +2995,7 @@ func RestoreMCEOriginalStates(t *testing.T, kubeContext string) {
 	if len(reverted) > 0 {
 		PrintToTTY("✅ Restored %d MCE component(s): %v\n", len(reverted), reverted)
 		t.Logf("MCE restore: reverted %d component(s): %v", len(reverted), reverted)
-	} else {
+	} else if len(failed) == 0 {
 		PrintToTTY("✅ All MCE components already in original state\n")
 	}
 
