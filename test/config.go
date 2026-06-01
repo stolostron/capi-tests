@@ -251,10 +251,10 @@ var (
 	resourceGroupName     string
 	resourceGroupNameOnce sync.Once
 
-	// cachedAzureResourceTags holds tags loaded from the deployment state file on resume.
+	// cachedResourceTags holds tags loaded from the deployment state file on resume.
 	// nil means tags were not loaded from state (fresh run or explicit CS_CLUSTER_NAME),
 	// so fresh tags will be generated.
-	cachedAzureResourceTags map[string]string
+	cachedResourceTags map[string]string
 )
 
 // getDefaultRepoDir returns the default repository directory path.
@@ -358,17 +358,21 @@ func getClusterNamePrefix(capiUser string) string {
 		if data, err := os.ReadFile(stateFilePath); err == nil {
 			var state struct {
 				ClusterNamePrefix string            `json:"cluster_name_prefix"`
+				ResourceTags      map[string]string `json:"resource_tags,omitempty"`
 				AzureResourceTags map[string]string `json:"azure_resource_tags,omitempty"`
 			}
 			if unmarshalErr := json.Unmarshal(data, &state); unmarshalErr != nil {
 				errMsg := fmt.Sprintf("deployment state file %s exists but cannot be parsed: %v\n"+
-					"Generating a new prefix would orphan Azure resources from the previous run.\n"+
+					"Generating a new prefix would orphan cloud resources from the previous run.\n"+
 					"Delete the file to start fresh, or fix the JSON to resume.", stateFilePath, unmarshalErr)
 				configError = &errMsg
 				return
 			} else if state.ClusterNamePrefix != "" {
 				clusterNamePrefix = state.ClusterNamePrefix
-				cachedAzureResourceTags = state.AzureResourceTags
+				cachedResourceTags = state.ResourceTags
+				if cachedResourceTags == nil {
+					cachedResourceTags = state.AzureResourceTags
+				}
 				return
 			}
 		} else if !os.IsNotExist(err) {
@@ -462,7 +466,7 @@ type TestConfig struct {
 	WorkloadClusterNamespace string            // Namespace for workload cluster resources on management cluster (unique per test run)
 	TestLabelPrefix          string            // Provider-specific label prefix for test namespaces (e.g., "capz-test" for ARO, "capa-test" for ROSA)
 	TestRunID                string            // Unique run identifier extracted from ClusterNamePrefix (the part after CAPI_USER-). Empty when prefix does not start with CAPI_USER-.
-	AzureResourceTags        map[string]string // Azure tags applied to all created resources for cleanup queries
+	ResourceTags             map[string]string // Tags applied to all created cloud resources (Azure RGs, AWS stacks/VPCs) for ownership tracking and cleanup
 	ResourceGroupName        string            // Azure resource group name (env: RESOURCEGROUPNAME, default: ${WorkloadClusterName}-${runID}-resgroup)
 	CAPINamespace            string            // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
 	CAPZNamespace            string            // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" when USE_K8S=true)
@@ -679,11 +683,11 @@ func NewTestConfig() *TestConfig {
 	workloadClusterName := GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", defaultWorkloadCluster)
 	rgName := getResourceGroupName(workloadClusterName, testRunID)
 
-	// Build Azure resource tags for cleanup and ownership tracking.
+	// Build resource tags for cleanup and ownership tracking (used for both Azure and AWS).
 	// On resume, use cached tags from the deployment state to preserve the original created-at timestamp.
-	azureTags := cachedAzureResourceTags
-	if azureTags == nil {
-		azureTags = map[string]string{
+	resourceTags := cachedResourceTags
+	if resourceTags == nil {
+		resourceTags = map[string]string{
 			"capi-test-user":       capiUser,
 			"capi-test-env":        environment,
 			"capi-test-run-id":     prefix,
@@ -711,7 +715,7 @@ func NewTestConfig() *TestConfig {
 		WorkloadClusterNamespace: getWorkloadClusterNamespace(testLabelPrefix),
 		TestLabelPrefix:          testLabelPrefix,
 		TestRunID:                testRunID,
-		AzureResourceTags:        azureTags,
+		ResourceTags:             resourceTags,
 		ResourceGroupName:        rgName,
 		CAPINamespace:            getControllerNamespace("CAPI_NAMESPACE", "capi-system"),
 		CAPZNamespace:            providerNamespace,

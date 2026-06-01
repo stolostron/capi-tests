@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-my-resources check-stale help summary scheduled-review fuzz
+.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-aws clean-my-resources check-stale help summary scheduled-review fuzz
 
 # Use bash for shell commands (required for PIPESTATUS in test-all target)
 SHELL := /bin/bash
@@ -9,6 +9,7 @@ CAPI_USER_DEFAULT := $(shell grep 'DefaultCAPIUser = ' test/config.go | grep -o 
 CAPI_USER ?= $(CAPI_USER_DEFAULT)
 DEPLOYMENT_ENV ?= stage
 REGION ?= uksouth
+AWS_REGION ?= us-east-1
 INFRA_PROVIDER ?= aro
 ifeq ($(INFRA_PROVIDER),rosa)
 MANAGEMENT_CLUSTER_NAME ?= capa-tests-stage
@@ -583,8 +584,9 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 	fi
 	@echo "Deleting all test resources without prompts..."
 	@echo ""
-	@# Delete all Azure resources (resource group + orphaned resources + AD apps + SPs) - only for ARO
+	@# Delete cloud resources (Azure for ARO, AWS for ROSA)
 	@$(MAKE) --no-print-directory _clean-azure-conditional
+	@$(MAKE) --no-print-directory _clean-aws-conditional
 	@echo ""
 	@# Delete management cluster
 	@if kind get clusters 2>/dev/null | grep -q "^$(CLEANUP_MANAGEMENT_CLUSTER)$$"; then \
@@ -631,8 +633,12 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 	@echo "=== All Resources Cleaned ==="
 	@echo "======================================="
 
-clean-my-resources: ## List all Azure resources tagged as mine (capi-test-user=$CAPI_USER)
-	@./scripts/cleanup-azure-resources.sh --my-resources
+clean-my-resources: ## List all cloud resources tagged as mine (capi-test-user=$CAPI_USER)
+	@echo "=== Azure Resources ==="
+	@./scripts/cleanup-azure-resources.sh --my-resources 2>/dev/null || echo "Azure check skipped (az CLI not available or not authenticated)"
+	@echo ""
+	@echo "=== AWS Resources ==="
+	@./scripts/cleanup-aws-resources.sh --my-resources 2>/dev/null || echo "AWS check skipped (aws CLI not available or not authenticated)"
 
 check-stale: ## Check for stale cloud resources left by tests (default: older than 24h)
 	@./scripts/check-stale-resources.sh --max-age 24
@@ -660,6 +666,27 @@ _clean-azure-conditional:
 		$(MAKE) --no-print-directory _clean-azure-force; \
 	else \
 		echo "Skipping Azure cleanup (INFRA_PROVIDER=$(INFRA_PROVIDER), not aro)"; \
+	fi
+
+clean-aws: ## Delete all AWS resources tagged with capi-test-* ownership tags
+	@if [ "$(FORCE)" = "1" ]; then \
+		./scripts/cleanup-aws-resources.sh --region "$(AWS_REGION)" --force; \
+	else \
+		./scripts/cleanup-aws-resources.sh --region "$(AWS_REGION)"; \
+	fi
+
+# Internal target: force delete all AWS resources without prompting
+.PHONY: _clean-aws-force
+_clean-aws-force:
+	@./scripts/cleanup-aws-resources.sh --region "$(AWS_REGION)" --force 2>/dev/null || true
+
+# Internal target: conditionally clean AWS resources (only for ROSA)
+.PHONY: _clean-aws-conditional
+_clean-aws-conditional:
+	@if [ "$(INFRA_PROVIDER)" = "rosa" ]; then \
+		$(MAKE) --no-print-directory _clean-aws-force; \
+	else \
+		echo "Skipping AWS cleanup (INFRA_PROVIDER=$(INFRA_PROVIDER), not rosa)"; \
 	fi
 
 setup-submodule: ## Add cluster-api-installer as a git submodule

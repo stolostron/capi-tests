@@ -1224,7 +1224,7 @@ func TestDeployment_VerifyClusterInfrastructureReady(t *testing.T) {
 func TestDeployment_TagAzureResources(t *testing.T) {
 	config := NewTestConfig()
 
-	if len(config.AzureResourceTags) == 0 {
+	if len(config.ResourceTags) == 0 {
 		t.Skipf("No Azure resource tags configured")
 		return
 	}
@@ -1253,6 +1253,44 @@ func TestDeployment_TagAzureResources(t *testing.T) {
 	tagAzureServicePrincipals(t, config)
 
 	PrintToTTY("✅ Azure resource tagging completed\n\n")
+}
+
+// TestDeployment_TagAWSResources tags AWS resources (CloudFormation stacks and VPCs) created
+// by the CAPA controller with ownership metadata for stale resource detection and cleanup.
+// Non-fatal: failures are logged as warnings since tagging is for cleanup convenience only.
+func TestDeployment_TagAWSResources(t *testing.T) {
+	config := NewTestConfig()
+
+	if len(config.ResourceTags) == 0 {
+		t.Skipf("No resource tags configured")
+		return
+	}
+
+	if !CommandExists("aws") {
+		t.Skipf("AWS CLI not available, skipping AWS resource tagging")
+		return
+	}
+
+	if config.InfraProviderName != "rosa" {
+		t.Skipf("AWS resource tagging only applies to ROSA provider")
+		return
+	}
+
+	PrintToTTY("\n=== Tagging AWS Resources ===\n")
+
+	region := config.Region
+
+	PrintToTTY("Tagging CloudFormation stacks in %s...\n", region)
+	if err := TagAWSCloudFormationStacks(t, config, region); err != nil {
+		t.Logf("Warning: failed to tag CloudFormation stacks: %v", err)
+	}
+
+	PrintToTTY("Tagging CAPA VPCs in %s...\n", region)
+	if err := TagAWSVPCs(t, config, region); err != nil {
+		t.Logf("Warning: failed to tag VPCs: %v", err)
+	}
+
+	PrintToTTY("✅ AWS resource tagging completed\n\n")
 }
 
 // tagAzureADApplications finds and tags Azure AD Applications matching our prefix.
@@ -1288,7 +1326,7 @@ func tagAzureADApplications(t *testing.T, config *TestConfig) {
 	}
 
 	// Build tag strings for AD apps (string array format: "key:value")
-	tagStrings := sortedTagPairs(config.AzureResourceTags, ":")
+	tagStrings := sortedTagPairs(config.ResourceTags, ":")
 	tagsJSON, err := toJSONArray(tagStrings)
 	if err != nil {
 		t.Logf("Warning: %v — skipping AD Application tagging", err)
@@ -1338,7 +1376,7 @@ func tagAzureServicePrincipals(t *testing.T, config *TestConfig) {
 	}
 
 	// Build tag strings for SPs (string array format: "key:value")
-	tagStrings := sortedTagPairs(config.AzureResourceTags, ":")
+	tagStrings := sortedTagPairs(config.ResourceTags, ":")
 	tagsJSON, err := toJSONArray(tagStrings)
 	if err != nil {
 		t.Logf("Warning: %v — skipping Service Principal tagging", err)

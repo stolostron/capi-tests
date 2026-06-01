@@ -476,12 +476,13 @@ check_aws_vpcs() {
     local region="$1"
     print_info "Scanning AWS VPCs for stale CAPI test resources..."
 
-    # Look for VPCs tagged with sigs.k8s.io/cluster-api-provider-aws/cluster/* keys
-    # which are created by CAPA during ROSA cluster provisioning
+    # Look for VPCs tagged with capi-test-created-at (our ownership tag).
+    # This replaces the previous approach of matching CAPA's sigs.k8s.io tags,
+    # which couldn't distinguish our resources from other teams' resources.
     local vpcs_json
     vpcs_json=$(aws ec2 describe-vpcs \
         --region "$region" \
-        --filters "Name=tag-key,Values=sigs.k8s.io/cluster-api-provider-aws/cluster/*" \
+        --filters "Name=tag-key,Values=capi-test-created-at" \
         --query "Vpcs[].{VpcId: VpcId, Tags: Tags, State: State}" \
         --output json 2>/dev/null) || {
         print_warning "Failed to query AWS VPCs"
@@ -492,7 +493,7 @@ check_aws_vpcs() {
     total=$(echo "$vpcs_json" | jq 'length')
 
     if [[ "$total" -eq 0 ]]; then
-        print_success "No CAPA-tagged VPCs found"
+        print_success "No capi-test-tagged VPCs found"
         return 0
     fi
 
@@ -502,30 +503,28 @@ check_aws_vpcs() {
         local vpc_id
         vpc_id=$(echo "$vpc" | jq -r '.VpcId')
 
-        # Get VPC creation time from its flow logs or use the Name tag timestamp
-        # VPCs don't have a native creation timestamp, so we check the creation time
-        # of the associated CAPA cluster tag
         local name_tag
         name_tag=$(echo "$vpc" | jq -r '[.Tags[] | select(.Key == "Name")] | .[0].Value // "unknown"')
 
-        # Use the VPC's earliest network interface creation as a proxy for VPC age
-        local earliest_eni
-        earliest_eni=$(aws ec2 describe-network-interfaces \
-            --region "$region" \
-            --filters "Name=vpc-id,Values=${vpc_id}" \
-            --query "sort_by(NetworkInterfaces, &Attachment.AttachTime)[0].Attachment.AttachTime" \
-            --output text 2>/dev/null) || earliest_eni=""
+        # Use capi-test-created-at tag as authoritative age source
+        local created_at
+        created_at=$(echo "$vpc" | jq -r '[.Tags[] | select(.Key == "capi-test-created-at")] | .[0].Value // empty')
+        [[ -z "$created_at" ]] && continue
 
-        if [[ -n "$earliest_eni" && "$earliest_eni" != "None" && "$earliest_eni" != "null" ]]; then
-            local created_epoch
-            created_epoch=$(date -d "$earliest_eni" +%s 2>/dev/null) || continue
+        local created_epoch
+        created_epoch=$(date -d "$created_at" +%s 2>/dev/null) || continue
 
-            if [[ "$created_epoch" -lt "$THRESHOLD_EPOCH" ]]; then
-                local enriched
-                enriched=$(jq -n --arg id "$vpc_id" --arg name "$name_tag" --arg created "$earliest_eni" \
-                    '{vpcId: $id, name: $name, createdAt: $created}')
-                stale_vpcs=$(echo "$stale_vpcs" | jq --argjson vpc "$enriched" '. + [$vpc]')
-            fi
+        if [[ "$created_epoch" -lt "$THRESHOLD_EPOCH" ]]; then
+            local user env run_id
+            user=$(echo "$vpc" | jq -r '[.Tags[] | select(.Key == "capi-test-user")] | .[0].Value // "-"')
+            env=$(echo "$vpc" | jq -r '[.Tags[] | select(.Key == "capi-test-env")] | .[0].Value // "-"')
+            run_id=$(echo "$vpc" | jq -r '[.Tags[] | select(.Key == "capi-test-run-id")] | .[0].Value // "-"')
+
+            local enriched
+            enriched=$(jq -n --arg id "$vpc_id" --arg name "$name_tag" --arg created "$created_at" \
+                --arg user "$user" --arg env "$env" --arg runId "$run_id" \
+                '{vpcId: $id, name: $name, createdAt: $created, user: $user, env: $env, runId: $runId}')
+            stale_vpcs=$(echo "$stale_vpcs" | jq --argjson vpc "$enriched" '. + [$vpc]')
         fi
     done < <(echo "$vpcs_json" | jq -c '.[]')
 
@@ -540,15 +539,15 @@ check_aws_vpcs() {
             echo ""
             print_warning "Found ${stale_count} stale AWS VPC(s):"
             echo ""
-            printf "%-25s | %-40s | %-25s\n" "VPC ID" "NAME" "CREATED AT"
-            printf "%s\n" "$(printf '%.0s-' {1..95})"
-            echo "$stale_vpcs" | jq -r '.[] | "\(.vpcId)|\(.name)|\(.createdAt)"' | while IFS='|' read -r id name created; do
-                printf "%-25s | %-40s | %-25s\n" "$id" "${name:0:40}" "${created:0:25}"
+            printf "%-25s | %-30s | %-25s | %-10s | %-8s\n" "VPC ID" "NAME" "CREATED AT" "USER" "ENV"
+            printf "%s\n" "$(printf '%.0s-' {1..105})"
+            echo "$stale_vpcs" | jq -r '.[] | "\(.vpcId)|\(.name)|\(.createdAt)|\(.user // "-")|\(.env // "-")"' | while IFS='|' read -r id name created user env; do
+                printf "%-25s | %-30s | %-25s | %-10s | %-8s\n" "$id" "${name:0:30}" "${created:0:25}" "${user:0:10}" "${env:0:8}"
             done
             echo ""
         fi
     else
-        print_success "No stale VPCs (checked ${total} CAPA-tagged VPCs)"
+        print_success "No stale VPCs (checked ${total} tagged VPCs)"
     fi
 }
 
@@ -556,36 +555,53 @@ check_aws_cloudformation() {
     local region="$1"
     print_info "Scanning AWS CloudFormation stacks for stale CAPI resources..."
 
+    # Use describe-stacks to get full tag information (list-stacks doesn't include tags)
     local stacks_json
-    stacks_json=$(aws cloudformation list-stacks \
+    stacks_json=$(aws cloudformation describe-stacks \
         --region "$region" \
-        --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE ROLLBACK_COMPLETE \
-        --query "StackSummaries[?contains(StackName, 'capa-') || contains(StackName, 'rosa-')].{StackName: StackName, CreationTime: CreationTime, StackStatus: StackStatus}" \
+        --query "Stacks[?StackStatus=='CREATE_COMPLETE' || StackStatus=='UPDATE_COMPLETE' || StackStatus=='ROLLBACK_COMPLETE'].{StackName: StackName, CreationTime: CreationTime, StackStatus: StackStatus, Tags: Tags}" \
         --output json 2>/dev/null) || {
         print_warning "Failed to query AWS CloudFormation stacks"
         return 0
     }
 
+    # Filter to stacks tagged with capi-test-created-at (our ownership tag)
+    local tagged_stacks
+    tagged_stacks=$(echo "$stacks_json" | jq '[.[] | select(.Tags != null) | select([.Tags[] | select(.Key == "capi-test-created-at")] | length > 0)]')
+
     local total
-    total=$(echo "$stacks_json" | jq 'length')
+    total=$(echo "$tagged_stacks" | jq 'length')
 
     if [[ "$total" -eq 0 ]]; then
-        print_success "No CAPI-related CloudFormation stacks found"
+        print_success "No capi-test-tagged CloudFormation stacks found"
         return 0
     fi
 
     local stale_stacks="[]"
 
     while IFS= read -r stack; do
+        # Use capi-test-created-at tag as authoritative age source
         local created_at
-        created_at=$(echo "$stack" | jq -r '.CreationTime')
+        created_at=$(echo "$stack" | jq -r '[.Tags[] | select(.Key == "capi-test-created-at")] | .[0].Value // empty')
+        if [[ -z "$created_at" ]]; then
+            created_at=$(echo "$stack" | jq -r '.CreationTime')
+        fi
         local created_epoch
         created_epoch=$(date -d "$created_at" +%s 2>/dev/null) || continue
 
         if [[ "$created_epoch" -lt "$THRESHOLD_EPOCH" ]]; then
-            stale_stacks=$(echo "$stale_stacks" | jq --argjson stack "$stack" '. + [$stack]')
+            # Extract ownership tags
+            local user env run_id
+            user=$(echo "$stack" | jq -r '[.Tags[] | select(.Key == "capi-test-user")] | .[0].Value // "-"')
+            env=$(echo "$stack" | jq -r '[.Tags[] | select(.Key == "capi-test-env")] | .[0].Value // "-"')
+            run_id=$(echo "$stack" | jq -r '[.Tags[] | select(.Key == "capi-test-run-id")] | .[0].Value // "-"')
+
+            local enriched
+            enriched=$(echo "$stack" | jq --arg user "$user" --arg env "$env" --arg runId "$run_id" --arg created "$created_at" \
+                '{StackName: .StackName, CreationTime: $created, StackStatus: .StackStatus, user: $user, env: $env, runId: $runId}')
+            stale_stacks=$(echo "$stale_stacks" | jq --argjson stack "$enriched" '. + [$stack]')
         fi
-    done < <(echo "$stacks_json" | jq -c '.[]')
+    done < <(echo "$tagged_stacks" | jq -c '.[]')
 
     local stale_count
     stale_count=$(echo "$stale_stacks" | jq 'length')
@@ -598,15 +614,15 @@ check_aws_cloudformation() {
             echo ""
             print_warning "Found ${stale_count} stale CloudFormation stack(s):"
             echo ""
-            printf "%-50s | %-25s | %-20s\n" "STACK NAME" "CREATED AT" "STATUS"
-            printf "%s\n" "$(printf '%.0s-' {1..100})"
-            echo "$stale_stacks" | jq -r '.[] | "\(.StackName)|\(.CreationTime)|\(.StackStatus)"' | while IFS='|' read -r name created status; do
-                printf "%-50s | %-25s | %-20s\n" "${name:0:50}" "${created:0:25}" "$status"
+            printf "%-40s | %-25s | %-15s | %-10s | %-8s\n" "STACK NAME" "CREATED AT" "STATUS" "USER" "ENV"
+            printf "%s\n" "$(printf '%.0s-' {1..105})"
+            echo "$stale_stacks" | jq -r '.[] | "\(.StackName)|\(.CreationTime)|\(.StackStatus)|\(.user // "-")|\(.env // "-")"' | while IFS='|' read -r name created status user env; do
+                printf "%-40s | %-25s | %-15s | %-10s | %-8s\n" "${name:0:40}" "${created:0:25}" "$status" "${user:0:10}" "${env:0:8}"
             done
             echo ""
         fi
     else
-        print_success "No stale CloudFormation stacks (checked ${total} stacks)"
+        print_success "No stale CloudFormation stacks (checked ${total} tagged stacks)"
     fi
 }
 
