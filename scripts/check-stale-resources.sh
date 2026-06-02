@@ -1,25 +1,21 @@
 #!/usr/bin/env bash
 # check-stale-resources.sh - Detect stale cloud resources left by CAPI test runs
 #
-# Scans Azure and AWS environments for resources that are older than a configurable
-# threshold, indicating they were leaked by failed or interrupted test runs.
+# Scans Azure for resources that are older than a configurable threshold,
+# indicating they were leaked by failed or interrupted test runs.
 #
 # Usage:
 #   ./scripts/check-stale-resources.sh [OPTIONS]
 #
 # Options:
 #   --max-age HOURS    Staleness threshold in hours (default: 24)
-#   --azure            Check Azure resources only
-#   --aws              Check AWS resources only
+#   --azure            Check Azure resources only (default)
 #   --json             Output results as JSON (for GHA workflow parsing)
 #   --help             Show this help message
 #
 # Environment variables:
 #   CAPI_USER              User prefix for resource matching (default: $USER)
-#   AZURE_SUBSCRIPTION_ID  Azure subscription to scan (for Azure mode)
-#   AWS_REGION             AWS region to scan (for AWS mode)
-#   AWS_ACCESS_KEY_ID      AWS credentials (for AWS mode)
-#   AWS_SECRET_ACCESS_KEY  AWS credentials (for AWS mode)
+#   AZURE_SUBSCRIPTION_ID  Azure subscription to scan
 #
 # Exit codes:
 #   0 - No stale resources found
@@ -27,19 +23,16 @@
 #   2 - Error (missing prerequisites, auth failure, etc.)
 #
 # Examples:
-#   ./scripts/check-stale-resources.sh                           # Check both Azure and AWS
-#   ./scripts/check-stale-resources.sh --azure --max-age 12      # Azure only, 12h threshold
-#   ./scripts/check-stale-resources.sh --aws --json              # AWS only, JSON output
-#   ./scripts/check-stale-resources.sh --json --max-age 48       # Both providers, 48h, JSON
+#   ./scripts/check-stale-resources.sh                           # Check Azure
+#   ./scripts/check-stale-resources.sh --azure --max-age 12      # Azure, 12h threshold
+#   ./scripts/check-stale-resources.sh --json --max-age 48       # Azure, 48h, JSON
 
 set -euo pipefail
 
 # Defaults
 MAX_AGE_HOURS=24
-CHECK_AZURE=false
-CHECK_AWS=false
+CHECK_AZURE=true
 JSON_OUTPUT=false
-EXPLICIT_PROVIDER=false
 
 # ANSI colors for output (disabled in JSON mode)
 RED='\033[0;31m'
@@ -73,12 +66,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --azure)
             CHECK_AZURE=true
-            EXPLICIT_PROVIDER=true
-            shift
-            ;;
-        --aws)
-            CHECK_AWS=true
-            EXPLICIT_PROVIDER=true
             shift
             ;;
         --json)
@@ -95,12 +82,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Default: check both providers when none specified explicitly
-if [[ "$EXPLICIT_PROVIDER" == "false" ]]; then
-    CHECK_AZURE=true
-    CHECK_AWS=true
-fi
-
 # Compute threshold epoch once
 THRESHOLD_EPOCH=$(date -d "-${MAX_AGE_HOURS} hours" +%s 2>/dev/null) || {
     print_error "Failed to compute threshold time. Ensure GNU date is available."
@@ -112,8 +93,6 @@ THRESHOLD_HUMAN=$(date -d "-${MAX_AGE_HOURS} hours" "+%Y-%m-%d %H:%M UTC" 2>/dev
 AZURE_RGS_JSON="[]"
 AZURE_APPS_JSON="[]"
 AZURE_SPS_JSON="[]"
-AWS_VPCS_JSON="[]"
-AWS_STACKS_JSON="[]"
 STALE_FOUND=false
 
 # ─── Azure Detection ────────────────────────────────────────────────────────────
@@ -454,199 +433,21 @@ check_azure_service_principals() {
     fi
 }
 
-# ─── AWS Detection ──────────────────────────────────────────────────────────────
-
-check_aws_stale() {
-    if ! command -v aws >/dev/null 2>&1; then
-        print_warning "AWS CLI not installed — skipping AWS check"
-        return 0
-    fi
-
-    if ! aws sts get-caller-identity >/dev/null 2>&1; then
-        print_warning "Not authenticated to AWS — skipping AWS check"
-        return 0
-    fi
-
-    local region="${AWS_REGION:-us-east-1}"
-    print_info "Checking AWS (${region}) for stale resources (older than ${MAX_AGE_HOURS}h)..."
-
-    check_aws_vpcs "$region"
-    check_aws_cloudformation "$region"
-}
-
-check_aws_vpcs() {
-    local region="$1"
-    print_info "Scanning AWS VPCs for stale CAPI test resources..."
-
-    # Look for VPCs tagged with capi-test-created-at (our ownership tag).
-    # This replaces the previous approach of matching CAPA's sigs.k8s.io tags,
-    # which couldn't distinguish our resources from other teams' resources.
-    local vpcs_json
-    vpcs_json=$(aws ec2 describe-vpcs \
-        --region "$region" \
-        --filters "Name=tag-key,Values=capi-test-created-at" \
-        --query "Vpcs[].{VpcId: VpcId, Tags: Tags, State: State}" \
-        --output json 2>/dev/null) || {
-        print_warning "Failed to query AWS VPCs"
-        return 0
-    }
-
-    local total
-    total=$(echo "$vpcs_json" | jq 'length')
-
-    if [[ "$total" -eq 0 ]]; then
-        print_success "No capi-test-tagged VPCs found"
-        return 0
-    fi
-
-    local stale_vpcs="[]"
-
-    while IFS= read -r vpc; do
-        local vpc_id
-        vpc_id=$(echo "$vpc" | jq -r '.VpcId')
-
-        local name_tag
-        name_tag=$(echo "$vpc" | jq -r '[.Tags[] | select(.Key == "Name")] | .[0].Value // "unknown"')
-
-        # Use capi-test-created-at tag as authoritative age source
-        local created_at
-        created_at=$(echo "$vpc" | jq -r '[.Tags[] | select(.Key == "capi-test-created-at")] | .[0].Value // empty')
-        [[ -z "$created_at" ]] && continue
-
-        local created_epoch
-        created_epoch=$(date -d "$created_at" +%s 2>/dev/null) || continue
-
-        if [[ "$created_epoch" -lt "$THRESHOLD_EPOCH" ]]; then
-            local user env run_id
-            user=$(echo "$vpc" | jq -r '[.Tags[] | select(.Key == "capi-test-user")] | .[0].Value // "-"')
-            env=$(echo "$vpc" | jq -r '[.Tags[] | select(.Key == "capi-test-env")] | .[0].Value // "-"')
-            run_id=$(echo "$vpc" | jq -r '[.Tags[] | select(.Key == "capi-test-run-id")] | .[0].Value // "-"')
-
-            local enriched
-            enriched=$(jq -n --arg id "$vpc_id" --arg name "$name_tag" --arg created "$created_at" \
-                --arg user "$user" --arg env "$env" --arg runId "$run_id" \
-                '{vpcId: $id, name: $name, createdAt: $created, user: $user, env: $env, runId: $runId}')
-            stale_vpcs=$(echo "$stale_vpcs" | jq --argjson vpc "$enriched" '. + [$vpc]')
-        fi
-    done < <(echo "$vpcs_json" | jq -c '.[]')
-
-    local stale_count
-    stale_count=$(echo "$stale_vpcs" | jq 'length')
-
-    if [[ "$stale_count" -gt 0 ]]; then
-        STALE_FOUND=true
-        AWS_VPCS_JSON="$stale_vpcs"
-
-        if [[ "$JSON_OUTPUT" != "true" ]]; then
-            echo ""
-            print_warning "Found ${stale_count} stale AWS VPC(s):"
-            echo ""
-            printf "%-25s | %-30s | %-25s | %-10s | %-8s\n" "VPC ID" "NAME" "CREATED AT" "USER" "ENV"
-            printf "%s\n" "$(printf '%.0s-' {1..105})"
-            echo "$stale_vpcs" | jq -r '.[] | "\(.vpcId)|\(.name)|\(.createdAt)|\(.user // "-")|\(.env // "-")"' | while IFS='|' read -r id name created user env; do
-                printf "%-25s | %-30s | %-25s | %-10s | %-8s\n" "$id" "${name:0:30}" "${created:0:25}" "${user:0:10}" "${env:0:8}"
-            done
-            echo ""
-        fi
-    else
-        print_success "No stale VPCs (checked ${total} tagged VPCs)"
-    fi
-}
-
-check_aws_cloudformation() {
-    local region="$1"
-    print_info "Scanning AWS CloudFormation stacks for stale CAPI resources..."
-
-    # Use describe-stacks to get full tag information (list-stacks doesn't include tags)
-    local stacks_json
-    stacks_json=$(aws cloudformation describe-stacks \
-        --region "$region" \
-        --query "Stacks[?StackStatus=='CREATE_COMPLETE' || StackStatus=='UPDATE_COMPLETE' || StackStatus=='ROLLBACK_COMPLETE' || StackStatus=='UPDATE_ROLLBACK_COMPLETE' || StackStatus=='CREATE_FAILED' || StackStatus=='DELETE_FAILED'].{StackName: StackName, CreationTime: CreationTime, StackStatus: StackStatus, Tags: Tags}" \
-        --output json 2>/dev/null) || {
-        print_warning "Failed to query AWS CloudFormation stacks"
-        return 0
-    }
-
-    # Filter to stacks tagged with capi-test-created-at (our ownership tag)
-    local tagged_stacks
-    tagged_stacks=$(echo "$stacks_json" | jq '[.[] | select(.Tags != null) | select([.Tags[] | select(.Key == "capi-test-created-at")] | length > 0)]')
-
-    local total
-    total=$(echo "$tagged_stacks" | jq 'length')
-
-    if [[ "$total" -eq 0 ]]; then
-        print_success "No capi-test-tagged CloudFormation stacks found"
-        return 0
-    fi
-
-    local stale_stacks="[]"
-
-    while IFS= read -r stack; do
-        # Use capi-test-created-at tag as authoritative age source
-        local created_at
-        created_at=$(echo "$stack" | jq -r '[.Tags[] | select(.Key == "capi-test-created-at")] | .[0].Value // empty')
-        if [[ -z "$created_at" ]]; then
-            created_at=$(echo "$stack" | jq -r '.CreationTime')
-        fi
-        local created_epoch
-        created_epoch=$(date -d "$created_at" +%s 2>/dev/null) || continue
-
-        if [[ "$created_epoch" -lt "$THRESHOLD_EPOCH" ]]; then
-            # Extract ownership tags
-            local user env run_id
-            user=$(echo "$stack" | jq -r '[.Tags[] | select(.Key == "capi-test-user")] | .[0].Value // "-"')
-            env=$(echo "$stack" | jq -r '[.Tags[] | select(.Key == "capi-test-env")] | .[0].Value // "-"')
-            run_id=$(echo "$stack" | jq -r '[.Tags[] | select(.Key == "capi-test-run-id")] | .[0].Value // "-"')
-
-            local enriched
-            enriched=$(echo "$stack" | jq --arg user "$user" --arg env "$env" --arg runId "$run_id" --arg created "$created_at" \
-                '{StackName: .StackName, CreationTime: $created, StackStatus: .StackStatus, user: $user, env: $env, runId: $runId}')
-            stale_stacks=$(echo "$stale_stacks" | jq --argjson stack "$enriched" '. + [$stack]')
-        fi
-    done < <(echo "$tagged_stacks" | jq -c '.[]')
-
-    local stale_count
-    stale_count=$(echo "$stale_stacks" | jq 'length')
-
-    if [[ "$stale_count" -gt 0 ]]; then
-        STALE_FOUND=true
-        AWS_STACKS_JSON="$stale_stacks"
-
-        if [[ "$JSON_OUTPUT" != "true" ]]; then
-            echo ""
-            print_warning "Found ${stale_count} stale CloudFormation stack(s):"
-            echo ""
-            printf "%-40s | %-25s | %-15s | %-10s | %-8s\n" "STACK NAME" "CREATED AT" "STATUS" "USER" "ENV"
-            printf "%s\n" "$(printf '%.0s-' {1..105})"
-            echo "$stale_stacks" | jq -r '.[] | "\(.StackName)|\(.CreationTime)|\(.StackStatus)|\(.user // "-")|\(.env // "-")"' | while IFS='|' read -r name created status user env; do
-                printf "%-40s | %-25s | %-15s | %-10s | %-8s\n" "${name:0:40}" "${created:0:25}" "$status" "${user:0:10}" "${env:0:8}"
-            done
-            echo ""
-        fi
-    else
-        print_success "No stale CloudFormation stacks (checked ${total} tagged stacks)"
-    fi
-}
-
 # ─── Output ─────────────────────────────────────────────────────────────────────
 
 generate_summary() {
     local parts=()
 
-    local azure_rg_count azure_app_count azure_sp_count aws_vpc_count aws_stack_count
+    local azure_rg_count azure_app_count azure_sp_count
     azure_rg_count=$(echo "$AZURE_RGS_JSON" | jq 'length')
     azure_app_count=$(echo "$AZURE_APPS_JSON" | jq 'length')
     azure_sp_count=$(echo "$AZURE_SPS_JSON" | jq 'length')
-    aws_vpc_count=$(echo "$AWS_VPCS_JSON" | jq 'length')
-    aws_stack_count=$(echo "$AWS_STACKS_JSON" | jq 'length')
 
     [[ "$azure_rg_count" -gt 0 ]] && parts+=("${azure_rg_count} Azure resource group(s)")
     [[ "$azure_app_count" -gt 0 ]] && parts+=("${azure_app_count} Azure AD app(s)")
     [[ "$azure_sp_count" -gt 0 ]] && parts+=("${azure_sp_count} Azure service principal(s)")
-    [[ "$aws_vpc_count" -gt 0 ]] && parts+=("${aws_vpc_count} AWS VPC(s)")
-    [[ "$aws_stack_count" -gt 0 ]] && parts+=("${aws_stack_count} AWS CloudFormation stack(s)")
 
-    local total=$((azure_rg_count + azure_app_count + azure_sp_count + aws_vpc_count + aws_stack_count))
+    local total=$((azure_rg_count + azure_app_count + azure_sp_count))
 
     if [[ ${#parts[@]} -eq 0 ]]; then
         echo "No stale resources found (threshold: ${MAX_AGE_HOURS}h)"
@@ -663,8 +464,7 @@ output_json() {
 
     local total
     total=$(( $(echo "$AZURE_RGS_JSON" | jq 'length') + $(echo "$AZURE_APPS_JSON" | jq 'length') + \
-              $(echo "$AZURE_SPS_JSON" | jq 'length') + $(echo "$AWS_VPCS_JSON" | jq 'length') + \
-              $(echo "$AWS_STACKS_JSON" | jq 'length') ))
+              $(echo "$AZURE_SPS_JSON" | jq 'length') ))
 
     jq -n \
         --argjson stale_found "$( [[ "$STALE_FOUND" == "true" ]] && echo "true" || echo "false" )" \
@@ -675,8 +475,6 @@ output_json() {
         --argjson azure_rgs "$AZURE_RGS_JSON" \
         --argjson azure_apps "$AZURE_APPS_JSON" \
         --argjson azure_sps "$AZURE_SPS_JSON" \
-        --argjson aws_vpcs "$AWS_VPCS_JSON" \
-        --argjson aws_stacks "$AWS_STACKS_JSON" \
         '{
             stale_found: $stale_found,
             total_count: $total_count,
@@ -686,10 +484,6 @@ output_json() {
                 resource_groups: $azure_rgs,
                 ad_applications: $azure_apps,
                 service_principals: $azure_sps
-            },
-            aws: {
-                vpcs: $aws_vpcs,
-                cloudformation_stacks: $aws_stacks
             },
             summary: $summary
         }'
@@ -704,17 +498,12 @@ main() {
         echo "========================================"
         echo ""
         print_info "Staleness threshold: ${MAX_AGE_HOURS} hours (before ${THRESHOLD_HUMAN})"
-        print_info "Providers: $( [[ "$CHECK_AZURE" == "true" ]] && echo -n "Azure " )$( [[ "$CHECK_AWS" == "true" ]] && echo -n "AWS" )"
+        print_info "Provider: Azure"
         echo ""
     fi
 
     if [[ "$CHECK_AZURE" == "true" ]]; then
         check_azure_stale
-        [[ "$JSON_OUTPUT" != "true" ]] && echo ""
-    fi
-
-    if [[ "$CHECK_AWS" == "true" ]]; then
-        check_aws_stale
         [[ "$JSON_OUTPUT" != "true" ]] && echo ""
     fi
 

@@ -1,13 +1,12 @@
 name: Management Cluster (ROSA)
 
+# DISABLED: AWS/ROSA support removed — no capacity to maintain (ARO-27468)
+#
 # Management cluster deployment only (no workload cluster provisioning).
 # This workflow deploys a Kind cluster with CAPI/CAPA controllers and validates setup.
 # Does NOT provision ROSA workload clusters.
 #
-# Triggers:
-#   - Pull requests (pre-merge validation)
-#   - Push to main (post-merge validation)
-#   - Manual dispatch
+# Triggers: DISABLED
 #
 # Requires:
 #   - Repository secret: QUAY_AUTH
@@ -16,22 +15,6 @@ name: Management Cluster (ROSA)
 #   - management-cluster-rosa.yml (this file): Quick validation, Kind + controllers only
 #   - cluster-rosa.yml: Full deployment including ROSA workload cluster provisioning
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'test/**'
-      - 'Makefile'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/management-cluster-rosa.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'test/**'
-      - 'Makefile'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/management-cluster-rosa.yml'
   workflow_dispatch:
 
 permissions:
@@ -48,8 +31,8 @@ env:
 
 jobs:
   management-cluster:
+    if: false  # DISABLED: AWS/ROSA support removed (ARO-27468)
     name: Management Cluster (ROSA/CAPA)
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 60
 

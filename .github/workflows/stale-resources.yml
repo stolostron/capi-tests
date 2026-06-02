@@ -1,12 +1,11 @@
 name: Stale Resource Detection
 
 # Scheduled workflow to detect stale cloud resources left by test runs.
-# Scans Azure and AWS for resources older than a configurable threshold.
+# Scans Azure for resources older than a configurable threshold.
 # On detection: fails the workflow and creates/updates a Jira issue.
 #
 # Requires:
 #   - Environment (aro-stage) with Azure credentials
-#   - Environment (rosa-stage) with AWS credentials
 #   - Repository secrets: JIRA_EMAIL, JIRA_API_TOKEN (for Jira integration)
 on:
   schedule:
@@ -131,103 +130,10 @@ jobs:
         path: azure-report.json
         retention-days: 30
 
-  check-aws:
-    name: Check AWS Resources
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: rosa-stage
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ vars.AWS_REGION }}
-    outputs:
-      stale_found: ${{ steps.check.outputs.stale_found }}
-      report: ${{ steps.check.outputs.report }}
-      summary: ${{ steps.check.outputs.summary }}
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-    - name: Validate AWS credentials
-      id: aws-creds
-      run: |
-        CONFIGURED=true
-        missing=""
-        [ -z "$AWS_ACCESS_KEY_ID" ] && missing="$missing secrets.AWS_ACCESS_KEY_ID"
-        [ -z "$AWS_SECRET_ACCESS_KEY" ] && missing="$missing secrets.AWS_SECRET_ACCESS_KEY"
-        if [ -n "$missing" ]; then
-          echo "::warning::Missing AWS credentials:$missing"
-          echo "Configure in Settings > Environments > rosa-stage"
-          CONFIGURED=false
-        fi
-
-        echo "configured=$CONFIGURED" >> "$GITHUB_OUTPUT"
-        if [ "$CONFIGURED" = "false" ]; then
-          echo "::notice::AWS credentials not configured — skipping AWS check"
-          echo "stale_found=false" >> "$GITHUB_OUTPUT"
-          {
-            echo 'summary<<SUMMARY_EOF'
-            echo "AWS check skipped: credentials not configured"
-            echo 'SUMMARY_EOF'
-          } >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-
-    - name: Check for stale AWS resources
-      id: check
-      if: steps.aws-creds.outputs.configured == 'true'
-      env:
-        AWS_DEFAULT_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-      run: |
-        set +e
-        RESULT=$(./scripts/check-stale-resources.sh --aws --json --max-age "$MAX_AGE_HOURS" 2>aws-check.stderr)
-        EXIT_CODE=$?
-        set -e
-
-        if [ "$EXIT_CODE" -eq 2 ]; then
-          echo "::error::Script error during AWS resource check"
-          cat aws-check.stderr >&2 || true
-          echo "stale_found=false" >> "$GITHUB_OUTPUT"
-          exit 1
-        fi
-
-        if ! echo "$RESULT" | jq -e . >/dev/null 2>&1; then
-          echo "::error::Invalid JSON output from check script"
-          cat aws-check.stderr >&2 || true
-          echo "stale_found=false" >> "$GITHUB_OUTPUT"
-          exit 1
-        fi
-        JSON_RESULT="$RESULT"
-
-        STALE=$(echo "$JSON_RESULT" | jq -r '.stale_found')
-        SUMMARY=$(echo "$JSON_RESULT" | jq -r '.summary')
-
-        echo "stale_found=$STALE" >> "$GITHUB_OUTPUT"
-        {
-          echo 'summary<<SUMMARY_EOF'
-          echo "$SUMMARY"
-          echo 'SUMMARY_EOF'
-        } >> "$GITHUB_OUTPUT"
-
-        echo "$JSON_RESULT" > aws-report.json
-        {
-          echo 'report<<REPORT_EOF'
-          echo "$JSON_RESULT"
-          echo 'REPORT_EOF'
-        } >> "$GITHUB_OUTPUT"
-
-    - name: Upload AWS report
-      if: always() && steps.check.outputs.stale_found == 'true'
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: aws-stale-report
-        path: aws-report.json
-        retention-days: 30
-
   report:
     name: Report Findings
-    needs: [check-azure, check-aws]
-    if: always() && (needs.check-azure.outputs.stale_found == 'true' || needs.check-aws.outputs.stale_found == 'true')
+    needs: [check-azure]
+    if: always() && needs.check-azure.outputs.stale_found == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -236,9 +142,6 @@ jobs:
       AZURE_STALE: ${{ needs.check-azure.outputs.stale_found }}
       AZURE_SUMMARY: ${{ needs.check-azure.outputs.summary }}
       AZURE_REPORT: ${{ needs.check-azure.outputs.report }}
-      AWS_STALE: ${{ needs.check-aws.outputs.stale_found }}
-      AWS_SUMMARY: ${{ needs.check-aws.outputs.summary }}
-      AWS_REPORT: ${{ needs.check-aws.outputs.report }}
     steps:
     - name: Generate step summary
       run: |
@@ -288,32 +191,6 @@ jobs:
             fi
           fi
 
-          if [ "$AWS_STALE" = "true" ]; then
-            echo "## AWS"
-            echo ""
-            echo "$AWS_SUMMARY"
-            echo ""
-
-            VPC_COUNT=$(echo "$AWS_REPORT" | jq '.aws.vpcs | length' 2>/dev/null || echo 0)
-            if [ "$VPC_COUNT" -gt 0 ]; then
-              echo "### VPCs"
-              echo ""
-              echo "| VPC ID | Name | Created At |"
-              echo "|--------|------|------------|"
-              echo "$AWS_REPORT" | jq -r '.aws.vpcs[] | "| \(.vpcId) | \(.name) | \(.createdAt) |"' 2>/dev/null
-              echo ""
-            fi
-
-            STACK_COUNT=$(echo "$AWS_REPORT" | jq '.aws.cloudformation_stacks | length' 2>/dev/null || echo 0)
-            if [ "$STACK_COUNT" -gt 0 ]; then
-              echo "### CloudFormation Stacks"
-              echo ""
-              echo "| Stack Name | Created At | Status |"
-              echo "|-----------|------------|--------|"
-              echo "$AWS_REPORT" | jq -r '.aws.cloudformation_stacks[] | "| \(.StackName) | \(.CreationTime) | \(.StackStatus) |"' 2>/dev/null
-              echo ""
-            fi
-          fi
         } >> "$GITHUB_STEP_SUMMARY"
 
     - name: Create or update Jira issue
@@ -329,9 +206,6 @@ jobs:
 
         if [ "$AZURE_STALE" = "true" ]; then
           DESCRIPTION+=$'h3. Azure\n'"${AZURE_SUMMARY}"$'\n\n'
-        fi
-        if [ "$AWS_STALE" = "true" ]; then
-          DESCRIPTION+=$'h3. AWS\n'"${AWS_SUMMARY}"$'\n\n'
         fi
 
         DESCRIPTION+=$'Please investigate and clean up the leaked resources.\n'
@@ -365,9 +239,6 @@ jobs:
           COMMENT=$'Stale resources detected again on '"${TODAY}"$'.\n\n'
           if [ "$AZURE_STALE" = "true" ]; then
             COMMENT+=$'*Azure:* '"${AZURE_SUMMARY}"$'\n'
-          fi
-          if [ "$AWS_STALE" = "true" ]; then
-            COMMENT+=$'*AWS:* '"${AWS_SUMMARY}"$'\n'
           fi
           COMMENT+=$'\n*Workflow run:* '"${RUN_URL}"
 
