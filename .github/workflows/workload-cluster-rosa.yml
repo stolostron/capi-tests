@@ -56,7 +56,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: github.event_name != 'schedule' || true
     outputs:
       has_changes: ${{ github.event_name != 'schedule' || steps.check.outputs.has_changes == 'true' }}
     steps:
