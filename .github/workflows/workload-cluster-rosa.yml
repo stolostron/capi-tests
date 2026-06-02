@@ -1,11 +1,11 @@
 name: Full Cluster Deployment (ROSA)
 
+# DISABLED: AWS/ROSA support removed — no capacity to maintain (ARO-27468)
+#
 # Full end-to-end cluster deployment workflow (management cluster + workload cluster).
 # This workflow deploys a Kind management cluster and provisions a ROSA workload cluster.
 #
-# Triggers:
-#   - Nightly at 2:00 AM UTC (skipped if no code changes since last successful run)
-#   - Manual dispatch
+# Triggers: DISABLED
 #
 # Requires:
 #   - Environment (rosa-stage) with:
@@ -17,8 +17,6 @@ name: Full Cluster Deployment (ROSA)
 #   - management-cluster-rosa.yml: Quick validation, Kind + controllers only (no workload cluster)
 #   - cluster-rosa.yml (this file): Full deployment including workload cluster provisioning
 on:
-  schedule:
-    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
       environment:
@@ -53,6 +51,7 @@ env:
 
 jobs:
   check-changes:
+    if: false  # DISABLED: AWS/ROSA support removed (ARO-27468)
     name: Check for code changes
     runs-on: ubuntu-latest
     permissions:
