@@ -129,13 +129,14 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 	t.Logf("Waiting for cluster '%s' deletion (namespace: %s, timeout: %v)...", provisionedClusterName, config.WorkloadClusterNamespace, timeout)
 
 	// Resolve clusterctl for diagnostics during deletion monitoring
-	clusterctlPath, hasClusterctl := ResolveClusterctlPath()
+	clusterctlPath, hasClusterctl := ResolveClusterctlPath(config)
 	if hasClusterctl {
 		PrintToTTY("📊 clusterctl available for deletion diagnostics: %s\n\n", clusterctlPath)
 	} else {
 		PrintToTTY("ℹ️  clusterctl not available — skipping clusterctl diagnostics\n\n")
 	}
 
+	var lastStatus DeletionResourceStatus
 	iteration := 0
 	for {
 		elapsed := time.Since(startTime)
@@ -170,13 +171,10 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 			PrintToTTY("%s", FormatControllerLogSummaries(summaries))
 			t.Logf("Controller logs saved to %s", resultsDir)
 
-			// 3. Finalizer details
-			finOutput, finErr := RunCommandQuiet(t, "kubectl", "--context", context,
-				"-n", config.WorkloadClusterNamespace, "get", "cluster", provisionedClusterName,
-				"-o", "jsonpath={.metadata.finalizers}")
-			if finErr == nil && strings.TrimSpace(finOutput) != "" {
-				PrintToTTY("--- Active finalizers ---\n%s\n\n", finOutput)
-				t.Logf("Active finalizers at timeout: %s", finOutput)
+			// 3. Finalizer details (reuse from last GetDeletionResourceStatus call)
+			if len(lastStatus.ClusterFinalizers) > 0 {
+				PrintToTTY("--- Active finalizers ---\n%s\n\n", strings.Join(lastStatus.ClusterFinalizers, ", "))
+				t.Logf("Active finalizers at timeout: %s", strings.Join(lastStatus.ClusterFinalizers, ", "))
 			}
 
 			PrintToTTY("=== END DIAGNOSTICS ===\n\n")
@@ -221,20 +219,20 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 		iteration++
 
 		// Get comprehensive deletion status
-		status := GetDeletionResourceStatus(t, context, config.WorkloadClusterNamespace, provisionedClusterName, resourceGroup)
+		lastStatus = GetDeletionResourceStatus(t, context, config.WorkloadClusterNamespace, provisionedClusterName, resourceGroup)
 
 		// Check if cluster is fully deleted
-		if !status.ClusterExists {
+		if !lastStatus.ClusterExists {
 			PrintToTTY("\n✅ Cluster '%s' has been deleted (took %v)\n\n", provisionedClusterName, elapsed.Round(time.Second))
 			t.Logf("Cluster '%s' deleted successfully (took %v)", provisionedClusterName, elapsed.Round(time.Second))
 
 			// Show final status
-			PrintToTTY("%s", FormatDeletionProgress(status))
+			PrintToTTY("%s", FormatDeletionProgress(lastStatus))
 			return
 		}
 
 		// Report detailed deletion progress
-		ReportDeletionProgress(t, iteration, elapsed, remaining, status)
+		ReportDeletionProgress(t, iteration, elapsed, remaining, lastStatus)
 
 		// clusterctl describe on every iteration for live CAPI resource tree
 		if hasClusterctl {
@@ -248,8 +246,8 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 			}
 		}
 
-		// Controller log summaries every 3rd iteration to limit noise
-		if iteration%3 == 0 {
+		// Controller log summaries every 3rd iteration (starting from 1st) to limit noise
+		if iteration%3 == 1 {
 			summaries := GetAllControllerLogSummaries(t, context)
 			PrintToTTY("%s", FormatControllerLogSummaries(summaries))
 			t.Logf("Controller log check (iteration %d): completed", iteration)

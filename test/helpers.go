@@ -3062,8 +3062,7 @@ func CheckPodsForImagePullErrors(t *testing.T, kubeContext, namespace string) er
 
 // ResolveClusterctlPath finds the clusterctl binary, checking the repo binary first,
 // then the system PATH. Returns the resolved path and whether it was found.
-func ResolveClusterctlPath() (string, bool) {
-	config := NewTestConfig()
+func ResolveClusterctlPath(config *TestConfig) (string, bool) {
 	repoPath := filepath.Join(config.RepoDir, config.ClusterctlBinPath)
 	if FileExists(repoPath) {
 		return repoPath, true
