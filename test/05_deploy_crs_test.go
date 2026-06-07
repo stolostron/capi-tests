@@ -351,11 +351,6 @@ func TestDeployment_ProviderCredentialsConfigured(t *testing.T) {
 func TestDeployment_TagAzureResources(t *testing.T) {
 	config := NewTestConfig()
 
-	if len(config.ResourceTags) == 0 {
-		t.Skipf("No Azure resource tags configured")
-		return
-	}
-
 	if config.InfraProviderName != "aro" {
 		t.Skipf("Azure resource tagging only applies to ARO provider")
 		return
