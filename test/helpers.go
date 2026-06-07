@@ -3561,7 +3561,8 @@ func GetDeletionResourceStatus(t *testing.T, kubeContext, namespace, clusterName
 		// Query finalizers directly from the cluster resource
 		finalizerOutput, finErr := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
 			"-n", namespace, "get", "cluster", clusterName,
-			"-o", "jsonpath={.metadata.finalizers}")
+			"-o", "jsonpath={.metadata.finalizers}",
+			"--request-timeout=10s")
 		if finErr == nil && strings.TrimSpace(finalizerOutput) != "" {
 			raw := strings.TrimSpace(finalizerOutput)
 			raw = strings.Trim(raw, "[]")
