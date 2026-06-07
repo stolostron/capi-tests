@@ -246,13 +246,6 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 			}
 		}
 
-		// Controller log summaries every 3rd iteration (starting from 1st) to limit noise
-		if iteration%3 == 1 {
-			summaries := GetAllControllerLogSummaries(t, context)
-			PrintToTTY("%s", FormatControllerLogSummaries(summaries))
-			t.Logf("Controller log check (iteration %d): completed", iteration)
-		}
-
 		time.Sleep(pollInterval)
 	}
 }
