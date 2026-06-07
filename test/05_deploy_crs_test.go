@@ -356,18 +356,13 @@ func TestDeployment_TagAzureResources(t *testing.T) {
 		return
 	}
 
-	if !CommandExists("az") {
-		t.Skipf("Azure CLI not available, skipping resource tagging")
-		return
-	}
-
 	if config.InfraProviderName != "aro" {
 		t.Skipf("Azure resource tagging only applies to ARO provider")
 		return
 	}
 
 	if err := EnsureAzureCliLogin(t); err != nil {
-		t.Skipf("Skipping Azure resource tagging: Azure CLI auth unavailable: %v", err)
+		t.Errorf("Azure CLI auth unavailable for resource tagging: %v — resources will be created without tags", err)
 		return
 	}
 
