@@ -372,10 +372,12 @@ func TestDeployment_TagAzureResources(t *testing.T) {
 	// The RG is created asynchronously after CRs are applied, typically within a few minutes.
 	rgTimeout, err := time.ParseDuration(GetEnvOrDefault("AZURE_RG_CREATION_TIMEOUT", "10m"))
 	if err != nil {
+		t.Logf("Warning: invalid AZURE_RG_CREATION_TIMEOUT format, using default 10m: %v", err)
 		rgTimeout = 10 * time.Minute
 	}
 	rgPollInterval, err := time.ParseDuration(GetEnvOrDefault("AZURE_RG_POLL_INTERVAL", "15s"))
 	if err != nil {
+		t.Logf("Warning: invalid AZURE_RG_POLL_INTERVAL format, using default 15s: %v", err)
 		rgPollInterval = 15 * time.Second
 	}
 	rgStart := time.Now()
