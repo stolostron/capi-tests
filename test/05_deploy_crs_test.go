@@ -344,7 +344,7 @@ func TestDeployment_ProviderCredentialsConfigured(t *testing.T) {
 //
 // Runs early in the deployment sequence (before monitoring) so that even failed or
 // interrupted test runs leave tagged resources that can be traced back to their owner.
-// The resource group is created asynchronously by CAPI controllers after CRs are applied,
+// The resource group is created asynchronously by ASO (triggered by CAPZ reconciliation),
 // so this test polls for it to appear before tagging.
 //
 // Non-fatal: failures are logged as warnings since tagging is for cleanup convenience only.
@@ -368,7 +368,7 @@ func TestDeployment_TagAzureResources(t *testing.T) {
 
 	PrintToTTY("\n=== Tagging Azure Resources ===\n")
 
-	// Wait for the resource group to be created by CAPI controllers.
+	// Wait for the resource group to be created by ASO (triggered by CAPZ reconciliation).
 	// The RG is created asynchronously after CRs are applied, typically within a few minutes.
 	rgTimeout, err := time.ParseDuration(GetEnvOrDefault("AZURE_RG_CREATION_TIMEOUT", "10m"))
 	if err != nil {
@@ -383,7 +383,7 @@ func TestDeployment_TagAzureResources(t *testing.T) {
 	rgStart := time.Now()
 	rgExists := false
 
-	PrintToTTY("Waiting for resource group %s to be created by controllers...\n", config.ResourceGroupName)
+	PrintToTTY("Waiting for resource group %s to be created by ASO...\n", config.ResourceGroupName)
 	for time.Since(rgStart) < rgTimeout {
 		_, err := RunCommandQuiet(t, "az", "group", "show", "--name", config.ResourceGroupName)
 		if err == nil {
