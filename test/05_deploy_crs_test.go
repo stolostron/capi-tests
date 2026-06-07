@@ -370,8 +370,14 @@ func TestDeployment_TagAzureResources(t *testing.T) {
 
 	// Wait for the resource group to be created by CAPI controllers.
 	// The RG is created asynchronously after CRs are applied, typically within a few minutes.
-	rgTimeout := 10 * time.Minute
-	rgPollInterval := 15 * time.Second
+	rgTimeout, err := time.ParseDuration(GetEnvOrDefault("AZURE_RG_CREATION_TIMEOUT", "10m"))
+	if err != nil {
+		rgTimeout = 10 * time.Minute
+	}
+	rgPollInterval, err := time.ParseDuration(GetEnvOrDefault("AZURE_RG_POLL_INTERVAL", "15s"))
+	if err != nil {
+		rgPollInterval = 15 * time.Second
+	}
 	rgStart := time.Now()
 	rgExists := false
 
