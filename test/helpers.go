@@ -3060,6 +3060,20 @@ func CheckPodsForImagePullErrors(t *testing.T, kubeContext, namespace string) er
 		namespace, strings.Join(affectedPods, ", "))
 }
 
+// ResolveClusterctlPath finds the clusterctl binary, checking the repo binary first,
+// then the system PATH. Returns the resolved path and whether it was found.
+func ResolveClusterctlPath() (string, bool) {
+	config := NewTestConfig()
+	repoPath := filepath.Join(config.RepoDir, config.ClusterctlBinPath)
+	if FileExists(repoPath) {
+		return repoPath, true
+	}
+	if CommandExists("clusterctl") {
+		return "clusterctl", true
+	}
+	return "", false
+}
+
 // GetControllerLogs retrieves logs from a controller deployment.
 // Returns the log output or an error if the logs cannot be retrieved.
 func GetControllerLogs(t *testing.T, kubeContext, namespace, deploymentName string, tailLines int) (string, error) {
@@ -3545,9 +3559,23 @@ func GetDeletionResourceStatus(t *testing.T, kubeContext, namespace, clusterName
 		status.ClusterExists = true
 		status.ClusterPhase = data.Summary.Phase
 
-		// Extract finalizers from cluster conditions (if available in future)
-		// For now, keep empty as the monitoring script doesn't expose finalizers
-		status.ClusterFinalizers = []string{}
+		// Query finalizers directly from the cluster resource
+		finalizerOutput, finErr := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
+			"-n", namespace, "get", "cluster", clusterName,
+			"-o", "jsonpath={.metadata.finalizers}")
+		if finErr == nil && strings.TrimSpace(finalizerOutput) != "" {
+			raw := strings.TrimSpace(finalizerOutput)
+			raw = strings.Trim(raw, "[]")
+			if raw != "" {
+				for _, f := range strings.Split(raw, ",") {
+					f = strings.TrimSpace(f)
+					f = strings.Trim(f, "\"")
+					if f != "" {
+						status.ClusterFinalizers = append(status.ClusterFinalizers, f)
+					}
+				}
+			}
+		}
 
 		// Get control plane kind and count from monitoring data
 		if data.ControlPlane.Name != "" {
