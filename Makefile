@@ -60,13 +60,13 @@ endif
 # Set to -v for verbose output (default), or empty string for quiet output
 TEST_VERBOSITY ?= -v
 
-# Test timeout configuration
+# Test timeout configuration — Go's -timeout flag (process-level hard kill)
 # Individual phase timeouts (format: Go duration like 30m, 1h, etc.)
-CLUSTER_TIMEOUT ?= 30m
-GENERATE_YAMLS_TIMEOUT ?= 20m
-DEPLOY_CRS_TIMEOUT ?= 105m
-VERIFY_TIMEOUT ?= 20m
-DELETION_TIMEOUT ?= 60m
+GO_STEP_CLUSTER_TIMEOUT ?= 30m
+GO_STEP_GENERATE_YAMLS_TIMEOUT ?= 20m
+GO_STEP_DEPLOY_CRS_TIMEOUT ?= 105m
+GO_STEP_VERIFY_TIMEOUT ?= 20m
+GO_STEP_DELETION_TIMEOUT ?= 60m
 
 # Results directory configuration
 # Create unique results directory for each test run using timestamp
@@ -188,7 +188,7 @@ _management_cluster: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-cluster.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestExternalCluster|TestKindCluster" -timeout $(CLUSTER_TIMEOUT) -failfast || EXIT_CODE=$$?; \
+	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-cluster.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestExternalCluster|TestKindCluster" -timeout $(GO_STEP_CLUSTER_TIMEOUT) -failfast || EXIT_CODE=$$?; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
@@ -209,7 +209,7 @@ _generate-yamls: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-generate-yamls.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestInfrastructure -timeout $(GENERATE_YAMLS_TIMEOUT) || EXIT_CODE=$$?; \
+	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-generate-yamls.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestInfrastructure -timeout $(GO_STEP_GENERATE_YAMLS_TIMEOUT) || EXIT_CODE=$$?; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
@@ -231,11 +231,11 @@ _deploy-crs: check-gotestsum
 	@echo ""
 	@EXIT_CODE=0; \
 	echo "--- Phase 1: Apply resources (fail-fast) ---"; \
-	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-apply.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestDeployment_0|TestDeployment_Apply|TestDeployment_Provider" -timeout $(DEPLOY_CRS_TIMEOUT) -failfast || EXIT_CODE=$$?; \
+	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-apply.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestDeployment_0|TestDeployment_Apply|TestDeployment_Provider" -timeout $(GO_STEP_DEPLOY_CRS_TIMEOUT) -failfast || EXIT_CODE=$$?; \
 	if [ $$EXIT_CODE -eq 0 ]; then \
 		echo ""; \
 		echo "--- Phase 2: Monitor deployment ---"; \
-		TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-monitor.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestDeployment_Monitor|TestDeployment_Wait|TestDeployment_Verify|TestDeployment_Tag" -timeout $(DEPLOY_CRS_TIMEOUT) || EXIT_CODE=$$?; \
+		TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-monitor.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestDeployment_Monitor|TestDeployment_Wait|TestDeployment_Verify|TestDeployment_Tag" -timeout $(GO_STEP_DEPLOY_CRS_TIMEOUT) || EXIT_CODE=$$?; \
 	fi; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
@@ -257,7 +257,7 @@ _verify-workload-cluster: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-verify.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestVerification -timeout $(VERIFY_TIMEOUT) || EXIT_CODE=$$?; \
+	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-verify.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestVerification -timeout $(GO_STEP_VERIFY_TIMEOUT) || EXIT_CODE=$$?; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
@@ -278,7 +278,7 @@ _delete-workload-cluster: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-delete.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestDeletion -timeout $(DELETION_TIMEOUT) || EXIT_CODE=$$?; \
+	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-delete.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestDeletion -timeout $(GO_STEP_DELETION_TIMEOUT) || EXIT_CODE=$$?; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
