@@ -338,6 +338,74 @@ func TestDeployment_ProviderCredentialsConfigured(t *testing.T) {
 	}
 }
 
+// TestDeployment_TagAzureResources tags all Azure resources created by the deployment
+// with ownership metadata for parallel run cleanup. Tags the resource group (ARM tags)
+// and Azure AD Applications/Service Principals (Microsoft Graph tags).
+//
+// Runs early in the deployment sequence (before monitoring) so that even failed or
+// interrupted test runs leave tagged resources that can be traced back to their owner.
+// The resource group is created asynchronously by ASO (triggered by CAPZ reconciliation),
+// so this test polls for it to appear before tagging.
+//
+// Non-fatal: failures are logged as warnings since tagging is for cleanup convenience only.
+func TestDeployment_TagAzureResources(t *testing.T) {
+	config := NewTestConfig()
+
+	if config.InfraProviderName != "aro" {
+		t.Skipf("Azure resource tagging only applies to ARO provider")
+		return
+	}
+
+	if err := EnsureAzureCliLogin(t); err != nil {
+		t.Logf("Warning: Azure CLI auth unavailable for resource tagging: %v — resources will be created without tags", err)
+		return
+	}
+
+	PrintToTTY("\n=== Tagging Azure Resources ===\n")
+
+	// Wait for the resource group to be created by ASO (triggered by CAPZ reconciliation).
+	// The RG is created asynchronously after CRs are applied, typically within a few minutes.
+	rgTimeout, err := time.ParseDuration(GetEnvOrDefault("AZURE_RG_CREATION_TIMEOUT", "10m"))
+	if err != nil {
+		t.Logf("Warning: invalid AZURE_RG_CREATION_TIMEOUT format, using default 10m: %v", err)
+		rgTimeout = 10 * time.Minute
+	}
+	rgPollInterval, err := time.ParseDuration(GetEnvOrDefault("AZURE_RG_POLL_INTERVAL", "15s"))
+	if err != nil {
+		t.Logf("Warning: invalid AZURE_RG_POLL_INTERVAL format, using default 15s: %v", err)
+		rgPollInterval = 15 * time.Second
+	}
+	rgStart := time.Now()
+	rgExists := false
+
+	PrintToTTY("Waiting for resource group %s to be created by ASO...\n", config.ResourceGroupName)
+	for time.Since(rgStart) < rgTimeout {
+		_, err := RunCommandQuiet(t, "az", "group", "show", "--name", config.ResourceGroupName)
+		if err == nil {
+			rgExists = true
+			PrintToTTY("✅ Resource group %s exists (waited %v)\n", config.ResourceGroupName, time.Since(rgStart).Round(time.Second))
+			break
+		}
+		PrintToTTY("⏳ Resource group not yet created (elapsed %v)\n", time.Since(rgStart).Round(time.Second))
+		time.Sleep(rgPollInterval)
+	}
+
+	if !rgExists {
+		t.Logf("Warning: resource group %s not created within %v, skipping tagging", config.ResourceGroupName, rgTimeout)
+		PrintToTTY("⚠️  Resource group not created within %v, skipping tagging\n\n", rgTimeout)
+		return
+	}
+
+	PrintToTTY("Tagging resource group %s...\n", config.ResourceGroupName)
+	if err := TagAzureResourceGroup(t, config); err != nil {
+		t.Logf("Warning: failed to tag resource group: %v", err)
+	}
+	tagAzureADApplications(t, config)
+	tagAzureServicePrincipals(t, config)
+
+	PrintToTTY("✅ Azure resource tagging completed\n\n")
+}
+
 // TestDeployment_MonitorCluster tests monitoring the ARO cluster deployment
 func TestDeployment_MonitorCluster(t *testing.T) {
 
@@ -1215,44 +1283,6 @@ func TestDeployment_VerifyClusterInfrastructureReady(t *testing.T) {
 		PrintToTTY("⏳ Cluster.InfrastructureReady: %s (elapsed %v)\n", status, elapsed.Round(time.Second))
 		time.Sleep(pollInterval)
 	}
-}
-
-// TestDeployment_TagAzureResources tags all Azure resources created by the deployment
-// with ownership metadata for parallel run cleanup. Tags the resource group (ARM tags)
-// and Azure AD Applications/Service Principals (Microsoft Graph tags).
-// Non-fatal: failures are logged as warnings since tagging is for cleanup convenience only.
-func TestDeployment_TagAzureResources(t *testing.T) {
-	config := NewTestConfig()
-
-	if len(config.ResourceTags) == 0 {
-		t.Skipf("No Azure resource tags configured")
-		return
-	}
-
-	if !CommandExists("az") {
-		t.Skipf("Azure CLI not available, skipping resource tagging")
-		return
-	}
-
-	if config.InfraProviderName != "aro" {
-		t.Skipf("Azure resource tagging only applies to ARO provider")
-		return
-	}
-
-	if err := EnsureAzureCliLogin(t); err != nil {
-		t.Skipf("Skipping Azure resource tagging: Azure CLI auth unavailable: %v", err)
-	}
-
-	PrintToTTY("\n=== Tagging Azure Resources ===\n")
-
-	PrintToTTY("Tagging resource group %s...\n", config.ResourceGroupName)
-	if err := TagAzureResourceGroup(t, config); err != nil {
-		t.Logf("Warning: failed to tag resource group: %v", err)
-	}
-	tagAzureADApplications(t, config)
-	tagAzureServicePrincipals(t, config)
-
-	PrintToTTY("✅ Azure resource tagging completed\n\n")
 }
 
 // TestDeployment_TagAWSResources tags AWS resources (CloudFormation stacks and VPCs) created
