@@ -58,8 +58,8 @@ export INFRA_PROVIDER CAPI_USER DEPLOYMENT_ENV
 export REGION
 : "${OPERATORS_UAMIS_SUFFIX_FILE:=/tmp/operators-uamis-suffix.txt}"
 export OPERATORS_UAMIS_SUFFIX_FILE
-: "${ARO_REPO_URL:=https://github.com/marek-veber/cluster-api-installer.git}"
-: "${ARO_REPO_BRANCH:=capi-tests}"
+: "${ARO_REPO_URL:=https://github.com/stolostron/cluster-api-installer.git}"
+: "${ARO_REPO_BRANCH:=main}"
 : "${ARO_REPO_DIR:=/tmp/cluster-api-installer-aro}"
 export ARO_REPO_URL ARO_REPO_BRANCH ARO_REPO_DIR
 
