@@ -128,6 +128,15 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 	PrintToTTY("\n")
 	t.Logf("Waiting for cluster '%s' deletion (namespace: %s, timeout: %v)...", provisionedClusterName, config.WorkloadClusterNamespace, timeout)
 
+	// Resolve clusterctl for diagnostics during deletion monitoring
+	clusterctlPath, hasClusterctl := ResolveClusterctlPath(config)
+	if hasClusterctl {
+		PrintToTTY("📊 clusterctl available for deletion diagnostics: %s\n\n", clusterctlPath)
+	} else {
+		PrintToTTY("ℹ️  clusterctl not available — skipping clusterctl diagnostics\n\n")
+	}
+
+	var lastStatus DeletionResourceStatus
 	iteration := 0
 	for {
 		elapsed := time.Since(startTime)
@@ -135,6 +144,40 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 
 		if elapsed > timeout {
 			PrintToTTY("\n❌ Timeout waiting for cluster deletion after %v\n\n", elapsed.Round(time.Second))
+
+			// === Diagnostic dump on timeout ===
+			PrintToTTY("=== DELETION TIMEOUT DIAGNOSTICS ===\n\n")
+			t.Logf("=== Deletion timeout diagnostics ===")
+
+			// 1. clusterctl describe
+			if hasClusterctl {
+				PrintToTTY("--- clusterctl describe (timeout snapshot) ---\n")
+				clOutput, clErr := RunCommandQuiet(t, clusterctlPath, "describe", "cluster",
+					provisionedClusterName, "-n", config.WorkloadClusterNamespace, "--show-conditions=all")
+				if clErr == nil {
+					PrintToTTY("%s\n", clOutput)
+					t.Logf("clusterctl describe at timeout:\n%s", clOutput)
+				} else {
+					PrintToTTY("clusterctl describe failed: %v\n\n", clErr)
+					t.Logf("clusterctl describe at timeout failed: %v", clErr)
+				}
+			}
+
+			// 2. Controller log summaries + save to results dir
+			PrintToTTY("--- Controller logs (timeout snapshot) ---\n")
+			summaries := GetAllControllerLogSummaries(t, context)
+			resultsDir := GetResultsDir()
+			summaries = SaveAllControllerLogs(t, context, resultsDir, summaries)
+			PrintToTTY("%s", FormatControllerLogSummaries(summaries))
+			t.Logf("Controller logs saved to %s", resultsDir)
+
+			// 3. Finalizer details (reuse from last GetDeletionResourceStatus call)
+			if len(lastStatus.ClusterFinalizers) > 0 {
+				PrintToTTY("--- Active finalizers ---\n%s\n\n", strings.Join(lastStatus.ClusterFinalizers, ", "))
+				t.Logf("Active finalizers at timeout: %s", strings.Join(lastStatus.ClusterFinalizers, ", "))
+			}
+
+			PrintToTTY("=== END DIAGNOSTICS ===\n\n")
 
 			// Build provider-agnostic troubleshooting message
 			controlPlaneResource := "controlplane"
@@ -176,20 +219,32 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 		iteration++
 
 		// Get comprehensive deletion status
-		status := GetDeletionResourceStatus(t, context, config.WorkloadClusterNamespace, provisionedClusterName, resourceGroup)
+		lastStatus = GetDeletionResourceStatus(t, context, config.WorkloadClusterNamespace, provisionedClusterName, resourceGroup)
 
 		// Check if cluster is fully deleted
-		if !status.ClusterExists {
+		if !lastStatus.ClusterExists {
 			PrintToTTY("\n✅ Cluster '%s' has been deleted (took %v)\n\n", provisionedClusterName, elapsed.Round(time.Second))
 			t.Logf("Cluster '%s' deleted successfully (took %v)", provisionedClusterName, elapsed.Round(time.Second))
 
 			// Show final status
-			PrintToTTY("%s", FormatDeletionProgress(status))
+			PrintToTTY("%s", FormatDeletionProgress(lastStatus))
 			return
 		}
 
 		// Report detailed deletion progress
-		ReportDeletionProgress(t, iteration, elapsed, remaining, status)
+		ReportDeletionProgress(t, iteration, elapsed, remaining, lastStatus)
+
+		// clusterctl describe on every iteration for live CAPI resource tree
+		if hasClusterctl {
+			clOutput, clErr := RunCommandQuiet(t, clusterctlPath, "describe", "cluster",
+				provisionedClusterName, "-n", config.WorkloadClusterNamespace, "--show-conditions=all")
+			if clErr == nil {
+				PrintToTTY("\n--- clusterctl describe ---\n%s\n", clOutput)
+				t.Logf("clusterctl describe:\n%s", clOutput)
+			} else {
+				t.Logf("clusterctl describe failed (may be expected during deletion): %v", clErr)
+			}
+		}
 
 		time.Sleep(pollInterval)
 	}
