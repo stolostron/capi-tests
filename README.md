@@ -183,7 +183,7 @@ Individual test phase timeouts control Go's `-timeout` flag (process-level hard 
 |----------|---------|-------|
 | `GO_STEP_CLUSTER_TIMEOUT` | `30m` | Management cluster deployment |
 | `GO_STEP_GENERATE_YAMLS_TIMEOUT` | `20m` | YAML generation |
-| `GO_STEP_DEPLOY_CRS_TIMEOUT` | `60m` | CR deployment and monitoring |
+| `GO_STEP_DEPLOY_CRS_TIMEOUT` | `105m` | CR deployment and monitoring |
 | `GO_STEP_VERIFY_TIMEOUT` | `20m` | Workload cluster verification |
 | `GO_STEP_DELETION_TIMEOUT` | `60m` | Workload cluster deletion |
 
