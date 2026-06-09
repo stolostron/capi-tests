@@ -177,17 +177,17 @@ The test suite validates naming compliance during the Check Dependencies phase (
 
 #### Makefile Timeout Variables
 
-Individual test phase timeouts can be overridden via Makefile variables:
+Individual test phase timeouts control Go's `-timeout` flag (process-level hard kill) and can be overridden via Makefile variables:
 
 | Variable | Default | Phase |
 |----------|---------|-------|
-| `CLUSTER_TIMEOUT` | `30m` | Management cluster deployment |
-| `GENERATE_YAMLS_TIMEOUT` | `20m` | YAML generation |
-| `DEPLOY_CRS_TIMEOUT` | `60m` | CR deployment and monitoring |
-| `VERIFY_TIMEOUT` | `20m` | Workload cluster verification |
-| `DELETION_TIMEOUT` | `60m` | Workload cluster deletion |
+| `GO_STEP_CLUSTER_TIMEOUT` | `30m` | Management cluster deployment |
+| `GO_STEP_GENERATE_YAMLS_TIMEOUT` | `20m` | YAML generation |
+| `GO_STEP_DEPLOY_CRS_TIMEOUT` | `105m` | CR deployment and monitoring |
+| `GO_STEP_VERIFY_TIMEOUT` | `20m` | Workload cluster verification |
+| `GO_STEP_DELETION_TIMEOUT` | `60m` | Workload cluster deletion |
 
-Example: `DEPLOY_CRS_TIMEOUT=90m make _deploy-crs`
+Example: `GO_STEP_DEPLOY_CRS_TIMEOUT=90m make _deploy-crs`
 
 ## Getting Started
 
