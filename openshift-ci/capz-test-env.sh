@@ -58,6 +58,16 @@ export INFRA_PROVIDER CAPI_USER DEPLOYMENT_ENV
 export REGION
 : "${OPERATORS_UAMIS_SUFFIX_FILE:=/tmp/operators-uamis-suffix.txt}"
 export OPERATORS_UAMIS_SUFFIX_FILE
+
+# Use pre-existing MSI identities from a Boskos-leased container resource group.
+# LEASED_MSI_CONTAINERS is set by Prow from the aro-hcp-test-msi-containers-stg pool;
+# each value is an Azure RG pre-provisioned with bare-named managed identities.
+# CAPZ leases one container per job — take the first (and only) entry.
+if [[ -n "${LEASED_MSI_CONTAINERS:-}" ]]; then
+  read -r MSI_RESOURCEGROUPNAME _ <<< "${LEASED_MSI_CONTAINERS}"
+  export MSI_RESOURCEGROUPNAME
+  echo "[capz-test-env] Using pre-existing MSI from Boskos pool: ${MSI_RESOURCEGROUPNAME}"
+fi
 : "${ARO_REPO_URL:=https://github.com/stolostron/cluster-api-installer.git}"
 : "${ARO_REPO_BRANCH:=main}"
 : "${ARO_REPO_DIR:=/tmp/cluster-api-installer-aro}"
