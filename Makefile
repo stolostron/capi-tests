@@ -60,11 +60,17 @@ endif
 # Set to -v for verbose output (default), or empty string for quiet output
 TEST_VERBOSITY ?= -v
 
-# User-facing cluster operation timeouts (Go duration format, minutes only)
+# User-facing cluster operation timeouts (minutes-only format: "60m", "90m", "120m").
 # These control how long the in-code polling loops wait for cluster operations.
 # The Go step timeouts below are auto-computed as these values + 15m headroom.
+# NOTE: Only the Nm format is supported (e.g., 60m, 90m). Other Go duration
+# formats like "1h" or "2h30m" will break the shell arithmetic below.
 CLUSTER_DEPLOYMENT_TIMEOUT ?= 60m
 CLUSTER_DELETION_TIMEOUT ?= 60m
+
+# Validate that timeout values are in minutes-only format (Nm)
+$(if $(shell echo '$(CLUSTER_DEPLOYMENT_TIMEOUT)' | grep -qE '^[0-9]+m$$' || echo INVALID),$(if $(filter INVALID,$(shell echo '$(CLUSTER_DEPLOYMENT_TIMEOUT)' | grep -qE '^[0-9]+m$$' || echo INVALID)),$(error CLUSTER_DEPLOYMENT_TIMEOUT must be in minutes format like "60m", got "$(CLUSTER_DEPLOYMENT_TIMEOUT)")))
+$(if $(shell echo '$(CLUSTER_DELETION_TIMEOUT)' | grep -qE '^[0-9]+m$$' || echo INVALID),$(if $(filter INVALID,$(shell echo '$(CLUSTER_DELETION_TIMEOUT)' | grep -qE '^[0-9]+m$$' || echo INVALID)),$(error CLUSTER_DELETION_TIMEOUT must be in minutes format like "60m", got "$(CLUSTER_DELETION_TIMEOUT)")))
 
 # Test timeout configuration — Go's -timeout flag (process-level hard kill)
 # GO_STEP_DEPLOY_CRS_TIMEOUT and GO_STEP_DELETION_TIMEOUT are auto-computed

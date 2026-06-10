@@ -171,8 +171,8 @@ The test suite validates naming compliance during the Check Dependencies phase (
 
 ### Test Behavior
 
-- `CLUSTER_DEPLOYMENT_TIMEOUT` - How long the in-code polling loop waits for the workload cluster to become ready (default: `60m`). Use Go duration format: `1h`, `45m`, `90m`, etc.
-- `CLUSTER_DELETION_TIMEOUT` - How long the in-code polling loop waits for the workload cluster to be deleted (default: `60m`). Use Go duration format.
+- `CLUSTER_DEPLOYMENT_TIMEOUT` - How long the in-code polling loop waits for the workload cluster to become ready (default: `60m`). Use minutes format: `60m`, `90m`, `120m` (required by Makefile auto-computation).
+- `CLUSTER_DELETION_TIMEOUT` - How long the in-code polling loop waits for the workload cluster to be deleted (default: `60m`). Use minutes format: `60m`, `90m`, `120m`.
 - `DEPLOYMENT_TIMEOUT` - **Deprecated**: Legacy timeout variable. Falls back to this if `CLUSTER_DEPLOYMENT_TIMEOUT` / `CLUSTER_DELETION_TIMEOUT` are not set.
 - `DEPLOYMENT_STALL_TIMEOUT` - Stall detection timeout (default: `30m`). If the deployment makes no progress for this duration, the test fails early instead of waiting for the full timeout. Set to `0` to disable.
 - `TEST_VERBOSITY` - Test output verbosity (default: `-v` for verbose). Set to empty string for quiet output: `TEST_VERBOSITY= make test`

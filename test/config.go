@@ -27,11 +27,6 @@ const (
 	// that waits for the workload cluster to be fully deleted (Phase 07).
 	DefaultClusterDeletionTimeout = 60 * time.Minute
 
-	// StepTimeoutHeadroom is the extra time added to CLUSTER_*_TIMEOUT values
-	// when computing GO_STEP_*_TIMEOUT. This gives the Go process time to save
-	// logs, controller summaries, and diagnostics before being killed.
-	StepTimeoutHeadroom = 15 * time.Minute
-
 	// DefaultDeploymentTimeout is the legacy default timeout for control plane deployment.
 	// Deprecated: Use DefaultClusterDeploymentTimeout instead.
 	DefaultDeploymentTimeout = 60 * time.Minute
