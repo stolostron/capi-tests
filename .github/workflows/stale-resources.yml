@@ -264,7 +264,7 @@ jobs:
           ISSUE_JSON=$(jq -n \
             --arg summary "[Stale Resources] Leaked cloud resources detected (${TODAY})" \
             --arg description "$DESCRIPTION" \
-            --arg assignee "${JIRA_ASSIGNEE_ACCOUNT_ID}" \
+            --arg assignee "${JIRA_ASSIGNEE_ACCOUNT_ID:-5fabb5fdecdae600685b01d6}" \
             '{
               "fields": {
                 "project": {"key": "ARO"},
