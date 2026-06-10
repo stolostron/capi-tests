@@ -73,6 +73,7 @@ jobs:
     - name: Azure CLI login
       if: steps.azure-creds.outputs.configured == 'true'
       run: |
+        echo "::add-mask::${AZURE_CLIENT_SECRET}"
         az login --service-principal \
           --username "$AZURE_CLIENT_ID" \
           --password "$AZURE_CLIENT_SECRET" \
@@ -139,6 +140,7 @@ jobs:
     env:
       JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
       JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_ASSIGNEE_ACCOUNT_ID: ${{ vars.JIRA_ASSIGNEE_ACCOUNT_ID }}
       AZURE_STALE: ${{ needs.check-azure.outputs.stale_found }}
       AZURE_SUMMARY: ${{ needs.check-azure.outputs.summary }}
       AZURE_REPORT: ${{ needs.check-azure.outputs.report }}
@@ -196,6 +198,7 @@ jobs:
     - name: Create or update Jira issue
       if: env.JIRA_EMAIL != '' && env.JIRA_API_TOKEN != ''
       run: |
+        echo "::add-mask::${JIRA_API_TOKEN}"
         TODAY=$(date +%Y-%m-%d)
         RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
@@ -261,6 +264,7 @@ jobs:
           ISSUE_JSON=$(jq -n \
             --arg summary "[Stale Resources] Leaked cloud resources detected (${TODAY})" \
             --arg description "$DESCRIPTION" \
+            --arg assignee "${JIRA_ASSIGNEE_ACCOUNT_ID}" \
             '{
               "fields": {
                 "project": {"key": "ARO"},
@@ -271,7 +275,7 @@ jobs:
                 "labels": ["CAPZ", "QE"],
                 "components": [{"id": "37592"}],
                 "security": {"id": "10034"},
-                "assignee": {"accountId": "5fabb5fdecdae600685b01d6"},
+                "assignee": {"accountId": $assignee},
                 "customfield_10464": {"id": "10608"}
               }
             }')

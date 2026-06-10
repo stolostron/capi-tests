@@ -277,6 +277,8 @@ jobs:
     - name: 'Setup Docker pull secrets for Kind'
       if: env.CLUSTER_MODE == 'kind'
       run: |
+        echo "::add-mask::${QUAY_AUTH}"
+
         # Create secure temporary directory for Docker config
         DOCKER_SECRETS=$(mktemp -d)
 
@@ -534,8 +536,11 @@ jobs:
     - name: 'Cleanup resources'
       if: always()
       run: |
+        rm -rf "${DOCKER_SECRETS:-}"
+
         # Authenticate Azure CLI for resource cleanup using SP credentials
         if [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ] && [ -n "$AZURE_TENANT_ID" ]; then
+          echo "::add-mask::${AZURE_CLIENT_SECRET}"
           az login --service-principal \
             -u "$AZURE_CLIENT_ID" \
             -p "$AZURE_CLIENT_SECRET" \

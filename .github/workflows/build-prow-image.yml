@@ -20,6 +20,10 @@ jobs:
       env:
         QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
       run: |
-        mkdir -p ~/.docker
-        echo "{\"auths\":{\"quay.io\":{\"auth\":\"${QUAY_AUTH}\"}}}" > ~/.docker/config.json
+        echo "::add-mask::${QUAY_AUTH}"
+        DECODED=$(echo "${QUAY_AUTH}" | base64 -d)
+        USERNAME="${DECODED%%:*}"
+        PASSWORD="${DECODED#*:}"
+        echo "::add-mask::${PASSWORD}"
+        echo "${PASSWORD}" | docker login quay.io --username "${USERNAME}" --password-stdin
         docker push quay.io/rcap/capi-tests-prow:latest

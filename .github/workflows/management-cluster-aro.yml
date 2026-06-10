@@ -139,6 +139,8 @@ jobs:
     - name: 'Setup Docker pull secrets for Kind'
       if: steps.phase2.outcome == 'success'
       run: |
+        echo "::add-mask::${QUAY_AUTH}"
+
         # Create secure temporary directory for Docker config
         DOCKER_SECRETS=$(mktemp -d)
 
@@ -341,6 +343,10 @@ jobs:
             --label "automated" \
             --label "test-failure"
         fi
+
+    - name: Cleanup Docker secrets
+      if: always()
+      run: rm -rf "${DOCKER_SECRETS:-}"
 
     - name: Fail if any phase failed
       if: always()
