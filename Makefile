@@ -60,13 +60,21 @@ endif
 # Set to -v for verbose output (default), or empty string for quiet output
 TEST_VERBOSITY ?= -v
 
+# User-facing cluster operation timeouts (Go duration format, minutes only)
+# These control how long the in-code polling loops wait for cluster operations.
+# The Go step timeouts below are auto-computed as these values + 15m headroom.
+CLUSTER_DEPLOYMENT_TIMEOUT ?= 60m
+CLUSTER_DELETION_TIMEOUT ?= 60m
+
 # Test timeout configuration — Go's -timeout flag (process-level hard kill)
-# Individual phase timeouts (format: Go duration like 30m, 1h, etc.)
+# GO_STEP_DEPLOY_CRS_TIMEOUT and GO_STEP_DELETION_TIMEOUT are auto-computed
+# from the user-facing values above + 15 minutes headroom, ensuring the Go process
+# has time to save logs and diagnostics before being killed.
 GO_STEP_CLUSTER_TIMEOUT ?= 30m
 GO_STEP_GENERATE_YAMLS_TIMEOUT ?= 20m
-GO_STEP_DEPLOY_CRS_TIMEOUT ?= 105m
+GO_STEP_DEPLOY_CRS_TIMEOUT ?= $(shell echo $$(( $$(echo '$(CLUSTER_DEPLOYMENT_TIMEOUT)' | sed 's/m$$//') + 15 ))m)
 GO_STEP_VERIFY_TIMEOUT ?= 20m
-GO_STEP_DELETION_TIMEOUT ?= 60m
+GO_STEP_DELETION_TIMEOUT ?= $(shell echo $$(( $$(echo '$(CLUSTER_DELETION_TIMEOUT)' | sed 's/m$$//') + 15 ))m)
 
 # Results directory configuration
 # Create unique results directory for each test run using timestamp
@@ -231,11 +239,11 @@ _deploy-crs: check-gotestsum
 	@echo ""
 	@EXIT_CODE=0; \
 	echo "--- Phase 1: Apply resources (fail-fast) ---"; \
-	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-apply.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestDeployment_0|TestDeployment_Apply|TestDeployment_Provider" -timeout $(GO_STEP_DEPLOY_CRS_TIMEOUT) -failfast || EXIT_CODE=$$?; \
+	CLUSTER_DEPLOYMENT_TIMEOUT=$(CLUSTER_DEPLOYMENT_TIMEOUT) TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-apply.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestDeployment_0|TestDeployment_Apply|TestDeployment_Provider" -timeout $(GO_STEP_DEPLOY_CRS_TIMEOUT) -failfast || EXIT_CODE=$$?; \
 	if [ $$EXIT_CODE -eq 0 ]; then \
 		echo ""; \
 		echo "--- Phase 2: Monitor deployment ---"; \
-		TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-monitor.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestDeployment_Monitor|TestDeployment_Wait|TestDeployment_Verify|TestDeployment_Tag" -timeout $(GO_STEP_DEPLOY_CRS_TIMEOUT) || EXIT_CODE=$$?; \
+		CLUSTER_DEPLOYMENT_TIMEOUT=$(CLUSTER_DEPLOYMENT_TIMEOUT) TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-deploy-monitor.xml -- $(TEST_VERBOSITY) ./test -count=1 -run "TestDeployment_Monitor|TestDeployment_Wait|TestDeployment_Verify|TestDeployment_Tag" -timeout $(GO_STEP_DEPLOY_CRS_TIMEOUT) || EXIT_CODE=$$?; \
 	fi; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
@@ -278,7 +286,7 @@ _delete-workload-cluster: check-gotestsum
 	@echo "Results will be saved to: $(RESULTS_DIR)"
 	@echo ""
 	@EXIT_CODE=0; \
-	TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-delete.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestDeletion -timeout $(GO_STEP_DELETION_TIMEOUT) || EXIT_CODE=$$?; \
+	CLUSTER_DELETION_TIMEOUT=$(CLUSTER_DELETION_TIMEOUT) TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-delete.xml -- $(TEST_VERBOSITY) ./test -count=1 -run TestDeletion -timeout $(GO_STEP_DELETION_TIMEOUT) || EXIT_CODE=$$?; \
 	mkdir -p $(LATEST_RESULTS_DIR); \
 	cp -f $(RESULTS_DIR)/*.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
 	cp -f $(RESULTS_DIR)/*.log $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
