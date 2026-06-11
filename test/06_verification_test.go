@@ -97,7 +97,7 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 		if FileExists(clusterctlPath) || CommandExists("clusterctl") {
 			t.Logf("Attempting Method 2: %s get kubeconfig %s -n %s", clusterctlPath, provisionedClusterName, config.WorkloadClusterNamespace)
 
-			output, err = RunCommand(t, clusterctlPath, "get", "kubeconfig", provisionedClusterName, "-n", config.WorkloadClusterNamespace)
+			output, err = RunCommandQuiet(t, clusterctlPath, "get", "kubeconfig", provisionedClusterName, "-n", config.WorkloadClusterNamespace)
 			if err != nil {
 				t.Errorf("Both kubeconfig retrieval methods failed: %v", err)
 				return

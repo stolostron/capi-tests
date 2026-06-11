@@ -230,6 +230,8 @@ jobs:
     - name: 'Setup Docker pull secrets for Kind'
       if: env.CLUSTER_MODE == 'kind'
       run: |
+        echo "::add-mask::${QUAY_AUTH}"
+
         # Create secure temporary directory for Docker config
         DOCKER_SECRETS=$(mktemp -d)
 
@@ -469,5 +471,7 @@ jobs:
 
     - name: 'Cleanup resources'
       if: always()
-      run: FORCE=1 make clean-all
+      run: |
+        rm -rf "${DOCKER_SECRETS:-}"
+        FORCE=1 make clean-all
       continue-on-error: true
