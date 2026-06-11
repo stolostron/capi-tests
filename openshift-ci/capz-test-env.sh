@@ -44,21 +44,25 @@ if [[ -d "${CAPZ_CREDS_DIR}" && -f "${CAPZ_CREDS_DIR}/AZURE_CLIENT_ID" ]]; then
   echo "[capz-test-env] Azure credentials overridden with CAPZ vault credentials from $CAPZ_CREDS_DIR"
 fi
 
-
-if [[ -n "${VAULT_SECRET_PROFILE:-}" && -d "/var/run/aro-hcp-${VAULT_SECRET_PROFILE:-}" ]] ; then
-    export CLUSTER_PROFILE_DIR="/var/run/aro-hcp-${VAULT_SECRET_PROFILE}"
-    { set +o xtrace; } 2>/dev/null
-    AZURE_CLIENT_ID="$(cat "${CLUSTER_PROFILE_DIR}/client-id")"
-    AZURE_CLIENT_SECRET="$(cat "${CLUSTER_PROFILE_DIR}/client-secret")"
-    AZURE_TENANT_ID="$(cat "${CLUSTER_PROFILE_DIR}/tenant")"
-    AZURE_SUBSCRIPTION_ID="$(cat "${CLUSTER_PROFILE_DIR}/subscription-id")"
-    export AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID
-    echo "[capz-test-env] Azure credentials overridden with CAPZ vault credentials from ${CLUSTER_PROFILE_DIR}"
+if [[ -n "${VAULT_SECRET_PROFILE:-}" && -d "/var/run/aro-hcp-${VAULT_SECRET_PROFILE}" ]]; then
+  export CLUSTER_PROFILE_DIR="/var/run/aro-hcp-${VAULT_SECRET_PROFILE}"
+  { set +o xtrace; } 2>/dev/null
+  AZURE_CLIENT_ID="$(cat "${CLUSTER_PROFILE_DIR}/client-id")"
+  AZURE_CLIENT_SECRET="$(cat "${CLUSTER_PROFILE_DIR}/client-secret")"
+  AZURE_TENANT_ID="$(cat "${CLUSTER_PROFILE_DIR}/tenant")"
+  AZURE_SUBSCRIPTION_ID="$(cat "${CLUSTER_PROFILE_DIR}/subscription-id")"
+  for var in AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
+    if [[ -z "${!var}" || "${!var}" == "null" ]]; then
+      echo "[capz-test-env] ERROR: ${var} is missing or null in ${CLUSTER_PROFILE_DIR}" >&2
+      exit 1
+    fi
+  done
+  export AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID
+  echo "[capz-test-env] Azure credentials overridden with CAPZ vault credentials from ${CLUSTER_PROFILE_DIR}"
 fi
 
-
 set -o xtrace
-: "${GOCACHE:=/tmp/go-cache}"
+GOCACHE:=/tmp/go-cache
 export GOCACHE
 
 : "${INFRA_PROVIDER:=aro}"
