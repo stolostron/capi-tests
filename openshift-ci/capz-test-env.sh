@@ -63,6 +63,9 @@ fi
 
 set -o xtrace
 : "${GOCACHE:=/tmp/go-cache}"
+if [[ ! -w "${GOCACHE%/*}" ]]; then
+  GOCACHE=/tmp/go-cache
+fi
 export GOCACHE
 
 : "${INFRA_PROVIDER:=aro}"
