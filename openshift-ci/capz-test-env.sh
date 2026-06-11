@@ -18,8 +18,7 @@ if [[ -n "${CLUSTER_PROFILE_DIR:-}" && -f "${CLUSTER_PROFILE_DIR}/osServicePrinc
     fi
   done
   export AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID
-  echo "[capz-test-env] Azure credentials loaded from cluster profile"
-  set -o xtrace
+  echo "[capz-test-env] Azure credentials loaded from cluster profile from: ${CLUSTER_PROFILE_DIR}/osServicePrincipal.json"
 fi
 
 # Override with CAPZ-specific Azure credentials from Vault (when available).
@@ -42,9 +41,25 @@ if [[ -d "${CAPZ_CREDS_DIR}" && -f "${CAPZ_CREDS_DIR}/AZURE_CLIENT_ID" ]]; then
     fi
   done
   export AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID
-  echo "[capz-test-env] Azure credentials overridden with CAPZ vault credentials"
-  set -o xtrace
+  echo "[capz-test-env] Azure credentials overridden with CAPZ vault credentials from $CAPZ_CREDS_DIR"
 fi
+
+
+if [[ -n "${VAULT_SECRET_PROFILE:-}" && -d "/var/run/aro-hcp-${VAULT_SECRET_PROFILE:-}" ]] ; then
+    export CLUSTER_PROFILE_DIR="/var/run/aro-hcp-${VAULT_SECRET_PROFILE}"
+    { set +o xtrace; } 2>/dev/null
+    AZURE_CLIENT_ID="$(cat "${CLUSTER_PROFILE_DIR}/client-id")"
+    AZURE_CLIENT_SECRET="$(cat "${CLUSTER_PROFILE_DIR}/client-secret")"
+    AZURE_TENANT_ID="$(cat "${CLUSTER_PROFILE_DIR}/tenant")"
+    AZURE_SUBSCRIPTION_ID="$(cat "${CLUSTER_PROFILE_DIR}/subscription-id")"
+    export AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID
+    echo "[capz-test-env] Azure credentials overridden with CAPZ vault credentials from ${CLUSTER_PROFILE_DIR}"
+fi
+
+
+set -o xtrace
+: "${GOCACHE:=/tmp/go-cache}"
+export GOCACHE
 
 : "${INFRA_PROVIDER:=aro}"
 : "${CAPI_USER:=prow}"
@@ -105,6 +120,17 @@ else
   echo "$RESOURCEGROUPNAME" > "$RESOURCEGROUPNAME_FILE"
 fi
 
+# Extract MSI resource group from Boskos lease (when available).
+# LEASED_MSI_CONTAINERS is set by Prow when the aro-hcp-test-msi-containers-*
+# lease is acquired; the first word is the resource group name.
+if [[ -n "${LEASED_MSI_CONTAINERS:-}" && -z "${MSI_RESOURCEGROUPNAME:-}" ]]; then
+  read -r MSI_RESOURCEGROUPNAME _ <<< "${LEASED_MSI_CONTAINERS}"
+  export MSI_RESOURCEGROUPNAME
+  echo "[capz-test-env] Using pre-existing MSI from Boskos pool: ${MSI_RESOURCEGROUPNAME}"
+fi
+
 # WORKLOAD_CLUSTER_NAMESPACE is set at the steps.env level in the ci-operator
 # config, so all steps share the same fixed namespace without needing to pass
 # it through SHARED_DIR files.
+
+{ set +o xtrace; } 2>/dev/null
