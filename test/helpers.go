@@ -1240,7 +1240,7 @@ func GetInfrastructureResourceStatus(t *testing.T, kubeContext, namespace, clust
 	var result InfrastructureResourceStatus
 
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace,
-		"get", "arocluster", clusterName, "-o", "jsonpath={.status}")
+		"get", "arocluster", clusterName, "-o", "jsonpath={.status}", KubectlRequestTimeout)
 	if err != nil || strings.TrimSpace(output) == "" {
 		return result
 	}
@@ -1423,7 +1423,7 @@ func DumpNotReadyResourceDiagnostics(t *testing.T, context, namespace string, no
 		condOutput, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", namespace,
 			"get", resourceType, r.Resource.Name,
 			"-o", "jsonpath={range .status.conditions[*]}{.type}: {.status} ({.reason}) {.message}{\"\\n\"}{end}",
-			"--request-timeout=10s")
+			KubectlRequestTimeout)
 		if err == nil && strings.TrimSpace(condOutput) != "" {
 			PrintToTTY("Conditions:\n%s\n", condOutput)
 			t.Logf("%s/%s conditions:\n%s", r.Resource.Kind, r.Resource.Name, condOutput)
@@ -1439,7 +1439,7 @@ func DumpNotReadyResourceDiagnostics(t *testing.T, context, namespace string, no
 			"get", "events",
 			"--field-selector", fmt.Sprintf("involvedObject.name=%s", r.Resource.Name),
 			"--sort-by=.lastTimestamp",
-			"--request-timeout=10s")
+			KubectlRequestTimeout)
 		if err == nil && strings.TrimSpace(evtOutput) != "" {
 			PrintToTTY("Events:\n%s\n", evtOutput)
 			t.Logf("%s/%s events:\n%s", r.Resource.Kind, r.Resource.Name, evtOutput)
@@ -1456,7 +1456,7 @@ func DumpNotReadyResourceDiagnostics(t *testing.T, context, namespace string, no
 	PrintToTTY("%s\n", nsHeader)
 	diagLog.WriteString(nsHeader + "\n")
 	evtOutput, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", namespace,
-		"get", "events", "--sort-by=.lastTimestamp", "--request-timeout=10s")
+		"get", "events", "--sort-by=.lastTimestamp", KubectlRequestTimeout)
 	if err == nil && strings.TrimSpace(evtOutput) != "" {
 		// Show last 30 lines to avoid flooding
 		lines := strings.Split(evtOutput, "\n")
@@ -2014,7 +2014,7 @@ func WaitForClusterHealthy(t *testing.T, kubeContext string, timeout time.Durati
 		// Try a simple kubectl command to check API server responsiveness
 		PrintToTTY("[%d] Checking API server responsiveness...\n", attempt)
 
-		_, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "get", "nodes", "--request-timeout=10s")
+		_, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "get", "nodes", KubectlRequestTimeout)
 		if err == nil {
 			PrintToTTY("✅ Cluster is healthy and responding\n\n")
 			t.Log("Cluster is healthy and responding")
@@ -2337,7 +2337,7 @@ func FormatAzureError(info *AzureErrorInfo) string {
 func RequireClusterResource(t *testing.T, kubeContext, namespace, clusterName string) {
 	t.Helper()
 
-	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "get", "cluster", clusterName)
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "get", "cluster", clusterName, KubectlRequestTimeout)
 	if err != nil {
 		errText := strings.ToLower(output + " " + err.Error())
 		if strings.Contains(errText, "not found") || strings.Contains(errText, "no resources found") {
@@ -2489,7 +2489,8 @@ func GetDeploymentImage(t *testing.T, kubeContext, namespace, deploymentName str
 
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
 		"-n", namespace, "get", "deployment", deploymentName,
-		"-o", "jsonpath={.spec.template.spec.containers[0].image}")
+		"-o", "jsonpath={.spec.template.spec.containers[0].image}",
+		KubectlRequestTimeout)
 	if err != nil {
 		return "", fmt.Errorf("failed to get deployment image: %w", err)
 	}
@@ -3028,7 +3029,7 @@ func CheckPodsForImagePullErrors(t *testing.T, kubeContext, namespace string) er
 	t.Helper()
 
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
-		"-n", namespace, "--request-timeout=10s",
+		"-n", namespace, KubectlRequestTimeout,
 		"get", "pods",
 		"-o", "jsonpath={range .items[*]}{.metadata.name}{\"\\t\"}{range .status.containerStatuses[*]}{.state.waiting.reason}{\" \"}{end}{range .status.initContainerStatuses[*]}{.state.waiting.reason}{\" \"}{end}{\"\\n\"}{end}")
 	if err != nil {
@@ -3562,7 +3563,7 @@ func GetDeletionResourceStatus(t *testing.T, kubeContext, namespace, clusterName
 		finalizerOutput, finErr := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
 			"-n", namespace, "get", "cluster", clusterName,
 			"-o", "jsonpath={.metadata.finalizers}",
-			"--request-timeout=10s")
+			KubectlRequestTimeout)
 		if finErr == nil && strings.TrimSpace(finalizerOutput) != "" {
 			raw := strings.TrimSpace(finalizerOutput)
 			raw = strings.Trim(raw, "[]")
@@ -3792,7 +3793,7 @@ func GetManagementClusterK8sTestNamespaces(t *testing.T, kubeContext string) ([]
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
 		"get", "namespaces", "-l", labelSelector,
 		"-o", "jsonpath={.items[*].metadata.name}",
-		"--request-timeout=10s")
+		KubectlRequestTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list test namespaces with label %s: %w", labelSelector, err)
 	}
@@ -3814,7 +3815,7 @@ func GetManagementClusterK8sTestNamespaceResources(t *testing.T, kubeContext, na
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
 		"-n", namespace, "get",
 		"clusters.cluster.x-k8s.io,machinepools.cluster.x-k8s.io,secrets,configmaps,all",
-		"--no-headers", "--ignore-not-found", "--request-timeout=10s")
+		"--no-headers", "--ignore-not-found", KubectlRequestTimeout)
 	if err != nil {
 		return "", fmt.Errorf("failed to list resources in namespace %s: %w", namespace, err)
 	}
@@ -4293,7 +4294,8 @@ func GetExistingClusterNames(t *testing.T, kubeContext, namespace string) ([]str
 
 	// Get all Cluster resources in the namespace
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
-		"-n", namespace, "get", "cluster", "-o", "jsonpath={.items[*].metadata.name}")
+		"-n", namespace, "get", "cluster", "-o", "jsonpath={.items[*].metadata.name}",
+		KubectlRequestTimeout)
 
 	if err != nil {
 		// Check if the error is because CRD doesn't exist (expected on fresh clusters)
@@ -4402,7 +4404,7 @@ func FormatMismatchedClustersError(mismatched []string, expectedClusterName, nam
 func IsMCECluster(t *testing.T, kubeContext string) bool {
 	t.Helper()
 	_, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
-		"get", "mce", "multiclusterengine", "-o", "name")
+		"get", "mce", "multiclusterengine", "-o", "name", KubectlRequestTimeout)
 	return err == nil
 }
 
@@ -4421,7 +4423,8 @@ func GetMCEComponentStatus(t *testing.T, kubeContext, componentName string) (*MC
 	// Query component enabled status using jsonpath
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
 		"get", "mce", "multiclusterengine", "-o",
-		fmt.Sprintf("jsonpath={.spec.overrides.components[?(@.name=='%s')].enabled}", componentName))
+		fmt.Sprintf("jsonpath={.spec.overrides.components[?(@.name=='%s')].enabled}", componentName),
+		KubectlRequestTimeout)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to query MCE component status: %w", err)
@@ -4454,7 +4457,7 @@ func SetMCEComponentState(t *testing.T, kubeContext, componentName string, enabl
 
 	// Get current MCE resource as JSON
 	currentOutput, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
-		"get", "mce", "multiclusterengine", "-o", "json")
+		"get", "mce", "multiclusterengine", "-o", "json", KubectlRequestTimeout)
 	if err != nil {
 		return fmt.Errorf("failed to get MCE resource: %w", err)
 	}
@@ -4503,7 +4506,7 @@ func EnableMCEComponent(t *testing.T, kubeContext, componentName string) error {
 
 	// Get current MCE resource as JSON
 	currentOutput, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
-		"get", "mce", "multiclusterengine", "-o", "json")
+		"get", "mce", "multiclusterengine", "-o", "json", KubectlRequestTimeout)
 	if err != nil {
 		return fmt.Errorf("failed to get MCE resource: %w", err)
 	}
@@ -4566,7 +4569,8 @@ func WaitForMCEController(t *testing.T, kubeContext, namespace, deploymentName s
 		// Check if deployment exists and is available
 		output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
 			"-n", namespace, "get", "deployment", deploymentName,
-			"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}")
+			"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}",
+			KubectlRequestTimeout)
 
 		if err != nil {
 			PrintToTTY("[%d] Deployment %s not found yet, waiting...\n", iteration, deploymentName)

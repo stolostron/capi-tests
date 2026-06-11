@@ -34,7 +34,7 @@ func TestExternalCluster_01_Connectivity(t *testing.T) {
 	PrintToTTY("Kubeconfig: %s\n", config.UseKubeconfig)
 	PrintToTTY("Context: %s\n\n", context)
 
-	output, err := RunCommand(t, "kubectl", "--context", context, "get", "nodes")
+	output, err := RunCommand(t, "kubectl", "--context", context, "get", "nodes", KubectlRequestTimeout)
 	if err != nil {
 		PrintToTTY("❌ Failed to connect to external cluster: %v\n", err)
 		t.Fatalf("Cannot connect to external cluster: %v", err)
@@ -526,7 +526,7 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
 	}
 
-	output, err = RunCommand(t, "kubectl", "--context", config.GetKubeContext(), "get", "nodes")
+	output, err = RunCommand(t, "kubectl", "--context", config.GetKubeContext(), "get", "nodes", KubectlRequestTimeout)
 	if err != nil {
 		PrintToTTY("❌ Failed to access management cluster nodes: %v\nOutput: %s\n\n", err, output)
 		t.Errorf("Failed to access management cluster nodes: %v\nOutput: %s", err, output)
@@ -579,7 +579,7 @@ func TestKindCluster_02_ControllersInstalled(t *testing.T) {
 	for _, ctrl := range config.AllControllers() {
 		PrintToTTY("Checking %s controller manager...\n", ctrl.DisplayName)
 		_, err := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.Namespace,
-			"get", "deployment", ctrl.DeploymentName)
+			"get", "deployment", ctrl.DeploymentName, KubectlRequestTimeout)
 		if err != nil {
 			PrintToTTY("❌ %s controller not found in %s namespace\n", ctrl.DisplayName, ctrl.Namespace)
 			allFound = false
@@ -645,7 +645,7 @@ func TestKindCluster_CAPINamespacesExists(t *testing.T) {
 	for _, ns := range config.AllNamespaces() {
 		PrintToTTY("Checking namespace: %s...\n", ns)
 
-		_, err := RunCommand(t, "kubectl", "--context", context, "get", "namespace", ns)
+		_, err := RunCommand(t, "kubectl", "--context", context, "get", "namespace", ns, KubectlRequestTimeout)
 		if err != nil {
 			PrintToTTY("⚠️  Namespace '%s' may not exist yet (this might be expected): %v\n", ns, err)
 			t.Logf("Namespace '%s' may not exist yet (this might be expected): %v", ns, err)
@@ -663,7 +663,7 @@ func TestKindCluster_CAPINamespacesExists(t *testing.T) {
 	PrintToTTY("\n=== Checking for CAPI pods ===\n")
 	PrintToTTY("Running: kubectl get pods -A --selector=cluster.x-k8s.io/provider\n")
 
-	output, err := RunCommand(t, "kubectl", "--context", context, "get", "pods", "-A", "--selector=cluster.x-k8s.io/provider")
+	output, err := RunCommand(t, "kubectl", "--context", context, "get", "pods", "-A", "--selector=cluster.x-k8s.io/provider", KubectlRequestTimeout)
 	if err != nil {
 		PrintToTTY("⚠️  CAPI pods check failed: %v\nOutput: %s\n\n", err, output)
 		t.Logf("CAPI pods check: %v\nOutput: %s", err, output)
@@ -706,15 +706,15 @@ func TestKindCluster_CAPIControllerReady(t *testing.T) {
 
 			// Dump diagnostic info to help identify the root cause
 			PrintToTTY("=== Diagnostic: pod status in %s ===\n", config.CAPINamespace)
-			if podOutput, podErr := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPINamespace, "--request-timeout=30s", "get", "pods", "-o", "wide"); podErr == nil {
+			if podOutput, podErr := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPINamespace, KubectlRequestTimeout, "get", "pods", "-o", "wide"); podErr == nil {
 				PrintToTTY("%s\n", podOutput)
 			}
 			PrintToTTY("=== Diagnostic: pod descriptions in %s ===\n", config.CAPINamespace)
-			if descOutput, descErr := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPINamespace, "--request-timeout=30s", "describe", "pods"); descErr == nil {
+			if descOutput, descErr := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPINamespace, KubectlRequestTimeout, "describe", "pods"); descErr == nil {
 				PrintToTTY("%s\n", descOutput)
 			}
 			PrintToTTY("=== Diagnostic: events in %s ===\n", config.CAPINamespace)
-			if evtOutput, evtErr := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPINamespace, "--request-timeout=30s", "get", "events", "--sort-by=.lastTimestamp"); evtErr == nil {
+			if evtOutput, evtErr := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPINamespace, KubectlRequestTimeout, "get", "events", "--sort-by=.lastTimestamp"); evtErr == nil {
 				PrintToTTY("%s\n", evtOutput)
 			}
 
@@ -733,7 +733,8 @@ func TestKindCluster_CAPIControllerReady(t *testing.T) {
 
 		output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPINamespace,
 			"get", "deployment", CAPIControllerDeployment,
-			"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}")
+			"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}",
+			KubectlRequestTimeout)
 
 		if err != nil {
 			PrintToTTY("[%d] ⚠️  Status check failed: %v\n", iteration, err)
@@ -750,7 +751,8 @@ func TestKindCluster_CAPIControllerReady(t *testing.T) {
 					PrintToTTY("Checking mce-capi-webhook-config deployment...\n")
 					mceOutput, mceErr := RunCommand(t, "kubectl", "--context", context, "-n", config.CAPINamespace,
 						"get", "deployment", "mce-capi-webhook-config",
-						"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}")
+						"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}",
+						KubectlRequestTimeout)
 					if mceErr != nil {
 						PrintToTTY("⚠️  MCE webhook config check failed: %v\n", mceErr)
 					} else if strings.TrimSpace(mceOutput) == "True" {
@@ -812,15 +814,15 @@ func TestKindCluster_InfraControllersReady(t *testing.T) {
 
 						// Dump diagnostic info to help identify the root cause
 						PrintToTTY("=== Diagnostic: pod status in %s ===\n", ctrl.Namespace)
-						if podOutput, podErr := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.Namespace, "--request-timeout=30s", "get", "pods", "-o", "wide"); podErr == nil {
+						if podOutput, podErr := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.Namespace, KubectlRequestTimeout, "get", "pods", "-o", "wide"); podErr == nil {
 							PrintToTTY("%s\n", podOutput)
 						}
 						PrintToTTY("=== Diagnostic: pod descriptions in %s ===\n", ctrl.Namespace)
-						if descOutput, descErr := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.Namespace, "--request-timeout=30s", "describe", "pods"); descErr == nil {
+						if descOutput, descErr := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.Namespace, KubectlRequestTimeout, "describe", "pods"); descErr == nil {
 							PrintToTTY("%s\n", descOutput)
 						}
 						PrintToTTY("=== Diagnostic: events in %s ===\n", ctrl.Namespace)
-						if evtOutput, evtErr := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.Namespace, "--request-timeout=30s", "get", "events", "--sort-by=.lastTimestamp"); evtErr == nil {
+						if evtOutput, evtErr := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.Namespace, KubectlRequestTimeout, "get", "events", "--sort-by=.lastTimestamp"); evtErr == nil {
 							PrintToTTY("%s\n", evtOutput)
 						}
 
@@ -839,7 +841,8 @@ func TestKindCluster_InfraControllersReady(t *testing.T) {
 
 					output, err := RunCommand(t, "kubectl", "--context", context, "-n", ctrl.Namespace,
 						"get", "deployment", ctrl.DeploymentName,
-						"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}")
+						"-o", "jsonpath={.status.conditions[?(@.type=='Available')].status}",
+						KubectlRequestTimeout)
 
 					if err != nil {
 						PrintToTTY("[%d] ⚠️  Status check failed: %v\n", iteration, err)
@@ -944,7 +947,8 @@ func TestKindCluster_WebhooksReady(t *testing.T) {
 			// First check if endpoint exists and has addresses
 			endpointOutput, err := RunCommandQuiet(t, "kubectl", "--context", context,
 				"get", "endpoints", wh.ServiceName, "-n", wh.Namespace,
-				"-o", "jsonpath={.subsets[0].addresses[0].ip}")
+				"-o", "jsonpath={.subsets[0].addresses[0].ip}",
+				KubectlRequestTimeout)
 
 			if err != nil || strings.TrimSpace(endpointOutput) == "" {
 				PrintToTTY("[%d] ⏳ Waiting for %s endpoint to have addresses...\n", iteration, wh.DisplayName)

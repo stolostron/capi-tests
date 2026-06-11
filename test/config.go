@@ -61,6 +61,10 @@ const (
 	// DefaultControllerTimeout is the default timeout for waiting for a controller to become ready.
 	DefaultControllerTimeout = 10 * time.Minute
 
+	// KubectlRequestTimeout is the kubectl --request-timeout flag value for all kubectl get commands.
+	// Prevents individual API calls from hanging indefinitely when the API server is slow or unreachable.
+	KubectlRequestTimeout = "--request-timeout=120s"
+
 	// CAPI core constants (provider-independent)
 
 	// CAPIControllerDeployment is the CAPI core controller deployment name.

@@ -36,7 +36,7 @@ func TestDeployment_00_CreateNamespace(t *testing.T) {
 	PrintToTTY("Context: %s\n\n", context)
 
 	// Check if namespace already exists
-	_, err := RunCommandQuiet(t, "kubectl", "--context", context, "get", "namespace", config.WorkloadClusterNamespace)
+	_, err := RunCommandQuiet(t, "kubectl", "--context", context, "get", "namespace", config.WorkloadClusterNamespace, KubectlRequestTimeout)
 	if err == nil {
 		PrintToTTY("✅ Namespace '%s' already exists\n\n", config.WorkloadClusterNamespace)
 		t.Logf("Namespace '%s' already exists", config.WorkloadClusterNamespace)
@@ -301,7 +301,7 @@ func TestDeployment_ProviderCredentialsConfigured(t *testing.T) {
 			// Check if secret exists
 			PrintToTTY("Checking if %s secret exists...\n", secretName)
 			_, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", secretNamespace,
-				"get", "secret", secretName)
+				"get", "secret", secretName, KubectlRequestTimeout)
 			if err != nil {
 				PrintToTTY("❌ Secret '%s' not found in %s namespace\n", secretName, secretNamespace)
 				PrintToTTY("\nThe YAML generation did not create the credentials secret.\n")
@@ -316,7 +316,8 @@ func TestDeployment_ProviderCredentialsConfigured(t *testing.T) {
 			for _, field := range cred.RequiredFields {
 				output, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", secretNamespace,
 					"get", "secret", secretName,
-					"-o", fmt.Sprintf("jsonpath={.data.%s}", field))
+					"-o", fmt.Sprintf("jsonpath={.data.%s}", field),
+					KubectlRequestTimeout)
 
 				if err != nil || strings.TrimSpace(output) == "" {
 					missingFields = append(missingFields, field)
@@ -455,7 +456,7 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 	PrintToTTY("\nChecking if cluster resource exists...\n")
 	t.Logf("Checking for cluster resource: %s (namespace: %s)", provisionedClusterName, config.WorkloadClusterNamespace)
 
-	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace, "get", "cluster", provisionedClusterName)
+	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace, "get", "cluster", provisionedClusterName, KubectlRequestTimeout)
 	if err != nil {
 		PrintToTTY("⚠️  Cluster resource not found (may not be deployed yet)\n\n")
 		t.Skipf("Cluster resource not found (may not be deployed yet): %v", err)

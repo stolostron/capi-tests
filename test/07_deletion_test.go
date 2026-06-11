@@ -33,7 +33,7 @@ func TestDeletion_DeleteCluster(t *testing.T) {
 
 	// Check if cluster exists before attempting deletion
 	_, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
-		"get", "cluster", provisionedClusterName)
+		"get", "cluster", provisionedClusterName, KubectlRequestTimeout)
 	if err != nil {
 		PrintToTTY("⚠️  Cluster '%s' not found in namespace '%s'\n", provisionedClusterName, config.WorkloadClusterNamespace)
 		t.Skipf("Cluster '%s' not found (may not have been deployed or already deleted)", provisionedClusterName)
@@ -51,7 +51,8 @@ func TestDeletion_DeleteCluster(t *testing.T) {
 
 		// Check if ROSAControlPlane exists and whether it's already being deleted
 		output, cpErr := RunCommandQuiet(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
-			"get", "rosacontrolplane", controlPlaneName, "-o", "jsonpath={.metadata.deletionTimestamp}")
+			"get", "rosacontrolplane", controlPlaneName, "-o", "jsonpath={.metadata.deletionTimestamp}",
+			KubectlRequestTimeout)
 		if cpErr == nil {
 			if strings.TrimSpace(output) != "" {
 				PrintToTTY("⏳ ROSAControlPlane '%s' already being deleted (deletionTimestamp set)\n", controlPlaneName)
@@ -421,7 +422,7 @@ func TestDeletion_DeleteManagementClusterK8sTestNamespace(t *testing.T) {
 
 	// Check if namespace exists
 	output, err := RunCommandQuiet(t, "kubectl", "--context", context,
-		"get", "namespace", config.WorkloadClusterNamespace)
+		"get", "namespace", config.WorkloadClusterNamespace, KubectlRequestTimeout)
 	if err != nil {
 		errMsg := strings.ToLower(output + " " + err.Error())
 		if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "notfound") {
@@ -518,7 +519,7 @@ func TestDeletion_Summary(t *testing.T) {
 
 	// Check namespace status
 	nsOutput, nsErr := RunCommandQuiet(t, "kubectl", "--context", context,
-		"get", "namespace", config.WorkloadClusterNamespace)
+		"get", "namespace", config.WorkloadClusterNamespace, KubectlRequestTimeout)
 	if nsErr != nil {
 		errMsg := strings.ToLower(nsOutput + " " + nsErr.Error())
 		if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "notfound") {

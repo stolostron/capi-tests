@@ -195,7 +195,7 @@ func TestCheckDependencies_ExternalKubeconfig(t *testing.T) {
 
 	// Validate kubectl can connect to the cluster
 	SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	output, err := RunCommand(t, "kubectl", "--context", context, "get", "nodes", "--no-headers")
+	output, err := RunCommand(t, "kubectl", "--context", context, "get", "nodes", "--no-headers", KubectlRequestTimeout)
 	if err != nil {
 		t.Fatalf("Cannot connect to external cluster with context '%s': %v\n\nEnsure the cluster is accessible and credentials are valid.", context, err)
 	}

@@ -72,7 +72,7 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 			attempt, maxRetries, context, config.WorkloadClusterNamespace, secretName)
 
 		output, secretErr = RunCommandQuiet(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace, "get", "secret",
-			secretName, "-o", "jsonpath={.data.value}")
+			secretName, "-o", "jsonpath={.data.value}", KubectlRequestTimeout)
 
 		if secretErr == nil && strings.TrimSpace(output) != "" {
 			t.Logf("Kubeconfig secret found on attempt %d", attempt)
@@ -232,7 +232,7 @@ func TestVerification_ClusterNodes(t *testing.T) {
 					os.Setenv("KUBECONFIG", oldKubeconfig)
 				}
 			}()
-			output, err := RunCommand(t, "kubectl", "get", "nodes")
+			output, err := RunCommand(t, "kubectl", "get", "nodes", KubectlRequestTimeout)
 
 			if err == nil {
 				PrintToTTY("%s\n\n", output)
@@ -313,7 +313,7 @@ func TestVerification_ClusterHealth(t *testing.T) {
 	// Check pods in kube-system namespace
 	t.Log("Checking system pods...")
 
-	output, err := RunCommand(t, "kubectl", "get", "pods", "-n", "kube-system")
+	output, err := RunCommand(t, "kubectl", "get", "pods", "-n", "kube-system", KubectlRequestTimeout)
 	if err != nil {
 		t.Logf("Failed to get system pods: %v\nOutput: %s", err, output)
 	} else {
@@ -321,7 +321,7 @@ func TestVerification_ClusterHealth(t *testing.T) {
 	}
 
 	// Check for any failing pods
-	output, err = RunCommand(t, "kubectl", "get", "pods", "-A", "--field-selector=status.phase!=Running,status.phase!=Succeeded")
+	output, err = RunCommand(t, "kubectl", "get", "pods", "-A", "--field-selector=status.phase!=Running,status.phase!=Succeeded", KubectlRequestTimeout)
 	if err == nil && strings.TrimSpace(output) != "" {
 		lines := strings.Split(output, "\n")
 		if len(lines) > 1 { // More than just header

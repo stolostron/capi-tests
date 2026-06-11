@@ -217,7 +217,7 @@ func TestCleanup_VerifyManagementClusterK8sTestNamespaceRemoval(t *testing.T) {
 	context := config.GetKubeContext()
 
 	output, err := RunCommandQuiet(t, "kubectl", "--context", context,
-		"get", "namespace", config.WorkloadClusterNamespace)
+		"get", "namespace", config.WorkloadClusterNamespace, KubectlRequestTimeout)
 	if err != nil {
 		errMsg := strings.ToLower(output + " " + err.Error())
 		if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "notfound") {
