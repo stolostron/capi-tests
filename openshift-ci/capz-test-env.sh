@@ -63,7 +63,7 @@ fi
 
 set -o xtrace
 : "${GOCACHE:=/tmp/go-cache}"
-if [[ ! -w "${GOCACHE%/*}" ]]; then
+if [[ ! -w "$(dirname "$GOCACHE")" ]]; then
   GOCACHE=/tmp/go-cache
 fi
 export GOCACHE
