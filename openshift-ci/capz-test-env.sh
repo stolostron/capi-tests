@@ -63,9 +63,11 @@ fi
 
 set -o xtrace
 : "${GOCACHE:=/tmp/go-cache}"
-if [[ ! -w "$(dirname "$GOCACHE")" ]]; then
-  echo "[capz-test-env] GOCACHE parent directory not writable, falling back to /tmp/go-cache" >&2
+if [[ ! -d "${GOCACHE}" ]] || [[ ! -w "${GOCACHE}" ]]; then
+  echo "[capz-test-env] GOCACHE=${GOCACHE} is not writable, falling back to /tmp/go-cache" >&2
   GOCACHE=/tmp/go-cache
+else
+  echo "[capz-test-env] GOCACHE=${GOCACHE}"
 fi
 export GOCACHE
 
