@@ -1423,7 +1423,7 @@ func DumpNotReadyResourceDiagnostics(t *testing.T, context, namespace string, no
 		condOutput, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", namespace,
 			"get", resourceType, r.Resource.Name,
 			"-o", "jsonpath={range .status.conditions[*]}{.type}: {.status} ({.reason}) {.message}{\"\\n\"}{end}",
-			KubectlRequestTimeout)
+			KubectlDiagnosticTimeout)
 		if err == nil && strings.TrimSpace(condOutput) != "" {
 			PrintToTTY("Conditions:\n%s\n", condOutput)
 			t.Logf("%s/%s conditions:\n%s", r.Resource.Kind, r.Resource.Name, condOutput)
@@ -1439,7 +1439,7 @@ func DumpNotReadyResourceDiagnostics(t *testing.T, context, namespace string, no
 			"get", "events",
 			"--field-selector", fmt.Sprintf("involvedObject.name=%s", r.Resource.Name),
 			"--sort-by=.lastTimestamp",
-			KubectlRequestTimeout)
+			KubectlDiagnosticTimeout)
 		if err == nil && strings.TrimSpace(evtOutput) != "" {
 			PrintToTTY("Events:\n%s\n", evtOutput)
 			t.Logf("%s/%s events:\n%s", r.Resource.Kind, r.Resource.Name, evtOutput)
@@ -1456,7 +1456,7 @@ func DumpNotReadyResourceDiagnostics(t *testing.T, context, namespace string, no
 	PrintToTTY("%s\n", nsHeader)
 	diagLog.WriteString(nsHeader + "\n")
 	evtOutput, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", namespace,
-		"get", "events", "--sort-by=.lastTimestamp", KubectlRequestTimeout)
+		"get", "events", "--sort-by=.lastTimestamp", KubectlDiagnosticTimeout)
 	if err == nil && strings.TrimSpace(evtOutput) != "" {
 		// Show last 30 lines to avoid flooding
 		lines := strings.Split(evtOutput, "\n")
@@ -2014,7 +2014,7 @@ func WaitForClusterHealthy(t *testing.T, kubeContext string, timeout time.Durati
 		// Try a simple kubectl command to check API server responsiveness
 		PrintToTTY("[%d] Checking API server responsiveness...\n", attempt)
 
-		_, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "get", "nodes", KubectlRequestTimeout)
+		_, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "get", "nodes", KubectlDiagnosticTimeout)
 		if err == nil {
 			PrintToTTY("✅ Cluster is healthy and responding\n\n")
 			t.Log("Cluster is healthy and responding")
@@ -3029,7 +3029,7 @@ func CheckPodsForImagePullErrors(t *testing.T, kubeContext, namespace string) er
 	t.Helper()
 
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
-		"-n", namespace, KubectlRequestTimeout,
+		"-n", namespace, KubectlDiagnosticTimeout,
 		"get", "pods",
 		"-o", "jsonpath={range .items[*]}{.metadata.name}{\"\\t\"}{range .status.containerStatuses[*]}{.state.waiting.reason}{\" \"}{end}{range .status.initContainerStatuses[*]}{.state.waiting.reason}{\" \"}{end}{\"\\n\"}{end}")
 	if err != nil {
@@ -3563,7 +3563,7 @@ func GetDeletionResourceStatus(t *testing.T, kubeContext, namespace, clusterName
 		finalizerOutput, finErr := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
 			"-n", namespace, "get", "cluster", clusterName,
 			"-o", "jsonpath={.metadata.finalizers}",
-			KubectlRequestTimeout)
+			KubectlDiagnosticTimeout)
 		if finErr == nil && strings.TrimSpace(finalizerOutput) != "" {
 			raw := strings.TrimSpace(finalizerOutput)
 			raw = strings.Trim(raw, "[]")
@@ -3793,7 +3793,7 @@ func GetManagementClusterK8sTestNamespaces(t *testing.T, kubeContext string) ([]
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
 		"get", "namespaces", "-l", labelSelector,
 		"-o", "jsonpath={.items[*].metadata.name}",
-		KubectlRequestTimeout)
+		KubectlDiagnosticTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list test namespaces with label %s: %w", labelSelector, err)
 	}
@@ -3815,7 +3815,7 @@ func GetManagementClusterK8sTestNamespaceResources(t *testing.T, kubeContext, na
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
 		"-n", namespace, "get",
 		"clusters.cluster.x-k8s.io,machinepools.cluster.x-k8s.io,secrets,configmaps,all",
-		"--no-headers", "--ignore-not-found", KubectlRequestTimeout)
+		"--no-headers", "--ignore-not-found", KubectlDiagnosticTimeout)
 	if err != nil {
 		return "", fmt.Errorf("failed to list resources in namespace %s: %w", namespace, err)
 	}
