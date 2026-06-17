@@ -470,6 +470,10 @@ delete_resources() {
                         ((skipped++)) || true
                         continue
                     fi
+                else
+                    echo "SKIPPED (untagged, age unknown — failed to parse timestamp)"
+                    ((skipped++)) || true
+                    continue
                 fi
             else
                 echo "SKIPPED (untagged, age unknown — no creation timestamp)"
@@ -499,7 +503,7 @@ delete_resources() {
     print_info "Deletion summary:"
     echo "  - Initiated: ${deleted}"
     echo "  - Failed: ${failed}"
-    echo "  - Skipped (not found): ${skipped}"
+    echo "  - Skipped: ${skipped}"
 
     if [[ "$deleted" -gt 0 ]]; then
         print_warning "Note: Deletions run asynchronously. Resources may take a few minutes to be fully removed."
