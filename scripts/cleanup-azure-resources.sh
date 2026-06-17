@@ -208,8 +208,9 @@ check_prerequisites() {
 delete_resource_group() {
     local rg_name="$1"
 
-    # Check if resource group exists
-    if ! az group show --name "$rg_name" >/dev/null 2>&1; then
+    # Check if resource group exists and capture its metadata in one API call
+    local rg_json
+    if ! rg_json=$(az group show --name "$rg_name" -o json 2>/dev/null); then
         print_info "Resource group '${rg_name}' not found (already deleted or doesn't exist)"
         return 0
     fi
@@ -218,7 +219,7 @@ delete_resource_group() {
     print_warning "Found resource group '${rg_name}'"
 
     local rg_tags
-    rg_tags=$(az group show --name "$rg_name" --query "tags" -o json 2>/dev/null)
+    rg_tags=$(echo "$rg_json" | jq -r '.tags // {}')
     if [[ -n "$rg_tags" && "$rg_tags" != "null" && "$rg_tags" != "{}" ]]; then
         print_info "Tags:"
         echo "$rg_tags" | jq -r 'to_entries[] | "    \(.key) = \(.value)"'
@@ -470,6 +471,10 @@ delete_resources() {
                         continue
                     fi
                 fi
+            else
+                echo "SKIPPED (untagged, age unknown — no creation timestamp)"
+                ((skipped++)) || true
+                continue
             fi
         else
             # Tagged resource: just verify existence
