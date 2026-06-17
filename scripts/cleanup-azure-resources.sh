@@ -208,14 +208,24 @@ check_prerequisites() {
 delete_resource_group() {
     local rg_name="$1"
 
-    # Check if resource group exists
-    if ! az group show --name "$rg_name" >/dev/null 2>&1; then
+    # Check if resource group exists and capture its metadata in one API call
+    local rg_json
+    if ! rg_json=$(az group show --name "$rg_name" -o json 2>/dev/null); then
         print_info "Resource group '${rg_name}' not found (already deleted or doesn't exist)"
         return 0
     fi
 
     echo ""
     print_warning "Found resource group '${rg_name}'"
+
+    local rg_tags
+    rg_tags=$(echo "$rg_json" | jq -r '.tags // {}')
+    if [[ -n "$rg_tags" && "$rg_tags" != "null" && "$rg_tags" != "{}" ]]; then
+        print_info "Tags:"
+        echo "$rg_tags" | jq -r 'to_entries[] | "    \(.key) = \(.value)"'
+    else
+        print_info "Tags: (none)"
+    fi
 
     if [[ "$DRY_RUN" == "true" ]]; then
         print_warning "[DRY-RUN] Would delete resource group '${rg_name}'"
@@ -256,9 +266,9 @@ find_resources() {
     # - contains: broader, matches resources whose names contain the prefix anywhere
     local query
     if [[ "$MATCH_MODE" == "startswith" ]]; then
-        query="Resources | where name startswith '${prefix}' | project id, name, type, resourceGroup, subscriptionId | order by type asc, name asc"
+        query="Resources | where name startswith '${prefix}' | project id, name, type, resourceGroup, subscriptionId, tags | order by type asc, name asc"
     else
-        query="Resources | where name contains '${prefix}' | project id, name, type, resourceGroup, subscriptionId | order by type asc, name asc"
+        query="Resources | where name contains '${prefix}' | project id, name, type, resourceGroup, subscriptionId, tags | order by type asc, name asc"
     fi
 
     local resources_json
@@ -317,7 +327,7 @@ find_resources_by_tag() {
 
     print_info "Searching for Azure resources with tag '${tag_key}=${tag_value}'..." >&2
 
-    local query="Resources | where tags['${tag_key}'] == '${tag_value}' | project id, name, type, resourceGroup, subscriptionId | order by resourceGroup asc, type asc, name asc"
+    local query="Resources | where tags['${tag_key}'] == '${tag_value}' | project id, name, type, resourceGroup, subscriptionId, tags | order by resourceGroup asc, type asc, name asc"
 
     local resources_json
     local az_stderr
@@ -377,13 +387,15 @@ display_resources() {
     printf "%-60s | %-50s | %-30s\n" "NAME" "TYPE" "RESOURCE GROUP"
     printf "%s\n" "$(printf '%.0s-' {1..145})"
 
-    # Print each resource
-    echo "$resources_json" | jq -r '.data[] | "\(.name)|\(.type)|\(.resourceGroup)"' | while IFS='|' read -r name type rg; do
-        # Truncate long names for display
+    # Print each resource with tags
+    echo "$resources_json" | jq -r '.data[] | [.name, .type, .resourceGroup, ((.tags // {}) | to_entries | map("\(.key)=\(.value)") | join(", "))] | @tsv' | while IFS=$'\t' read -r name type rg tags; do
         name_display="${name:0:60}"
         type_display="${type:0:50}"
         rg_display="${rg:0:30}"
         printf "%-60s | %-50s | %-30s\n" "$name_display" "$type_display" "$rg_display"
+        if [[ -n "$tags" ]]; then
+            printf "  Tags: %s\n" "$tags"
+        fi
     done
 
     echo ""
@@ -424,12 +436,12 @@ delete_resources() {
     print_info "Deleting resources..."
     echo ""
 
-    # Get resource IDs and delete them
+    # Get resource IDs with tag info and delete them
     # Sort by type to handle dependencies (identities first, then VNets, then NSGs)
-    local resource_ids
-    resource_ids=$(echo "$resources_json" | jq -r '.data | sort_by(.type) | reverse | .[].id')
+    local resource_data
+    resource_data=$(echo "$resources_json" | jq -r '.data | sort_by(.type) | reverse | .[] | (.id) + "\t" + ((.tags // {} | length) | tostring)')
 
-    while IFS= read -r resource_id; do
+    while IFS=$'\t' read -r resource_id tag_count; do
         if [[ -z "$resource_id" ]]; then
             continue
         fi
@@ -439,11 +451,42 @@ delete_resources() {
 
         echo -n "  Deleting: ${resource_name}... "
 
-        # First verify the resource still exists (Resource Graph may have stale data)
-        if ! az resource show --ids "$resource_id" >/dev/null 2>&1; then
-            echo "SKIPPED (not found)"
-            ((skipped++)) || true
-            continue
+        if [[ "${tag_count:-0}" -eq 0 ]]; then
+            # Untagged resource: verify existence and check age
+            local created_at
+            if ! created_at=$(az resource show --ids "$resource_id" --query "systemData.createdAt" -o tsv 2>/dev/null); then
+                echo "SKIPPED (not found)"
+                ((skipped++)) || true
+                continue
+            fi
+            if [[ -n "$created_at" && "$created_at" != "None" ]]; then
+                local created_epoch now_epoch age_days
+                created_epoch=$(date -d "$created_at" +%s 2>/dev/null || echo "")
+                if [[ -n "$created_epoch" ]]; then
+                    now_epoch=$(date +%s)
+                    age_days=$(( (now_epoch - created_epoch) / 86400 ))
+                    if [[ "$age_days" -lt 2 ]]; then
+                        echo "SKIPPED (untagged, ${age_days}d old — below 2d threshold)"
+                        ((skipped++)) || true
+                        continue
+                    fi
+                else
+                    echo "SKIPPED (untagged, age unknown — failed to parse timestamp)"
+                    ((skipped++)) || true
+                    continue
+                fi
+            else
+                echo "SKIPPED (untagged, age unknown — no creation timestamp)"
+                ((skipped++)) || true
+                continue
+            fi
+        else
+            # Tagged resource: just verify existence
+            if ! az resource show --ids "$resource_id" >/dev/null 2>&1; then
+                echo "SKIPPED (not found)"
+                ((skipped++)) || true
+                continue
+            fi
         fi
 
         # Attempt deletion
@@ -454,13 +497,13 @@ delete_resources() {
             echo "FAILED"
             ((failed++)) || true
         fi
-    done <<< "$resource_ids"
+    done <<< "$resource_data"
 
     echo ""
     print_info "Deletion summary:"
     echo "  - Initiated: ${deleted}"
     echo "  - Failed: ${failed}"
-    echo "  - Skipped (not found): ${skipped}"
+    echo "  - Skipped: ${skipped}"
 
     if [[ "$deleted" -gt 0 ]]; then
         print_warning "Note: Deletions run asynchronously. Resources may take a few minutes to be fully removed."
