@@ -715,6 +715,8 @@ func NewTestConfig() *TestConfig {
 		}
 	}
 
+	clusterDeployTimeout := parseClusterDeploymentTimeout()
+
 	return &TestConfig{
 		// Repository defaults
 		RepoURL:    GetEnvOrDefault("ARO_REPO_URL", "https://github.com/stolostron/cluster-api-installer"),
@@ -755,9 +757,9 @@ func NewTestConfig() *TestConfig {
 		GenScriptPath:     GetEnvOrDefault("GEN_SCRIPT_PATH", defaultGenScriptPath),
 
 		// Timeouts
-		ClusterDeploymentTimeout: parseClusterDeploymentTimeout(),
+		ClusterDeploymentTimeout: clusterDeployTimeout,
 		ClusterDeletionTimeout:   parseClusterDeletionTimeout(),
-		DeploymentTimeout:        parseClusterDeploymentTimeout(), // backward compat alias
+		DeploymentTimeout:        clusterDeployTimeout, // backward compat alias
 		DeploymentStallTimeout:   parseDeploymentStallTimeout(),
 		ASOControllerTimeout:     asoTimeout,
 		HelmInstallTimeout:       parseHelmInstallTimeout(),

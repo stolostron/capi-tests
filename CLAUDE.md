@@ -82,7 +82,7 @@ Never hardcode values - always use `GetEnvOrDefault()` for new configuration.
 **Validation:**
 - `ValidateDomainPrefix(user, env)` - Domain prefix length (max 15 chars)
 - `ValidateRFC1123Name(name, varName)` - RFC 1123 subdomain naming
-- `ValidateExternalAuthID` / `ValidateTimeout` / `ValidateDeploymentTimeout` / `ValidateASOControllerTimeout`
+- `ValidateExternalAuthID` / `ValidateTimeout` / `ValidateDeploymentTimeout` / `ValidateClusterDeploymentTimeout` / `ValidateClusterDeletionTimeout` / `ValidateASOControllerTimeout`
 - `ValidateAllConfigurations(t, config)` / `FormatValidationResults` - Bulk config validation
 - `ValidateAzureSubscriptionAccess` / `ValidateAzureRegion` - Azure resource validation
 - `ValidateYAMLFile` / `ValidateServicePrincipalCredentials`
