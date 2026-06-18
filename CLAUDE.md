@@ -405,7 +405,9 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 This is validated during Check Dependencies (phase 1) to prevent late deployment failures.
 
 ### Test Behavior
-- `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `60m`, format: Go duration like `1h`, `45m`)
+- `CLUSTER_DEPLOYMENT_TIMEOUT` - How long the in-code polling loop waits for the workload cluster to become ready (default: `60m`, format: minutes only like `60m`, `90m`, `120m`). The Makefile's `GO_STEP_DEPLOY_CRS_TIMEOUT` is auto-computed as this value + 15 minutes headroom.
+- `CLUSTER_DELETION_TIMEOUT` - How long the in-code polling loop waits for the workload cluster to be deleted (default: `60m`, format: minutes only like `60m`, `90m`). The Makefile's `GO_STEP_DELETION_TIMEOUT` is auto-computed as this value + 15 minutes headroom.
+- `DEPLOYMENT_TIMEOUT` - **Deprecated**: Legacy timeout variable. If `CLUSTER_DEPLOYMENT_TIMEOUT` / `CLUSTER_DELETION_TIMEOUT` are not set, the system falls back to `DEPLOYMENT_TIMEOUT` for backward compatibility.
 - `DEPLOYMENT_STALL_TIMEOUT` - Stall detection timeout: if no progress (control plane ready status, machine pool replicas, infrastructure resources) for this duration, the test fails early instead of waiting for the full deployment timeout (default: `30m`, set to `0` to disable)
 
 ### MCE Component Management

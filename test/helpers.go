@@ -4073,8 +4073,18 @@ func ValidateTimeout(name string, timeout, min, max time.Duration) error {
 	return nil
 }
 
+// ValidateClusterDeploymentTimeout validates the CLUSTER_DEPLOYMENT_TIMEOUT configuration.
+func ValidateClusterDeploymentTimeout(timeout time.Duration) error {
+	return ValidateTimeout("CLUSTER_DEPLOYMENT_TIMEOUT", timeout, MinDeploymentTimeout, MaxDeploymentTimeout)
+}
+
+// ValidateClusterDeletionTimeout validates the CLUSTER_DELETION_TIMEOUT configuration.
+func ValidateClusterDeletionTimeout(timeout time.Duration) error {
+	return ValidateTimeout("CLUSTER_DELETION_TIMEOUT", timeout, MinDeploymentTimeout, MaxDeploymentTimeout)
+}
+
 // ValidateDeploymentTimeout validates the DEPLOYMENT_TIMEOUT configuration.
-// Returns nil if the timeout is within acceptable bounds, or an error with remediation guidance.
+// Deprecated: Use ValidateClusterDeploymentTimeout instead.
 func ValidateDeploymentTimeout(timeout time.Duration) error {
 	return ValidateTimeout("DEPLOYMENT_TIMEOUT", timeout, MinDeploymentTimeout, MaxDeploymentTimeout)
 }
@@ -4201,18 +4211,31 @@ func ValidateAllConfigurations(t *testing.T, config *TestConfig) []ConfigValidat
 	})
 
 	// Validate timeout values
-	timeoutResult := ConfigValidationResult{
-		Variable:   "DEPLOYMENT_TIMEOUT",
-		Value:      config.DeploymentTimeout.String(),
-		IsCritical: false, // Not critical, deployment will just timeout
+	deployTimeoutResult := ConfigValidationResult{
+		Variable:   "CLUSTER_DEPLOYMENT_TIMEOUT",
+		Value:      config.ClusterDeploymentTimeout.String(),
+		IsCritical: false,
 	}
-	if err := ValidateDeploymentTimeout(config.DeploymentTimeout); err != nil {
-		timeoutResult.IsValid = false
-		timeoutResult.Error = err
+	if err := ValidateClusterDeploymentTimeout(config.ClusterDeploymentTimeout); err != nil {
+		deployTimeoutResult.IsValid = false
+		deployTimeoutResult.Error = err
 	} else {
-		timeoutResult.IsValid = true
+		deployTimeoutResult.IsValid = true
 	}
-	results = append(results, timeoutResult)
+	results = append(results, deployTimeoutResult)
+
+	deletionTimeoutResult := ConfigValidationResult{
+		Variable:   "CLUSTER_DELETION_TIMEOUT",
+		Value:      config.ClusterDeletionTimeout.String(),
+		IsCritical: false,
+	}
+	if err := ValidateClusterDeletionTimeout(config.ClusterDeletionTimeout); err != nil {
+		deletionTimeoutResult.IsValid = false
+		deletionTimeoutResult.Error = err
+	} else {
+		deletionTimeoutResult.IsValid = true
+	}
+	results = append(results, deletionTimeoutResult)
 
 	asoResult := ConfigValidationResult{
 		Variable:   "ASO_CONTROLLER_TIMEOUT",

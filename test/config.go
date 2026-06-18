@@ -19,7 +19,16 @@ var (
 )
 
 const (
-	// DefaultDeploymentTimeout is the default timeout for control plane deployment
+	// DefaultClusterDeploymentTimeout is the default timeout for the in-code polling loop
+	// that waits for the workload cluster to become ready during deployment (Phase 05).
+	DefaultClusterDeploymentTimeout = 60 * time.Minute
+
+	// DefaultClusterDeletionTimeout is the default timeout for the in-code polling loop
+	// that waits for the workload cluster to be fully deleted (Phase 07).
+	DefaultClusterDeletionTimeout = 60 * time.Minute
+
+	// DefaultDeploymentTimeout is the legacy default timeout for control plane deployment.
+	// Deprecated: Use DefaultClusterDeploymentTimeout instead.
 	DefaultDeploymentTimeout = 60 * time.Minute
 
 	// DefaultASOControllerTimeout is the default timeout for ASO controller manager to become ready.
@@ -505,10 +514,12 @@ type TestConfig struct {
 	GenScriptPath     string
 
 	// Timeouts
-	DeploymentTimeout      time.Duration
-	DeploymentStallTimeout time.Duration // 0 disables stall detection
-	ASOControllerTimeout   time.Duration
-	HelmInstallTimeout     time.Duration
+	ClusterDeploymentTimeout time.Duration // CLUSTER_DEPLOYMENT_TIMEOUT: how long the deploy polling loop waits
+	ClusterDeletionTimeout   time.Duration // CLUSTER_DELETION_TIMEOUT: how long the deletion polling loop waits
+	DeploymentTimeout        time.Duration // Deprecated: alias for ClusterDeploymentTimeout (backward compat)
+	DeploymentStallTimeout   time.Duration // 0 disables stall detection
+	ASOControllerTimeout     time.Duration
+	HelmInstallTimeout       time.Duration
 
 	// Infrastructure providers
 	// InfraProviderName is the selected infrastructure provider ("aro" or "rosa").
@@ -744,10 +755,12 @@ func NewTestConfig() *TestConfig {
 		GenScriptPath:     GetEnvOrDefault("GEN_SCRIPT_PATH", defaultGenScriptPath),
 
 		// Timeouts
-		DeploymentTimeout:      parseDeploymentTimeout(),
-		DeploymentStallTimeout: parseDeploymentStallTimeout(),
-		ASOControllerTimeout:   asoTimeout,
-		HelmInstallTimeout:     parseHelmInstallTimeout(),
+		ClusterDeploymentTimeout: parseClusterDeploymentTimeout(),
+		ClusterDeletionTimeout:   parseClusterDeletionTimeout(),
+		DeploymentTimeout:        parseClusterDeploymentTimeout(), // backward compat alias
+		DeploymentStallTimeout:   parseDeploymentStallTimeout(),
+		ASOControllerTimeout:     asoTimeout,
+		HelmInstallTimeout:       parseHelmInstallTimeout(),
 
 		// Infrastructure providers
 		InfraProviderName: infraProviderName,
@@ -781,9 +794,68 @@ func getControllerNamespace(envVar, defaultNS string) string {
 	return defaultNS
 }
 
+// parseClusterDeploymentTimeout parses the CLUSTER_DEPLOYMENT_TIMEOUT environment variable.
+// Controls how long the deployment polling loop waits for the cluster to become ready.
+//
+// Resolution order:
+//  1. CLUSTER_DEPLOYMENT_TIMEOUT (new, preferred)
+//  2. DEPLOYMENT_TIMEOUT (legacy, backward compat)
+//  3. DefaultClusterDeploymentTimeout (60m)
+func parseClusterDeploymentTimeout() time.Duration {
+	if timeoutStr := os.Getenv("CLUSTER_DEPLOYMENT_TIMEOUT"); timeoutStr != "" {
+		timeout, err := time.ParseDuration(timeoutStr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: invalid CLUSTER_DEPLOYMENT_TIMEOUT '%s', using default %v\n", timeoutStr, DefaultClusterDeploymentTimeout)
+			return DefaultClusterDeploymentTimeout
+		}
+		return timeout
+	}
+
+	// Fall back to legacy DEPLOYMENT_TIMEOUT
+	if timeoutStr := os.Getenv("DEPLOYMENT_TIMEOUT"); timeoutStr != "" {
+		timeout, err := time.ParseDuration(timeoutStr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: invalid DEPLOYMENT_TIMEOUT '%s', using default %v\n", timeoutStr, DefaultClusterDeploymentTimeout)
+			return DefaultClusterDeploymentTimeout
+		}
+		return timeout
+	}
+
+	return DefaultClusterDeploymentTimeout
+}
+
+// parseClusterDeletionTimeout parses the CLUSTER_DELETION_TIMEOUT environment variable.
+// Controls how long the deletion polling loop waits for the cluster to be deleted.
+//
+// Resolution order:
+//  1. CLUSTER_DELETION_TIMEOUT (new, preferred)
+//  2. DEPLOYMENT_TIMEOUT (legacy, backward compat)
+//  3. DefaultClusterDeletionTimeout (60m)
+func parseClusterDeletionTimeout() time.Duration {
+	if timeoutStr := os.Getenv("CLUSTER_DELETION_TIMEOUT"); timeoutStr != "" {
+		timeout, err := time.ParseDuration(timeoutStr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: invalid CLUSTER_DELETION_TIMEOUT '%s', using default %v\n", timeoutStr, DefaultClusterDeletionTimeout)
+			return DefaultClusterDeletionTimeout
+		}
+		return timeout
+	}
+
+	// Fall back to legacy DEPLOYMENT_TIMEOUT
+	if timeoutStr := os.Getenv("DEPLOYMENT_TIMEOUT"); timeoutStr != "" {
+		timeout, err := time.ParseDuration(timeoutStr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: invalid DEPLOYMENT_TIMEOUT '%s', using default %v\n", timeoutStr, DefaultClusterDeletionTimeout)
+			return DefaultClusterDeletionTimeout
+		}
+		return timeout
+	}
+
+	return DefaultClusterDeletionTimeout
+}
+
 // parseDeploymentTimeout parses the DEPLOYMENT_TIMEOUT environment variable.
-// Returns the parsed duration or defaults to DefaultDeploymentTimeout.
-// Logs a warning if the provided value is invalid.
+// Deprecated: Use parseClusterDeploymentTimeout instead.
 func parseDeploymentTimeout() time.Duration {
 	timeoutStr := os.Getenv("DEPLOYMENT_TIMEOUT")
 	if timeoutStr == "" {

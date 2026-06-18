@@ -115,8 +115,7 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 	PrintTestHeader(t, "TestDeletion_WaitForClusterDeletion",
 		"Wait for cluster resource to be fully deleted")
 
-	// Use the deployment timeout for deletion as well (deletion can take significant time)
-	timeout := config.DeploymentTimeout
+	timeout := config.ClusterDeletionTimeout
 	pollInterval := 30 * time.Second
 	startTime := time.Now()
 

@@ -508,7 +508,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	machinePoolName := config.GetProvisionedMachinePoolName()
 
 	// Wait for both to be ready (with configurable timeout)
-	timeout := config.DeploymentTimeout
+	timeout := config.ClusterDeploymentTimeout
 	pollInterval := 30 * time.Second
 	startTime := time.Now()
 
@@ -955,7 +955,7 @@ func TestDeployment_VerifyInfrastructureResources(t *testing.T) {
 
 	RequireClusterResource(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 
-	timeout := config.DeploymentTimeout
+	timeout := config.ClusterDeploymentTimeout
 	pollInterval := 30 * time.Second
 	startTime := time.Now()
 
