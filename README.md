@@ -171,23 +171,25 @@ The test suite validates naming compliance during the Check Dependencies phase (
 
 ### Test Behavior
 
-- `DEPLOYMENT_TIMEOUT` - Control plane deployment timeout (default: `60m`). Use Go duration format: `1h`, `45m`, `90m`, etc.
+- `CLUSTER_DEPLOYMENT_TIMEOUT` - How long the in-code polling loop waits for the workload cluster to become ready (default: `60m`). Use minutes format: `60m`, `90m`, `120m` (required by Makefile auto-computation).
+- `CLUSTER_DELETION_TIMEOUT` - How long the in-code polling loop waits for the workload cluster to be deleted (default: `60m`). Use minutes format: `60m`, `90m`, `120m`.
+- `DEPLOYMENT_TIMEOUT` - **Deprecated**: Legacy timeout variable. Falls back to this if `CLUSTER_DEPLOYMENT_TIMEOUT` / `CLUSTER_DELETION_TIMEOUT` are not set.
 - `DEPLOYMENT_STALL_TIMEOUT` - Stall detection timeout (default: `30m`). If the deployment makes no progress for this duration, the test fails early instead of waiting for the full timeout. Set to `0` to disable.
 - `TEST_VERBOSITY` - Test output verbosity (default: `-v` for verbose). Set to empty string for quiet output: `TEST_VERBOSITY= make test`
 
 #### Makefile Timeout Variables
 
-Individual test phase timeouts control Go's `-timeout` flag (process-level hard kill) and can be overridden via Makefile variables:
+Individual test phase timeouts control Go's `-timeout` flag (process-level hard kill). `GO_STEP_DEPLOY_CRS_TIMEOUT` and `GO_STEP_DELETION_TIMEOUT` are **auto-computed** from the user-facing values above + 15 minutes headroom, ensuring the Go process has time to save logs and diagnostics before being killed. Other step timeouts can be overridden via Makefile variables:
 
 | Variable | Default | Phase |
 |----------|---------|-------|
 | `GO_STEP_CLUSTER_TIMEOUT` | `30m` | Management cluster deployment |
 | `GO_STEP_GENERATE_YAMLS_TIMEOUT` | `20m` | YAML generation |
-| `GO_STEP_DEPLOY_CRS_TIMEOUT` | `105m` | CR deployment and monitoring |
+| `GO_STEP_DEPLOY_CRS_TIMEOUT` | auto (`CLUSTER_DEPLOYMENT_TIMEOUT` + 15m) | CR deployment and monitoring |
 | `GO_STEP_VERIFY_TIMEOUT` | `20m` | Workload cluster verification |
-| `GO_STEP_DELETION_TIMEOUT` | `60m` | Workload cluster deletion |
+| `GO_STEP_DELETION_TIMEOUT` | auto (`CLUSTER_DELETION_TIMEOUT` + 15m) | Workload cluster deletion |
 
-Example: `GO_STEP_DEPLOY_CRS_TIMEOUT=90m make _deploy-crs`
+Example: `CLUSTER_DEPLOYMENT_TIMEOUT=90m make _deploy-crs` (sets Go step timeout to 105m automatically)
 
 ## Getting Started
 

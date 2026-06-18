@@ -238,6 +238,147 @@ func TestParseDeploymentStallTimeout_NegativeDuration(t *testing.T) {
 	}
 }
 
+// --- CLUSTER_DEPLOYMENT_TIMEOUT tests ---
+
+func TestParseClusterDeploymentTimeout_Default(t *testing.T) {
+	for _, key := range []string{"CLUSTER_DEPLOYMENT_TIMEOUT", "DEPLOYMENT_TIMEOUT"} {
+		t.Setenv(key, "")
+		_ = os.Unsetenv(key)
+	}
+
+	timeout := parseClusterDeploymentTimeout()
+	if timeout != DefaultClusterDeploymentTimeout {
+		t.Errorf("Expected default timeout %v, got %v", DefaultClusterDeploymentTimeout, timeout)
+	}
+}
+
+func TestParseClusterDeploymentTimeout_ValidDuration(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected time.Duration
+	}{
+		{"30m", 30 * time.Minute},
+		{"1h", 1 * time.Hour},
+		{"90m", 90 * time.Minute},
+		{"2h30m", 2*time.Hour + 30*time.Minute},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.input, func(t *testing.T) {
+			t.Setenv("CLUSTER_DEPLOYMENT_TIMEOUT", tc.input)
+			_ = os.Unsetenv("DEPLOYMENT_TIMEOUT")
+			timeout := parseClusterDeploymentTimeout()
+			if timeout != tc.expected {
+				t.Errorf("For input '%s', expected %v, got %v", tc.input, tc.expected, timeout)
+			}
+		})
+	}
+}
+
+func TestParseClusterDeploymentTimeout_InvalidDuration(t *testing.T) {
+	invalidValues := []string{"invalid", "abc", "45", "1x"}
+	for _, val := range invalidValues {
+		t.Run(val, func(t *testing.T) {
+			t.Setenv("CLUSTER_DEPLOYMENT_TIMEOUT", val)
+			_ = os.Unsetenv("DEPLOYMENT_TIMEOUT")
+			timeout := parseClusterDeploymentTimeout()
+			if timeout != DefaultClusterDeploymentTimeout {
+				t.Errorf("For invalid input '%s', expected default %v, got %v", val, DefaultClusterDeploymentTimeout, timeout)
+			}
+		})
+	}
+}
+
+func TestParseClusterDeploymentTimeout_FallbackToDeploymentTimeout(t *testing.T) {
+	_ = os.Unsetenv("CLUSTER_DEPLOYMENT_TIMEOUT")
+	t.Setenv("DEPLOYMENT_TIMEOUT", "45m")
+
+	timeout := parseClusterDeploymentTimeout()
+	if timeout != 45*time.Minute {
+		t.Errorf("Expected fallback to DEPLOYMENT_TIMEOUT (45m), got %v", timeout)
+	}
+}
+
+func TestParseClusterDeploymentTimeout_PrecedenceOverDeploymentTimeout(t *testing.T) {
+	t.Setenv("CLUSTER_DEPLOYMENT_TIMEOUT", "90m")
+	t.Setenv("DEPLOYMENT_TIMEOUT", "45m")
+
+	timeout := parseClusterDeploymentTimeout()
+	if timeout != 90*time.Minute {
+		t.Errorf("CLUSTER_DEPLOYMENT_TIMEOUT should take precedence, expected 90m, got %v", timeout)
+	}
+}
+
+// --- CLUSTER_DELETION_TIMEOUT tests ---
+
+func TestParseClusterDeletionTimeout_Default(t *testing.T) {
+	for _, key := range []string{"CLUSTER_DELETION_TIMEOUT", "DEPLOYMENT_TIMEOUT"} {
+		t.Setenv(key, "")
+		_ = os.Unsetenv(key)
+	}
+
+	timeout := parseClusterDeletionTimeout()
+	if timeout != DefaultClusterDeletionTimeout {
+		t.Errorf("Expected default timeout %v, got %v", DefaultClusterDeletionTimeout, timeout)
+	}
+}
+
+func TestParseClusterDeletionTimeout_ValidDuration(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected time.Duration
+	}{
+		{"30m", 30 * time.Minute},
+		{"1h", 1 * time.Hour},
+		{"90m", 90 * time.Minute},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.input, func(t *testing.T) {
+			t.Setenv("CLUSTER_DELETION_TIMEOUT", tc.input)
+			_ = os.Unsetenv("DEPLOYMENT_TIMEOUT")
+			timeout := parseClusterDeletionTimeout()
+			if timeout != tc.expected {
+				t.Errorf("For input '%s', expected %v, got %v", tc.input, tc.expected, timeout)
+			}
+		})
+	}
+}
+
+func TestParseClusterDeletionTimeout_InvalidDuration(t *testing.T) {
+	invalidValues := []string{"invalid", "abc", "45", "1x"}
+	for _, val := range invalidValues {
+		t.Run(val, func(t *testing.T) {
+			t.Setenv("CLUSTER_DELETION_TIMEOUT", val)
+			_ = os.Unsetenv("DEPLOYMENT_TIMEOUT")
+			timeout := parseClusterDeletionTimeout()
+			if timeout != DefaultClusterDeletionTimeout {
+				t.Errorf("For invalid input '%s', expected default %v, got %v", val, DefaultClusterDeletionTimeout, timeout)
+			}
+		})
+	}
+}
+
+func TestParseClusterDeletionTimeout_FallbackToDeploymentTimeout(t *testing.T) {
+	_ = os.Unsetenv("CLUSTER_DELETION_TIMEOUT")
+	t.Setenv("DEPLOYMENT_TIMEOUT", "45m")
+
+	timeout := parseClusterDeletionTimeout()
+	if timeout != 45*time.Minute {
+		t.Errorf("Expected fallback to DEPLOYMENT_TIMEOUT (45m), got %v", timeout)
+	}
+}
+
+func TestParseClusterDeletionTimeout_PrecedenceOverDeploymentTimeout(t *testing.T) {
+	t.Setenv("CLUSTER_DELETION_TIMEOUT", "30m")
+	t.Setenv("DEPLOYMENT_TIMEOUT", "45m")
+
+	timeout := parseClusterDeletionTimeout()
+	if timeout != 30*time.Minute {
+		t.Errorf("CLUSTER_DELETION_TIMEOUT should take precedence, expected 30m, got %v", timeout)
+	}
+}
+
 func TestIsKindMode(t *testing.T) {
 	testCases := []struct {
 		name     string

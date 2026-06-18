@@ -939,13 +939,21 @@ func TestCheckDependencies_AzureSubscriptionAccess(t *testing.T) {
 func TestCheckDependencies_TimeoutConfiguration(t *testing.T) {
 	config := NewTestConfig()
 
-	t.Run("DeploymentTimeout", func(t *testing.T) {
-		if err := ValidateDeploymentTimeout(config.DeploymentTimeout); err != nil {
-			// Non-fatal warning - deployment will just timeout if too short
+	t.Run("ClusterDeploymentTimeout", func(t *testing.T) {
+		if err := ValidateClusterDeploymentTimeout(config.ClusterDeploymentTimeout); err != nil {
 			t.Logf("Warning: %v", err)
 		} else {
-			t.Logf("DEPLOYMENT_TIMEOUT '%v' is within acceptable range (%v - %v)",
-				config.DeploymentTimeout, MinDeploymentTimeout, MaxDeploymentTimeout)
+			t.Logf("CLUSTER_DEPLOYMENT_TIMEOUT '%v' is within acceptable range (%v - %v)",
+				config.ClusterDeploymentTimeout, MinDeploymentTimeout, MaxDeploymentTimeout)
+		}
+	})
+
+	t.Run("ClusterDeletionTimeout", func(t *testing.T) {
+		if err := ValidateClusterDeletionTimeout(config.ClusterDeletionTimeout); err != nil {
+			t.Logf("Warning: %v", err)
+		} else {
+			t.Logf("CLUSTER_DELETION_TIMEOUT '%v' is within acceptable range (%v - %v)",
+				config.ClusterDeletionTimeout, MinDeploymentTimeout, MaxDeploymentTimeout)
 		}
 	})
 
