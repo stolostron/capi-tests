@@ -3657,8 +3657,8 @@ func GetDeletionResourceStatus(t *testing.T, kubeContext, namespace, clusterName
 					} else {
 						t.Logf("Warning: Could not determine Azure RG status: %v", err)
 						errMsg := err.Error()
-						if len(errMsg) > 80 {
-							errMsg = errMsg[:80]
+						if len([]rune(errMsg)) > 80 {
+							errMsg = string([]rune(errMsg)[:80])
 						}
 						aroStatus.RGError = errMsg
 					}
