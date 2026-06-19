@@ -141,7 +141,7 @@ func checkManagementClusterHealth(t *testing.T, kubeContext string) error {
 	if netErr != nil {
 		return fmt.Errorf("management cluster unreachable (%s): %s", netErr.ErrorType, netErr.Message)
 	}
-	return fmt.Errorf("management cluster health check failed: %v", err)
+	return fmt.Errorf("management cluster health check failed: %w", err)
 }
 
 // MonitorCluster runs the monitor-cluster-json.sh script and parses its JSON output.
