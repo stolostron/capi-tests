@@ -3509,6 +3509,7 @@ type ARODeletionStatus struct {
 	RGExists         bool
 	RGChecked        bool
 	RGProvisionState string
+	RGError          string // Non-empty when the az CLI check failed (auth, network, etc.)
 }
 
 // DeletionResourceStatus represents the status of resources being deleted.
@@ -3638,17 +3639,32 @@ func GetDeletionResourceStatus(t *testing.T, kubeContext, namespace, clusterName
 					aroStatus.RGExists = true
 					aroStatus.RGChecked = true
 					aroStatus.RGProvisionState = strings.TrimSpace(output)
-				} else if err != nil {
+				} else if err == nil {
+					aroStatus.RGExists = true
+					aroStatus.RGChecked = true
+					aroStatus.RGProvisionState = "exists"
+				} else {
 					errOutput := strings.ToLower(output + " " + err.Error())
 					if strings.Contains(errOutput, "resourcegroupnotfound") ||
 						strings.Contains(errOutput, "could not be found") ||
 						(strings.Contains(errOutput, "resource group") && strings.Contains(errOutput, "not found")) {
 						aroStatus.RGExists = false
 						aroStatus.RGChecked = true
+					} else if strings.Contains(errOutput, "deleting") || strings.Contains(errOutput, "deprovisioning") {
+						aroStatus.RGExists = true
+						aroStatus.RGChecked = true
+						aroStatus.RGProvisionState = "Deleting"
 					} else {
 						t.Logf("Warning: Could not determine Azure RG status: %v", err)
+						errMsg := err.Error()
+						if len([]rune(errMsg)) > 80 {
+							errMsg = string([]rune(errMsg)[:80])
+						}
+						aroStatus.RGError = errMsg
 					}
 				}
+			} else {
+				aroStatus.RGError = "az CLI not available"
 			}
 
 			status.AROProviderSpecific = aroStatus
@@ -3731,7 +3747,11 @@ func FormatDeletionProgress(status DeletionResourceStatus) string {
 		aroStatus := status.AROProviderSpecific
 		if aroStatus.ResourceGroup != "" {
 			if !aroStatus.RGChecked {
-				sb.WriteString(formatRow("❓", "Azure RG", fmt.Sprintf("%s (unknown)", aroStatus.ResourceGroup)))
+				if aroStatus.RGError != "" {
+					sb.WriteString(formatRow("⚠️", "Azure RG", fmt.Sprintf("%s (%s)", aroStatus.ResourceGroup, aroStatus.RGError)))
+				} else {
+					sb.WriteString(formatRow("❓", "Azure RG", fmt.Sprintf("%s (unchecked)", aroStatus.ResourceGroup)))
+				}
 			} else if aroStatus.RGExists {
 				stateInfo := aroStatus.RGProvisionState
 				if stateInfo == "" {
@@ -3766,7 +3786,11 @@ func ReportDeletionProgress(t *testing.T, iteration int, elapsed, remaining time
 	azureRGStatus := "n/a"
 	if status.AROProviderSpecific != nil {
 		if !status.AROProviderSpecific.RGChecked {
-			azureRGStatus = "unknown"
+			if status.AROProviderSpecific.RGError != "" {
+				azureRGStatus = "error: " + status.AROProviderSpecific.RGError
+			} else {
+				azureRGStatus = "unchecked"
+			}
 		} else if status.AROProviderSpecific.RGExists {
 			azureRGStatus = "exists"
 		} else {
