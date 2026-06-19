@@ -2367,7 +2367,7 @@ func DetectAzureError(output string) *AzureErrorInfo {
 	// Load balancer errors
 	if strings.Contains(lowerOutput, "loadbalancer") && strings.Contains(lowerOutput, "fail") ||
 		strings.Contains(lowerOutput, "load balancer") && strings.Contains(lowerOutput, "fail") ||
-		strings.Contains(lowerOutput, "backendaddresspool") ||
+		strings.Contains(lowerOutput, "backendaddresspool") && strings.Contains(lowerOutput, "fail") ||
 		strings.Contains(lowerOutput, "frontendipconfig") && strings.Contains(lowerOutput, "fail") {
 		return &AzureErrorInfo{
 			ErrorType: "load_balancer_error",
