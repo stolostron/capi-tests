@@ -2100,6 +2100,12 @@ func ApplyWithRetryInNamespace(t *testing.T, kubeContext, namespace, yamlPath st
 		if !isRetryableKubectlError(output, err) {
 			PrintToTTY("❌ Non-retryable error applying %s: %v\n", yamlPath, err)
 			t.Logf("Non-retryable error applying %s: %v\nOutput: %s", yamlPath, err, output)
+
+			if netErr := DetectNetworkError(output + " " + err.Error()); netErr != nil {
+				PrintToTTY("%s", FormatNetworkError(netErr))
+				t.Log(FormatNetworkError(netErr))
+			}
+
 			return fmt.Errorf("failed to apply %s: %w\nOutput: %s", yamlPath, err, output)
 		}
 
@@ -2112,6 +2118,12 @@ func ApplyWithRetryInNamespace(t *testing.T, kubeContext, namespace, yamlPath st
 			}
 
 			PrintToTTY("[%d/%d] ⚠️  Retryable error: %v\n", attempt, maxRetries, err)
+
+			if netErr := DetectNetworkError(output + " " + err.Error()); netErr != nil {
+				PrintToTTY("[%d/%d] 🔍 %s: %s\n", attempt, maxRetries, netErr.ErrorType, netErr.Message)
+				t.Logf("Network error detected (%s): %s", netErr.ErrorType, netErr.Message)
+			}
+
 			PrintToTTY("[%d/%d] ⏳ Waiting %v before retry...\n", attempt, maxRetries, delay.Round(time.Second))
 			t.Logf("Apply failed (attempt %d/%d): %v, retrying in %v", attempt, maxRetries, err, delay.Round(time.Second))
 
@@ -2119,6 +2131,12 @@ func ApplyWithRetryInNamespace(t *testing.T, kubeContext, namespace, yamlPath st
 		} else {
 			PrintToTTY("❌ Failed to apply %s after %d attempts: %v\n", yamlPath, maxRetries, err)
 			t.Logf("Failed to apply %s after %d attempts: %v\nOutput: %s", yamlPath, maxRetries, err, output)
+
+			if netErr := DetectNetworkError(output + " " + err.Error()); netErr != nil {
+				PrintToTTY("%s", FormatNetworkError(netErr))
+				t.Log(FormatNetworkError(netErr))
+			}
+
 			return fmt.Errorf("failed to apply %s after %d attempts: %w\nOutput: %s", yamlPath, maxRetries, err, output)
 		}
 	}
@@ -2311,6 +2329,95 @@ func DetectAzureError(output string) *AzureErrorInfo {
 		}
 	}
 
+	// DNS zone errors
+	if strings.Contains(lowerOutput, "dnszonealreadyexists") ||
+		strings.Contains(lowerOutput, "dns zone") && strings.Contains(lowerOutput, "conflict") ||
+		strings.Contains(lowerOutput, "dns zone") && strings.Contains(lowerOutput, "not found") ||
+		strings.Contains(lowerOutput, "privatednszone") && strings.Contains(lowerOutput, "fail") {
+		return &AzureErrorInfo{
+			ErrorType: "dns_zone_error",
+			Message:   "Azure DNS zone operation failed",
+			Remediation: []string{
+				"List existing DNS zones: az network dns zone list -o table",
+				"List private DNS zones: az network private-dns zone list -o table",
+				"Check if a zone with the same name already exists in another resource group",
+				"For private DNS zones, verify the VNet link is configured correctly",
+				"Delete conflicting DNS zone if it's from a previous test run",
+			},
+		}
+	}
+
+	// Network Security Group errors
+	if strings.Contains(lowerOutput, "networksecuritygroup") && strings.Contains(lowerOutput, "fail") ||
+		strings.Contains(lowerOutput, "nsg") && strings.Contains(lowerOutput, "rule") && strings.Contains(lowerOutput, "conflict") ||
+		strings.Contains(lowerOutput, "securityrule") && strings.Contains(lowerOutput, "fail") {
+		return &AzureErrorInfo{
+			ErrorType: "network_security_group_error",
+			Message:   "Azure Network Security Group operation failed",
+			Remediation: []string{
+				"List NSGs in the resource group: az network nsg list -g <resource-group> -o table",
+				"Check for conflicting security rules: az network nsg rule list --nsg-name <nsg> -g <rg> -o table",
+				"Verify NSG rule priorities don't overlap with existing rules",
+				"Check if the NSG is associated with the correct subnet",
+				"For ARO, ensure the required NSG rules for API server and worker nodes are present",
+			},
+		}
+	}
+
+	// Load balancer errors
+	if strings.Contains(lowerOutput, "loadbalancer") && strings.Contains(lowerOutput, "fail") ||
+		strings.Contains(lowerOutput, "load balancer") && strings.Contains(lowerOutput, "fail") ||
+		strings.Contains(lowerOutput, "backendaddresspool") ||
+		strings.Contains(lowerOutput, "frontendipconfig") && strings.Contains(lowerOutput, "fail") {
+		return &AzureErrorInfo{
+			ErrorType: "load_balancer_error",
+			Message:   "Azure Load Balancer provisioning failed",
+			Remediation: []string{
+				"Check load balancer status: az network lb list -g <resource-group> -o table",
+				"Verify public IP availability: az network public-ip list -g <resource-group> -o table",
+				"Azure Standard LB supports up to 300 rules — check current count",
+				"Ensure the LB SKU matches the public IP SKU (both must be Standard or Basic)",
+				"Check if the backend pool has healthy instances: az network lb address-pool list --lb-name <lb> -g <rg>",
+			},
+		}
+	}
+
+	// Virtual Network errors
+	if strings.Contains(lowerOutput, "virtualnetwork") && strings.Contains(lowerOutput, "fail") ||
+		strings.Contains(lowerOutput, "vnet") && strings.Contains(lowerOutput, "conflict") ||
+		strings.Contains(lowerOutput, "address") && strings.Contains(lowerOutput, "overlap") ||
+		strings.Contains(lowerOutput, "address space") && strings.Contains(lowerOutput, "already") {
+		return &AzureErrorInfo{
+			ErrorType: "vnet_error",
+			Message:   "Azure Virtual Network operation failed",
+			Remediation: []string{
+				"List VNets in the resource group: az network vnet list -g <resource-group> -o table",
+				"Check for address space overlap with existing VNets or peered networks",
+				"Verify the CIDR range is valid and not already in use",
+				"For VNet peering issues, check peering status: az network vnet peering list --vnet-name <vnet> -g <rg>",
+				"Ensure the VNet is in the same region as the cluster",
+			},
+		}
+	}
+
+	// Subnet errors
+	if strings.Contains(lowerOutput, "subnetisinuse") ||
+		strings.Contains(lowerOutput, "subnet") && strings.Contains(lowerOutput, "already") && strings.Contains(lowerOutput, "associated") ||
+		strings.Contains(lowerOutput, "subnet") && strings.Contains(lowerOutput, "not found") ||
+		strings.Contains(lowerOutput, "subnet") && strings.Contains(lowerOutput, "delegat") && strings.Contains(lowerOutput, "fail") {
+		return &AzureErrorInfo{
+			ErrorType: "subnet_error",
+			Message:   "Azure Subnet operation failed",
+			Remediation: []string{
+				"List subnets in the VNet: az network vnet subnet list --vnet-name <vnet> -g <resource-group> -o table",
+				"Check if the subnet is already associated with another resource (e.g., NAT gateway, service endpoint)",
+				"Verify the subnet has sufficient available IP addresses for the cluster",
+				"For delegation conflicts, check existing delegations: az network vnet subnet show --name <subnet> --vnet-name <vnet> -g <rg>",
+				"Delete the subnet from a previous failed deployment if applicable",
+			},
+		}
+	}
+
 	return nil
 }
 
@@ -2324,6 +2431,153 @@ func FormatAzureError(info *AzureErrorInfo) string {
 	var result strings.Builder
 	fmt.Fprintf(&result, "\n=== Azure Error Detected: %s ===\n", info.Message)
 	result.WriteString("\nRemediation steps:\n")
+	for _, step := range info.Remediation {
+		fmt.Fprintf(&result, "  %s\n", step)
+	}
+	result.WriteString("\n")
+
+	return result.String()
+}
+
+// NetworkErrorInfo contains information about a detected network error and remediation steps.
+type NetworkErrorInfo struct {
+	ErrorType   string   // Short error type identifier (e.g., "dns_resolution", "connection_refused")
+	Message     string   // Human-readable error description
+	Remediation []string // Steps to diagnose or fix the error
+}
+
+// DetectNetworkError analyzes command output for known network error patterns
+// and returns detailed error information with remediation steps.
+// Returns nil if no known network error pattern is detected.
+//
+// This function complements isRetryableKubectlError by providing structured
+// diagnostics: while isRetryableKubectlError decides whether to retry,
+// DetectNetworkError explains what went wrong and how to fix it.
+func DetectNetworkError(output string) *NetworkErrorInfo {
+	lowerOutput := strings.ToLower(output)
+
+	// DNS resolution failures
+	if strings.Contains(lowerOutput, "no such host") ||
+		strings.Contains(lowerOutput, "temporary failure in name resolution") ||
+		strings.Contains(lowerOutput, "could not resolve host") ||
+		strings.Contains(lowerOutput, "dns lookup failed") ||
+		strings.Contains(lowerOutput, "server misbehaving") {
+		return &NetworkErrorInfo{
+			ErrorType: "dns_resolution",
+			Message:   "DNS resolution failed — unable to resolve the target hostname",
+			Remediation: []string{
+				"Verify the cluster endpoint or API server hostname is correct",
+				"Check DNS configuration: cat /etc/resolv.conf",
+				"Test DNS resolution: nslookup <hostname> or dig <hostname>",
+				"If using a private cluster, ensure DNS forwarding or VPN is active",
+				"For Kind clusters, verify Docker networking: docker network ls",
+			},
+		}
+	}
+
+	// Connection refused (target reachable but not listening)
+	if strings.Contains(lowerOutput, "connection refused") ||
+		strings.Contains(lowerOutput, "was refused") {
+		return &NetworkErrorInfo{
+			ErrorType: "connection_refused",
+			Message:   "Connection refused — the target is reachable but not accepting connections",
+			Remediation: []string{
+				"Verify the API server or target service is running",
+				"Check the port number in the kubeconfig or endpoint URL",
+				"For Kind clusters: kind get clusters (verify cluster exists)",
+				"Check firewall rules: iptables -L or ufw status",
+				"Verify the service is listening: ss -tlnp | grep <port>",
+			},
+		}
+	}
+
+	// Connection timeout (target unreachable)
+	if strings.Contains(lowerOutput, "i/o timeout") ||
+		strings.Contains(lowerOutput, "connection timed out") ||
+		strings.Contains(lowerOutput, "context deadline exceeded") ||
+		(strings.Contains(lowerOutput, "dial tcp") && strings.Contains(lowerOutput, "timeout")) {
+		return &NetworkErrorInfo{
+			ErrorType: "connection_timeout",
+			Message:   "Connection timed out — the target is not responding within the deadline",
+			Remediation: []string{
+				"Verify network connectivity to the target: ping <host> or curl -v <endpoint>",
+				"Check firewall rules that may be blocking traffic",
+				"For Azure clusters, verify NSG rules allow inbound traffic on the API server port",
+				"If behind a proxy, verify proxy configuration: echo $HTTPS_PROXY",
+				"Increase --request-timeout if the server is under heavy load",
+			},
+		}
+	}
+
+	// TLS/certificate errors
+	if strings.Contains(lowerOutput, "tls handshake timeout") ||
+		strings.Contains(lowerOutput, "x509") ||
+		strings.Contains(lowerOutput, "certificate") ||
+		(strings.Contains(lowerOutput, "tls:") && !strings.Contains(lowerOutput, "details:")) {
+		return &NetworkErrorInfo{
+			ErrorType: "tls_error",
+			Message:   "TLS/certificate error — secure connection could not be established",
+			Remediation: []string{
+				"Verify the certificate is valid: openssl s_client -connect <host>:<port>",
+				"Check if the CA certificate is trusted by the client",
+				"For self-signed certificates, ensure the kubeconfig has the correct CA data",
+				"Verify system clock is accurate (expired certificates may indicate clock skew)",
+				"If using a proxy, check if it's intercepting TLS traffic",
+			},
+		}
+	}
+
+	// Connection reset/dropped
+	if strings.Contains(lowerOutput, "connection reset") ||
+		strings.Contains(lowerOutput, "broken pipe") ||
+		strings.Contains(lowerOutput, "connection lost") ||
+		strings.Contains(lowerOutput, "client connection lost") ||
+		(strings.Contains(lowerOutput, "eof") && strings.Contains(lowerOutput, "http")) {
+		return &NetworkErrorInfo{
+			ErrorType: "connection_reset",
+			Message:   "Connection was reset or dropped unexpectedly",
+			Remediation: []string{
+				"This is often transient — retry usually resolves it",
+				"Check if the API server is restarting: kubectl get pods -n kube-system",
+				"Look for network instability: dmesg | grep -i 'link'",
+				"If behind a proxy or load balancer, check its connection timeout settings",
+				"For HTTP/2 errors, the API server may have reset the connection under load",
+			},
+		}
+	}
+
+	// API server errors (server-side issues)
+	if strings.Contains(lowerOutput, "server unavailable") ||
+		strings.Contains(lowerOutput, "service unavailable") ||
+		strings.Contains(lowerOutput, "gateway timeout") ||
+		strings.Contains(lowerOutput, "too many requests") ||
+		strings.Contains(lowerOutput, "internal server error") {
+		return &NetworkErrorInfo{
+			ErrorType: "api_server_error",
+			Message:   "API server returned an error — the server may be overloaded or restarting",
+			Remediation: []string{
+				"The API server may be temporarily overloaded — wait and retry",
+				"Check API server health: kubectl get --raw /healthz",
+				"For 'too many requests': reduce concurrent operations or increase API priority",
+				"Check API server logs for the root cause",
+				"For Kind clusters, verify the host has sufficient resources (CPU, memory)",
+			},
+		}
+	}
+
+	return nil
+}
+
+// FormatNetworkError formats a NetworkErrorInfo for display.
+// Returns a formatted string with the error message and remediation steps.
+func FormatNetworkError(info *NetworkErrorInfo) string {
+	if info == nil {
+		return ""
+	}
+
+	var result strings.Builder
+	fmt.Fprintf(&result, "\n=== Network Error Detected: %s ===\n", info.Message)
+	result.WriteString("\nDiagnostic steps:\n")
 	for _, step := range info.Remediation {
 		fmt.Fprintf(&result, "  %s\n", step)
 	}
