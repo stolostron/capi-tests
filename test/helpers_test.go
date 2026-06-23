@@ -2697,6 +2697,13 @@ Insufficient privileges to complete the operation.`,
 			expectNil:      false,
 			checkRemediate: true,
 		},
+		{
+			name:           "dns zone not found in resource group",
+			output:         `DNS zone 'example.com' not found in resource group 'mygroup'`,
+			expectedType:   "dns_zone_error",
+			expectNil:      false,
+			checkRemediate: true,
+		},
 
 		// Network Security Group errors
 		{
@@ -3047,6 +3054,16 @@ func TestDetectNetworkError(t *testing.T) {
 		{
 			name:      "permission denied is not network error",
 			output:    `Error from server (Forbidden): pods is forbidden`,
+			expectNil: true,
+		},
+		{
+			name:      "certificate-authority-data is not TLS error",
+			output:    `certificate-authority-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0t`,
+			expectNil: true,
+		},
+		{
+			name:      "certificate signing request approved is not TLS error",
+			output:    `certificatesigningrequest.certificates.k8s.io/csr-abc123 approved`,
 			expectNil: true,
 		},
 	}

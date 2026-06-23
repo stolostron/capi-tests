@@ -144,6 +144,23 @@ func checkManagementClusterHealth(t *testing.T, kubeContext string) error {
 	return fmt.Errorf("management cluster health check failed: %w", err)
 }
 
+// handleMonitorFailure logs the monitoring failure, checks management cluster health,
+// and returns a non-nil error if the caller should abort (after maxConsecutiveMonitorFailures
+// consecutive failures where the management cluster is also unreachable).
+func handleMonitorFailure(t *testing.T, kubeContext string, iteration int, consecutiveFailures *int, monitorErr error) error {
+	t.Helper()
+	*consecutiveFailures++
+	t.Logf("[%d] Warning: failed to get cluster status: %v", iteration, monitorErr)
+
+	if healthErr := checkManagementClusterHealth(t, kubeContext); healthErr != nil {
+		t.Logf("[%d] ⚠️  %v", iteration, healthErr)
+		if *consecutiveFailures >= maxConsecutiveMonitorFailures {
+			return fmt.Errorf("aborting after %d consecutive monitoring failures: %w", *consecutiveFailures, healthErr)
+		}
+	}
+	return nil
+}
+
 // MonitorCluster runs the monitor-cluster-json.sh script and parses its JSON output.
 // This provides a provider-agnostic way to monitor any CAPI cluster (ARO, ROSA, etc.)
 //
@@ -291,16 +308,9 @@ func MonitorClusterUntilReady(t *testing.T, kubeContext, namespace, clusterName 
 
 		data, err := MonitorCluster(t, kubeContext, namespace, clusterName)
 		if err != nil {
-			consecutiveFailures++
-			t.Logf("[%d] Warning: failed to get cluster status: %v", iteration, err)
-
-			if healthErr := checkManagementClusterHealth(t, kubeContext); healthErr != nil {
-				t.Logf("[%d] ⚠️  %v", iteration, healthErr)
-				if consecutiveFailures >= maxConsecutiveMonitorFailures {
-					return nil, fmt.Errorf("aborting after %d consecutive monitoring failures: %w", consecutiveFailures, healthErr)
-				}
+			if abortErr := handleMonitorFailure(t, kubeContext, iteration, &consecutiveFailures, err); abortErr != nil {
+				return nil, abortErr
 			}
-
 			time.Sleep(pollInterval)
 			continue
 		}
@@ -366,16 +376,9 @@ func MonitorControlPlaneUntilReady(t *testing.T, kubeContext, namespace, cluster
 
 		data, err := MonitorCluster(t, kubeContext, namespace, clusterName)
 		if err != nil {
-			consecutiveFailures++
-			t.Logf("[%d] Warning: failed to get cluster status: %v", iteration, err)
-
-			if healthErr := checkManagementClusterHealth(t, kubeContext); healthErr != nil {
-				t.Logf("[%d] ⚠️  %v", iteration, healthErr)
-				if consecutiveFailures >= maxConsecutiveMonitorFailures {
-					return nil, fmt.Errorf("aborting after %d consecutive monitoring failures: %w", consecutiveFailures, healthErr)
-				}
+			if abortErr := handleMonitorFailure(t, kubeContext, iteration, &consecutiveFailures, err); abortErr != nil {
+				return nil, abortErr
 			}
-
 			time.Sleep(pollInterval)
 			continue
 		}
@@ -423,16 +426,9 @@ func MonitorNodesUntilAvailable(t *testing.T, kubeContext, namespace, clusterNam
 
 		data, err := MonitorCluster(t, kubeContext, namespace, clusterName)
 		if err != nil {
-			consecutiveFailures++
-			t.Logf("[%d] Warning: failed to get cluster status: %v", iteration, err)
-
-			if healthErr := checkManagementClusterHealth(t, kubeContext); healthErr != nil {
-				t.Logf("[%d] ⚠️  %v", iteration, healthErr)
-				if consecutiveFailures >= maxConsecutiveMonitorFailures {
-					return nil, fmt.Errorf("aborting after %d consecutive monitoring failures: %w", consecutiveFailures, healthErr)
-				}
+			if abortErr := handleMonitorFailure(t, kubeContext, iteration, &consecutiveFailures, err); abortErr != nil {
+				return nil, abortErr
 			}
-
 			time.Sleep(pollInterval)
 			continue
 		}
@@ -491,15 +487,9 @@ func MonitorClusterUntilDeleted(t *testing.T, kubeContext, namespace, clusterNam
 				return nil
 			}
 			// Real error - not just "not found"
-			consecutiveFailures++
 			PrintToTTY("[%d] ⚠️  Error checking cluster status: %v\n", iteration, err)
-			t.Logf("[%d] Warning: Error checking cluster status (continuing...): %v", iteration, err)
-
-			if healthErr := checkManagementClusterHealth(t, kubeContext); healthErr != nil {
-				t.Logf("[%d] ⚠️  %v", iteration, healthErr)
-				if consecutiveFailures >= maxConsecutiveMonitorFailures {
-					return fmt.Errorf("aborting after %d consecutive monitoring failures: %w", consecutiveFailures, healthErr)
-				}
+			if abortErr := handleMonitorFailure(t, kubeContext, iteration, &consecutiveFailures, err); abortErr != nil {
+				return abortErr
 			}
 		} else {
 			consecutiveFailures = 0

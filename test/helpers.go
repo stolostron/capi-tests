@@ -2254,9 +2254,9 @@ func DetectAzureError(output string) *AzureErrorInfo {
 		}
 	}
 
-	// Resource group not found
+	// Resource group not found (exclude DNS zone messages that also mention resource group)
 	if strings.Contains(lowerOutput, "resourcegroupnotfound") ||
-		strings.Contains(lowerOutput, "resource group") && strings.Contains(lowerOutput, "not found") {
+		(strings.Contains(lowerOutput, "resource group") && strings.Contains(lowerOutput, "not found") && !strings.Contains(lowerOutput, "dns zone")) {
 		return &AzureErrorInfo{
 			ErrorType: "resource_group_not_found",
 			Message:   "The specified resource group was not found",
@@ -2385,7 +2385,8 @@ func DetectAzureError(output string) *AzureErrorInfo {
 	// Virtual Network errors
 	if strings.Contains(lowerOutput, "virtualnetwork") && strings.Contains(lowerOutput, "fail") ||
 		strings.Contains(lowerOutput, "vnet") && strings.Contains(lowerOutput, "conflict") ||
-		strings.Contains(lowerOutput, "address") && strings.Contains(lowerOutput, "overlap") ||
+		strings.Contains(lowerOutput, "address space") && strings.Contains(lowerOutput, "overlap") ||
+		strings.Contains(lowerOutput, "address range") && strings.Contains(lowerOutput, "overlap") ||
 		strings.Contains(lowerOutput, "address space") && strings.Contains(lowerOutput, "already") {
 		return &AzureErrorInfo{
 			ErrorType: "vnet_error",
@@ -2512,7 +2513,7 @@ func DetectNetworkError(output string) *NetworkErrorInfo {
 	// TLS/certificate errors
 	if strings.Contains(lowerOutput, "tls handshake timeout") ||
 		strings.Contains(lowerOutput, "x509") ||
-		strings.Contains(lowerOutput, "certificate") ||
+		(strings.Contains(lowerOutput, "certificate") && (strings.Contains(lowerOutput, "expired") || strings.Contains(lowerOutput, "unknown authority") || strings.Contains(lowerOutput, "not valid") || strings.Contains(lowerOutput, "error") || strings.Contains(lowerOutput, "failed"))) ||
 		(strings.Contains(lowerOutput, "tls:") && !strings.Contains(lowerOutput, "details:")) {
 		return &NetworkErrorInfo{
 			ErrorType: "tls_error",
