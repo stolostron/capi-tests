@@ -2255,8 +2255,9 @@ func DetectAzureError(output string) *AzureErrorInfo {
 	}
 
 	// Resource group not found (exclude DNS zone messages that also mention resource group)
-	if strings.Contains(lowerOutput, "resourcegroupnotfound") ||
-		(strings.Contains(lowerOutput, "resource group") && strings.Contains(lowerOutput, "not found") && !strings.Contains(lowerOutput, "dns zone")) {
+	if (strings.Contains(lowerOutput, "resourcegroupnotfound") ||
+		(strings.Contains(lowerOutput, "resource group") && strings.Contains(lowerOutput, "not found"))) &&
+		!strings.Contains(lowerOutput, "dns zone") {
 		return &AzureErrorInfo{
 			ErrorType: "resource_group_not_found",
 			Message:   "The specified resource group was not found",
