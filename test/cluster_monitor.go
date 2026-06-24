@@ -149,15 +149,17 @@ func checkManagementClusterHealth(t *testing.T, kubeContext string) error {
 // consecutive failures where the management cluster is also unreachable).
 func handleMonitorFailure(t *testing.T, kubeContext string, iteration int, consecutiveFailures *int, monitorErr error) error {
 	t.Helper()
-	*consecutiveFailures++
 	t.Logf("[%d] Warning: failed to get cluster status: %v", iteration, monitorErr)
 
 	if healthErr := checkManagementClusterHealth(t, kubeContext); healthErr != nil {
+		*consecutiveFailures++
 		t.Logf("[%d] ⚠️  %v", iteration, healthErr)
 		if *consecutiveFailures >= maxConsecutiveMonitorFailures {
 			return fmt.Errorf("aborting after %d consecutive monitoring failures: %w", *consecutiveFailures, healthErr)
 		}
+		return nil
 	}
+	*consecutiveFailures = 0
 	return nil
 }
 
