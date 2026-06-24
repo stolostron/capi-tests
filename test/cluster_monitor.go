@@ -119,6 +119,50 @@ type ConditionsSummary struct {
 	Total int `json:"total"`
 }
 
+// maxConsecutiveMonitorFailures is the number of consecutive monitoring script failures
+// (where the management cluster is also unreachable) before aborting with a structured error.
+const maxConsecutiveMonitorFailures = 3
+
+// checkManagementClusterHealth runs a lightweight kubectl command against the management cluster
+// to determine if the cluster API server is reachable. Returns nil if healthy, or a descriptive
+// error with remediation guidance from DetectNetworkError if unreachable.
+func checkManagementClusterHealth(t *testing.T, kubeContext string) error {
+	t.Helper()
+
+	// #nosec G204 -- kubeContext is validated upstream as RFC 1123 compliant
+	cmd := exec.Command("kubectl", "--context", kubeContext, "get", "ns", "--request-timeout=5s")
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+
+	combined := string(output) + " " + err.Error()
+	netErr := DetectNetworkError(combined)
+	if netErr != nil {
+		return fmt.Errorf("management cluster unreachable (%s): %s", netErr.ErrorType, netErr.Message)
+	}
+	return fmt.Errorf("management cluster health check failed: %w", err)
+}
+
+// handleMonitorFailure logs the monitoring failure, checks management cluster health,
+// and returns a non-nil error if the caller should abort (after maxConsecutiveMonitorFailures
+// consecutive failures where the management cluster is also unreachable).
+func handleMonitorFailure(t *testing.T, kubeContext string, iteration int, consecutiveFailures *int, monitorErr error) error {
+	t.Helper()
+	t.Logf("[%d] Warning: failed to get cluster status: %v", iteration, monitorErr)
+
+	if healthErr := checkManagementClusterHealth(t, kubeContext); healthErr != nil {
+		*consecutiveFailures++
+		t.Logf("[%d] ⚠️  %v", iteration, healthErr)
+		if *consecutiveFailures >= maxConsecutiveMonitorFailures {
+			return fmt.Errorf("aborting after %d consecutive monitoring failures: %w", *consecutiveFailures, healthErr)
+		}
+		return nil
+	}
+	*consecutiveFailures = 0
+	return nil
+}
+
 // MonitorCluster runs the monitor-cluster-json.sh script and parses its JSON output.
 // This provides a provider-agnostic way to monitor any CAPI cluster (ARO, ROSA, etc.)
 //
@@ -253,6 +297,7 @@ func MonitorClusterUntilReady(t *testing.T, kubeContext, namespace, clusterName 
 	pollInterval := 30 * time.Second
 	startTime := time.Now()
 	iteration := 0
+	consecutiveFailures := 0
 
 	for {
 		elapsed := time.Since(startTime)
@@ -265,10 +310,13 @@ func MonitorClusterUntilReady(t *testing.T, kubeContext, namespace, clusterName 
 
 		data, err := MonitorCluster(t, kubeContext, namespace, clusterName)
 		if err != nil {
-			t.Logf("[%d] Warning: failed to get cluster status: %v", iteration, err)
+			if abortErr := handleMonitorFailure(t, kubeContext, iteration, &consecutiveFailures, err); abortErr != nil {
+				return nil, abortErr
+			}
 			time.Sleep(pollInterval)
 			continue
 		}
+		consecutiveFailures = 0
 
 		t.Logf("[%d] %s", iteration, data.FormatSummary())
 
@@ -317,6 +365,7 @@ func MonitorControlPlaneUntilReady(t *testing.T, kubeContext, namespace, cluster
 	pollInterval := 30 * time.Second
 	startTime := time.Now()
 	iteration := 0
+	consecutiveFailures := 0
 
 	for {
 		elapsed := time.Since(startTime)
@@ -329,10 +378,13 @@ func MonitorControlPlaneUntilReady(t *testing.T, kubeContext, namespace, cluster
 
 		data, err := MonitorCluster(t, kubeContext, namespace, clusterName)
 		if err != nil {
-			t.Logf("[%d] Warning: failed to get cluster status: %v", iteration, err)
+			if abortErr := handleMonitorFailure(t, kubeContext, iteration, &consecutiveFailures, err); abortErr != nil {
+				return nil, abortErr
+			}
 			time.Sleep(pollInterval)
 			continue
 		}
+		consecutiveFailures = 0
 
 		t.Logf("[%d] %s", iteration, data.FormatSummary())
 
@@ -363,6 +415,7 @@ func MonitorNodesUntilAvailable(t *testing.T, kubeContext, namespace, clusterNam
 	pollInterval := 30 * time.Second
 	startTime := time.Now()
 	iteration := 0
+	consecutiveFailures := 0
 
 	for {
 		elapsed := time.Since(startTime)
@@ -375,10 +428,13 @@ func MonitorNodesUntilAvailable(t *testing.T, kubeContext, namespace, clusterNam
 
 		data, err := MonitorCluster(t, kubeContext, namespace, clusterName)
 		if err != nil {
-			t.Logf("[%d] Warning: failed to get cluster status: %v", iteration, err)
+			if abortErr := handleMonitorFailure(t, kubeContext, iteration, &consecutiveFailures, err); abortErr != nil {
+				return nil, abortErr
+			}
 			time.Sleep(pollInterval)
 			continue
 		}
+		consecutiveFailures = 0
 
 		t.Logf("[%d] %s", iteration, data.FormatSummary())
 
@@ -404,6 +460,7 @@ func MonitorClusterUntilDeleted(t *testing.T, kubeContext, namespace, clusterNam
 	pollInterval := 30 * time.Second
 	startTime := time.Now()
 	iteration := 0
+	consecutiveFailures := 0
 
 	for {
 		elapsed := time.Since(startTime)
@@ -433,8 +490,11 @@ func MonitorClusterUntilDeleted(t *testing.T, kubeContext, namespace, clusterNam
 			}
 			// Real error - not just "not found"
 			PrintToTTY("[%d] ⚠️  Error checking cluster status: %v\n", iteration, err)
-			t.Logf("[%d] Warning: Error checking cluster status (continuing...): %v", iteration, err)
-			// Continue waiting - the error might be transient
+			if abortErr := handleMonitorFailure(t, kubeContext, iteration, &consecutiveFailures, err); abortErr != nil {
+				return abortErr
+			}
+		} else {
+			consecutiveFailures = 0
 		}
 
 		// Cluster still exists

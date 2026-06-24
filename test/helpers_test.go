@@ -2675,6 +2675,115 @@ Insufficient privileges to complete the operation.`,
 			expectedType: "",
 			expectNil:    true,
 		},
+		// DNS zone errors
+		{
+			name:           "dns zone already exists",
+			output:         `DnsZoneAlreadyExists: DNS zone 'cluster.example.com' already exists in resource group 'other-rg'`,
+			expectedType:   "dns_zone_error",
+			expectNil:      false,
+			checkRemediate: true,
+		},
+		{
+			name:           "dns zone conflict",
+			output:         `Error: DNS zone creation failed due to conflict with existing zone`,
+			expectedType:   "dns_zone_error",
+			expectNil:      false,
+			checkRemediate: true,
+		},
+		{
+			name:           "private dns zone failure",
+			output:         `PrivateDnsZone provisioning failed: unable to create zone`,
+			expectedType:   "dns_zone_error",
+			expectNil:      false,
+			checkRemediate: true,
+		},
+		{
+			name:           "dns zone not found in resource group",
+			output:         `DNS zone 'example.com' not found in resource group 'mygroup'`,
+			expectedType:   "dns_zone_error",
+			expectNil:      false,
+			checkRemediate: true,
+		},
+
+		// Network Security Group errors
+		{
+			name:           "NSG failure",
+			output:         `NetworkSecurityGroup provisioning failed: conflicting rules detected`,
+			expectedType:   "network_security_group_error",
+			expectNil:      false,
+			checkRemediate: true,
+		},
+		{
+			name:           "security rule failure",
+			output:         `SecurityRule creation failed: priority conflict with existing rule`,
+			expectedType:   "network_security_group_error",
+			expectNil:      false,
+			checkRemediate: true,
+		},
+
+		// Load balancer errors
+		{
+			name:           "load balancer failure",
+			output:         `LoadBalancer provisioning failed: unable to allocate frontend IP`,
+			expectedType:   "load_balancer_error",
+			expectNil:      false,
+			checkRemediate: true,
+		},
+		{
+			name:           "load balancer with spaces",
+			output:         `Error: load balancer creation failed due to IP exhaustion`,
+			expectedType:   "load_balancer_error",
+			expectNil:      false,
+			checkRemediate: true,
+		},
+		{
+			name:           "backend address pool error",
+			output:         `BackendAddressPool update failed: pool already in use`,
+			expectedType:   "load_balancer_error",
+			expectNil:      false,
+			checkRemediate: true,
+		},
+
+		// Virtual network errors
+		{
+			name:           "vnet failure",
+			output:         `VirtualNetwork provisioning failed: address space conflicts`,
+			expectedType:   "vnet_error",
+			expectNil:      false,
+			checkRemediate: true,
+		},
+		{
+			name:           "address space overlap",
+			output:         `Error: The address space 10.0.0.0/16 has an overlap with another peered VNet`,
+			expectedType:   "vnet_error",
+			expectNil:      false,
+			checkRemediate: true,
+		},
+
+		// Subnet errors
+		{
+			name:           "subnet in use",
+			output:         `SubnetIsInUse: Subnet 'worker-subnet' is in use by another resource`,
+			expectedType:   "subnet_error",
+			expectNil:      false,
+			checkRemediate: true,
+		},
+		{
+			name:           "subnet already associated",
+			output:         `Error: subnet 'api-subnet' is already associated with NAT gateway`,
+			expectedType:   "subnet_error",
+			expectNil:      false,
+			checkRemediate: true,
+		},
+		{
+			name:           "subnet delegation failure",
+			output:         `Error: subnet delegation for Microsoft.Network failed`,
+			expectedType:   "subnet_error",
+			expectNil:      false,
+			checkRemediate: true,
+		},
+
+		// Non-matches (should return nil)
 		{
 			name:         "no azure error - generic error",
 			output:       "Some random error occurred",
@@ -2770,6 +2879,275 @@ func TestFormatAzureError(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			result := FormatAzureError(tc.info)
+
+			if tc.expectEmpty {
+				if result != "" {
+					t.Errorf("Expected empty string but got: %s", result)
+				}
+				return
+			}
+
+			if result == "" {
+				t.Error("Expected non-empty formatted string")
+				return
+			}
+
+			for _, part := range tc.expectedParts {
+				if !strings.Contains(result, part) {
+					t.Errorf("Expected formatted output to contain '%s', got: %s", part, result)
+				}
+			}
+		})
+	}
+}
+
+func TestDetectNetworkError(t *testing.T) {
+	tests := []struct {
+		name         string
+		output       string
+		expectedType string
+		expectNil    bool
+	}{
+		// DNS resolution errors
+		{
+			name:         "no such host",
+			output:       `dial tcp: lookup kubernetes.default.svc.cluster.local: no such host`,
+			expectedType: "dns_resolution",
+		},
+		{
+			name:         "temporary failure in name resolution",
+			output:       `dial tcp: lookup api.cluster.example.com: temporary failure in name resolution`,
+			expectedType: "dns_resolution",
+		},
+		{
+			name:         "could not resolve host",
+			output:       `curl: (6) Could not resolve host: api.cluster.example.com`,
+			expectedType: "dns_resolution",
+		},
+		{
+			name:         "server misbehaving",
+			output:       `dial tcp: lookup api.example.com on 10.0.0.10:53: server misbehaving`,
+			expectedType: "dns_resolution",
+		},
+
+		// Connection refused errors
+		{
+			name:         "connection refused",
+			output:       `The connection to the server localhost:8443 was refused - did you specify the right host or port?`,
+			expectedType: "connection_refused",
+		},
+		{
+			name:         "was refused - API server",
+			output:       `Get "https://127.0.0.1:6443/api/v1/nodes": dial tcp 127.0.0.1:6443: connect: connection refused`,
+			expectedType: "connection_refused",
+		},
+
+		// Connection timeout errors
+		{
+			name:         "i/o timeout",
+			output:       `dial tcp 10.96.0.1:443: i/o timeout`,
+			expectedType: "connection_timeout",
+		},
+		{
+			name:         "connection timed out",
+			output:       `dial tcp 10.96.0.1:443: connection timed out`,
+			expectedType: "connection_timeout",
+		},
+		{
+			name:         "context deadline exceeded",
+			output:       `context deadline exceeded`,
+			expectedType: "connection_timeout",
+		},
+		{
+			name:         "dial tcp with timeout",
+			output:       `dial tcp 192.168.1.100:6443: i/o timeout`,
+			expectedType: "connection_timeout",
+		},
+
+		// TLS/certificate errors
+		{
+			name:         "TLS handshake timeout",
+			output:       `net/http: TLS handshake timeout`,
+			expectedType: "tls_error",
+		},
+		{
+			name:         "x509 certificate error",
+			output:       `x509: certificate signed by unknown authority`,
+			expectedType: "tls_error",
+		},
+		{
+			name:         "certificate expired",
+			output:       `x509: certificate has expired or is not yet valid`,
+			expectedType: "tls_error",
+		},
+		{
+			name:         "tls protocol error",
+			output:       `tls: failed to verify certificate: x509: certificate signed by unknown authority`,
+			expectedType: "tls_error",
+		},
+
+		// Connection reset errors
+		{
+			name:         "connection reset by peer",
+			output:       `read tcp 127.0.0.1:51396->127.0.0.1:6443: read: connection reset by peer`,
+			expectedType: "connection_reset",
+		},
+		{
+			name:         "broken pipe",
+			output:       `write tcp 127.0.0.1:51396->127.0.0.1:6443: write: broken pipe`,
+			expectedType: "connection_reset",
+		},
+		{
+			name:         "http2 client connection lost",
+			output:       `Get "https://127.0.0.1:51396/api/v1": http2: client connection lost`,
+			expectedType: "connection_reset",
+		},
+		{
+			name:         "http EOF",
+			output:       `http: server gave HTTP response to HTTPS client EOF`,
+			expectedType: "connection_reset",
+		},
+
+		// API server errors
+		{
+			name:         "server unavailable",
+			output:       `Error from server: Service Unavailable`,
+			expectedType: "api_server_error",
+		},
+		{
+			name:         "gateway timeout",
+			output:       `Error from server: gateway timeout`,
+			expectedType: "api_server_error",
+		},
+		{
+			name:         "too many requests",
+			output:       `Error from server (TooManyRequests): too many requests`,
+			expectedType: "api_server_error",
+		},
+		{
+			name:         "internal server error",
+			output:       `Error from server: Internal error occurred: internal server error`,
+			expectedType: "api_server_error",
+		},
+
+		// Non-network errors (should return nil)
+		{
+			name:      "resource not found",
+			output:    `Error from server (NotFound): secrets "my-secret" not found`,
+			expectNil: true,
+		},
+		{
+			name:      "validation error",
+			output:    `error: error validating data: ValidationError(Pod.spec)`,
+			expectNil: true,
+		},
+		{
+			name:      "empty output",
+			output:    ``,
+			expectNil: true,
+		},
+		{
+			name:      "normal success output",
+			output:    `pod/my-pod created`,
+			expectNil: true,
+		},
+		{
+			name:      "permission denied is not network error",
+			output:    `Error from server (Forbidden): pods is forbidden`,
+			expectNil: true,
+		},
+		{
+			name:      "certificate-authority-data is not TLS error",
+			output:    `certificate-authority-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0t`,
+			expectNil: true,
+		},
+		{
+			name:      "certificate signing request approved is not TLS error",
+			output:    `certificatesigningrequest.certificates.k8s.io/csr-abc123 approved`,
+			expectNil: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := DetectNetworkError(tc.output)
+
+			if tc.expectNil {
+				if result != nil {
+					t.Errorf("Expected nil but got error type: %s", result.ErrorType)
+				}
+				return
+			}
+
+			if result == nil {
+				t.Fatal("Expected non-nil NetworkErrorInfo but got nil")
+			}
+
+			if result.ErrorType != tc.expectedType {
+				t.Errorf("Expected error type %q but got %q", tc.expectedType, result.ErrorType)
+			}
+
+			if result.Message == "" {
+				t.Error("Expected non-empty message")
+			}
+
+			if len(result.Remediation) == 0 {
+				t.Error("Expected non-empty remediation steps")
+			}
+		})
+	}
+}
+
+func TestFormatNetworkError(t *testing.T) {
+	tests := []struct {
+		name          string
+		info          *NetworkErrorInfo
+		expectEmpty   bool
+		expectedParts []string
+	}{
+		{
+			name:        "nil input returns empty string",
+			info:        nil,
+			expectEmpty: true,
+		},
+		{
+			name: "formats DNS resolution error",
+			info: &NetworkErrorInfo{
+				ErrorType: "dns_resolution",
+				Message:   "DNS resolution failed — unable to resolve the target hostname",
+				Remediation: []string{
+					"Verify the cluster endpoint",
+					"Check DNS configuration",
+				},
+			},
+			expectEmpty: false,
+			expectedParts: []string{
+				"Network Error Detected",
+				"DNS resolution failed",
+				"Diagnostic steps:",
+				"cluster endpoint",
+				"DNS configuration",
+			},
+		},
+		{
+			name: "formats error with empty remediation",
+			info: &NetworkErrorInfo{
+				ErrorType:   "test_error",
+				Message:     "Test network error",
+				Remediation: []string{},
+			},
+			expectEmpty: false,
+			expectedParts: []string{
+				"Network Error Detected",
+				"Test network error",
+				"Diagnostic steps:",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := FormatNetworkError(tc.info)
 
 			if tc.expectEmpty {
 				if result != "" {

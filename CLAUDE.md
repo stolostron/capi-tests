@@ -98,7 +98,8 @@ Never hardcode values - always use `GetEnvOrDefault()` for new configuration.
 
 **Azure utilities:**
 - `EnsureAzureCredentialsSet` / `EnsureAzureCliLogin` / `DetectAzureAuthMode` / `HasServicePrincipalCredentials` / `GetAzureAuthDescription`
-- `DetectAzureError` / `FormatAzureError` - Azure error detection and formatting
+- `DetectAzureError` / `FormatAzureError` - Azure error detection and formatting (auth, network, infrastructure)
+- `DetectNetworkError` / `FormatNetworkError` - Network error detection and formatting (DNS, connectivity, TLS, API server)
 
 **AWS/ROSA utilities:**
 - `EnsureAWSCredentialsSet` - AWS credential setup for ROSA provider
