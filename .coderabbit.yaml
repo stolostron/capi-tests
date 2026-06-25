@@ -23,6 +23,7 @@ reviews:
     - "!*.min.js"
     - "!yarn.lock"
     - "!**/*.md"
+    - ".claude/**/*.md"
 
   auto_review:
     enabled: true
