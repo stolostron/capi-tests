@@ -1,4 +1,4 @@
-module github.com/rcap/capi-tests
+module github.com/stolostron/capi-tests
 
 go 1.24
 
