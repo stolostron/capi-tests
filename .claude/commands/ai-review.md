@@ -104,10 +104,10 @@ Before external AI reviews, run Claude Code's own code review to catch issues ea
 
 After self-review fixes are committed and pushed, run a security-focused review to catch vulnerabilities before external AI reviewers see the code.
 
-1. **Invoke the `/security-review` skill**:
-   - Use the Skill tool to invoke `security-review`
-   - This performs a comprehensive security review of the pending changes on the current branch
-   - It checks for: command injection, credential exposure, path traversal, insecure defaults, OWASP top 10 issues, and other security vulnerabilities
+1. **Run a security-focused review of the current branch diff**:
+   - Get the diff: `gh pr diff "$PR_NUMBER"`
+   - Review all changed files for: command injection, credential exposure, path traversal, insecure defaults, OWASP top 10 issues, and other security vulnerabilities
+   - Focus on the actual diff, not the entire codebase
 
 2. **Implement security fixes**:
    - For each security issue found:
@@ -134,6 +134,8 @@ After self-review fixes are committed and pushed, run a security-focused review 
    ```
    Security review: No issues found. Proceeding to wait for AI reviewers.
    ```
+
+**IMPORTANT: After the security review completes (whether fixes were made or not), immediately continue to Step 3. Do NOT stop or wait for user input.**
 
 ### Steps 3-6: CodeRabbit Review Loop
 
