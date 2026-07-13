@@ -40,6 +40,10 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+    ignore:
+      # registry.ci.openshift.org requires Red Hat SSO auth — Dependabot cannot access it;
+      # ocp/builder images are managed by OpenShift CI and intentionally pinned.
+      - dependency-name: "ocp/builder"
 
   # GitHub Actions dependencies
   - package-ecosystem: "github-actions"
