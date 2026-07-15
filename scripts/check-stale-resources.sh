@@ -194,6 +194,10 @@ check_azure_resource_groups_by_convention() {
     local tagged_rg_names
     tagged_rg_names=$(echo "$AZURE_RGS_JSON" | jq -r '.[].name' 2>/dev/null || echo "")
 
+    # Cache subscription ID for retroactive tagging (computed once, used per RG)
+    local subscription_id
+    subscription_id=$(az account show --query id -o tsv 2>/dev/null || echo "")
+
     local all_rgs_json
     all_rgs_json=$(az group list \
         --query "[].{name: name, location: location, tags: tags}" \
@@ -292,6 +296,22 @@ check_azure_resource_groups_by_convention() {
                 --argjson resourceCount "$resource_count" \
                 '{name: $name, location: $location, createdAt: $createdAt, user: $user, env: $env, detection: $detection, resourceCount: $resourceCount}')
             stale_convention_rgs=$(echo "$stale_convention_rgs" | jq --argjson rg "$enriched" '. + [$rg]')
+
+            # Retroactively tag the RG so future scans can find it via capi-test-created-at.
+            # Phase 04 defers tagging when ASO hasn't created the RG yet; if the run is killed
+            # before Phase 05 retries, the RG ends up permanently untagged.
+            # az tag update --operation Merge adds tags without removing existing ones.
+            if [[ -n "$subscription_id" ]]; then
+                local resource_id="/subscriptions/${subscription_id}/resourceGroups/${rg_name}"
+                local tag_json
+                tag_json=$(jq -n --arg ts "$created_at" '{"capi-test-created-at": $ts, "capi-test-detection": "convention-retroactive"}')
+                if az tag update --resource-id "$resource_id" --operation Merge --tags "$tag_json" \
+                        >/dev/null 2>&1; then
+                    print_info "Retroactively tagged ${rg_name} with capi-test-created-at=${created_at}"
+                else
+                    print_warning "Could not retroactively tag ${rg_name} (non-fatal)"
+                fi
+            fi
         fi
     done < <(echo "$convention_rgs" | jq -c '.[]')
 
