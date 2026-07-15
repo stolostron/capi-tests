@@ -303,9 +303,8 @@ check_azure_resource_groups_by_convention() {
             # az tag update --operation Merge adds tags without removing existing ones.
             if [[ -n "$subscription_id" ]]; then
                 local resource_id="/subscriptions/${subscription_id}/resourceGroups/${rg_name}"
-                local tag_json
-                tag_json=$(jq -n --arg ts "$created_at" '{"capi-test-created-at": $ts, "capi-test-detection": "convention-retroactive"}')
-                if az tag update --resource-id "$resource_id" --operation Merge --tags "$tag_json" \
+                if az tag update --resource-id "$resource_id" --operation Merge \
+                        --tags "capi-test-created-at=$created_at" "capi-test-detection=convention-retroactive" \
                         >/dev/null 2>&1; then
                     print_info "Retroactively tagged ${rg_name} with capi-test-created-at=${created_at}"
                 else
