@@ -37,7 +37,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 env:
   INFRA_PROVIDER: rosa
@@ -96,6 +95,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 280  # GO_STEP_DEPLOY_CRS_TIMEOUT (130m) + GO_STEP_DELETION_TIMEOUT (120m) + overhead (30m)
     environment: ${{ inputs.environment || 'rosa-stage' }}
+    permissions:
+      contents: read
+      issues: write
     env:
       # Cluster mode selection
       CLUSTER_MODE: ${{ inputs.cluster_mode || 'kind' }}
