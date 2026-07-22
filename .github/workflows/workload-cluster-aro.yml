@@ -86,7 +86,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 env:
   INFRA_PROVIDER: aro
@@ -145,6 +144,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 280  # GO_STEP_DEPLOY_CRS_TIMEOUT (130m) + GO_STEP_DELETION_TIMEOUT (120m) + overhead (30m)
     environment: ${{ inputs.environment || 'aro-stage' }}
+    permissions:
+      contents: read
+    outputs:
+      configured: ${{ steps.secrets.outputs.configured }}
+      phase3_outcome: ${{ steps.phase3.outcome }}
+      artifact_name: ${{ steps.sanitize_branch.outputs.artifact_name }}
     env:
       # Cluster mode selection
       CLUSTER_MODE: ${{ inputs.cluster_mode || 'kind' }}
@@ -427,6 +432,7 @@ jobs:
 
     - name: Sanitize branch name for artifact
       if: always()
+      id: sanitize_branch
       env:
         ARO_REPO_BRANCH_INPUT: ${{ inputs.aro_repo_branch }}
       run: |
@@ -434,8 +440,10 @@ jobs:
         if [ -n "$BRANCH" ]; then
           SANITIZED=$(printf '%s' "$BRANCH" | sed -E 's/[^A-Za-z0-9._-]+/-/g')
           echo "ARTIFACT_BRANCH_SUFFIX=-${SANITIZED}" >> "$GITHUB_ENV"
+          echo "artifact_name=test-results-full-cluster-aro-${SANITIZED}" >> "$GITHUB_OUTPUT"
         else
           echo "ARTIFACT_BRANCH_SUFFIX=" >> "$GITHUB_ENV"
+          echo "artifact_name=test-results-full-cluster-aro" >> "$GITHUB_OUTPUT"
         fi
 
     - name: Upload test results
@@ -446,8 +454,67 @@ jobs:
         path: results/
         retention-days: 30
 
+    - name: Fail if any phase failed
+      if: always()
+      env:
+        PHASE3_OUTCOME: ${{ steps.phase3.outcome }}
+      run: |
+        EXIT=0
+        if [ "$PHASE3_OUTCOME" = "failure" ]; then
+          echo "Test suite (test-all) failed"
+          EXIT=1
+        elif [ -z "$PHASE3_OUTCOME" ] || [ "$PHASE3_OUTCOME" = "skipped" ]; then
+          echo "Test suite (test-all) was skipped"
+          EXIT=1
+        fi
+        exit $EXIT
+
+    - name: 'Restore MCE component states'
+      if: always()
+      run: make _mce-teardown || true
+      continue-on-error: true
+
+    - name: 'Cleanup resources'
+      if: always()
+      run: |
+        rm -rf "${DOCKER_SECRETS:-}"
+
+        # Authenticate Azure CLI for resource cleanup using SP credentials
+        if [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ] && [ -n "$AZURE_TENANT_ID" ]; then
+          echo "::add-mask::${AZURE_CLIENT_SECRET}"
+          az login --service-principal \
+            -u "$AZURE_CLIENT_ID" \
+            -p "$AZURE_CLIENT_SECRET" \
+            --tenant "$AZURE_TENANT_ID" \
+            --output none && echo "Azure CLI authenticated for cleanup" \
+            || echo "Warning: Azure CLI login failed, Azure resource cleanup may be incomplete"
+          if [ -n "$AZURE_SUBSCRIPTION_ID" ]; then
+            if ! az account set --subscription "$AZURE_SUBSCRIPTION_ID" --output none; then
+              echo "Warning: failed to set Azure subscription ($AZURE_SUBSCRIPTION_ID); Azure cleanup may be incomplete"
+            fi
+          fi
+        fi
+        FORCE=1 make clean-all
+      continue-on-error: true
+
+  report-failure:
+    name: Report failure (ARO)
+    needs: management-cluster
+    if: always() && needs.management-cluster.result == 'failure' && needs.management-cluster.outputs.configured == 'true' && needs.management-cluster.outputs.phase3_outcome == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+    - name: Download test results
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      with:
+        name: ${{ needs.management-cluster.outputs.artifact_name }}
+        path: results/
+      continue-on-error: true
+
     - name: Create GitHub issue on failure
-      if: always() && steps.secrets.outputs.configured == 'true' && (steps.phase3.outcome == 'failure')
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         WORKFLOW_NAME: Full Cluster (ARO)(${{ inputs.aro_repo_branch || 'main' }})
@@ -455,7 +522,7 @@ jobs:
         REF_NAME: ${{ github.ref_name }}
         COMMIT_SHA: ${{ github.sha }}
         EVENT_NAME: ${{ github.event_name }}
-        PHASE3_OUTCOME: ${{ steps.phase3.outcome }}
+        PHASE3_OUTCOME: ${{ needs.management-cluster.outputs.phase3_outcome }}
       run: |
         EXISTING_ISSUE=$(gh issue list --label "automated" --label "test-failure" --state open --json number,title --jq ".[] | select(.title | contains(\"[$WORKFLOW_NAME]\")) | .number | select(. != null)" | head -1)
 
@@ -512,46 +579,3 @@ jobs:
             --label "automated" \
             --label "test-failure"
         fi
-
-    - name: Fail if any phase failed
-      if: always()
-      env:
-        PHASE3_OUTCOME: ${{ steps.phase3.outcome }}
-      run: |
-        EXIT=0
-        if [ "$PHASE3_OUTCOME" = "failure" ]; then
-          echo "Test suite (test-all) failed"
-          EXIT=1
-        elif [ -z "$PHASE3_OUTCOME" ] || [ "$PHASE3_OUTCOME" = "skipped" ]; then
-          echo "Test suite (test-all) was skipped"
-          EXIT=1
-        fi
-        exit $EXIT
-
-    - name: 'Restore MCE component states'
-      if: always()
-      run: make _mce-teardown || true
-      continue-on-error: true
-
-    - name: 'Cleanup resources'
-      if: always()
-      run: |
-        rm -rf "${DOCKER_SECRETS:-}"
-
-        # Authenticate Azure CLI for resource cleanup using SP credentials
-        if [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CLIENT_SECRET" ] && [ -n "$AZURE_TENANT_ID" ]; then
-          echo "::add-mask::${AZURE_CLIENT_SECRET}"
-          az login --service-principal \
-            -u "$AZURE_CLIENT_ID" \
-            -p "$AZURE_CLIENT_SECRET" \
-            --tenant "$AZURE_TENANT_ID" \
-            --output none && echo "Azure CLI authenticated for cleanup" \
-            || echo "Warning: Azure CLI login failed, Azure resource cleanup may be incomplete"
-          if [ -n "$AZURE_SUBSCRIPTION_ID" ]; then
-            if ! az account set --subscription "$AZURE_SUBSCRIPTION_ID" --output none; then
-              echo "Warning: failed to set Azure subscription ($AZURE_SUBSCRIPTION_ID); Azure cleanup may be incomplete"
-            fi
-          fi
-        fi
-        FORCE=1 make clean-all
-      continue-on-error: true
