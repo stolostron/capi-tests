@@ -551,6 +551,7 @@ The test suite integrates with GitHub Actions:
 | Variable | `MCE_API_URL` | MCE cluster API endpoint (optional, for MCE mode) |
 | Variable | `MCE_API_USER` | MCE cluster username (optional, default: `kubeadmin`) |
 | Secret | `MCE_API_PASSWORD` | MCE cluster password (optional, for MCE mode) |
+| Variable | `MCE_API_CA_BUNDLE` | Path to CA bundle for MCE TLS verification (recommended) |
 
 **GitHub Actions Environment: `rosa-stage`** (used by ROSA workflows):
 
@@ -566,6 +567,7 @@ The test suite integrates with GitHub Actions:
 | Variable | `MCE_API_URL` | MCE cluster API endpoint (optional, for MCE mode) |
 | Variable | `MCE_API_USER` | MCE cluster username (optional, default: `kubeadmin`) |
 | Secret | `MCE_API_PASSWORD` | MCE cluster password (optional, for MCE mode) |
+| Variable | `MCE_API_CA_BUNDLE` | Path to CA bundle for MCE TLS verification (recommended) |
 
 ## Contributing
 

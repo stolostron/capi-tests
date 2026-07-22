@@ -85,6 +85,11 @@ func TestCheckDependencies_OptionalTools(t *testing.T) {
 // 3. Validates authentication with oc whoami
 // 4. Fails immediately if authentication fails
 // Runs FIRST to populate kubeconfig before TestCheckDependencies_ExternalKubeconfig validates it.
+//
+// TLS verification (in order of precedence):
+//   - MCE_API_CA_BUNDLE set: use --certificate-authority=<path> (recommended)
+//   - MCE_INSECURE_TLS=true: use --insecure-skip-tls-verify (opt-in for local dev only)
+//   - neither: rely on the system certificate store
 func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 	config := NewTestConfig()
 
@@ -105,6 +110,9 @@ func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 			"  - MCE_API_URL: MCE cluster API URL\n" +
 			"  - MCE_API_USER: MCE cluster username (default: kubeadmin)\n" +
 			"  - MCE_API_PASSWORD: MCE cluster password\n\n" +
+			"Optional TLS environment variables:\n" +
+			"  - MCE_API_CA_BUNDLE: path to CA bundle for TLS verification (recommended)\n" +
+			"  - MCE_INSECURE_TLS: set to 'true' to skip TLS verification (local dev only)\n\n" +
 			"Configure these in your environment or GitHub workflow.")
 	}
 
@@ -127,11 +135,24 @@ func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 	PrintToTTY("Logging into MCE cluster...\n")
 	t.Logf("Attempting oc login to %s (KUBECONFIG=%s)", mceAPIURL, kubeconfigPath)
 
+	mceCABundle := GetEnvOrDefault("MCE_API_CA_BUNDLE", "")
+	mceInsecureTLS := GetEnvOrDefault("MCE_INSECURE_TLS", "false") == "true"
+
+	ocLoginArgs := []string{"login", mceAPIURL, "-u", mceUser}
+	switch {
+	case mceCABundle != "":
+		PrintToTTY("TLS: using certificate authority from MCE_API_CA_BUNDLE\n")
+		ocLoginArgs = append(ocLoginArgs, "--certificate-authority="+mceCABundle)
+	case mceInsecureTLS:
+		t.Logf("Warning: MCE_INSECURE_TLS=true — TLS certificate verification disabled")
+		PrintToTTY("TLS: certificate verification disabled (MCE_INSECURE_TLS=true)\n")
+		ocLoginArgs = append(ocLoginArgs, "--insecure-skip-tls-verify")
+	default:
+		PrintToTTY("TLS: using system certificate store\n")
+	}
+
 	// Pass password via stdin to avoid exposing it in process list (ps aux)
-	// oc login will prompt for password and read it from stdin
-	output, err := RunCommandWithStdin(t, mcePassword+"\n", "oc", "login", mceAPIURL,
-		"--insecure-skip-tls-verify",
-		"-u", mceUser)
+	output, err := RunCommandWithStdin(t, mcePassword+"\n", "oc", ocLoginArgs...)
 
 	if err != nil {
 		PrintToTTY("❌ Failed to login to MCE cluster\n\n")
@@ -143,7 +164,8 @@ func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 		PrintToTTY("%s\n\n", ocVersion)
 		t.Fatalf("MCE authentication failed: %v\n\nOutput: %s\n\n"+
 			"KUBECONFIG: %s\n"+
-			"Ensure MCE_API_URL, MCE_API_USER, and MCE_API_PASSWORD are correct.", err, output, os.Getenv("KUBECONFIG"))
+			"Ensure MCE_API_URL, MCE_API_USER, MCE_API_PASSWORD are correct.\n"+
+			"For TLS: set MCE_API_CA_BUNDLE to the CA bundle path, or MCE_INSECURE_TLS=true for local dev.", err, output, os.Getenv("KUBECONFIG"))
 	}
 
 	PrintToTTY("✅ Successfully logged into MCE cluster\n\n")

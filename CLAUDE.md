@@ -414,6 +414,8 @@ This is validated during Check Dependencies (phase 1) to prevent late deployment
 ### MCE Component Management
 - `MCE_AUTO_ENABLE` - Auto-enable MCE CAPI/CAPZ components if not found on external cluster (default: `true` when `USE_KUBECONFIG` is set)
 - `MCE_ENABLEMENT_TIMEOUT` - Timeout for waiting after MCE component enablement (default: `15m`, format: Go duration)
+- `MCE_API_CA_BUNDLE` - Path to CA bundle file for TLS verification of the MCE API server (recommended for production use)
+- `MCE_INSECURE_TLS` - Set to `true` to skip TLS certificate verification for MCE cluster login (local dev only; never set in CI)
 
 When using an external MCE cluster (`USE_KUBECONFIG`), the test suite will:
 1. Detect if the cluster is an MCE installation
