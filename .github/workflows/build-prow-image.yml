@@ -5,7 +5,9 @@ on:
     branches: [main]
     paths: [Dockerfile.prow]
 
-permissions: read-all
+permissions:
+  contents: read
+  id-token: write  # required for cosign OIDC keyless signing
 
 jobs:
   build-and-push:
@@ -13,12 +15,23 @@ jobs:
     steps:
     - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
+    - name: Install cosign
+      uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
     - name: Build image
-      run: docker build -f Dockerfile.prow -t quay.io/rcap/capi-tests-prow:latest .
+      env:
+        IMAGE_SHA: ${{ github.sha }}
+      run: |
+        docker build -f Dockerfile.prow \
+          -t "quay.io/rcap/capi-tests-prow:${IMAGE_SHA}" \
+          -t quay.io/rcap/capi-tests-prow:latest \
+          .
 
     - name: Push to quay.io
+      id: push
       env:
         QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
+        IMAGE_SHA: ${{ github.sha }}
       run: |
         echo "::add-mask::${QUAY_AUTH}"
         DECODED=$(echo "${QUAY_AUTH}" | base64 -d)
@@ -27,7 +40,15 @@ jobs:
         PASSWORD="${DECODED#*:}"
         echo "::add-mask::${PASSWORD}"
         echo "${PASSWORD}" | docker login quay.io --username "${USERNAME}" --password-stdin
+        docker push "quay.io/rcap/capi-tests-prow:${IMAGE_SHA}"
         docker push quay.io/rcap/capi-tests-prow:latest
+        DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' quay.io/rcap/capi-tests-prow:latest)
+        echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+    - name: Sign image with cosign
+      env:
+        IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+      run: cosign sign --yes "${IMAGE_DIGEST}"
 
     - name: Cleanup Docker credentials
       if: always()
