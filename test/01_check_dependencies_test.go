@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -135,8 +136,16 @@ func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 	PrintToTTY("Logging into MCE cluster...\n")
 	t.Logf("Attempting oc login to %s (KUBECONFIG=%s)", mceAPIURL, kubeconfigPath)
 
-	mceCABundle := GetEnvOrDefault("MCE_API_CA_BUNDLE", "")
-	mceInsecureTLS := GetEnvOrDefault("MCE_INSECURE_TLS", "false") == "true"
+	mceCABundle := strings.TrimSpace(GetEnvOrDefault("MCE_API_CA_BUNDLE", ""))
+
+	mceInsecureTLS := false
+	if raw := strings.TrimSpace(os.Getenv("MCE_INSECURE_TLS")); raw != "" {
+		var parseErr error
+		mceInsecureTLS, parseErr = strconv.ParseBool(raw)
+		if parseErr != nil {
+			t.Fatalf("MCE_INSECURE_TLS must be a boolean (true/false), got: %q", raw)
+		}
+	}
 
 	ocLoginArgs := []string{"login", mceAPIURL, "-u", mceUser}
 	switch {
