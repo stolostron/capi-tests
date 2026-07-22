@@ -141,6 +141,11 @@ func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 	ocLoginArgs := []string{"login", mceAPIURL, "-u", mceUser}
 	switch {
 	case mceCABundle != "":
+		if !FileExists(mceCABundle) {
+			t.Fatalf("MCE_API_CA_BUNDLE file not found: %s\n\n"+
+				"Set MCE_API_CA_BUNDLE to a valid CA bundle file path, "+
+				"or unset it to use the system certificate store.", mceCABundle)
+		}
 		PrintToTTY("TLS: using certificate authority from MCE_API_CA_BUNDLE\n")
 		ocLoginArgs = append(ocLoginArgs, "--certificate-authority="+mceCABundle)
 	case mceInsecureTLS:
