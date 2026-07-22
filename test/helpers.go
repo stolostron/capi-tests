@@ -3686,12 +3686,14 @@ func ValidateServicePrincipalCredentials(t *testing.T) error {
 			clientID != "", clientSecret != "", tenantID != "")
 	}
 
-	// Test login with service principal (using --allow-no-subscriptions in case SP has no subscription access)
+	// Test login with service principal (using --allow-no-subscriptions in case SP has no subscription access).
+	// AZURE_CLIENT_SECRET is read from the environment by az — do not pass via -p argv to
+	// avoid the secret appearing in /proc/*/cmdline for the lifetime of the az process.
 	t.Log("Validating service principal credentials...")
+	_ = clientSecret // validated non-empty above; az reads AZURE_CLIENT_SECRET from env
 	_, err := RunCommandQuiet(t, "az", "login",
 		"--service-principal",
 		"-u", clientID,
-		"-p", clientSecret,
 		"--tenant", tenantID,
 		"--allow-no-subscriptions")
 	if err != nil {
@@ -3734,14 +3736,14 @@ func EnsureAzureCliLogin(t *testing.T) error {
 		}
 
 		clientID := os.Getenv("AZURE_CLIENT_ID")
-		clientSecret := os.Getenv("AZURE_CLIENT_SECRET")
 		tenantID := os.Getenv("AZURE_TENANT_ID")
 
+		// AZURE_CLIENT_SECRET is read from the environment by az — do not pass via -p argv to
+		// avoid the secret appearing in /proc/*/cmdline for the lifetime of the az process.
 		t.Log("Azure CLI not logged in, authenticating with service principal...")
 		if _, err := RunCommandQuiet(t, "az", "login",
 			"--service-principal",
 			"-u", clientID,
-			"-p", clientSecret,
 			"--tenant", tenantID,
 			"--allow-no-subscriptions"); err != nil {
 			return fmt.Errorf("az login with service principal failed: %w", err)
