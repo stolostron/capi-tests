@@ -3,7 +3,10 @@ name: Build Prow Image
 on:
   push:
     branches: [main]
-    paths: [Dockerfile.prow]
+    paths:
+      - Dockerfile.prow
+      - .github/workflows/build-prow-image.yml
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -43,6 +46,10 @@ jobs:
         docker push "quay.io/rcap/capi-tests-prow:${IMAGE_SHA}"
         docker push quay.io/rcap/capi-tests-prow:latest
         DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' quay.io/rcap/capi-tests-prow:latest)
+        if [[ -z "${DIGEST}" ]]; then
+          echo "::error::Failed to resolve image digest — RepoDigests is empty after push"
+          exit 1
+        fi
         echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
 
     - name: Sign image with cosign
