@@ -364,7 +364,13 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 		PrintToTTY("\n=== Checking for existing Kind management cluster ===\n")
 		t.Log("Checking for existing Kind cluster")
 		output, _ = RunCommand(t, "kind", "get", "clusters")
-		clusterExists := strings.Contains(output, config.ManagementClusterName)
+		clusterExists := false
+		for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+			if strings.TrimSpace(line) == config.ManagementClusterName {
+				clusterExists = true
+				break
+			}
+		}
 		needsDeployment = !clusterExists
 	}
 
