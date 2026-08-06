@@ -1,12 +1,8 @@
 name: Management Cluster (ROSA)
 
-# DISABLED: AWS/ROSA support removed — no capacity to maintain (ARO-27468)
-#
 # Management cluster deployment only (no workload cluster provisioning).
 # This workflow deploys a Kind cluster with CAPI/CAPA controllers and validates setup.
 # Does NOT provision ROSA workload clusters.
-#
-# Triggers: DISABLED
 #
 # Requires:
 #   - Repository secret: QUAY_AUTH
@@ -31,7 +27,6 @@ env:
 
 jobs:
   management-cluster:
-    if: false  # DISABLED: AWS/ROSA support removed (ARO-27468)
     name: Management Cluster (ROSA/CAPA)
     runs-on: ubuntu-latest
     timeout-minutes: 60
