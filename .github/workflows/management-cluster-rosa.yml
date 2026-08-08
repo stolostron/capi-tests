@@ -266,11 +266,11 @@ jobs:
         PHASE2_OUTCOME: ${{ steps.phase2.outcome }}
         PHASE3_OUTCOME: ${{ steps.phase3.outcome }}
       run: |
-        EXISTING_ISSUE=$(gh issue list --label "automated" --label "test-failure" --state open --json number,title --jq ".[] | select(.title | contains(\"[$WORKFLOW_NAME]\")) | .number | select(. != null)" | head -1)
+        EXISTING_ISSUE=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "automated" --label "test-failure" --state open --json number,title --jq ".[] | select(.title | contains(\"[$WORKFLOW_NAME]\")) | .number | select(. != null)" | head -1)
 
         if [ -n "$EXISTING_ISSUE" ]; then
           echo "Issue already exists: #$EXISTING_ISSUE"
-          gh issue comment "$EXISTING_ISSUE" --body "Workflow failed again in run: $RUN_URL"
+          gh issue comment "$EXISTING_ISSUE" --repo "$GITHUB_REPOSITORY" --body "Workflow failed again in run: $RUN_URL"
         else
           FAILED_TESTS=$(python3 -c "
         import xml.etree.ElementTree as ET
@@ -314,10 +314,11 @@ jobs:
           echo "*This issue was automatically created by the CI workflow*" >> issue_body.md
 
           # Ensure labels exist (gh issue create fails if label is missing)
-          gh label create "automated" --force 2>/dev/null || true
-          gh label create "test-failure" --color "d93f0b" --force 2>/dev/null || true
+          gh label create "automated" --repo "$GITHUB_REPOSITORY" --force 2>/dev/null || true
+          gh label create "test-failure" --repo "$GITHUB_REPOSITORY" --color "d93f0b" --force 2>/dev/null || true
 
           gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
             --title "[$WORKFLOW_NAME] Workflow failed on $REF_NAME" \
             --body-file issue_body.md \
             --label "automated" \
