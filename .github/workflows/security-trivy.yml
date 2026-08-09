@@ -123,7 +123,7 @@ jobs:
         SHA: ${{ github.sha }}
       run: |
         # Search for existing open issues with security labels (one issue per scanner type)
-        EXISTING_ISSUE=$(gh issue list --state open --label "security" --label "trivy" --json number --jq ".[0].number" 2>/dev/null || echo "")
+        EXISTING_ISSUE=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label "security" --label "trivy" --json number --jq ".[0].number" 2>/dev/null || echo "")
 
         # Count vulnerabilities by severity
         CRITICAL=$(grep -o "CRITICAL" trivy-results.txt 2>/dev/null | wc -l || echo "0")
@@ -170,7 +170,7 @@ jobs:
             echo "**Security Tab**: Check the [Security tab](${SERVER_URL}/${REPO}/security/code-scanning) for detailed SARIF results."
           } > comment_body.md
 
-          gh issue comment "$EXISTING_ISSUE" --body-file comment_body.md
+          gh issue comment "$EXISTING_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file comment_body.md
         else
           echo "Creating new issue..."
 
@@ -316,6 +316,7 @@ jobs:
 
           # Create issue with security labels
           gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
             --title "🚨 [Trivy] $TOTAL vulnerabilities detected on ${REF_NAME}" \
             --label "security" \
             --label "trivy" \

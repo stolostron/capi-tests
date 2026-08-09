@@ -93,7 +93,7 @@ jobs:
         SHA: ${{ github.sha }}
       run: |
         # Search for existing open issues with security labels (one issue per scanner type)
-        EXISTING_ISSUE=$(gh issue list --state open --label "security" --label "gosec" --json number --jq ".[0].number" 2>/dev/null || echo "")
+        EXISTING_ISSUE=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label "security" --label "gosec" --json number --jq ".[0].number" 2>/dev/null || echo "")
 
         if [ -n "$EXISTING_ISSUE" ]; then
           echo "Existing issue found: #$EXISTING_ISSUE"
@@ -127,7 +127,7 @@ jobs:
             echo "**Action Required**: Security issues persist. Please review and fix."
           } > comment_body.md
 
-          gh issue comment "$EXISTING_ISSUE" --body-file comment_body.md
+          gh issue comment "$EXISTING_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file comment_body.md
         else
           echo "Creating new issue..."
 
@@ -231,6 +231,7 @@ jobs:
 
           # Create issue with security labels
           gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
             --title "🚨 [gosec] Security issues detected on ${REF_NAME}" \
             --label "security" \
             --label "gosec" \
