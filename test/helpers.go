@@ -4760,7 +4760,8 @@ func AutoExtractMCECACert(t *testing.T, apiURL string) (string, error) {
 		hostOnly = host[:colonIdx]
 	}
 
-	t.Logf("Auto-extracting CA bundle from %s via openssl s_client", host)
+	t.Logf("Auto-extracting CA bundle from %s via openssl s_client (TOFU — "+
+		"set MCE_API_CA_BUNDLE to a pre-verified CA bundle for shared/cloud CI networks)", host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -4805,7 +4806,14 @@ func AutoExtractMCECACert(t *testing.T, apiURL string) (string, error) {
 	}
 
 	t.Cleanup(func() { os.Remove(caPath) })
-	t.Logf("Auto-extracted CA bundle written to %s (%d cert(s) in chain)", caPath, len(caBundleCerts))
+
+	// Log the SHA-256 fingerprint so operators can detect unexpected cert changes.
+	// #nosec G204 — caPath is an os.CreateTemp path, not user-controlled
+	if fpOut, fpErr := exec.Command("openssl", "x509", "-noout", "-fingerprint", "-sha256", "-in", caPath).Output(); fpErr == nil {
+		t.Logf("Auto-extracted CA bundle written to %s (%d cert(s)): %s", caPath, len(caBundleCerts), strings.TrimSpace(string(fpOut)))
+	} else {
+		t.Logf("Auto-extracted CA bundle written to %s (%d cert(s) in chain)", caPath, len(caBundleCerts))
+	}
 	return caPath, nil
 }
 
