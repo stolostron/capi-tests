@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -4754,10 +4755,17 @@ func AutoExtractMCECACert(t *testing.T, apiURL string) (string, error) {
 		return "", fmt.Errorf("openssl not found — set MCE_API_CA_BUNDLE or MCE_INSECURE_TLS=true")
 	}
 
+	hostOnly := host
+	if colonIdx := strings.LastIndex(host, ":"); colonIdx >= 0 {
+		hostOnly = host[:colonIdx]
+	}
+
 	t.Logf("Auto-extracting CA bundle from %s via openssl s_client", host)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	// #nosec G204 — host derived from validated MCE_API_URL, not raw user input
-	cmd := exec.Command("openssl", "s_client", "-connect", host, "-showcerts")
+	cmd := exec.CommandContext(ctx, "openssl", "s_client", "-connect", host, "-servername", hostOnly, "-showcerts")
 	cmd.Stdin = strings.NewReader("")
 	// openssl s_client exits non-zero even on success; capture stdout only
 	output, _ := cmd.Output()
