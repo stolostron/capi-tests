@@ -256,8 +256,8 @@ jobs:
       run: |
         KIND_VERSION=v0.31.0
         KIND_BIN=kind-linux-amd64
-        curl -fsSLo "./${KIND_BIN}" "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/${KIND_BIN}"
-        curl -fsSLo "./${KIND_BIN}.sha256sum" "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/${KIND_BIN}.sha256sum"
+        curl --retry 3 --retry-delay 5 -fsSLo "./${KIND_BIN}" "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/${KIND_BIN}"
+        curl --retry 3 --retry-delay 5 -fsSLo "./${KIND_BIN}.sha256sum" "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/${KIND_BIN}.sha256sum"
         sha256sum --check "./${KIND_BIN}.sha256sum"
         chmod +x "./${KIND_BIN}"
         sudo mv "./${KIND_BIN}" /usr/local/bin/kind
@@ -268,7 +268,7 @@ jobs:
         # Note: cluster-api does not publish checksums/signatures for clusterctl binaries
         # (upstream issues #9292, #9293). Verification only available for container images.
         CLUSTERCTL_VERSION=v1.12.2
-        curl -fsSL "https://github.com/kubernetes-sigs/cluster-api/releases/download/${CLUSTERCTL_VERSION}/clusterctl-linux-amd64" -o clusterctl
+        curl --retry 3 --retry-delay 5 -fsSL "https://github.com/kubernetes-sigs/cluster-api/releases/download/${CLUSTERCTL_VERSION}/clusterctl-linux-amd64" -o clusterctl
         chmod +x clusterctl
         sudo mv clusterctl /usr/local/bin/
         clusterctl version
