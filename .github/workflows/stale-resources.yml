@@ -141,6 +141,7 @@ jobs:
       JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
       JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
       JIRA_ASSIGNEE_ACCOUNT_ID: ${{ vars.JIRA_ASSIGNEE_ACCOUNT_ID }}
+      JIRA_PARENT_KEY: ${{ vars.JIRA_STALE_PARENT_KEY }}
       AZURE_STALE: ${{ needs.check-azure.outputs.stale_found }}
       AZURE_SUMMARY: ${{ needs.check-azure.outputs.summary }}
       AZURE_REPORT: ${{ needs.check-azure.outputs.report }}
@@ -214,10 +215,10 @@ jobs:
         DESCRIPTION+=$'Please investigate and clean up the leaked resources.\n'
         DESCRIPTION+="Use {{make clean-azure}} or {{./scripts/cleanup-azure-resources.sh}} for Azure cleanup."
 
-        # Search for existing open stale-resources issue under ARO-24159
+        # Search for existing open stale-resources issue under the configured parent
         SEARCH_RESPONSE=$(curl -s -w "\n%{http_code}" -u "${JIRA_EMAIL}:${JIRA_API_TOKEN}" \
           -G "https://redhat.atlassian.net/rest/api/3/search/jql" \
-          --data-urlencode "jql=parent = ARO-24159 AND summary ~ \"\\\"[Stale Resources]\\\"\" AND status != Closed" \
+          --data-urlencode "jql=parent = ${JIRA_PARENT_KEY} AND summary ~ \"\\\"[Stale Resources]\\\"\" AND status != Closed" \
           --data-urlencode "fields=key,summary,status" \
           -H "Content-Type: application/json" 2>/dev/null)
 
@@ -265,10 +266,11 @@ jobs:
             --arg summary "[Stale Resources] Leaked cloud resources detected (${TODAY})" \
             --arg description "$DESCRIPTION" \
             --arg assignee "${JIRA_ASSIGNEE_ACCOUNT_ID:-5fabb5fdecdae600685b01d6}" \
+            --arg parent "$JIRA_PARENT_KEY" \
             '{
               "fields": {
                 "project": {"key": "ARO"},
-                "parent": {"key": "ARO-24159"},
+                "parent": {"key": $parent},
                 "issuetype": {"name": "Sub-task"},
                 "summary": $summary,
                 "description": $description,
