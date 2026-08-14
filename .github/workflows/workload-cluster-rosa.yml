@@ -118,6 +118,7 @@ jobs:
       MCE_API_URL: ${{ vars.MCE_API_URL }}
       MCE_API_USER: ${{ vars.MCE_API_USER }}
       MCE_API_PASSWORD: ${{ secrets.MCE_API_PASSWORD }}
+      MCE_INSECURE_TLS: ${{ vars.MCE_INSECURE_TLS }}
 
     steps:
     - name: Validate credentials

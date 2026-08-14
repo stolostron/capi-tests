@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -4727,6 +4728,131 @@ func FormatMismatchedClustersError(mismatched []string, expectedClusterName, nam
 // =============================================================================
 // MCE (MultiClusterEngine) Helper Functions
 // =============================================================================
+
+// AutoExtractMCECACert connects to the MCE API server and extracts a usable CA
+// certificate via openssl s_client. Returns the path to a temp file containing
+// the CA bundle, or an error if no usable CA cert could be obtained.
+// A cleanup is registered to delete the temp file when the test ends.
+//
+// Handles three cases:
+//   - Full chain (multiple certs): uses certs[1:] as CA bundle
+//   - Single self-signed cert: uses that cert as CA
+//   - Single non-self-signed leaf cert: returns error (CA not obtainable)
+//
+// Note: this is a Trust-On-First-Use (TOFU) approach. For adversarial networks
+// set MCE_API_CA_BUNDLE to a pre-verified CA bundle instead.
+func AutoExtractMCECACert(t *testing.T, apiURL string) (string, error) {
+	t.Helper()
+
+	host := strings.TrimPrefix(apiURL, "https://")
+	host = strings.TrimPrefix(host, "http://")
+	if idx := strings.Index(host, "/"); idx >= 0 {
+		host = host[:idx]
+	}
+	if !strings.Contains(host, ":") {
+		host += ":443"
+	}
+
+	if !CommandExists("openssl") {
+		return "", fmt.Errorf("openssl not found — set MCE_API_CA_BUNDLE or MCE_INSECURE_TLS=true")
+	}
+
+	hostOnly := host
+	if colonIdx := strings.LastIndex(host, ":"); colonIdx >= 0 {
+		hostOnly = host[:colonIdx]
+	}
+
+	t.Logf("Auto-extracting CA bundle from %s via openssl s_client (TOFU — "+
+		"set MCE_API_CA_BUNDLE to a pre-verified CA bundle for shared/cloud CI networks)", host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	// #nosec G204 — host derived from validated MCE_API_URL, not raw user input
+	cmd := exec.CommandContext(ctx, "openssl", "s_client", "-connect", host, "-servername", hostOnly, "-showcerts")
+	cmd.Stdin = strings.NewReader("")
+	output, _ := cmd.Output()
+	if len(output) == 0 {
+		return "", fmt.Errorf("openssl s_client returned no output from %s", host)
+	}
+
+	certs := extractPEMCerts(string(output))
+	if len(certs) == 0 {
+		return "", fmt.Errorf("no certificates found in TLS chain from %s", host)
+	}
+
+	var caBundleCerts []string
+	if len(certs) > 1 {
+		caBundleCerts = certs[1:]
+	} else {
+		if !isSelfSignedCert(certs[0]) {
+			return "", fmt.Errorf("server sent only a leaf certificate (not self-signed) " +
+				"and the CA is not in the TLS chain — set MCE_API_CA_BUNDLE to the CA bundle path")
+		}
+		caBundleCerts = certs
+	}
+
+	tmpFile, err := os.CreateTemp("", "mce-ca-*.crt")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp CA bundle file: %w", err)
+	}
+	caPath := tmpFile.Name()
+
+	_, writeErr := tmpFile.WriteString(strings.Join(caBundleCerts, "\n"))
+	tmpFile.Close()
+	if writeErr != nil {
+		os.Remove(caPath)
+		return "", fmt.Errorf("failed to write CA bundle: %w", writeErr)
+	}
+
+	t.Cleanup(func() { os.Remove(caPath) })
+
+	// #nosec G204 — caPath is an os.CreateTemp path, not user-controlled
+	if fpOut, fpErr := exec.Command("openssl", "x509", "-noout", "-fingerprint", "-sha256", "-in", caPath).Output(); fpErr == nil {
+		t.Logf("Auto-extracted CA bundle written to %s (%d cert(s)): %s", caPath, len(caBundleCerts), strings.TrimSpace(string(fpOut)))
+	} else {
+		t.Logf("Auto-extracted CA bundle written to %s (%d cert(s) in chain)", caPath, len(caBundleCerts))
+	}
+	return caPath, nil
+}
+
+// isSelfSignedCert returns true if the PEM-encoded cert's Subject equals its Issuer.
+func isSelfSignedCert(pemCert string) bool {
+	// #nosec G204 — openssl binary with static args, cert content from TLS handshake
+	cmd := exec.Command("openssl", "x509", "-noout", "-subject", "-issuer")
+	cmd.Stdin = strings.NewReader(pemCert)
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) < 2 {
+		return false
+	}
+	subject := strings.TrimSpace(strings.TrimPrefix(lines[0], "subject="))
+	issuer := strings.TrimSpace(strings.TrimPrefix(lines[1], "issuer="))
+	return subject == issuer
+}
+
+// extractPEMCerts parses all PEM certificate blocks from a string.
+func extractPEMCerts(data string) []string {
+	var certs []string
+	var current strings.Builder
+	inCert := false
+	for _, line := range strings.Split(data, "\n") {
+		if strings.HasPrefix(line, "-----BEGIN CERTIFICATE-----") {
+			inCert = true
+			current.Reset()
+		}
+		if inCert {
+			current.WriteString(line + "\n")
+		}
+		if strings.HasPrefix(line, "-----END CERTIFICATE-----") {
+			inCert = false
+			certs = append(certs, current.String())
+		}
+	}
+	return certs
+}
 
 // IsMCECluster checks if the external cluster has MCE (MultiClusterEngine) installed.
 // Returns true if the 'multiclusterengine' resource exists, false otherwise.
