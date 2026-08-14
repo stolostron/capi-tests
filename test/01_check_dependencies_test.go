@@ -162,17 +162,7 @@ func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 		PrintToTTY("TLS: certificate verification disabled (MCE_INSECURE_TLS=true)\n")
 		ocLoginArgs = append(ocLoginArgs, "--insecure-skip-tls-verify")
 	default:
-		PrintToTTY("TLS: auto-extracting CA bundle from server...\n")
-		caPath, extractErr := AutoExtractMCECACert(t, mceAPIURL)
-		if extractErr != nil {
-			t.Fatalf("TLS: CA auto-extraction failed: %v\n\n"+
-				"The MCE server at %s uses a certificate the runner does not trust.\n"+
-				"Fix with one of:\n"+
-				"  • Set MCE_API_CA_BUNDLE to the CA bundle file path (most secure)\n"+
-				"  • Set MCE_INSECURE_TLS=true (local dev only — never in CI)", extractErr, mceAPIURL)
-		}
-		PrintToTTY("TLS: using auto-extracted CA bundle\n")
-		ocLoginArgs = append(ocLoginArgs, "--certificate-authority="+caPath)
+		PrintToTTY("TLS: using system certificate store\n")
 	}
 
 	// Pass password via stdin to avoid exposing it in process list (ps aux)
