@@ -4805,7 +4805,7 @@ func AutoExtractMCECACert(t *testing.T, apiURL string) (string, error) {
 	caPath := tmpFile.Name()
 
 	_, writeErr := tmpFile.WriteString(strings.Join(caBundleCerts, "\n"))
-	tmpFile.Close()
+	_ = tmpFile.Close()
 	if writeErr != nil {
 		_ = os.Remove(caPath)
 		return "", fmt.Errorf("failed to write CA bundle: %w", writeErr)
