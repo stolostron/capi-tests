@@ -88,7 +88,8 @@ func TestCheckDependencies_OptionalTools(t *testing.T) {
 // Runs FIRST to populate kubeconfig before TestCheckDependencies_ExternalKubeconfig validates it.
 //
 // TLS verification (in order of precedence):
-//   - MCE_API_CA_BUNDLE set: use --certificate-authority=<path> (recommended)
+//   - MCE_API_CA_BUNDLE set: use --certificate-authority (recommended). The value may be
+//     a file path or inline PEM content (inline content is written to a temp file).
 //   - MCE_INSECURE_TLS=true: use --insecure-skip-tls-verify (opt-in for local dev only)
 //   - neither: rely on the system certificate store
 func TestCheckDependencies_MCEAuthentication(t *testing.T) {
@@ -150,13 +151,29 @@ func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 	ocLoginArgs := []string{"login", mceAPIURL, "-u", mceUser}
 	switch {
 	case mceCABundle != "":
-		if !FileExists(mceCABundle) {
-			t.Fatalf("MCE_API_CA_BUNDLE file not found: %s\n\n"+
-				"Set MCE_API_CA_BUNDLE to a valid CA bundle file path, "+
-				"or unset it to use the system certificate store.", mceCABundle)
+		caPath := mceCABundle
+		if strings.Contains(mceCABundle, "-----BEGIN") {
+			// Inline PEM content (e.g. injected from a CI secret store): persist it to a
+			// file next to the kubeconfig and reference that via --certificate-authority.
+			// This file must NOT be deleted after login — oc records the path in the
+			// kubeconfig, so subsequent kubectl/oc commands (later test phases, which run
+			// as separate processes reusing this kubeconfig) need it to remain. Placing it
+			// beside the kubeconfig keeps oc's relativized path resolvable and ties the
+			// bundle's lifetime to the kubeconfig it belongs to.
+			caPath = kubeconfigPath + ".mce-ca.crt"
+			if err := os.WriteFile(caPath, []byte(mceCABundle+"\n"), 0o600); err != nil {
+				t.Fatalf("failed to write MCE_API_CA_BUNDLE content to %s: %v", caPath, err)
+			}
+			PrintToTTY("TLS: using certificate authority from MCE_API_CA_BUNDLE (inline PEM content)\n")
+		} else {
+			if !FileExists(mceCABundle) {
+				t.Fatalf("MCE_API_CA_BUNDLE file not found: %s\n\n"+
+					"Set MCE_API_CA_BUNDLE to a valid CA bundle file path or inline PEM content, "+
+					"or unset it to use the system certificate store.", mceCABundle)
+			}
+			PrintToTTY("TLS: using certificate authority from MCE_API_CA_BUNDLE (file)\n")
 		}
-		PrintToTTY("TLS: using certificate authority from MCE_API_CA_BUNDLE\n")
-		ocLoginArgs = append(ocLoginArgs, "--certificate-authority="+mceCABundle)
+		ocLoginArgs = append(ocLoginArgs, "--certificate-authority="+caPath)
 	case mceInsecureTLS:
 		t.Logf("Warning: MCE_INSECURE_TLS=true — TLS certificate verification disabled")
 		PrintToTTY("TLS: certificate verification disabled (MCE_INSECURE_TLS=true)\n")
