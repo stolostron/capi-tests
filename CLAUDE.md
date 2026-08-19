@@ -353,6 +353,28 @@ export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)
 export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 ```
 
+#### Option 3: Workload Identity (Federated Managed Identities)
+
+For clusters configured with an OIDC issuer, the test suite can drive YAML generation
+using federated user-assigned managed identities instead of a service principal secret.
+This mode is **opt-in** and detected when all three of the following are set:
+
+```bash
+export USER_ASSIGNED_IDENTITY_ASO=<aso-identity-name>      # user-assigned identity for ASO
+export USER_ASSIGNED_IDENTITY_ARO=<aro-identity-name>      # user-assigned identity for ARO
+export OICD_RESOURCE_GROUP=<oidc-issuer-resource-group>    # resource group hosting the OIDC issuer
+export ENV=int                                             # optional: environment selector passed to gen.sh
+```
+
+Notes:
+- These variable names (including the `OICD` spelling) match the existing `gen.sh` support
+  in cluster-api-installer, which keys off `KIND_CLUSTER_NAME` to export them.
+- When set, `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` are **not** required (as with Azure CLI auth).
+- An active Azure session (e.g. `az login`) is still needed for control-plane operations.
+- Check Dependencies (Phase 01) validates the identity/resource-group names for RFC 1123
+  compliance via `TestCheckDependencies_AzureWorkloadIdentity`; if none are set, the check is skipped.
+- Setting only some of the three variables is treated as a misconfiguration and fails early.
+
 ### Repository Configuration
 - `ARO_REPO_URL` - cluster-api-installer URL (default: RadekCap/cluster-api-installer)
 - `ARO_REPO_BRANCH` - Branch to use (default: `ARO-ASO`)

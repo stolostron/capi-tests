@@ -3625,13 +3625,26 @@ const (
 	// AzureAuthModeCLI indicates authentication via Azure CLI (az login).
 	AzureAuthModeCLI AzureAuthMode = "cli"
 
+	// AzureAuthModeWorkloadIdentity indicates authentication via Azure workload identity
+	// (user-assigned managed identities federated with an OIDC issuer). This is signalled
+	// by USER_ASSIGNED_IDENTITY_ASO + USER_ASSIGNED_IDENTITY_ARO + OICD_RESOURCE_GROUP,
+	// which gen.sh consumes to wire ASO/ARO to their federated identities instead of a
+	// service principal client secret.
+	AzureAuthModeWorkloadIdentity AzureAuthMode = "workload-identity"
+
 	// AzureAuthModeNone indicates no valid authentication is available.
 	AzureAuthModeNone AzureAuthMode = "none"
 )
 
 // DetectAzureAuthMode determines which authentication method is available.
-// It checks for service principal credentials first (preferred for CI/automation),
-// then falls back to Azure CLI authentication.
+// Workload identity is checked first (it is opt-in and only set intentionally),
+// then service principal credentials (preferred for CI/automation), then it falls
+// back to Azure CLI authentication.
+//
+// Workload identity authentication requires:
+// - USER_ASSIGNED_IDENTITY_ASO
+// - USER_ASSIGNED_IDENTITY_ARO
+// - OICD_RESOURCE_GROUP
 //
 // Service principal authentication requires:
 // - AZURE_CLIENT_ID
@@ -3643,7 +3656,15 @@ const (
 func DetectAzureAuthMode(t *testing.T) AzureAuthMode {
 	t.Helper()
 
-	// Check for service principal credentials first
+	// Check for workload identity configuration first. These variables are only ever
+	// set on purpose to opt into federated managed-identity auth, so their presence is
+	// the strongest signal of intent and must win over any service principal fallback.
+	if HasWorkloadIdentityCredentials() {
+		t.Log("Workload identity configuration detected (USER_ASSIGNED_IDENTITY_ASO, USER_ASSIGNED_IDENTITY_ARO, OICD_RESOURCE_GROUP)")
+		return AzureAuthModeWorkloadIdentity
+	}
+
+	// Check for service principal credentials next
 	clientID := os.Getenv("AZURE_CLIENT_ID")
 	clientSecret := os.Getenv("AZURE_CLIENT_SECRET")
 	tenantID := os.Getenv("AZURE_TENANT_ID")
@@ -3669,6 +3690,16 @@ func HasServicePrincipalCredentials() bool {
 	return os.Getenv("AZURE_CLIENT_ID") != "" &&
 		os.Getenv("AZURE_CLIENT_SECRET") != "" &&
 		os.Getenv("AZURE_TENANT_ID") != ""
+}
+
+// HasWorkloadIdentityCredentials returns true if the workload identity environment
+// variables consumed by gen.sh are all set. This is a quick presence check only; it
+// does not validate that the referenced managed identities or OIDC resource group
+// actually exist in Azure.
+func HasWorkloadIdentityCredentials() bool {
+	return os.Getenv("USER_ASSIGNED_IDENTITY_ASO") != "" &&
+		os.Getenv("USER_ASSIGNED_IDENTITY_ARO") != "" &&
+		os.Getenv("OICD_RESOURCE_GROUP") != ""
 }
 
 // ValidateServicePrincipalCredentials validates that service principal credentials can authenticate.
@@ -3729,6 +3760,8 @@ func GetAzureAuthDescription(mode AzureAuthMode) string {
 		return "service principal (AZURE_CLIENT_ID/AZURE_CLIENT_SECRET)"
 	case AzureAuthModeCLI:
 		return "Azure CLI (az login)"
+	case AzureAuthModeWorkloadIdentity:
+		return "workload identity (USER_ASSIGNED_IDENTITY_ASO/USER_ASSIGNED_IDENTITY_ARO)"
 	default:
 		return "no authentication"
 	}

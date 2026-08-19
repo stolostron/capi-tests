@@ -85,6 +85,7 @@ jq --version
 - Authenticated via one of:
   - **Service principal** (recommended for CI): Set `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID`
   - **Azure CLI** (for development): Run `az login`
+  - **Workload identity** (federated managed identities): Set `USER_ASSIGNED_IDENTITY_ASO`, `USER_ASSIGNED_IDENTITY_ARO`, and `OICD_RESOURCE_GROUP` (see [CLAUDE.md](CLAUDE.md#option-3-workload-identity-federated-managed-identities))
 
 ## Configuration
 
@@ -211,6 +212,11 @@ Example: `CLUSTER_DEPLOYMENT_TIMEOUT=90m make _deploy-crs` (sets Go step timeout
    export AZURE_CLIENT_SECRET=<your-client-secret>
    export AZURE_TENANT_ID=<your-tenant-id>
    export AZURE_SUBSCRIPTION_ID=<your-subscription-id>
+
+   # Option C: Workload Identity (federated managed identities)
+   export USER_ASSIGNED_IDENTITY_ASO=<aso-identity-name>
+   export USER_ASSIGNED_IDENTITY_ARO=<aro-identity-name>
+   export OICD_RESOURCE_GROUP=<oidc-issuer-resource-group>
    ```
 
 3. **Run check dependencies tests**:

@@ -471,23 +471,30 @@ type TestConfig struct {
 	RepoDir    string
 
 	// Cluster configuration
-	ManagementClusterName    string
-	WorkloadClusterName      string
-	ClusterNamePrefix        string // Used as CS_CLUSTER_NAME for YAML generation
-	NamePrefix               string // NAME_PREFIX used for Azure resource naming (Key Vault, node pools); passed to YAML generation
-	OCPVersion               string
-	OCPVersionMP             string // Full x.y.z OpenShift version for MachinePool workers (from OCP_VERSION_MP env var)
-	Region                   string
-	AzureSubscriptionName    string // Azure subscription name (from AZURE_SUBSCRIPTION_NAME env var)
-	Environment              string
-	CAPIUser                 string            // User identifier for CAPI resources (from CAPI_USER env var)
-	WorkloadClusterNamespace string            // Namespace for workload cluster resources on management cluster (unique per test run)
-	TestLabelPrefix          string            // Provider-specific label prefix for test namespaces (e.g., "capz-test" for ARO, "capa-test" for ROSA)
-	TestRunID                string            // Unique run identifier extracted from ClusterNamePrefix (the part after CAPI_USER-). Empty when prefix does not start with CAPI_USER-.
-	ResourceTags             map[string]string // Tags applied to all created cloud resources (Azure RGs, AWS stacks/VPCs) for ownership tracking and cleanup
-	ResourceGroupName        string            // Azure resource group name (env: RESOURCEGROUPNAME, default: ${WorkloadClusterName}-${runID}-resgroup)
-	CAPINamespace            string            // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
-	CAPZNamespace            string            // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" when USE_K8S=true)
+	ManagementClusterName string
+	WorkloadClusterName   string
+	ClusterNamePrefix     string // Used as CS_CLUSTER_NAME for YAML generation
+	NamePrefix            string // NAME_PREFIX used for Azure resource naming (Key Vault, node pools); passed to YAML generation
+	OCPVersion            string
+	OCPVersionMP          string // Full x.y.z OpenShift version for MachinePool workers (from OCP_VERSION_MP env var)
+	Region                string
+	AzureSubscriptionName string // Azure subscription name (from AZURE_SUBSCRIPTION_NAME env var)
+	// Workload identity configuration (optional). When these are set, gen.sh wires ASO/ARO
+	// to federated user-assigned managed identities instead of a service principal secret.
+	// See DetectAzureAuthMode / AzureAuthModeWorkloadIdentity.
+	AzureUserAssignedIdentityASO string // USER_ASSIGNED_IDENTITY_ASO: user-assigned identity for ASO
+	AzureUserAssignedIdentityARO string // USER_ASSIGNED_IDENTITY_ARO: user-assigned identity for ARO
+	AzureOIDCResourceGroup       string // OICD_RESOURCE_GROUP: resource group hosting the OIDC issuer
+	AzureWorkloadIdentityEnv     string // ENV: environment selector passed to gen.sh for workload identity (e.g. "int")
+	Environment                  string
+	CAPIUser                     string            // User identifier for CAPI resources (from CAPI_USER env var)
+	WorkloadClusterNamespace     string            // Namespace for workload cluster resources on management cluster (unique per test run)
+	TestLabelPrefix              string            // Provider-specific label prefix for test namespaces (e.g., "capz-test" for ARO, "capa-test" for ROSA)
+	TestRunID                    string            // Unique run identifier extracted from ClusterNamePrefix (the part after CAPI_USER-). Empty when prefix does not start with CAPI_USER-.
+	ResourceTags                 map[string]string // Tags applied to all created cloud resources (Azure RGs, AWS stacks/VPCs) for ownership tracking and cleanup
+	ResourceGroupName            string            // Azure resource group name (env: RESOURCEGROUPNAME, default: ${WorkloadClusterName}-${runID}-resgroup)
+	CAPINamespace                string            // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" when USE_K8S=true)
+	CAPZNamespace                string            // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" when USE_K8S=true)
 
 	// Management cluster mode
 	// ClusterMode specifies the management cluster deployment mode ("kind" or "mce").
@@ -724,23 +731,27 @@ func NewTestConfig() *TestConfig {
 		RepoDir:    getDefaultRepoDir(),
 
 		// Cluster defaults
-		ManagementClusterName:    GetEnvOrDefault("MANAGEMENT_CLUSTER_NAME", defaultMgmtCluster),
-		WorkloadClusterName:      workloadClusterName,
-		ClusterNamePrefix:        prefix,
-		NamePrefix:               GetEnvOrDefault("NAME_PREFIX", ""),
-		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.20"),
-		OCPVersionMP:             GetEnvOrDefault("OCP_VERSION_MP", "4.20.17"),
-		Region:                   GetEnvOrDefault(regionEnvVar, defaultRegion),
-		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),
-		Environment:              environment,
-		CAPIUser:                 capiUser,
-		WorkloadClusterNamespace: getWorkloadClusterNamespace(testLabelPrefix),
-		TestLabelPrefix:          testLabelPrefix,
-		TestRunID:                testRunID,
-		ResourceTags:             resourceTags,
-		ResourceGroupName:        rgName,
-		CAPINamespace:            getControllerNamespace("CAPI_NAMESPACE", "capi-system"),
-		CAPZNamespace:            providerNamespace,
+		ManagementClusterName:        GetEnvOrDefault("MANAGEMENT_CLUSTER_NAME", defaultMgmtCluster),
+		WorkloadClusterName:          workloadClusterName,
+		ClusterNamePrefix:            prefix,
+		NamePrefix:                   GetEnvOrDefault("NAME_PREFIX", ""),
+		OCPVersion:                   GetEnvOrDefault("OCP_VERSION", "4.20"),
+		OCPVersionMP:                 GetEnvOrDefault("OCP_VERSION_MP", "4.20.17"),
+		Region:                       GetEnvOrDefault(regionEnvVar, defaultRegion),
+		AzureSubscriptionName:        os.Getenv("AZURE_SUBSCRIPTION_NAME"),
+		AzureUserAssignedIdentityASO: os.Getenv("USER_ASSIGNED_IDENTITY_ASO"),
+		AzureUserAssignedIdentityARO: os.Getenv("USER_ASSIGNED_IDENTITY_ARO"),
+		AzureOIDCResourceGroup:       os.Getenv("OICD_RESOURCE_GROUP"),
+		AzureWorkloadIdentityEnv:     os.Getenv("ENV"),
+		Environment:                  environment,
+		CAPIUser:                     capiUser,
+		WorkloadClusterNamespace:     getWorkloadClusterNamespace(testLabelPrefix),
+		TestLabelPrefix:              testLabelPrefix,
+		TestRunID:                    testRunID,
+		ResourceTags:                 resourceTags,
+		ResourceGroupName:            rgName,
+		CAPINamespace:                getControllerNamespace("CAPI_NAMESPACE", "capi-system"),
+		CAPZNamespace:                providerNamespace,
 
 		// Management cluster mode
 		ClusterMode: clusterMode,
