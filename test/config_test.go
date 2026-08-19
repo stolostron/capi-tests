@@ -1151,3 +1151,49 @@ func TestClusterMode_MCE_FindsMostRecentKubeconfig(t *testing.T) {
 		t.Errorf("Expected UseKubeconfig to be most recent file %q, got %q", newerFile.Name(), config.UseKubeconfig)
 	}
 }
+
+// --- GetKubeContext tests ---
+
+func TestGetKubeContext_KindFormat(t *testing.T) {
+	config := &TestConfig{ManagementClusterName: "capz-tests-stage"}
+
+	got := config.GetKubeContext()
+	want := "kind-capz-tests-stage"
+	if got != want {
+		t.Errorf("GetKubeContext() = %q, want %q", got, want)
+	}
+}
+
+func TestGetKubeContext_Cached(t *testing.T) {
+	// For a Kind cluster the context derives from ManagementClusterName.
+	// The result is cached on first call, so mutating the field afterwards
+	// must not change what GetKubeContext() returns.
+	config := &TestConfig{ManagementClusterName: "capz-tests-stage"}
+
+	first := config.GetKubeContext()
+
+	// Mutate the underlying field; a cached result should ignore this.
+	config.ManagementClusterName = "changed-name"
+
+	second := config.GetKubeContext()
+	if second != first {
+		t.Errorf("GetKubeContext() not cached: first=%q, second=%q", first, second)
+	}
+	if second != "kind-capz-tests-stage" {
+		t.Errorf("GetKubeContext() returned stale-but-wrong value %q, want cached %q", second, "kind-capz-tests-stage")
+	}
+}
+
+func TestGetKubeContext_PerInstance(t *testing.T) {
+	// The cache is per-instance: two configs must resolve independently
+	// rather than sharing a package-level cached value.
+	configA := &TestConfig{ManagementClusterName: "cluster-a"}
+	configB := &TestConfig{ManagementClusterName: "cluster-b"}
+
+	if got := configA.GetKubeContext(); got != "kind-cluster-a" {
+		t.Errorf("configA.GetKubeContext() = %q, want %q", got, "kind-cluster-a")
+	}
+	if got := configB.GetKubeContext(); got != "kind-cluster-b" {
+		t.Errorf("configB.GetKubeContext() = %q, want %q", got, "kind-cluster-b")
+	}
+}
