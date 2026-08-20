@@ -1096,6 +1096,12 @@ func (c *TestConfig) GetKubeContext() string {
 			c.kubeContext = fmt.Sprintf("kind-%s", c.ManagementClusterName)
 		}
 	})
+	// If the external-cluster lookup failed (transient kubectl error), the Once
+	// has fired but cached "". Fall back to a fresh lookup so callers can retry
+	// rather than getting a permanently poisoned empty context.
+	if c.IsExternalCluster() && c.kubeContext == "" {
+		return ExtractCurrentContext(c.UseKubeconfig)
+	}
 	return c.kubeContext
 }
 
