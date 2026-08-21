@@ -3255,6 +3255,91 @@ func TestHasServicePrincipalCredentials(t *testing.T) {
 	}
 }
 
+// TestHasWorkloadIdentityCredentials tests the HasWorkloadIdentityCredentials function.
+func TestHasWorkloadIdentityCredentials(t *testing.T) {
+	tests := []struct {
+		name        string
+		identityASO string
+		identityARO string
+		oidcRG      string
+		expected    bool
+	}{
+		{
+			name:        "all workload identity vars set",
+			identityASO: "aso-identity",
+			identityARO: "aro-identity",
+			oidcRG:      "oidc-rg",
+			expected:    true,
+		},
+		{
+			name:        "missing ASO identity",
+			identityASO: "",
+			identityARO: "aro-identity",
+			oidcRG:      "oidc-rg",
+			expected:    false,
+		},
+		{
+			name:        "missing ARO identity",
+			identityASO: "aso-identity",
+			identityARO: "",
+			oidcRG:      "oidc-rg",
+			expected:    false,
+		},
+		{
+			name:        "missing OIDC resource group",
+			identityASO: "aso-identity",
+			identityARO: "aro-identity",
+			oidcRG:      "",
+			expected:    false,
+		},
+		{
+			name:        "all empty",
+			identityASO: "",
+			identityARO: "",
+			oidcRG:      "",
+			expected:    false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Save original values
+			origASO := os.Getenv("USER_ASSIGNED_IDENTITY_ASO")
+			origARO := os.Getenv("USER_ASSIGNED_IDENTITY_ARO")
+			origRG := os.Getenv("OICD_RESOURCE_GROUP")
+
+			// Restore original values after test
+			t.Cleanup(func() {
+				_ = os.Setenv("USER_ASSIGNED_IDENTITY_ASO", origASO)
+				_ = os.Setenv("USER_ASSIGNED_IDENTITY_ARO", origARO)
+				_ = os.Setenv("OICD_RESOURCE_GROUP", origRG)
+			})
+
+			// Set test values
+			if tc.identityASO != "" {
+				_ = os.Setenv("USER_ASSIGNED_IDENTITY_ASO", tc.identityASO)
+			} else {
+				_ = os.Unsetenv("USER_ASSIGNED_IDENTITY_ASO")
+			}
+			if tc.identityARO != "" {
+				_ = os.Setenv("USER_ASSIGNED_IDENTITY_ARO", tc.identityARO)
+			} else {
+				_ = os.Unsetenv("USER_ASSIGNED_IDENTITY_ARO")
+			}
+			if tc.oidcRG != "" {
+				_ = os.Setenv("OICD_RESOURCE_GROUP", tc.oidcRG)
+			} else {
+				_ = os.Unsetenv("OICD_RESOURCE_GROUP")
+			}
+
+			result := HasWorkloadIdentityCredentials()
+			if result != tc.expected {
+				t.Errorf("HasWorkloadIdentityCredentials() = %v, expected %v", result, tc.expected)
+			}
+		})
+	}
+}
+
 // TestGetAzureAuthDescription tests the GetAzureAuthDescription function.
 func TestGetAzureAuthDescription(t *testing.T) {
 	tests := []struct {
@@ -3268,6 +3353,10 @@ func TestGetAzureAuthDescription(t *testing.T) {
 		{
 			mode:     AzureAuthModeCLI,
 			expected: "Azure CLI (az login)",
+		},
+		{
+			mode:     AzureAuthModeWorkloadIdentity,
+			expected: "workload identity (USER_ASSIGNED_IDENTITY_ASO/USER_ASSIGNED_IDENTITY_ARO)",
 		},
 		{
 			mode:     AzureAuthModeNone,
@@ -3297,6 +3386,9 @@ func TestAzureAuthModeConstants(t *testing.T) {
 	}
 	if AzureAuthModeCLI != "cli" {
 		t.Errorf("AzureAuthModeCLI = %q, expected 'cli'", AzureAuthModeCLI)
+	}
+	if AzureAuthModeWorkloadIdentity != "workload-identity" {
+		t.Errorf("AzureAuthModeWorkloadIdentity = %q, expected 'workload-identity'", AzureAuthModeWorkloadIdentity)
 	}
 	if AzureAuthModeNone != "none" {
 		t.Errorf("AzureAuthModeNone = %q, expected 'none'", AzureAuthModeNone)

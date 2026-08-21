@@ -441,6 +441,13 @@ func TestCheckDependencies_AzureAuthentication(t *testing.T) {
 	case AzureAuthModeCLI:
 		t.Log("Azure authentication via CLI is valid")
 
+	case AzureAuthModeWorkloadIdentity:
+		// Workload identity relies on federated managed identities plus an active Azure
+		// session (e.g. az login) for the control-plane operations gen.sh performs.
+		// The dedicated TestCheckDependencies_AzureWorkloadIdentity test validates the
+		// identity variables themselves.
+		t.Log("Azure authentication via workload identity is configured")
+
 	case AzureAuthModeNone:
 		t.Errorf("No Azure authentication available.\n\n" +
 			"Please authenticate using one of these methods:\n\n" +
@@ -454,6 +461,75 @@ func TestCheckDependencies_AzureAuthentication(t *testing.T) {
 			"  az ad sp create-for-rbac --name <name> --role Contributor --scopes /subscriptions/<subscription-id>")
 		return
 	}
+}
+
+// TestCheckDependencies_AzureWorkloadIdentity validates the Azure workload identity
+// configuration when it is in use. Workload identity is opt-in: if none of the
+// USER_ASSIGNED_IDENTITY_ASO / USER_ASSIGNED_IDENTITY_ARO / OICD_RESOURCE_GROUP
+// variables are set, the test is skipped (the suite falls back to service principal
+// or Azure CLI auth). When some but not all are set, the configuration is incomplete
+// and the test fails with a clear message. When all are set, the identity and resource
+// group names are validated for RFC 1123 compliance so misconfiguration is caught early
+// rather than during deployment.
+func TestCheckDependencies_AzureWorkloadIdentity(t *testing.T) {
+	config := NewTestConfig()
+	if !config.HasProvider("aro") {
+		t.Skip("Skipping Azure workload identity check (provider is not aro)")
+	}
+
+	// Map of env var name -> value, in the order gen.sh expects them.
+	required := []struct {
+		name  string
+		value string
+	}{
+		{"USER_ASSIGNED_IDENTITY_ASO", config.AzureUserAssignedIdentityASO},
+		{"USER_ASSIGNED_IDENTITY_ARO", config.AzureUserAssignedIdentityARO},
+		{"OICD_RESOURCE_GROUP", config.AzureOIDCResourceGroup},
+	}
+
+	var setVars, missingVars []string
+	for _, v := range required {
+		if v.value != "" {
+			setVars = append(setVars, v.name)
+		} else {
+			missingVars = append(missingVars, v.name)
+		}
+	}
+
+	// Not configured at all: workload identity is optional, so skip.
+	if len(setVars) == 0 {
+		t.Skip("Workload identity not configured (USER_ASSIGNED_IDENTITY_ASO/ARO, OICD_RESOURCE_GROUP unset) - skipping")
+	}
+
+	// Partially configured: this is almost certainly a mistake, so fail loudly.
+	if len(missingVars) > 0 {
+		t.Fatalf("Incomplete Azure workload identity configuration.\n"+
+			"Set: %v\n"+
+			"Missing: %v\n\n"+
+			"Workload identity requires all of the following to be set together:\n"+
+			"  export USER_ASSIGNED_IDENTITY_ASO=<aso-identity-name>\n"+
+			"  export USER_ASSIGNED_IDENTITY_ARO=<aro-identity-name>\n"+
+			"  export OICD_RESOURCE_GROUP=<oidc-issuer-resource-group>",
+			setVars, missingVars)
+	}
+
+	// Fully configured: validate the names so a bad value fails here, not mid-deployment.
+	for _, v := range required {
+		t.Run(v.name, func(t *testing.T) {
+			if err := ValidateRFC1123Name(v.value, v.name); err != nil {
+				t.Errorf("%s is not a valid RFC 1123 name: %v", v.name, err)
+				return
+			}
+			t.Logf("%s is set and valid", v.name)
+		})
+	}
+
+	// ENV is optional; report it so users can confirm which gen.sh environment is selected.
+	if config.AzureWorkloadIdentityEnv != "" {
+		t.Logf("Workload identity environment (ENV): %s", config.AzureWorkloadIdentityEnv)
+	}
+
+	t.Logf("Azure workload identity configuration is complete: %s", GetAzureAuthDescription(AzureAuthModeWorkloadIdentity))
 }
 
 // TestCheckDependencies_AzureEnvironment validates required Azure environment variables.
