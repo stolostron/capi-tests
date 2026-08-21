@@ -549,6 +549,14 @@ type TestConfig struct {
 	// When true and USE_KUBECONFIG is set, deploys CAPI/provider charts to external cluster.
 	// Default: false
 	DeployCharts bool
+
+	// kubeContext caches the result of GetKubeContext() so the external-cluster
+	// path does not shell out to `kubectl config current-context` on every call.
+	// kubeContextOnce guards the one-time computation. These are per-instance
+	// (not package-level) so distinct configs with different UseKubeconfig values
+	// resolve their own context correctly.
+	kubeContext     string
+	kubeContextOnce sync.Once
 }
 
 // NewTestConfig creates a new test configuration with defaults
@@ -1076,11 +1084,25 @@ func (c *TestConfig) SharedTempDir() string {
 // GetKubeContext returns the kubectl context to use for the management cluster.
 // For external clusters, extracts current-context from the kubeconfig file.
 // For Kind clusters, returns "kind-{ManagementClusterName}".
+//
+// The result is computed once and cached: the external-cluster path shells out to
+// `kubectl config current-context`, and this method is called dozens of times across
+// test phases, so caching avoids repeatedly spawning that subprocess.
 func (c *TestConfig) GetKubeContext() string {
-	if c.IsExternalCluster() {
+	c.kubeContextOnce.Do(func() {
+		if c.IsExternalCluster() {
+			c.kubeContext = ExtractCurrentContext(c.UseKubeconfig)
+		} else {
+			c.kubeContext = fmt.Sprintf("kind-%s", c.ManagementClusterName)
+		}
+	})
+	// If the external-cluster lookup failed (transient kubectl error), the Once
+	// has fired but cached "". Fall back to a fresh lookup so callers can retry
+	// rather than getting a permanently poisoned empty context.
+	if c.IsExternalCluster() && c.kubeContext == "" {
 		return ExtractCurrentContext(c.UseKubeconfig)
 	}
-	return fmt.Sprintf("kind-%s", c.ManagementClusterName)
+	return c.kubeContext
 }
 
 // AllControllers returns all infrastructure controllers across all providers,
