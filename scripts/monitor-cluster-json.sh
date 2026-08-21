@@ -29,7 +29,10 @@ fi
 # Get Cluster
 # Capture both stdout and stderr separately to distinguish errors
 KUBECTL_STDERR=$(mktemp)
-CLUSTER_JSON=$("${KUBECTL_CMD[@]}" get cluster "$CLUSTER_NAME" -n "$NAMESPACE" -o json 2>"$KUBECTL_STDERR")
+# Use the fully-qualified resource name so the query is unambiguous even when
+# another CRD also registers a "Cluster" kind (e.g. clusters.submariner.io on
+# ACM/MCE clusters). See ARO-29248.
+CLUSTER_JSON=$("${KUBECTL_CMD[@]}" get clusters.cluster.x-k8s.io "$CLUSTER_NAME" -n "$NAMESPACE" -o json 2>"$KUBECTL_STDERR")
 KUBECTL_EXIT_CODE=$?
 KUBECTL_ERROR=$(cat "$KUBECTL_STDERR")
 rm -f "$KUBECTL_STDERR"
