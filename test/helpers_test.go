@@ -4097,7 +4097,7 @@ func TestFormatMismatchedClustersError(t *testing.T) {
 				"EXISTING CLUSTER RESOURCES DETECTED",
 				"cateb-stage",
 				"catek-stage",
-				"kubectl delete cluster cateb-stage -n default",
+				"kubectl delete clusters.cluster.x-k8s.io cateb-stage -n default",
 				"make clean",
 			},
 		},
@@ -4109,7 +4109,7 @@ func TestFormatMismatchedClustersError(t *testing.T) {
 			wantContains: []string{
 				"cateb-stage",
 				"old-cluster",
-				"kubectl delete cluster --all -n test-ns",
+				"kubectl delete clusters.cluster.x-k8s.io --all -n test-ns",
 				"CAPI_USER was changed",
 			},
 		},

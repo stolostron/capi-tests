@@ -4714,13 +4714,13 @@ func FormatMismatchedClustersError(mismatched []string, expectedClusterName, nam
 
 	// Single cluster cleanup
 	if len(mismatched) == 1 {
-		fmt.Fprintf(&sb, "  kubectl delete cluster %s -n %s\n\n", mismatched[0], namespace)
+		fmt.Fprintf(&sb, "  kubectl delete %s %s -n %s\n\n", capiClusterResource, mismatched[0], namespace)
 	} else {
 		// Multiple clusters
 		sb.WriteString("  # Delete specific cluster:\n")
-		fmt.Fprintf(&sb, "  kubectl delete cluster %s -n %s\n\n", mismatched[0], namespace)
+		fmt.Fprintf(&sb, "  kubectl delete %s %s -n %s\n\n", capiClusterResource, mismatched[0], namespace)
 		sb.WriteString("  # Or delete all clusters in namespace:\n")
-		fmt.Fprintf(&sb, "  kubectl delete cluster --all -n %s\n\n", namespace)
+		fmt.Fprintf(&sb, "  kubectl delete %s --all -n %s\n\n", capiClusterResource, namespace)
 	}
 
 	sb.WriteString("  # Or use make clean for complete cleanup:\n")
