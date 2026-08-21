@@ -33,7 +33,7 @@ func TestDeletion_DeleteCluster(t *testing.T) {
 
 	// Check if cluster exists before attempting deletion
 	_, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
-		"get", "cluster", provisionedClusterName)
+		"get", capiClusterResource, provisionedClusterName)
 	if err != nil {
 		PrintToTTY("⚠️  Cluster '%s' not found in namespace '%s'\n", provisionedClusterName, config.WorkloadClusterNamespace)
 		t.Skipf("Cluster '%s' not found (may not have been deployed or already deleted)", provisionedClusterName)
@@ -78,7 +78,7 @@ func TestDeletion_DeleteCluster(t *testing.T) {
 	// Use --wait=false to return immediately so the next test can monitor deletion progress
 	PrintToTTY("🗑️  Deleting Cluster resource...\n")
 	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace,
-		"delete", "cluster", provisionedClusterName, "--wait=false")
+		"delete", capiClusterResource, provisionedClusterName, "--wait=false")
 	if err != nil {
 		PrintToTTY("❌ Failed to delete cluster: %v\n", err)
 		PrintToTTY("Output: %s\n\n", output)
@@ -195,8 +195,8 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 
 			t.Errorf("Timeout waiting for cluster '%s' to be deleted after %v.\n\n"+
 				"Troubleshooting steps:\n"+
-				"  1. Check cluster status: kubectl --context %s -n %s get cluster %s -o yaml\n"+
-				"  2. Check for stuck finalizers: kubectl --context %s -n %s get cluster %s -o jsonpath='{.metadata.finalizers}'\n"+
+				"  1. Check cluster status: kubectl --context %s -n %s get clusters.cluster.x-k8s.io %s -o yaml\n"+
+				"  2. Check for stuck finalizers: kubectl --context %s -n %s get clusters.cluster.x-k8s.io %s -o jsonpath='{.metadata.finalizers}'\n"+
 				"  3. Check remaining CAPI resources: kubectl --context %s -n %s get %s,machinepool\n"+
 				"%s\n"+
 				"Common causes:\n"+

@@ -455,7 +455,7 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 	PrintToTTY("\nChecking if cluster resource exists...\n")
 	t.Logf("Checking for cluster resource: %s (namespace: %s)", provisionedClusterName, config.WorkloadClusterNamespace)
 
-	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace, "get", "cluster", provisionedClusterName)
+	output, err := RunCommand(t, "kubectl", "--context", context, "-n", config.WorkloadClusterNamespace, "get", capiClusterResource, provisionedClusterName)
 	if err != nil {
 		PrintToTTY("⚠️  Cluster resource not found (may not be deployed yet)\n\n")
 		t.Skipf("Cluster resource not found (may not be deployed yet): %v", err)
@@ -570,7 +570,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 				"Troubleshooting steps:\n"+
 				"  1. Check ControlPlane status: kubectl --context %s -n %s get %s %s -o yaml\n"+
 				"  2. Check MachinePool status: kubectl --context %s -n %s get machinepool %s -o yaml\n"+
-				"  3. Check cluster conditions: kubectl --context %s -n %s get cluster %s -o yaml\n"+
+				"  3. Check cluster conditions: kubectl --context %s -n %s get clusters.cluster.x-k8s.io %s -o yaml\n"+
 				"  4. Check controller logs: kubectl --context %s -n capz-system logs -l control-plane=controller-manager --tail=100\n\n"+
 				"To increase timeout: export DEPLOYMENT_TIMEOUT=60m",
 				elapsed.Round(time.Second),
@@ -608,7 +608,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 			PrintToTTY("\n❌ Cluster phase is Failed — aborting early\n\n")
 			t.Fatalf("Cluster phase is 'Failed' — deployment cannot recover.\n\n"+
 				"Check cluster status:\n"+
-				"  kubectl --context %s -n %s get cluster %s -o yaml",
+				"  kubectl --context %s -n %s get clusters.cluster.x-k8s.io %s -o yaml",
 				context, config.WorkloadClusterNamespace, provisionedClusterName)
 		}
 
@@ -1151,7 +1151,7 @@ func TestDeployment_VerifyClusterProvisioned(t *testing.T) {
 
 	PrintToTTY("\n=== Waiting for Cluster.Initialization.InfrastructureProvisioned ===\n")
 	PrintToTTY("Cluster: %s | Namespace: %s\n", provisionedClusterName, config.WorkloadClusterNamespace)
-	PrintToTTY("Command: kubectl --context %s -n %s get cluster %s -o jsonpath={.status.initialization.infrastructureProvisioned}\n\n",
+	PrintToTTY("Command: kubectl --context %s -n %s get clusters.cluster.x-k8s.io %s -o jsonpath={.status.initialization.infrastructureProvisioned}\n\n",
 		context, config.WorkloadClusterNamespace, provisionedClusterName)
 
 	for {
@@ -1161,7 +1161,7 @@ func TestDeployment_VerifyClusterProvisioned(t *testing.T) {
 			CollectAndDumpInfraDiagnostics(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 
 			t.Fatalf("Timeout after %v waiting for cluster.status.initialization.infrastructureProvisioned=true.\n"+
-				"  kubectl --context %s -n %s get cluster %s -o yaml",
+				"  kubectl --context %s -n %s get clusters.cluster.x-k8s.io %s -o yaml",
 				elapsed.Round(time.Second), context, config.WorkloadClusterNamespace, provisionedClusterName)
 		}
 
@@ -1190,7 +1190,7 @@ func TestDeployment_VerifyClusterProvisioned(t *testing.T) {
 				PrintToTTY("\n❌ Cluster phase is Failed — aborting early\n\n")
 				t.Fatalf("Cluster phase is 'Failed' — deployment cannot recover.\n\n"+
 					"Check cluster status:\n"+
-					"  kubectl --context %s -n %s get cluster %s -o yaml",
+					"  kubectl --context %s -n %s get clusters.cluster.x-k8s.io %s -o yaml",
 					context, config.WorkloadClusterNamespace, provisionedClusterName)
 			}
 			if failErr := CheckK8sConditionsForPermanentFailure(data.Cluster.Conditions); failErr != nil {
@@ -1198,7 +1198,7 @@ func TestDeployment_VerifyClusterProvisioned(t *testing.T) {
 				PrintToTTY("   %v\n\n", failErr)
 				t.Fatalf("Permanent failure in Cluster conditions — deployment cannot recover.\n%v\n\n"+
 					"Check cluster status:\n"+
-					"  kubectl --context %s -n %s get cluster %s -o yaml",
+					"  kubectl --context %s -n %s get clusters.cluster.x-k8s.io %s -o yaml",
 					failErr, context, config.WorkloadClusterNamespace, provisionedClusterName)
 			}
 		}
@@ -1228,7 +1228,7 @@ func TestDeployment_VerifyClusterInfrastructureReady(t *testing.T) {
 
 	PrintToTTY("\n=== Waiting for CAPI Cluster.InfrastructureReady ===\n")
 	PrintToTTY("Cluster: %s | Namespace: %s\n", provisionedClusterName, config.WorkloadClusterNamespace)
-	PrintToTTY("Command: kubectl --context %s -n %s get cluster %s -o jsonpath={.status.conditions[?(@.type=='InfrastructureReady')].status}\n\n",
+	PrintToTTY("Command: kubectl --context %s -n %s get clusters.cluster.x-k8s.io %s -o jsonpath={.status.conditions[?(@.type=='InfrastructureReady')].status}\n\n",
 		context, config.WorkloadClusterNamespace, provisionedClusterName)
 
 	for {
@@ -1238,7 +1238,7 @@ func TestDeployment_VerifyClusterInfrastructureReady(t *testing.T) {
 			CollectAndDumpInfraDiagnostics(t, context, config.WorkloadClusterNamespace, provisionedClusterName)
 
 			t.Fatalf("Timeout after %v waiting for Cluster InfrastructureReady=True.\n"+
-				"  kubectl --context %s -n %s get cluster %s -o yaml",
+				"  kubectl --context %s -n %s get clusters.cluster.x-k8s.io %s -o yaml",
 				elapsed.Round(time.Second), context, config.WorkloadClusterNamespace, provisionedClusterName)
 		}
 
@@ -1267,7 +1267,7 @@ func TestDeployment_VerifyClusterInfrastructureReady(t *testing.T) {
 				PrintToTTY("\n❌ Cluster phase is Failed — aborting early\n\n")
 				t.Fatalf("Cluster phase is 'Failed' — deployment cannot recover.\n\n"+
 					"Check cluster status:\n"+
-					"  kubectl --context %s -n %s get cluster %s -o yaml",
+					"  kubectl --context %s -n %s get clusters.cluster.x-k8s.io %s -o yaml",
 					context, config.WorkloadClusterNamespace, provisionedClusterName)
 			}
 			if failErr := CheckK8sConditionsForPermanentFailure(data.Cluster.Conditions); failErr != nil {
@@ -1275,7 +1275,7 @@ func TestDeployment_VerifyClusterInfrastructureReady(t *testing.T) {
 				PrintToTTY("   %v\n\n", failErr)
 				t.Fatalf("Permanent failure in Cluster conditions — deployment cannot recover.\n%v\n\n"+
 					"Check cluster status:\n"+
-					"  kubectl --context %s -n %s get cluster %s -o yaml",
+					"  kubectl --context %s -n %s get clusters.cluster.x-k8s.io %s -o yaml",
 					failErr, context, config.WorkloadClusterNamespace, provisionedClusterName)
 			}
 		}

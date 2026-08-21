@@ -16,6 +16,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// capiClusterResource is the fully-qualified name of the CAPI Cluster resource.
+// It must be used for all `kubectl get`/`kubectl delete` calls that target CAPI
+// Cluster CRs so the query stays unambiguous even when another CRD registers a
+// "Cluster" kind (e.g. clusters.submariner.io on ACM/MCE clusters). Using the
+// bare "cluster" name resolves to the wrong CRD in those environments. See
+// ARO-29248.
+const capiClusterResource = "clusters.cluster.x-k8s.io"
+
 // ClonedRepository represents information about a cloned git repository.
 type ClonedRepository struct {
 	URL    string // Repository URL (e.g., "https://github.com/RadekCap/cluster-api-installer")
@@ -2593,7 +2601,7 @@ func FormatNetworkError(info *NetworkErrorInfo) string {
 func RequireClusterResource(t *testing.T, kubeContext, namespace, clusterName string) {
 	t.Helper()
 
-	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "get", "cluster", clusterName)
+	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "get", capiClusterResource, clusterName)
 	if err != nil {
 		errText := strings.ToLower(output + " " + err.Error())
 		if strings.Contains(errText, "not found") || strings.Contains(errText, "no resources found") {
@@ -3845,7 +3853,7 @@ func GetDeletionResourceStatus(t *testing.T, kubeContext, namespace, clusterName
 
 		// Query finalizers directly from the cluster resource
 		finalizerOutput, finErr := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
-			"-n", namespace, "get", "cluster", clusterName,
+			"-n", namespace, "get", capiClusterResource, clusterName,
 			"-o", "jsonpath={.metadata.finalizers}",
 			"--request-timeout=10s")
 		if finErr == nil && strings.TrimSpace(finalizerOutput) != "" {
@@ -4624,7 +4632,7 @@ func GetExistingClusterNames(t *testing.T, kubeContext, namespace string) ([]str
 
 	// Get all Cluster resources in the namespace
 	output, err := RunCommandQuiet(t, "kubectl", "--context", kubeContext,
-		"-n", namespace, "get", "cluster", "-o", "jsonpath={.items[*].metadata.name}")
+		"-n", namespace, "get", capiClusterResource, "-o", "jsonpath={.items[*].metadata.name}")
 
 	if err != nil {
 		// Check if the error is because CRD doesn't exist (expected on fresh clusters)
