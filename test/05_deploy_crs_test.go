@@ -72,7 +72,6 @@ func TestDeployment_00_CreateNamespace(t *testing.T) {
 // This fail-fast check prevents deploying new clusters alongside stale resources from previous
 // configurations (e.g., when CAPI_USER was changed without cleanup).
 func TestDeployment_01_CheckExistingClusters(t *testing.T) {
-
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
