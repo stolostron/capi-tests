@@ -3170,6 +3170,80 @@ func TestFormatNetworkError(t *testing.T) {
 	}
 }
 
+func TestDetectKubeconfigAuthError(t *testing.T) {
+	tests := []struct {
+		name         string
+		output       string
+		expectedType string
+		expectNil    bool
+	}{
+		{
+			name:         "expired bearer token",
+			output:       "error: You must be logged in to the server (the provided bearer token has expired)",
+			expectedType: "credentials_expired",
+		},
+		{
+			name:         "expired client certificate",
+			output:       "tls: failed to verify certificate: x509: certificate has expired or is not yet valid",
+			expectedType: "credentials_expired",
+		},
+		{
+			name:         "unauthorized",
+			output:       "Error from server (Unauthorized): the server has asked for the client to provide credentials",
+			expectedType: "authentication_failed",
+		},
+		{
+			name:         "forbidden",
+			output:       "Error from server (Forbidden): pods is forbidden: User cannot list resource pods",
+			expectedType: "insufficient_permissions",
+		},
+		{
+			name:      "unrelated kubectl error",
+			output:    "The connection to the server was refused",
+			expectNil: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := DetectKubeconfigAuthError(tc.output)
+			if tc.expectNil {
+				if result != nil {
+					t.Fatalf("expected nil, got %q", result.ErrorType)
+				}
+				return
+			}
+			if result == nil {
+				t.Fatal("expected authentication error, got nil")
+			}
+			if result.ErrorType != tc.expectedType {
+				t.Errorf("error type = %q, expected %q", result.ErrorType, tc.expectedType)
+			}
+			if result.Message == "" || len(result.Remediation) == 0 {
+				t.Error("expected message and remediation steps")
+			}
+		})
+	}
+}
+
+func TestFormatKubeconfigAuthError(t *testing.T) {
+	if got := FormatKubeconfigAuthError(nil); got != "" {
+		t.Fatalf("FormatKubeconfigAuthError(nil) = %q, expected empty string", got)
+	}
+
+	info := &KubeconfigAuthErrorInfo{
+		ErrorType:   "insufficient_permissions",
+		Message:     "The authenticated identity is not authorized to perform the requested Kubernetes operation",
+		Remediation: []string{"Grant the required RBAC role to the kubeconfig identity"},
+	}
+	formatted := FormatKubeconfigAuthError(info)
+	for _, expected := range []string{"Kubeconfig Authentication Error", info.Message, "Remediation steps:", info.Remediation[0]} {
+		if !strings.Contains(formatted, expected) {
+			t.Errorf("formatted error does not contain %q: %s", expected, formatted)
+		}
+	}
+}
+
 // TestHasServicePrincipalCredentials tests the HasServicePrincipalCredentials function.
 func TestHasServicePrincipalCredentials(t *testing.T) {
 	tests := []struct {
