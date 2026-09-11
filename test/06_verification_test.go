@@ -29,9 +29,7 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 
@@ -162,9 +160,7 @@ func TestVerification_ClusterNodes(t *testing.T) {
 	}
 
 	// Set KUBECONFIG for external cluster mode (management cluster)
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 	provisionedClusterName := config.GetProvisionedClusterName()
@@ -343,9 +339,7 @@ func TestVerification_TestedVersionsSummary(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 
@@ -392,9 +386,7 @@ func TestVerification_ControllerLogSummary(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 

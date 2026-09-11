@@ -19,9 +19,7 @@ func TestDeletion_DeleteCluster(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 
@@ -97,9 +95,7 @@ func TestDeletion_WaitForClusterDeletion(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 
@@ -254,9 +250,7 @@ func TestDeletion_VerifyControlPlaneDeletion(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 	provisionedClusterName := config.GetProvisionedClusterName()
@@ -297,9 +291,7 @@ func TestDeletion_VerifyMachinePoolDeletion(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 	provisionedClusterName := config.GetProvisionedClusterName()
@@ -409,9 +401,7 @@ func TestDeletion_VerifyAzureResourcesDeletion(t *testing.T) {
 func TestDeletion_DeleteManagementClusterK8sTestNamespace(t *testing.T) {
 	config := NewTestConfig()
 
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 
@@ -472,9 +462,7 @@ func TestDeletion_Summary(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 	provisionedClusterName := config.GetProvisionedClusterName()
