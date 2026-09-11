@@ -6,6 +6,19 @@ on:
   schedule:
     - cron: '0 5 * * *'
   workflow_dispatch:
+    inputs:
+      deployment_timeout_minutes:
+        description: 'Workload cluster deployment timeout (minutes)'
+        required: true
+        type: choice
+        default: '60'
+        options: ['60', '90', '120']
+      deletion_timeout_minutes:
+        description: 'Workload cluster deletion timeout (minutes)'
+        required: true
+        type: choice
+        default: '60'
+        options: ['60', '90', '120']
 
 permissions:
   actions: write
@@ -17,4 +30,6 @@ jobs:
     uses: ./.github/workflows/workload-cluster-aro.yml
     with:
       aro_repo_branch: backplane-5.0
+      deployment_timeout_minutes: ${{ inputs.deployment_timeout_minutes || 60 }}
+      deletion_timeout_minutes: ${{ inputs.deletion_timeout_minutes || 60 }}
     secrets: inherit

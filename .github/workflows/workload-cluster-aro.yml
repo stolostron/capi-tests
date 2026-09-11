@@ -53,6 +53,24 @@ on:
         required: false
         type: string
         default: ''
+      deployment_timeout_minutes:
+        description: 'Workload cluster deployment timeout (minutes)'
+        required: true
+        type: choice
+        default: '60'
+        options:
+          - '60'
+          - '90'
+          - '120'
+      deletion_timeout_minutes:
+        description: 'Workload cluster deletion timeout (minutes)'
+        required: true
+        type: choice
+        default: '60'
+        options:
+          - '60'
+          - '90'
+          - '120'
   workflow_call:
     inputs:
       environment:
@@ -80,6 +98,16 @@ on:
         required: false
         type: string
         default: ''
+      deployment_timeout_minutes:
+        description: 'Workload cluster deployment timeout (minutes)'
+        required: false
+        type: string
+        default: '60'
+      deletion_timeout_minutes:
+        description: 'Workload cluster deletion timeout (minutes)'
+        required: false
+        type: string
+        default: '60'
     secrets:
       QUAY_AUTH:
         required: true
@@ -93,7 +121,8 @@ env:
   ARO_REPO_BRANCH: ${{ inputs.aro_repo_branch }}
   CAPZ_PR_NO: ${{ inputs.capz_pr_no }}
   ASO_PR_NO: ${{ inputs.aso_pr_no }}
-  TEST_TIMEOUT_MINUTES: 120
+  CLUSTER_DEPLOYMENT_TIMEOUT_MINUTES: ${{ inputs.deployment_timeout_minutes || 60 }}
+  CLUSTER_DELETION_TIMEOUT_MINUTES: ${{ inputs.deletion_timeout_minutes || 60 }}
   # Global variables (not environment-specific)
   QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
 
@@ -142,7 +171,7 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 280  # GO_STEP_DEPLOY_CRS_TIMEOUT (130m) + GO_STEP_DELETION_TIMEOUT (120m) + overhead (30m)
+    timeout-minutes: 280  # Maximum selectable phase timeouts (120m each) + Go-step headroom and overhead
     environment: ${{ inputs.environment || 'aro-stage' }}
     permissions:
       contents: read
@@ -309,12 +338,13 @@ jobs:
 
     - name: 'Run test-all'
       # Azure credentials and config are set at job level (see env: above)
-      # GO_STEP_DEPLOY_CRS_TIMEOUT has a 10m buffer over DEPLOYMENT_TIMEOUT so the deployment
+      # Go step timeouts have a 15m buffer over each operation timeout so the deployment
       # loop can produce a graceful t.Fatalf before Go's test timer panics.
       run: |
-        export DEPLOYMENT_TIMEOUT="${TEST_TIMEOUT_MINUTES}m"
-        export GO_STEP_DEPLOY_CRS_TIMEOUT="$((TEST_TIMEOUT_MINUTES + 10))m"
-        export GO_STEP_DELETION_TIMEOUT="${TEST_TIMEOUT_MINUTES}m"
+        export CLUSTER_DEPLOYMENT_TIMEOUT="${CLUSTER_DEPLOYMENT_TIMEOUT_MINUTES}m"
+        export CLUSTER_DELETION_TIMEOUT="${CLUSTER_DELETION_TIMEOUT_MINUTES}m"
+        export GO_STEP_DEPLOY_CRS_TIMEOUT="$((CLUSTER_DEPLOYMENT_TIMEOUT_MINUTES + 15))m"
+        export GO_STEP_DELETION_TIMEOUT="$((CLUSTER_DELETION_TIMEOUT_MINUTES + 15))m"
         make test-all
       continue-on-error: true
       id: phase3

@@ -272,6 +272,18 @@ func TestParseDeploymentStallTimeout_NegativeDuration(t *testing.T) {
 
 // --- CLUSTER_DEPLOYMENT_TIMEOUT tests ---
 
+func TestTimeoutDefaultsAreCentralized(t *testing.T) {
+	if DefaultClusterDeploymentTimeout != 60*time.Minute {
+		t.Errorf("DefaultClusterDeploymentTimeout = %v, want 60m", DefaultClusterDeploymentTimeout)
+	}
+	if DefaultDeploymentTimeout != DefaultClusterDeploymentTimeout {
+		t.Errorf("DefaultDeploymentTimeout = %v, want deployment default %v", DefaultDeploymentTimeout, DefaultClusterDeploymentTimeout)
+	}
+	if DefaultClusterReadyTimeout != DefaultClusterDeploymentTimeout {
+		t.Errorf("DefaultClusterReadyTimeout = %v, want deployment default %v", DefaultClusterReadyTimeout, DefaultClusterDeploymentTimeout)
+	}
+}
+
 func TestParseClusterDeploymentTimeout_Default(t *testing.T) {
 	for _, key := range []string{"CLUSTER_DEPLOYMENT_TIMEOUT", "DEPLOYMENT_TIMEOUT"} {
 		t.Setenv(key, "")

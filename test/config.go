@@ -21,7 +21,7 @@ var (
 const (
 	// DefaultClusterDeploymentTimeout is the default timeout for the in-code polling loop
 	// that waits for the workload cluster to become ready during deployment (Phase 05).
-	DefaultClusterDeploymentTimeout = 120 * time.Minute
+	DefaultClusterDeploymentTimeout = 60 * time.Minute
 
 	// DefaultClusterDeletionTimeout is the default timeout for the in-code polling loop
 	// that waits for the workload cluster to be fully deleted (Phase 07).
@@ -29,7 +29,7 @@ const (
 
 	// DefaultDeploymentTimeout is the legacy default timeout for control plane deployment.
 	// Deprecated: Use DefaultClusterDeploymentTimeout instead.
-	DefaultDeploymentTimeout = 120 * time.Minute
+	DefaultDeploymentTimeout = DefaultClusterDeploymentTimeout
 
 	// DefaultASOControllerTimeout is the default timeout for ASO controller manager to become ready.
 	// ASO may take longer than other controllers due to its CRD initialization sequence:
@@ -817,7 +817,7 @@ func getControllerNamespace(useK8S bool, envVar, defaultNS string) string {
 // Resolution order:
 //  1. CLUSTER_DEPLOYMENT_TIMEOUT (new, preferred)
 //  2. DEPLOYMENT_TIMEOUT (legacy, backward compat)
-//  3. DefaultClusterDeploymentTimeout (120m)
+//  3. DefaultClusterDeploymentTimeout (60m)
 func parseClusterDeploymentTimeout() time.Duration {
 	if timeoutStr := os.Getenv("CLUSTER_DEPLOYMENT_TIMEOUT"); timeoutStr != "" {
 		timeout, err := time.ParseDuration(timeoutStr)

@@ -2678,7 +2678,7 @@ func IsClusterReady(t *testing.T, kubeContext, namespace, clusterName string) bo
 }
 
 // DefaultClusterReadyTimeout is the default timeout for waiting for a cluster to become ready.
-const DefaultClusterReadyTimeout = 120 * time.Minute
+const DefaultClusterReadyTimeout = DefaultClusterDeploymentTimeout
 
 // DefaultClusterReadyPollInterval is the default interval between cluster ready checks.
 const DefaultClusterReadyPollInterval = 30 * time.Second
@@ -2692,7 +2692,7 @@ const DefaultClusterReadyPollInterval = 30 * time.Second
 //   - kubeContext: kubectl context to use (e.g., "kind-capz-tests-stage")
 //   - namespace: namespace where the Cluster resource is located
 //   - clusterName: name of the Cluster resource to check
-//   - timeout: maximum time to wait for the cluster to become ready (use 0 for default of 120m)
+//   - timeout: maximum time to wait for the cluster to become ready (use 0 for default of 60m)
 //
 // Returns nil if the cluster becomes ready, or an error if the timeout is reached or the cluster fails.
 func WaitForClusterReady(t *testing.T, kubeContext, namespace, clusterName string, timeout time.Duration) error {
