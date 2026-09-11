@@ -1,0 +1,93 @@
+name: CAPZ Jira Hygiene
+
+# Scheduled workflow to audit open CAPZ Jira tickets against the official
+# ARO HCP governance rules (aro-hcp-jira-hygiene skill by Jasiyah Khalil).
+#
+# Checks each ticket for:
+#   - Description completeness (Overview, AC, DoD, References)
+#   - Components set (aro-hcp-capz or sub-component)
+#   - Fix Version set
+#   - Parent Epic set (no orphans)
+#   - Story points set for active tickets
+#   - Stale policy violations (14/30/90/120-day thresholds)
+#
+# Requires:
+#   - Repository secrets: JIRA_EMAIL, JIRA_API_TOKEN
+#
+# Ref: https://redhat.atlassian.net/browse/ARO-29422
+on:
+  schedule:
+    - cron: '0 7 * * 1'  # Every Monday at 07:00 UTC (start of sprint week)
+  workflow_dispatch:
+    inputs:
+      component:
+        description: 'Jira component to audit'
+        required: false
+        default: 'aro-hcp-capz'
+        type: string
+      max_results:
+        description: 'Max tickets per page (default: 100)'
+        required: false
+        default: '100'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit CAPZ Jira tickets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_COMPONENT: ${{ inputs.component || 'aro-hcp-capz' }}
+      MAX_RESULTS: ${{ inputs.max_results || '100' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Jira credentials
+        id: creds-check
+        run: |
+          if [ -z "$JIRA_EMAIL" ] || [ -z "$JIRA_API_TOKEN" ]; then
+            echo "::warning::JIRA_EMAIL or JIRA_API_TOKEN not set — skipping audit"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run hygiene check
+        id: hygiene
+        if: steps.creds-check.outputs.configured == 'true'
+        run: |
+          echo "::add-mask::${JIRA_API_TOKEN}"
+          set +e
+          REPORT=$(python3 scripts/check-jira-hygiene.py 2>hygiene.stderr)
+          EXIT_CODE=$?
+          set -e
+
+          cat hygiene.stderr >&2 || true
+
+          # Write report to step summary
+          echo "$REPORT" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ $EXIT_CODE -eq 1 ]; then
+            echo "issues_found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "issues_found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload report artifact
+        if: always() && steps.creds-check.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: jira-hygiene-report
+          path: hygiene.stderr
+          retention-days: 14
+
+      - name: Annotate findings
+        if: steps.hygiene.outputs.issues_found == 'true'
+        run: |
+          echo "::warning::CAPZ Jira hygiene issues found — see step summary for details"
