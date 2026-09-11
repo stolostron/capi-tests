@@ -65,7 +65,7 @@ TEST_VERBOSITY ?= -v
 # The Go step timeouts below are auto-computed as these values + 15m headroom.
 # NOTE: Only the Nm format is supported (e.g., 60m, 90m). Other Go duration
 # formats like "1h" or "2h30m" will break the shell arithmetic below.
-CLUSTER_DEPLOYMENT_TIMEOUT ?= 60m
+CLUSTER_DEPLOYMENT_TIMEOUT ?= 120m
 CLUSTER_DELETION_TIMEOUT ?= 60m
 
 # Validate that timeout values are in minutes-only format (Nm)

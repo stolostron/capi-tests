@@ -572,7 +572,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 				"  2. Check MachinePool status: kubectl --context %s -n %s get machinepool %s -o yaml\n"+
 				"  3. Check cluster conditions: kubectl --context %s -n %s get clusters.cluster.x-k8s.io %s -o yaml\n"+
 				"  4. Check controller logs: kubectl --context %s -n capz-system logs -l control-plane=controller-manager --tail=100\n\n"+
-				"To increase timeout: export DEPLOYMENT_TIMEOUT=60m",
+				"To increase timeout: export DEPLOYMENT_TIMEOUT=120m",
 				elapsed.Round(time.Second),
 				controlPlaneReady, machinePoolReady,
 				context, config.WorkloadClusterNamespace, strings.ToLower(controlPlaneKind), controlPlaneName,
