@@ -22,9 +22,7 @@ func TestDeployment_00_CreateNamespace(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 
@@ -75,9 +73,7 @@ func TestDeployment_01_CheckExistingClusters(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 
@@ -131,9 +127,7 @@ func TestDeployment_ApplyResources(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
 
@@ -186,9 +180,7 @@ func TestDeployment_ApplyClusterYAMLs(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	outputDir := filepath.Join(config.RepoDir, config.GetOutputDirName())
 
@@ -321,9 +313,7 @@ func TestDeployment_ProviderCredentialsConfigured(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 
@@ -413,9 +403,7 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	PrintToTTY("Checking prerequisites...\n")
 	if !DirExists(config.RepoDir) {
@@ -494,9 +482,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 
@@ -850,9 +836,7 @@ func TestDeployment_WaitForExternalAuthReady(t *testing.T) {
 		t.Skip("Skipping ARO-specific test (ExternalAuthReady condition is ARO-specific)")
 	}
 
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 	provisionedClusterName := config.GetProvisionedClusterName()
@@ -945,9 +929,7 @@ func TestDeployment_VerifyInfrastructureResources(t *testing.T) {
 	}
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 	provisionedClusterName := config.GetProvisionedClusterName()
@@ -1052,9 +1034,7 @@ func TestDeployment_VerifyAROClusterReady(t *testing.T) {
 		t.Skip("Skipping ARO-specific test (AROCluster resource is not used by this provider)")
 	}
 
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 	provisionedClusterName := config.GetProvisionedClusterName()
@@ -1135,9 +1115,7 @@ func TestDeployment_VerifyAROClusterReady(t *testing.T) {
 func TestDeployment_VerifyClusterProvisioned(t *testing.T) {
 	config := NewTestConfig()
 
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 	provisionedClusterName := config.GetProvisionedClusterName()
@@ -1212,9 +1190,7 @@ func TestDeployment_VerifyClusterProvisioned(t *testing.T) {
 func TestDeployment_VerifyClusterInfrastructureReady(t *testing.T) {
 	config := NewTestConfig()
 
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 	provisionedClusterName := config.GetProvisionedClusterName()
