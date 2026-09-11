@@ -250,6 +250,9 @@ func TestCheckDependencies_ExternalKubeconfig(t *testing.T) {
 	SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
 	output, err := RunCommand(t, "kubectl", "--context", context, "get", "nodes", "--no-headers")
 	if err != nil {
+		if authErr := DetectKubeconfigAuthError(output + " " + err.Error()); authErr != nil {
+			t.Fatalf("Cannot authenticate to external cluster with context '%s': %v\n%s", context, err, FormatKubeconfigAuthError(authErr))
+		}
 		t.Fatalf("Cannot connect to external cluster with context '%s': %v\n\nEnsure the cluster is accessible and credentials are valid.", context, err)
 	}
 

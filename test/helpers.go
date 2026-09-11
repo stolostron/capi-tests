@@ -2602,6 +2602,89 @@ func FormatNetworkError(info *NetworkErrorInfo) string {
 	return result.String()
 }
 
+// KubeconfigAuthErrorInfo contains structured diagnostics for authentication
+// and authorization failures returned while using a kubeconfig.
+type KubeconfigAuthErrorInfo struct {
+	ErrorType   string   // Short error type identifier.
+	Message     string   // Human-readable error description.
+	Remediation []string // Steps to restore access.
+}
+
+// DetectKubeconfigAuthError analyzes kubectl or oc output for authentication
+// and authorization failures. It deliberately does not classify connectivity
+// errors, which are handled by DetectNetworkError.
+func DetectKubeconfigAuthError(output string) *KubeconfigAuthErrorInfo {
+	lowerOutput := strings.ToLower(output)
+
+	// Expired tokens and client certificates require refreshing the credentials
+	// in the kubeconfig rather than changing Kubernetes RBAC.
+	if strings.Contains(lowerOutput, "token has expired") ||
+		strings.Contains(lowerOutput, "token is expired") ||
+		strings.Contains(lowerOutput, "certificate has expired") ||
+		(strings.Contains(lowerOutput, "client certificate") && strings.Contains(lowerOutput, "expired")) {
+		return &KubeconfigAuthErrorInfo{
+			ErrorType: "credentials_expired",
+			Message:   "The kubeconfig credentials have expired",
+			Remediation: []string{
+				"Refresh or regenerate the token or client certificate used by the kubeconfig",
+				"For an OpenShift cluster, authenticate again with: oc login <api-url>",
+				"For a managed cluster, retrieve a new kubeconfig from the cluster provider",
+				"Verify the system clock is correct if a valid certificate is reported as expired",
+			},
+		}
+	}
+
+	// Forbidden responses indicate a valid identity with insufficient RBAC.
+	if strings.Contains(lowerOutput, "forbidden") ||
+		(strings.Contains(lowerOutput, "cannot ") && strings.Contains(lowerOutput, " resource")) {
+		return &KubeconfigAuthErrorInfo{
+			ErrorType: "insufficient_permissions",
+			Message:   "The authenticated identity is not authorized to perform the requested Kubernetes operation",
+			Remediation: []string{
+				"Identify the kubeconfig user or service account: kubectl config view --minify",
+				"Ask a cluster administrator to grant the required Kubernetes RBAC role or role binding",
+				"Confirm the kubeconfig context points to the intended cluster and namespace",
+			},
+		}
+	}
+
+	// Unauthorized responses indicate missing, invalid, or rejected credentials.
+	if strings.Contains(lowerOutput, "unauthorized") ||
+		strings.Contains(lowerOutput, "authentication required") ||
+		strings.Contains(lowerOutput, "invalid bearer token") ||
+		strings.Contains(lowerOutput, "provide credentials") {
+		return &KubeconfigAuthErrorInfo{
+			ErrorType: "authentication_failed",
+			Message:   "The kubeconfig credentials were rejected by the Kubernetes API server",
+			Remediation: []string{
+				"Verify the kubeconfig user, token, or client certificate is valid",
+				"Refresh the credentials or retrieve a new kubeconfig from the cluster provider",
+				"Confirm the kubeconfig context points to the intended cluster",
+			},
+		}
+	}
+
+	return nil
+}
+
+// FormatKubeconfigAuthError formats kubeconfig authentication diagnostics for
+// display in dependency and external-cluster validation failures.
+func FormatKubeconfigAuthError(info *KubeconfigAuthErrorInfo) string {
+	if info == nil {
+		return ""
+	}
+
+	var result strings.Builder
+	fmt.Fprintf(&result, "\n=== Kubeconfig Authentication Error: %s ===\n", info.Message)
+	result.WriteString("\nRemediation steps:\n")
+	for _, step := range info.Remediation {
+		fmt.Fprintf(&result, "  %s\n", step)
+	}
+	result.WriteString("\n")
+
+	return result.String()
+}
+
 // RequireClusterResource skips the test if the CAPI Cluster resource does not exist or is in a Failed phase.
 // Use this at the top of verification tests that depend on earlier deployment phases succeeding.
 func RequireClusterResource(t *testing.T, kubeContext, namespace, clusterName string) {
@@ -2674,7 +2757,7 @@ func IsClusterReady(t *testing.T, kubeContext, namespace, clusterName string) bo
 }
 
 // DefaultClusterReadyTimeout is the default timeout for waiting for a cluster to become ready.
-const DefaultClusterReadyTimeout = 120 * time.Minute
+const DefaultClusterReadyTimeout = DefaultClusterDeploymentTimeout
 
 // DefaultClusterReadyPollInterval is the default interval between cluster ready checks.
 const DefaultClusterReadyPollInterval = 30 * time.Second
@@ -2688,7 +2771,7 @@ const DefaultClusterReadyPollInterval = 30 * time.Second
 //   - kubeContext: kubectl context to use (e.g., "kind-capz-tests-stage")
 //   - namespace: namespace where the Cluster resource is located
 //   - clusterName: name of the Cluster resource to check
-//   - timeout: maximum time to wait for the cluster to become ready (use 0 for default of 120m)
+//   - timeout: maximum time to wait for the cluster to become ready (use 0 for default of 60m)
 //
 // Returns nil if the cluster becomes ready, or an error if the timeout is reached or the cluster fails.
 func WaitForClusterReady(t *testing.T, kubeContext, namespace, clusterName string, timeout time.Duration) error {

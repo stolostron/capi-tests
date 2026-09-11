@@ -171,7 +171,7 @@ The test suite validates naming compliance during the Check Dependencies phase (
 
 ### Test Behavior
 
-- `CLUSTER_DEPLOYMENT_TIMEOUT` - How long the in-code polling loop waits for the workload cluster to become ready (default: `120m`). Use minutes format: `60m`, `90m`, `120m` (required by Makefile auto-computation).
+- `CLUSTER_DEPLOYMENT_TIMEOUT` - How long the in-code polling loop waits for the workload cluster to become ready (default: `60m`). Use minutes format: `60m`, `90m`, `120m` (required by Makefile auto-computation).
 - `CLUSTER_DELETION_TIMEOUT` - How long the in-code polling loop waits for the workload cluster to be deleted (default: `60m`). Use minutes format: `60m`, `90m`, `120m`.
 - `DEPLOYMENT_TIMEOUT` - **Deprecated**: Legacy timeout variable. Falls back to this if `CLUSTER_DEPLOYMENT_TIMEOUT` / `CLUSTER_DELETION_TIMEOUT` are not set.
 - `DEPLOYMENT_STALL_TIMEOUT` - Stall detection timeout (default: `30m`). If the deployment makes no progress for this duration, the test fails early instead of waiting for the full timeout. Set to `0` to disable.
@@ -346,7 +346,7 @@ These targets are called by `make test-all` but can be run individually for debu
 
 ```bash
 # Run all tests
-go test -v ./test -timeout 120m
+go test -v ./test -timeout 60m
 
 # Run specific test phase
 go test -v ./test -run TestCheckDependencies
@@ -356,7 +356,7 @@ go test -v ./test -run TestInfrastructure
 DEPLOYMENT_ENV=prod \
 WORKLOAD_CLUSTER_NAME=my-aro-cluster \
 REGION=westus2 \
-go test -v ./test -timeout 120m
+go test -v ./test -timeout 60m
 ```
 
 ### Test Results and Reports
@@ -528,6 +528,11 @@ The test suite integrates with GitHub Actions:
 - **Check Dependencies** - Dependency checks on every push
 - **Test Setup** - Repository setup validation
 - **Test Kind Cluster** - Kind cluster deployment tests
+
+When manually dispatching a Full Cluster Deployment workflow, choose the
+workload-cluster deployment and deletion timeouts from `60`, `90`, or `120`
+minutes. The defaults are `60` minutes for both operations; scheduled runs use
+those defaults.
 
 **Security Scanning:**
 - **govulncheck** - Go vulnerability scanning
