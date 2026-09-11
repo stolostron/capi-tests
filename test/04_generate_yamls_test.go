@@ -295,6 +295,16 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	}
 	PrintToTTY("\n")
 
+	if config.HasProvider("aro") {
+		clusterYAMLPath := filepath.Join(outputDir, config.ClusterYAML)
+		if err := ValidateGeneratedResourceGroupFile(config.ResourceGroupName, clusterYAMLPath); err != nil {
+			t.Errorf("generated Azure resource group validation failed for %s: %v", clusterYAMLPath, err)
+			return
+		}
+		PrintToTTY("✅ Generated Azure resource group matches configuration: %s\n\n", config.ResourceGroupName)
+		t.Logf("Generated Azure resource group matches configuration: %s", config.ResourceGroupName)
+	}
+
 	// Mark generation as successful only if no errors occurred
 	if !t.Failed() {
 		infrastructureGenerationSucceeded = true
