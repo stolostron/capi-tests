@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [ "**" ]
   schedule:
-    # Run daily at 2:30 AM UTC
     - cron: '30 2 * * *'
   workflow_dispatch:
 
@@ -21,7 +20,6 @@ jobs:
     permissions:
       contents: read
       security-events: write
-      issues: write
 
     steps:
     - name: Checkout code
@@ -43,35 +41,13 @@ jobs:
     - name: Generate summary
       if: always()
       run: |
-        echo "# gosec Security Scan Results" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-
+        echo "# gosec Security Scan Results" >> "$GITHUB_STEP_SUMMARY"
         if [ -f gosec-results.json ]; then
-          # Parse JSON results
           ISSUES=$(jq -r '.Issues // [] | length' gosec-results.json 2>/dev/null || echo "0")
-
-          if [ "$ISSUES" = "0" ]; then
-            echo "## ✅ No security issues found!" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Go source code passed all gosec security checks." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ Security issues detected: $ISSUES" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### Issues Found" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "| Severity | Rule | File | Line | Details |" >> $GITHUB_STEP_SUMMARY
-            echo "|----------|------|------|------|---------|" >> $GITHUB_STEP_SUMMARY
-
-            jq -r '.Issues[] | "| \(.severity) | \(.rule_id) | \(.file) | \(.line) | \(.details) |"' gosec-results.json >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
-
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### Recommendations" >> $GITHUB_STEP_SUMMARY
-            echo "1. Review each security issue listed above" >> $GITHUB_STEP_SUMMARY
-            echo "2. Apply recommended fixes from gosec documentation" >> $GITHUB_STEP_SUMMARY
-            echo "3. Re-run the scan to verify fixes" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "Detected issues: $ISSUES" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.Issues[] | "- \(.severity): \(.rule_id) - \(.file):\(.line) - \(.details)"' gosec-results.json >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
         else
-          echo "⚠️ No results file generated" >> $GITHUB_STEP_SUMMARY
+          echo "No results file generated" >> "$GITHUB_STEP_SUMMARY"
         fi
 
     - name: Upload gosec results
@@ -82,162 +58,40 @@ jobs:
         path: gosec-results.json
         retention-days: 30
 
-    - name: Create GitHub issue on security findings
+    - name: Report security findings to Jira
       if: steps.gosec-scan.outcome == 'failure' && github.event_name != 'pull_request'
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+        JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        JIRA_PARENT_KEY: ${{ vars.JIRA_SECURITY_PARENT_KEY }}
+        JIRA_ASSIGNEE_ACCOUNT_ID: ${{ vars.JIRA_ASSIGNEE_ACCOUNT_ID }}
         SERVER_URL: ${{ github.server_url }}
         REPO: ${{ github.repository }}
         RUN_ID: ${{ github.run_id }}
         REF_NAME: ${{ github.ref_name }}
         SHA: ${{ github.sha }}
       run: |
-        # Search for existing open issues with security labels (one issue per scanner type)
-        EXISTING_ISSUE=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label "security" --label "gosec" --json number --jq ".[0].number" 2>/dev/null || echo "")
-
-        if [ -n "$EXISTING_ISSUE" ]; then
-          echo "Existing issue found: #$EXISTING_ISSUE"
-
-          # Count current issues
-          ISSUES=$(jq -r '.Issues // [] | length' gosec-results.json 2>/dev/null || echo "0")
-
-          # Build comment body using echo statements to avoid YAML heredoc issues
-          {
-            echo "## 🔄 Security Issues Still Present"
-            echo ""
-            echo "**New Detection**: ${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}"
-            echo "**Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-            echo "**Branch**: ${REF_NAME}"
-            echo "**Commit**: ${SHA}"
-            echo "**Issues Count**: $ISSUES"
-            echo ""
-            echo "### Latest Findings"
-            echo ""
-            echo "<details>"
-            echo "<summary>Click to expand gosec findings</summary>"
-            echo ""
-            if [ -f gosec-results.json ] && [ "$ISSUES" != "0" ]; then
-              jq -r '.Issues[] | "**\(.severity)** - \(.rule_id) - `\(.file):\(.line)`\n\(.details)\n"' gosec-results.json 2>/dev/null | head -50
-            else
-              echo "See workflow logs for details"
-            fi
-            echo ""
-            echo "</details>"
-            echo ""
-            echo "**Action Required**: Security issues persist. Please review and fix."
-          } > comment_body.md
-
-          gh issue comment "$EXISTING_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file comment_body.md
-        else
-          echo "Creating new issue..."
-
-          # Parse issue details
-          ISSUES=$(jq -r '.Issues // [] | length' gosec-results.json 2>/dev/null || echo "0")
-          HIGH=$(jq -r '[.Issues[] | select(.severity == "HIGH")] | length' gosec-results.json 2>/dev/null || echo "0")
-          MEDIUM=$(jq -r '[.Issues[] | select(.severity == "MEDIUM")] | length' gosec-results.json 2>/dev/null || echo "0")
-          LOW=$(jq -r '[.Issues[] | select(.severity == "LOW")] | length' gosec-results.json 2>/dev/null || echo "0")
-
-          # Build issue body using echo statements to avoid YAML heredoc issues
-          {
-            echo "# 🚨 Security Alert: Code Security Issues Detected (gosec)"
-            echo ""
-            echo "## Overview"
-            echo ""
-            echo "The **gosec** source code security scanner has detected security issues in the Go codebase."
-            echo ""
-            echo "| Field | Value |"
-            echo "|-------|-------|"
-            echo "| **Scanner** | gosec (Go AST security analyzer) |"
-            echo "| **Status** | ❌ FAILED |"
-            echo "| **Total Issues** | $ISSUES |"
-            echo "| **🔴 HIGH** | $HIGH |"
-            echo "| **🟡 MEDIUM** | $MEDIUM |"
-            echo "| **🟢 LOW** | $LOW |"
-            echo "| **Workflow Run** | [${RUN_ID}](${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}) |"
-            echo "| **Branch** | \`${REF_NAME}\` |"
-            echo "| **Commit** | \`${SHA}\` |"
-            echo "| **Date** | $(date -u +"%Y-%m-%d %H:%M:%S UTC") |"
-            echo ""
-            echo "## 📋 Security Issues Found"
-            echo ""
-            echo "<details open>"
-            echo "<summary><b>Detailed Findings (Click to collapse)</b></summary>"
-            echo ""
-            if [ -f gosec-results.json ] && [ "$ISSUES" != "0" ]; then
-              echo "| Severity | Rule | File | Line | Details |"
-              echo "|----------|------|------|------|---------|"
-              jq -r '.Issues[] | "| \(.severity) | \(.rule_id) | `\(.file)` | \(.line) | \(.details) |"' gosec-results.json 2>/dev/null
-            else
-              echo "See workflow run logs for complete details"
-            fi
-            echo ""
-            echo "</details>"
-            echo ""
-            echo "## 🔧 Remediation Steps"
-            echo ""
-            echo "### 1️⃣ Review Each Finding"
-            echo "- Examine the security issues listed above"
-            echo "- Understand the security risk for each"
-            echo "- Check gosec documentation for the specific rule ID"
-            echo ""
-            echo "### 2️⃣ Fix Security Issues"
-            echo ""
-            echo "Common fixes:"
-            echo "- **G104**: Add proper error handling"
-            echo "- **G304**: Validate file paths or add \`#nosec\` with justification"
-            echo "- **G401/G501**: Use stronger crypto algorithms"
-            echo "- **Others**: Follow gosec recommendations"
-            echo ""
-            echo "### 3️⃣ Suppress False Positives (If Appropriate)"
-            echo "\`\`\`go"
-            echo "// #nosec G304 - Justification for why this is safe"
-            echo "data, err := os.ReadFile(filePath)"
-            echo "\`\`\`"
-            echo ""
-            echo "### 4️⃣ Test Changes"
-            echo "\`\`\`bash"
-            echo "# Run tests"
-            echo "go test ./..."
-            echo ""
-            echo "# Run gosec locally"
-            echo "go install github.com/securego/gosec/v2/cmd/gosec@v2.25.0"
-            echo "gosec ./..."
-            echo "\`\`\`"
-            echo ""
-            echo "### 5️⃣ Verify Fix"
-            echo "- Push changes to a branch"
-            echo "- The gosec workflow will run automatically"
-            echo "- Verify it passes before merging"
-            echo ""
-            echo "## 📚 Resources"
-            echo ""
-            echo "- [gosec Documentation](https://github.com/securego/gosec)"
-            echo "- [Available Rules](https://github.com/securego/gosec#available-rules)"
-            echo "- [CWE Database](https://cwe.mitre.org/)"
-            echo "- [Workflow File](${SERVER_URL}/${REPO}/blob/main/.github/workflows/security-gosec.yml)"
-            echo ""
-            echo "## 🔔 Next Steps"
-            echo ""
-            echo "1. **Triage** issues by severity (HIGH → MEDIUM → LOW)"
-            echo "2. **Fix** legitimate security issues"
-            echo "3. **Suppress** false positives with \`#nosec\` and justification"
-            echo "4. **Test** thoroughly to ensure no regressions"
-            echo "5. **Close** this issue once the workflow passes"
-            echo ""
-            echo "---"
-            echo ""
-            echo "*🤖 This issue was automatically created by the [gosec security workflow](${SERVER_URL}/${REPO}/actions/workflows/security-gosec.yml)*"
-          } > issue_body.md
-
-          # Create issue with security labels
-          gh issue create \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "🚨 [gosec] Security issues detected on ${REF_NAME}" \
-            --label "security" \
-            --label "gosec" \
-            --body-file issue_body.md || \
-          echo "Failed to create issue, but continuing workflow"
-        fi
+        ISSUES=$(jq -r '.Issues // [] | length' gosec-results.json 2>/dev/null || echo "0")
+        HIGH=$(jq -r '[.Issues[] | select(.severity == "HIGH")] | length' gosec-results.json 2>/dev/null || echo "0")
+        MEDIUM=$(jq -r '[.Issues[] | select(.severity == "MEDIUM")] | length' gosec-results.json 2>/dev/null || echo "0")
+        LOW=$(jq -r '[.Issues[] | select(.severity == "LOW")] | length' gosec-results.json 2>/dev/null || echo "0")
+        {
+          echo "Security Alert: Code Security Issues Detected (gosec)"
+          echo "Scanner: gosec"
+          echo "Status: FAILED"
+          echo "Total issues: $ISSUES (HIGH: $HIGH, MEDIUM: $MEDIUM, LOW: $LOW)"
+          echo "Workflow run: ${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}"
+          echo "Branch: ${REF_NAME}"
+          echo "Commit: ${SHA}"
+          echo ""
+          jq -r '.Issues[] | "\(.severity) - \(.rule_id) - \(.file):\(.line)\n\(.details)\n"' gosec-results.json 2>/dev/null || true
+          echo "Remediation: review each finding, fix legitimate issues, and rerun gosec."
+          echo "Workflow: ${SERVER_URL}/${REPO}/blob/main/.github/workflows/security-gosec.yml"
+        } > jira-report.md
+        ./scripts/report-security-finding.sh \
+          --scanner gosec \
+          --summary "[Security][gosec] Security findings detected" \
+          --body-file jira-report.md
 
     - name: Fail if security issues found
       if: steps.gosec-scan.outcome == 'failure'

@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [ "**" ]
   schedule:
-    # Run daily at 3:30 AM UTC
     - cron: '30 3 * * *'
   workflow_dispatch:
 
@@ -21,7 +20,6 @@ jobs:
     permissions:
       contents: read
       security-events: write
-      issues: write
 
     steps:
     - name: Checkout code
@@ -42,70 +40,34 @@ jobs:
     - name: Run nancy dependency scanner
       id: nancy-scan
       run: |
-        # Install nancy — pin to specific version to prevent supply chain attacks
         go install github.com/sonatype-nexus-community/nancy@v1.2.0
-
-        # Run nancy and capture output
         set +e
         nancy sleuth --loud < go.list 2>&1 | tee nancy-output.txt
         NANCY_EXIT_CODE=$?
         set -e
-
-        # Check for OSS Index API errors (401 Unauthorized, 403 Forbidden, 5xx errors)
         if grep -qE "\[401 Unauthorized\]|\[403 Forbidden\]|\[5[0-9][0-9]" nancy-output.txt; then
-          echo "OSS_INDEX_ERROR=true" >> $GITHUB_ENV
-          echo "NANCY_RESULT=api_error" >> $GITHUB_ENV
-          echo "::warning::Sonatype OSS Index API error detected. This is likely a temporary service issue."
+          echo "NANCY_RESULT=api_error" >> "$GITHUB_ENV"
+          echo "::warning::Sonatype OSS Index API error detected."
         elif [ "$NANCY_EXIT_CODE" -eq 0 ]; then
-          echo "OSS_INDEX_ERROR=false" >> $GITHUB_ENV
-          echo "NANCY_RESULT=success" >> $GITHUB_ENV
+          echo "NANCY_RESULT=success" >> "$GITHUB_ENV"
         else
-          echo "OSS_INDEX_ERROR=false" >> $GITHUB_ENV
-          echo "NANCY_RESULT=vulnerabilities" >> $GITHUB_ENV
+          echo "NANCY_RESULT=vulnerabilities" >> "$GITHUB_ENV"
         fi
-
-        # Store exit code for later steps
-        echo "NANCY_EXIT_CODE=$NANCY_EXIT_CODE" >> $GITHUB_ENV
+        echo "NANCY_EXIT_CODE=$NANCY_EXIT_CODE" >> "$GITHUB_ENV"
       continue-on-error: true
 
     - name: Generate summary
       if: always()
       run: |
-        echo "# nancy Dependency Security Scan Results" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "Scanning Go dependencies for known vulnerabilities using Sonatype OSS Index." >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-
+        echo "# nancy Dependency Security Scan Results" >> "$GITHUB_STEP_SUMMARY"
         if [ "$NANCY_RESULT" = "success" ]; then
-          echo "## ✅ No vulnerable dependencies found!" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "All Go dependencies passed nancy security checks." >> $GITHUB_STEP_SUMMARY
+          echo "No vulnerable dependencies found." >> "$GITHUB_STEP_SUMMARY"
         elif [ "$NANCY_RESULT" = "api_error" ]; then
-          echo "## ⚠️ OSS Index API Error" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Nancy could not complete the scan due to a Sonatype OSS Index API error." >> $GITHUB_STEP_SUMMARY
-          echo "This is typically a temporary service issue and not related to your dependencies." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### What to do" >> $GITHUB_STEP_SUMMARY
-          echo "- Wait and re-run the workflow later" >> $GITHUB_STEP_SUMMARY
-          echo "- Check [OSS Index status](https://ossindex.sonatype.org/)" >> $GITHUB_STEP_SUMMARY
-          echo "- govulncheck provides alternative vulnerability scanning" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Error Details" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          cat nancy-output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No output captured"
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "OSS Index API error; the scan was not conclusive." >> "$GITHUB_STEP_SUMMARY"
+          cat nancy-output.txt >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
         else
-          echo "## ❌ Vulnerable dependencies detected!" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Nancy found one or more dependencies with known vulnerabilities." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Remediation Steps" >> $GITHUB_STEP_SUMMARY
-          echo "1. Review the vulnerabilities in the workflow logs" >> $GITHUB_STEP_SUMMARY
-          echo "2. Update affected dependencies: \`go get -u <package>\`" >> $GITHUB_STEP_SUMMARY
-          echo "3. Run \`go mod tidy\` to clean up" >> $GITHUB_STEP_SUMMARY
-          echo "4. Test thoroughly after updates" >> $GITHUB_STEP_SUMMARY
-          echo "5. Re-run this workflow to verify fixes" >> $GITHUB_STEP_SUMMARY
+          echo "Vulnerable dependencies detected." >> "$GITHUB_STEP_SUMMARY"
+          echo "Update affected dependencies and rerun the scan." >> "$GITHUB_STEP_SUMMARY"
         fi
 
     - name: Upload scan results
@@ -118,219 +80,43 @@ jobs:
           nancy-output.txt
         retention-days: 30
 
-    - name: Create GitHub issue on vulnerability
+    - name: Report security findings to Jira
       if: env.NANCY_RESULT == 'vulnerabilities' && github.event_name != 'pull_request'
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+        JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        JIRA_PARENT_KEY: ${{ vars.JIRA_SECURITY_PARENT_KEY }}
+        JIRA_ASSIGNEE_ACCOUNT_ID: ${{ vars.JIRA_ASSIGNEE_ACCOUNT_ID }}
         SERVER_URL: ${{ github.server_url }}
         REPO: ${{ github.repository }}
         RUN_ID: ${{ github.run_id }}
         REF_NAME: ${{ github.ref_name }}
         SHA: ${{ github.sha }}
-        EVENT_NAME: ${{ github.event_name }}
       run: |
-        # Search for existing open issues with security labels (one issue per scanner type)
-        EXISTING_ISSUE=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label "security" --label "nancy" --json number --jq ".[0].number" 2>/dev/null || echo "")
-
-        if [ -n "$EXISTING_ISSUE" ]; then
-          echo "Existing issue found: #$EXISTING_ISSUE"
-
-          # Build comment body using echo statements to avoid YAML heredoc issues
-          {
-            echo "## 🔄 Vulnerable Dependencies Still Present"
-            echo ""
-            echo "**New Detection**: ${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}"
-            echo "**Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-            echo "**Branch**: ${REF_NAME}"
-            echo "**Commit**: ${SHA}"
-            echo ""
-            echo "### Status"
-            echo ""
-            echo "Nancy continues to detect vulnerable Go dependencies from the Sonatype OSS Index."
-            echo ""
-            echo "<details>"
-            echo "<summary>View workflow logs for details</summary>"
-            echo ""
-            echo "Check the [workflow run](${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}) for specific vulnerable packages and versions."
-            echo ""
-            echo "</details>"
-            echo ""
-            echo "**Action Required**: Update vulnerable dependencies to patched versions."
-          } > comment_body.md
-
-          gh issue comment "$EXISTING_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file comment_body.md
-        else
-          echo "Creating new issue..."
-
-          # Build issue body using echo statements to avoid YAML heredoc issues
-          {
-            echo "# 🚨 Security Alert: Vulnerable Go Dependencies (nancy)"
-            echo ""
-            echo "## Overview"
-            echo ""
-            echo "The **nancy** dependency scanner has detected Go dependencies with known vulnerabilities from the **Sonatype OSS Index**."
-            echo ""
-            echo "| Field | Value |"
-            echo "|-------|-------|"
-            echo "| **Scanner** | nancy (Sonatype OSS Index) |"
-            echo "| **Status** | ❌ FAILED |"
-            echo "| **Database** | Sonatype OSS Index |"
-            echo "| **Workflow Run** | [${RUN_ID}](${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}) |"
-            echo "| **Branch** | \`${REF_NAME}\` |"
-            echo "| **Commit** | \`${SHA}\` |"
-            echo "| **Triggered By** | ${EVENT_NAME} |"
-            echo "| **Date** | $(date -u +"%Y-%m-%d %H:%M:%S UTC") |"
-            echo ""
-            echo "## 📋 Vulnerability Details"
-            echo ""
-            echo "Nancy scans your Go dependencies (\`go.list\`) against the Sonatype OSS Index for known security vulnerabilities."
-            echo ""
-            echo "### View Full Results"
-            echo ""
-            echo "Check the [workflow run logs](${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}) for:"
-            echo "- Specific vulnerable package names"
-            echo "- CVE identifiers"
-            echo "- Vulnerability severity ratings"
-            echo "- Recommended patch versions"
-            echo ""
-            echo "### Dependency List"
-            echo ""
-            echo "The scan analyzed dependencies from \`go.list\`. Download the artifact from the workflow run to see the full dependency tree."
-            echo ""
-            echo "## 🔧 Remediation Steps"
-            echo ""
-            echo "### 1️⃣ Identify Vulnerable Packages"
-            echo ""
-            echo "Review the workflow logs to identify which packages have vulnerabilities:"
-            echo "\`\`\`"
-            echo "Check: https://github.com/${REPO}/actions/runs/${RUN_ID}"
-            echo "\`\`\`"
-            echo ""
-            echo "### 2️⃣ Update Dependencies"
-            echo ""
-            echo "For each vulnerable package:"
-            echo ""
-            echo "\`\`\`bash"
-            echo "# Update specific package to patched version"
-            echo "go get -u <vulnerable-package>@<safe-version>"
-            echo ""
-            echo "# Example:"
-            echo "# go get -u github.com/example/pkg@v1.2.3"
-            echo ""
-            echo "# Update go.mod and go.sum"
-            echo "go mod tidy"
-            echo ""
-            echo "# Verify no broken dependencies"
-            echo "go mod verify"
-            echo "\`\`\`"
-            echo ""
-            echo "### 3️⃣ Check for Breaking Changes"
-            echo ""
-            echo "\`\`\`bash"
-            echo "# Run all tests"
-            echo "go test ./..."
-            echo ""
-            echo "# Or use make"
-            echo "make test"
-            echo "\`\`\`"
-            echo ""
-            echo "### 4️⃣ Run nancy Locally (Optional)"
-            echo ""
-            echo "\`\`\`bash"
-            echo "# Install nancy"
-            echo "go install github.com/sonatype-nexus-community/nancy@v1.2.0"
-            echo ""
-            echo "# Generate dependency list"
-            echo "go list -json -deps ./... > go.list"
-            echo ""
-            echo "# Run nancy scan"
-            echo "nancy sleuth --loud < go.list"
-            echo "\`\`\`"
-            echo ""
-            echo "### 5️⃣ Verify Fix"
-            echo ""
-            echo "- Push your changes to a branch"
-            echo "- The nancy workflow will run automatically"
-            echo "- Verify it passes before merging"
-            echo "- Check that no new vulnerabilities were introduced"
-            echo ""
-            echo "## 💡 Best Practices"
-            echo ""
-            echo "### Keep Dependencies Updated"
-            echo ""
-            echo "\`\`\`bash"
-            echo "# Check for outdated dependencies"
-            echo "go list -u -m all"
-            echo ""
-            echo "# Update all dependencies (careful - test thoroughly)"
-            echo "go get -u ./..."
-            echo "go mod tidy"
-            echo "\`\`\`"
-            echo ""
-            echo "### Use Dependabot"
-            echo ""
-            echo "Consider enabling GitHub Dependabot for automatic dependency updates:"
-            echo "1. Go to repository **Settings** → **Security & analysis**"
-            echo "2. Enable **Dependabot security updates**"
-            echo "3. Enable **Dependabot version updates**"
-            echo ""
-            echo "### Regular Scans"
-            echo ""
-            echo "- Nancy runs daily at 3:30 AM UTC"
-            echo "- Also runs on all PRs and pushes"
-            echo "- Monitor Security tab regularly"
-            echo ""
-            echo "## 📚 Resources"
-            echo ""
-            echo "- [nancy Documentation](https://github.com/sonatype-nexus-community/nancy)"
-            echo "- [Sonatype OSS Index](https://ossindex.sonatype.org/)"
-            echo "- [Go Vulnerability Database](https://vuln.go.dev/)"
-            echo "- [Go Module Documentation](https://go.dev/ref/mod)"
-            echo "- [Workflow File](${SERVER_URL}/${REPO}/blob/main/.github/workflows/security-nancy.yml)"
-            echo ""
-            echo "## 🔄 Comparison with govulncheck"
-            echo ""
-            echo "This repository uses both **nancy** and **govulncheck**:"
-            echo ""
-            echo "| Scanner | Database | Focus |"
-            echo "|---------|----------|-------|"
-            echo "| **nancy** | Sonatype OSS Index | Broader vulnerability database |"
-            echo "| **govulncheck** | Go Vulnerability DB | Official Go vulnerabilities |"
-            echo ""
-            echo "Both scanners complement each other - fix vulnerabilities found by either scanner."
-            echo ""
-            echo "## 🔔 Next Steps"
-            echo ""
-            echo "1. **Review** workflow logs for vulnerable package details"
-            echo "2. **Update** each vulnerable dependency to a safe version"
-            echo "3. **Test** thoroughly to ensure no breaking changes"
-            echo "4. **Verify** nancy scan passes"
-            echo "5. **Close** this issue once resolved"
-            echo ""
-            echo "---"
-            echo ""
-            echo "*🤖 This issue was automatically created by the [nancy security workflow](${SERVER_URL}/${REPO}/actions/workflows/security-nancy.yml)*"
-          } > issue_body.md
-
-          # Create issue with security labels
-          gh issue create \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "🚨 [nancy] Vulnerable dependencies detected on ${REF_NAME}" \
-            --label "security" \
-            --label "nancy" \
-            --body-file issue_body.md || \
-          echo "Failed to create issue, but continuing workflow"
-        fi
+        {
+          echo "Security Alert: Vulnerable Go Dependencies (nancy)"
+          echo "Scanner: nancy / Sonatype OSS Index"
+          echo "Status: FAILED"
+          echo "Workflow run: ${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}"
+          echo "Branch: ${REF_NAME}"
+          echo "Commit: ${SHA}"
+          echo ""
+          head -200 nancy-output.txt 2>/dev/null || echo "See workflow logs for details"
+          echo ""
+          echo "Remediation: update vulnerable dependencies and rerun nancy."
+          echo "Workflow: ${SERVER_URL}/${REPO}/blob/main/.github/workflows/security-nancy.yml"
+        } > jira-report.md
+        ./scripts/report-security-finding.sh \
+          --scanner nancy \
+          --summary "[Security][nancy] Vulnerable dependencies detected" \
+          --body-file jira-report.md
 
     - name: Fail if vulnerabilities found
       if: env.NANCY_RESULT == 'vulnerabilities'
       run: |
-        echo "::error::Nancy detected vulnerable Go dependencies. Review the scan results above."
+        echo "::error::Nancy detected vulnerable Go dependencies."
         exit 1
 
     - name: Warn on API error (non-blocking)
       if: env.NANCY_RESULT == 'api_error'
-      run: |
-        echo "::warning::Nancy scan could not complete due to OSS Index API error."
-        echo "This is a temporary external service issue - the workflow will not fail."
-        echo "Other security scanners (govulncheck, Trivy, gosec) continue to provide coverage."
+      run: echo "::warning::Nancy scan could not complete due to an OSS Index API error."
