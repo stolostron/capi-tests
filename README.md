@@ -125,6 +125,18 @@ When using `INFRA_PROVIDER=rosa`, the following credentials are required:
 - `AZURE_SUBSCRIPTION_NAME` - Azure subscription ID
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`). Used in Azure resource tags and domain prefix validation.
 - `CAPI_USER` - User identifier and base for auto-generated `CS_CLUSTER_NAME` (default: `cate`)
+
+#### Default user prefix migration
+
+The default resource-name prefix changed from `rcapb` to `rcapx` in the change
+associated with PR #444. Because `CAPI_USER` is used to derive
+`CS_CLUSTER_NAME` and related cloud resource names, this is a breaking change
+for runs that relied on the previous default. To preserve existing names while
+migrating, set `CAPI_USER=rcapb` explicitly and clean up resources created with
+the old prefix before switching to the new value. Current releases use `cate`
+as the default, so set `CAPI_USER` explicitly when upgrading from either older
+default.
+
 - `WORKLOAD_CLUSTER_NAMESPACE` - Namespace for workload cluster resources. If set, uses the exact value provided (for resume scenarios). If not set, auto-generates a unique namespace per test run using `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` format.
 - `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` - Prefix for auto-generated namespace (default: provider-specific — `capz-test` for ARO, `capa-test` for ROSA). Only used when `WORKLOAD_CLUSTER_NAMESPACE` is not set.
 
