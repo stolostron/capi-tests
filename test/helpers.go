@@ -2090,77 +2090,73 @@ func ApplyWithRetryInNamespace(t *testing.T, kubeContext, namespace, yamlPath st
 		maxRetries = DefaultApplyMaxRetries
 	}
 
-	baseDelay := DefaultApplyRetryDelay
+	var output string
+	var commandErr error
+	attempt := 0
 
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		// Build kubectl command - skip namespace flag if namespace is empty
-		var output string
-		var err error
+	policy := RetryPolicy{
+		MaxAttempts:    maxRetries,
+		InitialDelay:   DefaultApplyRetryDelay,
+		MaxDelay:       60 * time.Second,
+		JitterFraction: 0.1,
+		Sleep: func(delay time.Duration) {
+			PrintToTTY("[%d/%d] ⚠️  Retryable error: %v\n", attempt, maxRetries, commandErr)
 
-		if namespace == "" {
-			PrintToTTY("[%d/%d] Applying %s...\n", attempt, maxRetries, yamlPath)
-			t.Logf("Applying %s (attempt %d/%d)", yamlPath, attempt, maxRetries)
-			output, err = RunCommandQuiet(t, "kubectl", "--context", kubeContext, "apply", "--validate=warn", "-f", yamlPath)
-		} else {
-			PrintToTTY("[%d/%d] Applying %s to namespace %s...\n", attempt, maxRetries, yamlPath, namespace)
-			t.Logf("Applying %s to namespace %s (attempt %d/%d)", yamlPath, namespace, attempt, maxRetries)
-			output, err = RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "apply", "--validate=warn", "-f", yamlPath)
-		}
-
-		// Check if apply was successful
-		if err == nil || IsKubectlApplySuccess(output) {
-			PrintToTTY("✅ Successfully applied %s\n", yamlPath)
-			t.Logf("Successfully applied %s", yamlPath)
-			return nil
-		}
-
-		// Determine if error is retryable
-		if !isRetryableKubectlError(output, err) {
-			PrintToTTY("❌ Non-retryable error applying %s: %v\n", yamlPath, err)
-			t.Logf("Non-retryable error applying %s: %v\nOutput: %s", yamlPath, err, output)
-
-			if netErr := DetectNetworkError(output + " " + err.Error()); netErr != nil {
-				PrintToTTY("%s", FormatNetworkError(netErr))
-				t.Log(FormatNetworkError(netErr))
-			}
-
-			return fmt.Errorf("failed to apply %s: %w\nOutput: %s", yamlPath, err, output)
-		}
-
-		// Don't sleep after last attempt
-		if attempt < maxRetries {
-			// Exponential backoff: 10s, 20s, 40s, 60s (capped)
-			delay := baseDelay * time.Duration(attempt)
-			if delay > 60*time.Second {
-				delay = 60 * time.Second
-			}
-
-			PrintToTTY("[%d/%d] ⚠️  Retryable error: %v\n", attempt, maxRetries, err)
-
-			if netErr := DetectNetworkError(output + " " + err.Error()); netErr != nil {
+			if netErr := DetectNetworkError(output + " " + commandErr.Error()); netErr != nil {
 				PrintToTTY("[%d/%d] 🔍 %s: %s\n", attempt, maxRetries, netErr.ErrorType, netErr.Message)
 				t.Logf("Network error detected (%s): %s", netErr.ErrorType, netErr.Message)
 			}
 
 			PrintToTTY("[%d/%d] ⏳ Waiting %v before retry...\n", attempt, maxRetries, delay.Round(time.Second))
-			t.Logf("Apply failed (attempt %d/%d): %v, retrying in %v", attempt, maxRetries, err, delay.Round(time.Second))
-
+			t.Logf("Apply failed (attempt %d/%d): %v, retrying in %v", attempt, maxRetries, commandErr, delay.Round(time.Second))
 			time.Sleep(delay)
-		} else {
-			PrintToTTY("❌ Failed to apply %s after %d attempts: %v\n", yamlPath, maxRetries, err)
-			t.Logf("Failed to apply %s after %d attempts: %v\nOutput: %s", yamlPath, maxRetries, err, output)
-
-			if netErr := DetectNetworkError(output + " " + err.Error()); netErr != nil {
-				PrintToTTY("%s", FormatNetworkError(netErr))
-				t.Log(FormatNetworkError(netErr))
-			}
-
-			return fmt.Errorf("failed to apply %s after %d attempts: %w\nOutput: %s", yamlPath, maxRetries, err, output)
-		}
+		},
 	}
 
-	// This should never be reached, but just in case
-	return fmt.Errorf("failed to apply %s: exhausted all retries", yamlPath)
+	retryErr := policy.Execute(func() error {
+		attempt++
+		// Build kubectl command - skip namespace flag if namespace is empty.
+		if namespace == "" {
+			PrintToTTY("[%d/%d] Applying %s...\n", attempt, maxRetries, yamlPath)
+			t.Logf("Applying %s (attempt %d/%d)", yamlPath, attempt, maxRetries)
+			output, commandErr = RunCommandQuiet(t, "kubectl", "--context", kubeContext, "apply", "--validate=warn", "-f", yamlPath)
+		} else {
+			PrintToTTY("[%d/%d] Applying %s to namespace %s...\n", attempt, maxRetries, yamlPath, namespace)
+			t.Logf("Applying %s to namespace %s (attempt %d/%d)", yamlPath, namespace, attempt, maxRetries)
+			output, commandErr = RunCommandQuiet(t, "kubectl", "--context", kubeContext, "-n", namespace, "apply", "--validate=warn", "-f", yamlPath)
+		}
+
+		if commandErr == nil || IsKubectlApplySuccess(output) {
+			return nil
+		}
+		return commandErr
+	}, func(err error) bool {
+		return isRetryableKubectlError(output, err)
+	})
+
+	if retryErr == nil {
+		PrintToTTY("✅ Successfully applied %s\n", yamlPath)
+		t.Logf("Successfully applied %s", yamlPath)
+		return nil
+	}
+
+	if !isRetryableKubectlError(output, retryErr) {
+		PrintToTTY("❌ Non-retryable error applying %s: %v\n", yamlPath, retryErr)
+		t.Logf("Non-retryable error applying %s: %v\nOutput: %s", yamlPath, retryErr, output)
+	} else {
+		PrintToTTY("❌ Failed to apply %s after %d attempts: %v\n", yamlPath, maxRetries, retryErr)
+		t.Logf("Failed to apply %s after %d attempts: %v\nOutput: %s", yamlPath, attempt, retryErr, output)
+	}
+
+	if netErr := DetectNetworkError(output + " " + retryErr.Error()); netErr != nil {
+		PrintToTTY("%s", FormatNetworkError(netErr))
+		t.Log(FormatNetworkError(netErr))
+	}
+
+	if attempt == 1 && !isRetryableKubectlError(output, retryErr) {
+		return fmt.Errorf("failed to apply %s: %w\nOutput: %s", yamlPath, retryErr, output)
+	}
+	return fmt.Errorf("failed to apply %s after %d attempts: %w\nOutput: %s", yamlPath, attempt, retryErr, output)
 }
 
 // isRetryableKubectlError determines if a kubectl error is retryable.
