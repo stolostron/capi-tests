@@ -229,6 +229,13 @@ func TestDeployment_ApplyClusterYAMLs(t *testing.T) {
 				file, filePath)
 		}
 
+		if config.HasProvider("aro") && file == config.ClusterYAML {
+			if err := ValidateGeneratedResourceGroupFile(config.ResourceGroupName, filePath); err != nil {
+				t.Fatalf("generated Azure resource group validation failed for %s: %v", filePath, err)
+			}
+			PrintToTTY("✅ Generated Azure resource group matches configuration: %s\n\n", config.ResourceGroupName)
+		}
+
 		PrintToTTY("[%d/%d] Applying %s...\n", i+1, len(expectedFiles), file)
 		t.Logf("Applying %s (%d/%d)", file, i+1, len(expectedFiles))
 
