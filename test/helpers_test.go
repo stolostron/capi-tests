@@ -115,6 +115,80 @@ func TestIsKubectlApplySuccess(t *testing.T) {
 	}
 }
 
+func TestDeploymentStateFilePathUsesStableRunIdentifier(t *testing.T) {
+	t.Setenv("DEPLOYMENT_STATE_FILE", "")
+	t.Setenv("CS_CLUSTER_NAME", "")
+	t.Setenv("RESOURCEGROUPNAME", "capz-tests-a1b2c-resgroup")
+
+	got := deploymentStateFilePath()
+	want := ".deployment-state-capz-tests-a1b2c-resgroup.json"
+	if got != want {
+		t.Fatalf("deploymentStateFilePath() = %q, want %q", got, want)
+	}
+}
+
+func TestDeploymentStateFilePathUsesExplicitOverride(t *testing.T) {
+	t.Setenv("DEPLOYMENT_STATE_FILE", "/tmp/capi-deployment-state.json")
+	t.Setenv("CS_CLUSTER_NAME", "cate-a1b2c")
+	t.Setenv("RESOURCEGROUPNAME", "capz-tests-a1b2c-resgroup")
+
+	got := deploymentStateFilePath()
+	want := "/tmp/capi-deployment-state.json"
+	if got != want {
+		t.Fatalf("deploymentStateFilePath() = %q, want %q", got, want)
+	}
+}
+
+func TestDeploymentStateFilePathFallsBackToLegacyFile(t *testing.T) {
+	t.Setenv("DEPLOYMENT_STATE_FILE", "")
+	t.Setenv("CS_CLUSTER_NAME", "")
+	t.Setenv("RESOURCEGROUPNAME", "")
+
+	got := deploymentStateFilePath()
+	if got != legacyDeploymentStateFile {
+		t.Fatalf("deploymentStateFilePath() = %q, want legacy file %q", got, legacyDeploymentStateFile)
+	}
+}
+
+func TestDeploymentStateReadsLegacyFileWhenRunScopedFileIsMissing(t *testing.T) {
+	t.Setenv("DEPLOYMENT_STATE_FILE", "")
+	t.Setenv("CS_CLUSTER_NAME", "")
+	t.Setenv("RESOURCEGROUPNAME", "capz-tests-a1b2c-resgroup")
+	t.Chdir(t.TempDir())
+
+	legacyState := `{"resource_group":"legacy-resgroup"}`
+	if err := os.WriteFile(legacyDeploymentStateFile, []byte(legacyState), 0600); err != nil {
+		t.Fatalf("failed to write legacy state file: %v", err)
+	}
+
+	state, err := ReadDeploymentState()
+	if err != nil {
+		t.Fatalf("ReadDeploymentState failed: %v", err)
+	}
+	if state == nil || state.ResourceGroup != "legacy-resgroup" {
+		t.Fatalf("ReadDeploymentState() = %#v, want legacy resource group", state)
+	}
+}
+
+func TestWriteDeploymentStateUsesRunScopedFile(t *testing.T) {
+	t.Setenv("DEPLOYMENT_STATE_FILE", "")
+	t.Setenv("CS_CLUSTER_NAME", "")
+	t.Setenv("RESOURCEGROUPNAME", "capz-tests-a1b2c-resgroup")
+	t.Chdir(t.TempDir())
+
+	config := &TestConfig{ResourceGroupName: "run-resgroup"}
+	if err := WriteDeploymentState(config); err != nil {
+		t.Fatalf("WriteDeploymentState failed: %v", err)
+	}
+
+	if _, err := os.Stat(deploymentStateFilePath()); err != nil {
+		t.Fatalf("run-scoped state file was not written: %v", err)
+	}
+	if _, err := os.Stat(legacyDeploymentStateFile); !os.IsNotExist(err) {
+		t.Fatalf("legacy state file exists after run-scoped write, err = %v", err)
+	}
+}
+
 func TestExtractClusterNameFromYAML(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir := t.TempDir()

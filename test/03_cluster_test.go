@@ -548,8 +548,8 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 	if err := WriteDeploymentState(config); err != nil {
 		t.Logf("Warning: failed to write deployment state file: %v", err)
 	} else {
-		PrintToTTY("📝 Deployment state saved to %s\n", DeploymentStateFile)
-		t.Logf("Deployment state saved to %s", DeploymentStateFile)
+		PrintToTTY("📝 Deployment state saved to %s\n", deploymentStateFilePath())
+		t.Logf("Deployment state saved to %s", deploymentStateFilePath())
 	}
 }
 

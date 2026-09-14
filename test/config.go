@@ -326,9 +326,8 @@ func getWorkloadClusterNamespace(defaultPrefix string) string {
 		// This handles the case where YAML generation ran in a previous test invocation
 		// and we need to use the same namespace for subsequent phases
 		repoDir := getDefaultRepoDir()
-		stateFilePath := filepath.Join(repoDir, ".deployment-state.json")
-		// #nosec G304 - path constructed from repo directory and fixed filename (.deployment-state.json)
-		if data, err := os.ReadFile(stateFilePath); err == nil {
+		_, data, err := readDeploymentStateFileFromRepo(repoDir)
+		if err == nil && data != nil {
 			var state struct {
 				WorkloadClusterNamespace string `json:"workload_cluster_namespace"`
 			}
@@ -371,9 +370,8 @@ func getClusterNamePrefix(capiUser string) string {
 		// This handles the case where a previous test invocation already generated
 		// a unique prefix and we need to reuse it for subsequent phases
 		repoDir := getDefaultRepoDir()
-		stateFilePath := filepath.Join(repoDir, ".deployment-state.json")
-		// #nosec G304 - path constructed from repo directory and fixed filename (.deployment-state.json)
-		if data, err := os.ReadFile(stateFilePath); err == nil {
+		stateFilePath, data, err := readDeploymentStateFileFromRepo(repoDir)
+		if err == nil && data != nil {
 			var state struct {
 				ClusterNamePrefix string            `json:"cluster_name_prefix"`
 				ResourceTags      map[string]string `json:"resource_tags,omitempty"`
@@ -393,7 +391,7 @@ func getClusterNamePrefix(capiUser string) string {
 				}
 				return
 			}
-		} else if !os.IsNotExist(err) {
+		} else if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: cannot read deployment state file %s: %v\n", stateFilePath, err)
 		}
 
@@ -429,9 +427,8 @@ func getResourceGroupName(workloadClusterName, runID string) string {
 		}
 
 		repoDir := getDefaultRepoDir()
-		stateFilePath := filepath.Join(repoDir, ".deployment-state.json")
-		// #nosec G304 - path constructed from repo directory and fixed filename (.deployment-state.json)
-		if data, err := os.ReadFile(stateFilePath); err == nil {
+		_, data, err := readDeploymentStateFileFromRepo(repoDir)
+		if err == nil && data != nil {
 			var state struct {
 				ResourceGroup string `json:"resource_group"`
 			}

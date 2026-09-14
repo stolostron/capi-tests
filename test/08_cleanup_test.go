@@ -182,7 +182,7 @@ func TestCleanup_VerifyDeploymentStateFile(t *testing.T) {
 	PrintTestHeader(t, "TestCleanup_VerifyDeploymentStateFile",
 		"Verify deployment state file can be identified for cleanup")
 
-	stateFile := ".deployment-state.json"
+	stateFile := deploymentStateFilePath()
 	if FileExists(stateFile) {
 		PrintToTTY("Deployment state file exists: %s\n", stateFile)
 
@@ -819,7 +819,7 @@ func TestCleanup_Summary(t *testing.T) {
 	}
 
 	// Deployment state
-	if FileExists(".deployment-state.json") {
+	if FileExists(deploymentStateFilePath()) || FileExists(legacyDeploymentStateFile) {
 		PrintToTTY("  Deploy State:     EXISTS\n")
 	} else {
 		PrintToTTY("  Deploy State:     CLEAN\n")
