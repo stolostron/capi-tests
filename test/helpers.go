@@ -459,6 +459,14 @@ func SetEnvVar(t *testing.T, key, value string) {
 	})
 }
 
+// SetupKubeconfig sets KUBECONFIG when tests use an external management cluster.
+func SetupKubeconfig(t *testing.T, config *TestConfig) {
+	t.Helper()
+	if config.IsExternalCluster() {
+		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	}
+}
+
 // FileExists checks if a file exists at the given path
 func FileExists(path string) bool {
 	_, err := os.Stat(path) // #nosec G703 -- test helper only checks existence, no file content read

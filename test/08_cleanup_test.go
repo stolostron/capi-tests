@@ -210,9 +210,7 @@ func TestCleanup_VerifyManagementClusterK8sTestNamespaceRemoval(t *testing.T) {
 	PrintTestHeader(t, "TestCleanup_VerifyManagementClusterK8sTestNamespaceRemoval",
 		"Verify workload cluster namespace was removed")
 
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 
@@ -251,9 +249,7 @@ func TestCleanup_VerifyOrphanedManagementClusterK8sTestNamespaces(t *testing.T) 
 	PrintTestHeader(t, "TestCleanup_VerifyOrphanedManagementClusterK8sTestNamespaces",
 		fmt.Sprintf("Check for orphaned test namespaces (label: %s=true)", config.TestLabelPrefix))
 
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 
@@ -828,9 +824,7 @@ func TestCleanup_Summary(t *testing.T) {
 	// Management cluster namespaces
 	PrintToTTY("\n--- Management Cluster Namespaces ---\n")
 
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 	testNamespaces, nsErr := GetManagementClusterK8sTestNamespaces(t, context)
