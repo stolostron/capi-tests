@@ -115,6 +115,98 @@ func TestIsKubectlApplySuccess(t *testing.T) {
 	}
 }
 
+func TestExtractResourceGroupNameFromYAML(t *testing.T) {
+	tests := []struct {
+		name        string
+		yaml        string
+		expected    string
+		expectedErr string
+	}{
+		{
+			name:     "extracts Azure resource group",
+			yaml:     "apiVersion: resources.azure.com/v1api20200601\nkind: ResourceGroup\nmetadata:\n  name: capz-tests-71771-resgroup\n",
+			expected: "capz-tests-71771-resgroup",
+		},
+		{
+			name:        "fails when resource group is absent",
+			yaml:        "apiVersion: cluster.x-k8s.io/v1beta1\nkind: Cluster\nmetadata:\n  name: test-cluster\n",
+			expectedErr: "no Azure ResourceGroup resource found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "aro.yaml")
+			if err := os.WriteFile(path, []byte(tt.yaml), 0600); err != nil {
+				t.Fatalf("failed to write test YAML: %v", err)
+			}
+
+			name, err := ExtractResourceGroupNameFromYAML(path)
+			if tt.expectedErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.expectedErr) {
+					t.Fatalf("ExtractResourceGroupNameFromYAML() error = %v, want substring %q", err, tt.expectedErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ExtractResourceGroupNameFromYAML() unexpected error: %v", err)
+			}
+			if name != tt.expected {
+				t.Errorf("ExtractResourceGroupNameFromYAML() = %q, want %q", name, tt.expected)
+			}
+		})
+	}
+}
+
+func TestValidateGeneratedResourceGroupName(t *testing.T) {
+	tests := []struct {
+		name        string
+		configured  string
+		generated   string
+		expectedErr string
+	}{
+		{
+			name:       "accepts matching resource group",
+			configured: "capz-tests-71771-resgroup",
+			generated:  "capz-tests-71771-resgroup",
+		},
+		{
+			name:        "rejects mismatched resource group",
+			configured:  "capz-tests-3d65d-resgroup",
+			generated:   "capz-tests-71771-resgroup",
+			expectedErr: "configured resource group \"capz-tests-3d65d-resgroup\" differs from generated resource group \"capz-tests-71771-resgroup\"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateGeneratedResourceGroupName(tt.configured, tt.generated)
+			if tt.expectedErr == "" {
+				if err != nil {
+					t.Fatalf("ValidateGeneratedResourceGroupName() unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || err.Error() != tt.expectedErr {
+				t.Fatalf("ValidateGeneratedResourceGroupName() error = %v, want %q", err, tt.expectedErr)
+			}
+		})
+	}
+}
+
+func TestValidateGeneratedResourceGroupFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "aro.yaml")
+	yaml := "apiVersion: resources.azure.com/v1api20200601\nkind: ResourceGroup\nmetadata:\n  name: capz-tests-71771-resgroup\n"
+	if err := os.WriteFile(path, []byte(yaml), 0600); err != nil {
+		t.Fatalf("failed to write test YAML: %v", err)
+	}
+
+	err := ValidateGeneratedResourceGroupFile("capz-tests-3d65d-resgroup", path)
+	if err == nil || !strings.Contains(err.Error(), "configured resource group \"capz-tests-3d65d-resgroup\" differs from generated resource group \"capz-tests-71771-resgroup\"") {
+		t.Fatalf("ValidateGeneratedResourceGroupFile() error = %v, want configured/generated mismatch", err)
+	}
+}
+
 func TestExtractClusterNameFromYAML(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir := t.TempDir()

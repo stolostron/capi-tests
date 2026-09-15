@@ -821,6 +821,71 @@ func ExtractMachinePoolNameFromYAML(filePath string) (string, error) {
 	return "", fmt.Errorf("no MachinePool resource found in %s", filePath)
 }
 
+// ExtractResourceGroupNameFromYAML extracts the Azure ResourceGroup name from a
+// multi-document YAML file.
+func ExtractResourceGroupNameFromYAML(filePath string) (string, error) {
+	if _, err := os.Stat(filePath); err != nil {
+		return "", fmt.Errorf("file not accessible: %w", err)
+	}
+
+	// #nosec G304 - filePath comes from test configuration
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %w", err)
+	}
+
+	docs := strings.Split(string(data), "---")
+	for _, doc := range docs {
+		doc = strings.TrimSpace(doc)
+		if doc == "" {
+			continue
+		}
+
+		var content map[string]interface{}
+		if err := yaml.Unmarshal([]byte(doc), &content); err != nil {
+			continue
+		}
+
+		kind, ok := content["kind"].(string)
+		if !ok || kind != "ResourceGroup" {
+			continue
+		}
+
+		metadata, ok := content["metadata"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, ok := metadata["name"].(string)
+		if !ok || name == "" {
+			continue
+		}
+
+		return name, nil
+	}
+
+	return "", fmt.Errorf("no Azure ResourceGroup resource found in %s", filePath)
+}
+
+// ValidateGeneratedResourceGroupName verifies that the generated manifest uses
+// the same resource group as the test configuration.
+func ValidateGeneratedResourceGroupName(configuredName, generatedName string) error {
+	if configuredName != generatedName {
+		return fmt.Errorf("configured resource group %q differs from generated resource group %q", configuredName, generatedName)
+	}
+	return nil
+}
+
+// ValidateGeneratedResourceGroupFile verifies the ResourceGroup in a generated
+// manifest against the configured Azure resource group.
+func ValidateGeneratedResourceGroupFile(configuredName, filePath string) error {
+	generatedName, err := ExtractResourceGroupNameFromYAML(filePath)
+	if err != nil {
+		return err
+	}
+	return ValidateGeneratedResourceGroupName(configuredName, generatedName)
+}
+
 // CheckYAMLConfigMatch verifies that existing YAML files match the current configuration.
 // It extracts the cluster name from the cluster YAML file and compares it with the expected
 // cluster name prefix. This is used to detect configuration mismatches that would cause
