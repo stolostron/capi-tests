@@ -2075,6 +2075,25 @@ func ApplyWithRetry(t *testing.T, kubeContext, yamlPath string, maxRetries int) 
 	return ApplyWithRetryInNamespace(t, kubeContext, "", yamlPath, maxRetries)
 }
 
+// applyFilesInOrder applies files sequentially and stops at the first failure.
+// The returned slice contains only files whose apply operation succeeded, which
+// lets callers report the partial deployment precisely for cleanup and recovery.
+func applyFilesInOrder(files []string, apply func(string) error) ([]string, error) {
+	if apply == nil {
+		return nil, fmt.Errorf("apply function is nil")
+	}
+
+	applied := make([]string, 0, len(files))
+	for _, file := range files {
+		if err := apply(file); err != nil {
+			return applied, fmt.Errorf("failed to apply %s after %d successful file(s): %w", file, len(applied), err)
+		}
+		applied = append(applied, file)
+	}
+
+	return applied, nil
+}
+
 // ApplyWithRetryInNamespace applies a YAML file with retry logic to a specific namespace.
 // Parameters:
 //   - kubeContext: kubectl context to use
