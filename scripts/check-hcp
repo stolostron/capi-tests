@@ -21,6 +21,7 @@ INTEGRATION_SUBNET_ID=$(jq -r '.properties.platform.vnetIntegrationSubnetId // e
 VNET_ID=$(sed 's#/subnets/.*##' <<< "$SUBNET_ID")
 NSG_ID=$(jq -r '.properties.platform.networkSecurityGroupId // empty' "$tmp_json")
 CONDITION_TEXT=$(jq -r '.properties.status.conditions[]?.message // empty' "$tmp_json")
+CHECK_FAILED=false
 
 resource_status() {
   local id="$1"
@@ -42,7 +43,12 @@ show_scope_assignments() {
 echo "HCP: $(basename "$HCP_ID")"
 PROVISIONING_STATE=$(jq -r '.properties.provisioningState // "unknown"' "$tmp_json")
 REQUIREMENTS=$(jq -r '[.properties.status.conditions[]? | select(.type == "RequirementsValid") | (.status + " (" + .reason + ")")] | first // "unknown"' "$tmp_json")
-if [[ "$REQUIREMENTS" == True* ]]; then echo "  RequirementsValid: ✅ $REQUIREMENTS"; else echo "  RequirementsValid: ❌ $REQUIREMENTS"; fi
+if [[ "$REQUIREMENTS" == True* ]]; then
+  echo "  RequirementsValid: ✅ $REQUIREMENTS"
+else
+  echo "  RequirementsValid: ❌ $REQUIREMENTS"
+  CHECK_FAILED=true
+fi
 echo "  provisioningState: $PROVISIONING_STATE"
 
 echo
@@ -75,6 +81,7 @@ while IFS= read -r IDENTITY_ID; do
     printf '  ✅ %s\n' "$NAME"
   else
     printf '  ❌ %s (not found)\n' "$NAME"
+    CHECK_FAILED=true
   fi
 
   if [[ "$VERBOSE" == true ]]; then
@@ -101,4 +108,8 @@ if [[ "$VERBOSE" == true ]]; then
   az role definition list \
     --query "[?contains(join(',', permissions[].actions[]), 'Microsoft.Network/virtualNetworks/join/action')].{role:roleName,id:id}" \
     -o table
+fi
+
+if [[ "$CHECK_FAILED" == true ]]; then
+  exit 1
 fi
