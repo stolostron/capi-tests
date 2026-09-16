@@ -3338,18 +3338,20 @@ func ReadDeploymentState() (*DeploymentState, error) {
 	path := deploymentStatePath()
 	data, err := readValidatedStateFile(path, ".deployment-state.json")
 	if err != nil {
-		if os.IsNotExist(err) {
-			// Read the historical default path when a custom context path is used.
-			if path != DeploymentStateFile {
-				data, err = readValidatedStateFile(DeploymentStateFile, ".deployment-state.json")
-				if os.IsNotExist(err) {
-					return nil, nil
-				}
-			} else {
-				return nil, nil // No state file, return nil without error
-			}
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to read deployment state file: %w", err)
 		}
-		return nil, fmt.Errorf("failed to read deployment state file: %w", err)
+		// Read the historical default path when a custom context path is used.
+		if path == DeploymentStateFile {
+			return nil, nil // No state file, return nil without error
+		}
+		data, err = readValidatedStateFile(DeploymentStateFile, ".deployment-state.json")
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("failed to read deployment state file: %w", err)
+		}
 	}
 
 	var state DeploymentState
