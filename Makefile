@@ -165,7 +165,12 @@ _init-run-context: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-init-run-context.xml -- $(TEST_VERBOSITY) ./test -count=1 -run '^TestInitializeRunContext$$'
 
-_check-dep: _init-run-context check-gotestsum
+RUN_CONTEXT_PHASES := _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup
+ifneq ($(RUN_CONTEXT_INITIALIZED),1)
+$(RUN_CONTEXT_PHASES): _init-run-context
+endif
+
+_check-dep: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Check Dependencies Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -186,7 +191,7 @@ _check-dep: _init-run-context check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_setup: _init-run-context check-gotestsum
+_setup: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Repository Setup Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -207,7 +212,7 @@ _setup: _init-run-context check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_management_cluster: _init-run-context check-gotestsum
+_management_cluster: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Cluster Deployment Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -228,7 +233,7 @@ _management_cluster: _init-run-context check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_generate-yamls: _init-run-context check-gotestsum
+_generate-yamls: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running YAML Generation Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -249,7 +254,7 @@ _generate-yamls: _init-run-context check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_deploy-crs: _init-run-context check-gotestsum
+_deploy-crs: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running CR Deployment Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -276,7 +281,7 @@ _deploy-crs: _init-run-context check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_verify-workload-cluster: _init-run-context check-gotestsum
+_verify-workload-cluster: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Workload Cluster Verification Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -297,7 +302,7 @@ _verify-workload-cluster: _init-run-context check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_delete-workload-cluster: _init-run-context check-gotestsum
+_delete-workload-cluster: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Workload Cluster Deletion Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -318,7 +323,7 @@ _delete-workload-cluster: _init-run-context check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_mce-teardown: _init-run-context check-gotestsum
+_mce-teardown: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running MCE Teardown Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -339,7 +344,7 @@ _mce-teardown: _init-run-context check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_validate-cleanup: _init-run-context check-gotestsum
+_validate-cleanup: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Cleanup Validation Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -392,14 +397,14 @@ _test-all-impl:
 	@echo "All test results will be saved to: $(RESULTS_DIR)"
 	@echo "Terminal output captured to: $(RESULTS_DIR)/$(TERMINAL_OUTPUT_FILE)"
 	@echo ""
-	@$(MAKE) --no-print-directory _check-dep RESULTS_DIR=$(RESULTS_DIR) || ( \
+	@$(MAKE) --no-print-directory _check-dep RESULTS_DIR=$(RESULTS_DIR) RUN_CONTEXT_INITIALIZED=1 || ( \
 		echo ""; \
 		echo "❌ ERROR: Check dependencies phase failed. Cannot continue with test suite."; \
 		echo "   Please ensure all required tools are installed and try again."; \
 		echo ""; \
 		exit 1 \
 	)
-	@$(MAKE) --no-print-directory _setup RESULTS_DIR=$(RESULTS_DIR) || ( \
+	@$(MAKE) --no-print-directory _setup RESULTS_DIR=$(RESULTS_DIR) RUN_CONTEXT_INITIALIZED=1 || ( \
 		echo ""; \
 		echo "❌ ERROR: Repository setup phase failed. Cannot continue with test suite."; \
 		echo "   Previous stage (check dependencies) completed successfully."; \
@@ -409,7 +414,7 @@ _test-all-impl:
 	@# Phases 03-08 are wrapped so MCE teardown always runs, even on failure.
 	@# MCE components must be restored to their pre-test state regardless of outcome.
 	@SUITE_EXIT=0; \
-	$(MAKE) --no-print-directory _management_cluster RESULTS_DIR=$(RESULTS_DIR) || { \
+	$(MAKE) --no-print-directory _management_cluster RESULTS_DIR=$(RESULTS_DIR) RUN_CONTEXT_INITIALIZED=1 || { \
 		echo ""; \
 		echo "❌ ERROR: Cluster deployment phase failed. Cannot continue with test suite."; \
 		echo "   Previous stages (check dependencies, setup) completed successfully."; \
@@ -417,7 +422,7 @@ _test-all-impl:
 		SUITE_EXIT=1; \
 	}; \
 	if [ $$SUITE_EXIT -eq 0 ]; then \
-		$(MAKE) --no-print-directory _generate-yamls RESULTS_DIR=$(RESULTS_DIR) || { \
+		$(MAKE) --no-print-directory _generate-yamls RESULTS_DIR=$(RESULTS_DIR) RUN_CONTEXT_INITIALIZED=1 || { \
 			echo ""; \
 			echo "❌ ERROR: YAML generation phase failed. Cannot continue with test suite."; \
 			echo "   Previous stages (check dependencies, setup, cluster) completed successfully."; \
@@ -426,7 +431,7 @@ _test-all-impl:
 		}; \
 	fi; \
 	if [ $$SUITE_EXIT -eq 0 ]; then \
-		$(MAKE) --no-print-directory _deploy-crs RESULTS_DIR=$(RESULTS_DIR) || { \
+		$(MAKE) --no-print-directory _deploy-crs RESULTS_DIR=$(RESULTS_DIR) RUN_CONTEXT_INITIALIZED=1 || { \
 			echo ""; \
 			echo "❌ ERROR: CR deployment phase failed. Cannot continue with test suite."; \
 			echo "   Previous stages (check dependencies, setup, cluster, YAML generation) completed successfully."; \
@@ -435,7 +440,7 @@ _test-all-impl:
 		}; \
 	fi; \
 	if [ $$SUITE_EXIT -eq 0 ]; then \
-		$(MAKE) --no-print-directory _verify-workload-cluster RESULTS_DIR=$(RESULTS_DIR) || { \
+		$(MAKE) --no-print-directory _verify-workload-cluster RESULTS_DIR=$(RESULTS_DIR) RUN_CONTEXT_INITIALIZED=1 || { \
 			echo ""; \
 			echo "❌ ERROR: Workload cluster verification phase failed."; \
 			echo "   Previous stages completed successfully but workload cluster verification encountered issues."; \
@@ -444,7 +449,7 @@ _test-all-impl:
 		}; \
 	fi; \
 	if [ $$SUITE_EXIT -eq 0 ]; then \
-		$(MAKE) --no-print-directory _delete-workload-cluster RESULTS_DIR=$(RESULTS_DIR) || { \
+		$(MAKE) --no-print-directory _delete-workload-cluster RESULTS_DIR=$(RESULTS_DIR) RUN_CONTEXT_INITIALIZED=1 || { \
 			echo ""; \
 			echo "❌ ERROR: Workload cluster deletion phase failed."; \
 			echo "   Previous stages completed successfully but cluster deletion encountered issues."; \
@@ -454,7 +459,7 @@ _test-all-impl:
 	fi; \
 	echo ""; \
 	echo "=== MCE teardown (always runs) ==="; \
-	$(MAKE) --no-print-directory _mce-teardown RESULTS_DIR=$(RESULTS_DIR) || true; \
+	$(MAKE) --no-print-directory _mce-teardown RESULTS_DIR=$(RESULTS_DIR) RUN_CONTEXT_INITIALIZED=1 || true; \
 	if [ $$SUITE_EXIT -ne 0 ]; then \
 		echo ""; \
 		echo "❌ Test suite failed (see errors above)"; \
@@ -630,6 +635,10 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 			echo "Removing deployment state file..."; \
 			rm -f "$(DEPLOYMENT_STATE_FILE)"; \
 		fi; \
+		if [ -f "$(CAPI_TEST_CONTEXT_FILE)" ]; then \
+			echo "Removing run context file..."; \
+			rm -f "$(CAPI_TEST_CONTEXT_FILE)"; \
+		fi; \
 		echo "======================================="; \
 		echo "=== Cleanup Complete ==="; \
 		echo "======================================="; \
@@ -692,6 +701,10 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 	@if [ -f "$(DEPLOYMENT_STATE_FILE)" ]; then \
 		echo "Removing deployment state file..."; \
 		rm -f "$(DEPLOYMENT_STATE_FILE)"; \
+	fi
+	@if [ -f "$(CAPI_TEST_CONTEXT_FILE)" ]; then \
+		echo "Removing run context file..."; \
+		rm -f "$(CAPI_TEST_CONTEXT_FILE)"; \
 	fi
 	@echo "======================================="
 	@echo "=== All Resources Cleaned ==="

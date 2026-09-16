@@ -277,6 +277,8 @@ type RunContext struct {
 	WorkloadClusterNamespace string `json:"workload_cluster_namespace"`
 	TestRunID                string `json:"test_run_id"`
 	CAPIUser                 string `json:"capi_user"`
+	InfraProvider            string `json:"infra_provider"`
+	DeploymentEnvironment    string `json:"deployment_environment"`
 }
 
 const (
@@ -320,6 +322,22 @@ func deploymentStatePath() string {
 	return filepath.Join(filepath.Dir(RunContextFilePath()), ".deployment-state.json")
 }
 
+// readValidatedStateFile enforces the state-file path policy at the single
+// filesystem boundary used by run identity and deployment state. Callers may
+// provide a CI override, which must resolve to an absolute path. Deployment
+// state additionally uses a fixed filename; traversal cannot change that name.
+func readValidatedStateFile(path, expectedName string) ([]byte, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve state path %q: %w", path, err)
+	}
+	if !filepath.IsAbs(absolute) || (expectedName != "" && filepath.Base(filepath.Clean(absolute)) != expectedName) {
+		return nil, fmt.Errorf("invalid state path %q: expected absolute filename %q", path, expectedName)
+	}
+	// #nosec G304 -- absolute path is validated above against a fixed state filename.
+	return os.ReadFile(absolute)
+}
+
 func legacyDeploymentStatePaths(contextPath string) []string {
 	paths := []string{filepath.Join(filepath.Dir(contextPath), ".deployment-state.json")}
 	legacyPath := filepath.Join(getDefaultRepoDir(), ".deployment-state.json")
@@ -330,7 +348,7 @@ func legacyDeploymentStatePaths(contextPath string) []string {
 }
 
 func readRunContext(path string) (*RunContext, error) {
-	data, err := os.ReadFile(path)
+	data, err := readValidatedStateFile(path, "")
 	if err != nil {
 		return nil, err
 	}
@@ -346,7 +364,7 @@ func readRunContext(path string) (*RunContext, error) {
 }
 
 func readLegacyRunContext(path string) (*RunContext, map[string]string, error) {
-	data, err := os.ReadFile(path)
+	data, err := readValidatedStateFile(path, ".deployment-state.json")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -357,6 +375,8 @@ func readLegacyRunContext(path string) (*RunContext, map[string]string, error) {
 		ClusterNamePrefix        string            `json:"cluster_name_prefix"`
 		TestRunID                string            `json:"test_run_id"`
 		User                     string            `json:"user"`
+		InfraProvider            string            `json:"infra_provider"`
+		DeploymentEnvironment    string            `json:"environment"`
 		ResourceTags             map[string]string `json:"resource_tags,omitempty"`
 		AzureResourceTags        map[string]string `json:"azure_resource_tags,omitempty"`
 	}
@@ -373,6 +393,8 @@ func readLegacyRunContext(path string) (*RunContext, map[string]string, error) {
 		WorkloadClusterNamespace: state.WorkloadClusterNamespace,
 		TestRunID:                state.TestRunID,
 		CAPIUser:                 state.User,
+		InfraProvider:            state.InfraProvider,
+		DeploymentEnvironment:    state.DeploymentEnvironment,
 	}, state.ResourceTags, nil
 }
 
@@ -388,6 +410,8 @@ func explicitContextConflicts(context *RunContext) error {
 		{"WORKLOAD_CLUSTER_NAME", "WorkloadClusterName", os.Getenv("WORKLOAD_CLUSTER_NAME"), context.WorkloadClusterName},
 		{"WORKLOAD_CLUSTER_NAMESPACE", "WorkloadClusterNamespace", os.Getenv("WORKLOAD_CLUSTER_NAMESPACE"), context.WorkloadClusterNamespace},
 		{"CAPI_USER", "CAPIUser", os.Getenv("CAPI_USER"), context.CAPIUser},
+		{"INFRA_PROVIDER", "InfraProvider", os.Getenv("INFRA_PROVIDER"), context.InfraProvider},
+		{"DEPLOYMENT_ENV", "DeploymentEnvironment", os.Getenv("DEPLOYMENT_ENV"), context.DeploymentEnvironment},
 	}
 	for _, check := range checks {
 		if check.value != "" && check.actual != "" && check.value != check.actual {
@@ -496,6 +520,12 @@ func EnsureRunContext() (*RunContext, error) {
 	capiUser := getCAPIUser()
 	if context.CAPIUser == "" {
 		context.CAPIUser = capiUser
+	}
+	if context.InfraProvider == "" {
+		context.InfraProvider = provider
+	}
+	if context.DeploymentEnvironment == "" {
+		context.DeploymentEnvironment = GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv)
 	}
 	if context.WorkloadClusterName == "" {
 		context.WorkloadClusterName = GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", defaultWorkloadCluster)

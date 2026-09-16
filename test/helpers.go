@@ -3336,12 +3336,12 @@ func sortedTagPairs(tags map[string]string, sep string) []string {
 // Returns nil if the file doesn't exist (no deployment has been recorded).
 func ReadDeploymentState() (*DeploymentState, error) {
 	path := deploymentStatePath()
-	data, err := os.ReadFile(path)
+	data, err := readValidatedStateFile(path, ".deployment-state.json")
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Read the historical default path when a custom context path is used.
 			if path != DeploymentStateFile {
-				data, err = os.ReadFile(DeploymentStateFile)
+				data, err = readValidatedStateFile(DeploymentStateFile, ".deployment-state.json")
 				if os.IsNotExist(err) {
 					return nil, nil
 				}
@@ -3376,6 +3376,9 @@ func DeleteDeploymentState() error {
 	err := os.Remove(deploymentStatePath())
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to delete deployment state file: %w", err)
+	}
+	if err := os.Remove(RunContextFilePath()); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to delete run context file: %w", err)
 	}
 	return nil
 }
