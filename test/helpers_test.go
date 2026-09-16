@@ -218,6 +218,18 @@ spec:
 	}
 }
 
+func TestLogGeneratedResourceGroup_DiagnosticFailureDoesNotFail(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "aro.yaml")
+	if err := os.WriteFile(path, []byte("kind: AROCluster\nmetadata: {}\n"), 0600); err != nil {
+		t.Fatalf("failed to write test YAML: %v", err)
+	}
+	if ok := t.Run("diagnostic failure", func(t *testing.T) {
+		LogGeneratedResourceGroup(t, "planned-resgroup", path)
+	}); !ok {
+		t.Fatal("diagnostic parsing failure should not fail the generation path")
+	}
+}
+
 func TestExtractResourceGroupNameFromYAML(t *testing.T) {
 	tests := []struct {
 		name        string

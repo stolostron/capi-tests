@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -266,6 +267,284 @@ var (
 	cachedResourceTags map[string]string
 )
 
+// RunContext contains the immutable identity shared by every phase process in a
+// test run. DeploymentState intentionally remains separate because it records
+// mutable cleanup and controller state.
+type RunContext struct {
+	ClusterNamePrefix        string `json:"cluster_name_prefix"`
+	ResourceGroupName        string `json:"resource_group_name"`
+	WorkloadClusterName      string `json:"workload_cluster_name"`
+	WorkloadClusterNamespace string `json:"workload_cluster_namespace"`
+	TestRunID                string `json:"test_run_id"`
+	CAPIUser                 string `json:"capi_user"`
+}
+
+const (
+	runContextFileName   = ".run-context.json"
+	runContextLockSuffix = ".lock"
+)
+
+// runContextWorkspace returns the repository containing this package. It does
+// not use the process working directory, because generation phases chdir into
+// the installer repository.
+func runContextWorkspace() string {
+	if workspace := os.Getenv("CAPI_TEST_WORKSPACE"); workspace != "" {
+		if absolute, err := filepath.Abs(workspace); err == nil {
+			return absolute
+		}
+	}
+
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if ok {
+		if absolute, err := filepath.Abs(filepath.Join(filepath.Dir(sourceFile), "..")); err == nil {
+			return absolute
+		}
+	}
+	return "."
+}
+
+// RunContextFilePath returns the one absolute path used for immutable run
+// identity. Relative overrides are resolved from the repository workspace.
+func RunContextFilePath() string {
+	path := os.Getenv("CAPI_TEST_CONTEXT_FILE")
+	if path == "" {
+		path = filepath.Join(runContextWorkspace(), runContextFileName)
+	}
+	if absolute, err := filepath.Abs(path); err == nil {
+		return absolute
+	}
+	return path
+}
+
+func deploymentStatePath() string {
+	return filepath.Join(filepath.Dir(RunContextFilePath()), ".deployment-state.json")
+}
+
+func legacyDeploymentStatePaths(contextPath string) []string {
+	paths := []string{filepath.Join(filepath.Dir(contextPath), ".deployment-state.json")}
+	legacyPath := filepath.Join(getDefaultRepoDir(), ".deployment-state.json")
+	if legacyPath != paths[0] {
+		paths = append(paths, legacyPath)
+	}
+	return paths
+}
+
+func readRunContext(path string) (*RunContext, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var context RunContext
+	if err := json.Unmarshal(data, &context); err != nil {
+		return nil, fmt.Errorf("failed to parse run context %s: %w", path, err)
+	}
+	if context.ClusterNamePrefix == "" || context.ResourceGroupName == "" ||
+		context.WorkloadClusterNamespace == "" || context.TestRunID == "" {
+		return nil, fmt.Errorf("run context %s is missing required identity fields", path)
+	}
+	return &context, nil
+}
+
+func readLegacyRunContext(path string) (*RunContext, map[string]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	var state struct {
+		ResourceGroup            string            `json:"resource_group"`
+		WorkloadClusterName      string            `json:"workload_cluster_name"`
+		WorkloadClusterNamespace string            `json:"workload_cluster_namespace"`
+		ClusterNamePrefix        string            `json:"cluster_name_prefix"`
+		TestRunID                string            `json:"test_run_id"`
+		User                     string            `json:"user"`
+		ResourceTags             map[string]string `json:"resource_tags,omitempty"`
+		AzureResourceTags        map[string]string `json:"azure_resource_tags,omitempty"`
+	}
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, nil, fmt.Errorf("failed to parse legacy deployment state %s: %w", path, err)
+	}
+	if state.ResourceTags == nil {
+		state.ResourceTags = state.AzureResourceTags
+	}
+	return &RunContext{
+		ClusterNamePrefix:        state.ClusterNamePrefix,
+		ResourceGroupName:        state.ResourceGroup,
+		WorkloadClusterName:      state.WorkloadClusterName,
+		WorkloadClusterNamespace: state.WorkloadClusterNamespace,
+		TestRunID:                state.TestRunID,
+		CAPIUser:                 state.User,
+	}, state.ResourceTags, nil
+}
+
+func explicitContextConflicts(context *RunContext) error {
+	checks := []struct {
+		envName string
+		field   string
+		value   string
+		actual  string
+	}{
+		{"CS_CLUSTER_NAME", "ClusterNamePrefix", os.Getenv("CS_CLUSTER_NAME"), context.ClusterNamePrefix},
+		{"RESOURCEGROUPNAME", "ResourceGroupName", os.Getenv("RESOURCEGROUPNAME"), context.ResourceGroupName},
+		{"WORKLOAD_CLUSTER_NAME", "WorkloadClusterName", os.Getenv("WORKLOAD_CLUSTER_NAME"), context.WorkloadClusterName},
+		{"WORKLOAD_CLUSTER_NAMESPACE", "WorkloadClusterNamespace", os.Getenv("WORKLOAD_CLUSTER_NAMESPACE"), context.WorkloadClusterNamespace},
+		{"CAPI_USER", "CAPIUser", os.Getenv("CAPI_USER"), context.CAPIUser},
+	}
+	for _, check := range checks {
+		if check.value != "" && check.actual != "" && check.value != check.actual {
+			return fmt.Errorf("run context conflict for %s (%s): explicit value %q conflicts with persisted value %q", check.envName, check.field, check.value, check.actual)
+		}
+	}
+	return nil
+}
+
+func acquireRunContextLock(path string) (func(), error) {
+	lockPath := path + runContextLockSuffix
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		err := os.Mkdir(lockPath, 0700)
+		if err == nil {
+			return func() { _ = os.Remove(lockPath) }, nil
+		}
+		if !os.IsExist(err) {
+			return nil, fmt.Errorf("failed to create run context lock %s: %w", lockPath, err)
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("timed out waiting for run context lock %s", lockPath)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func writeRunContext(path string, context *RunContext) error {
+	data, err := json.MarshalIndent(context, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal run context: %w", err)
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".run-context-*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary run context: %w", err)
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if err := temporary.Chmod(0600); err != nil {
+		_ = temporary.Close()
+		return fmt.Errorf("failed to set run context permissions: %w", err)
+	}
+	if _, err := temporary.Write(data); err != nil {
+		_ = temporary.Close()
+		return fmt.Errorf("failed to write run context: %w", err)
+	}
+	if err := temporary.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary run context: %w", err)
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return fmt.Errorf("failed to atomically persist run context: %w", err)
+	}
+	return nil
+}
+
+// EnsureRunContext loads or atomically creates the immutable identity for this
+// run. Explicit environment values are accepted on first creation and checked
+// against persisted values on every later phase invocation.
+func EnsureRunContext() (*RunContext, error) {
+	path := RunContextFilePath()
+	if context, err := readRunContext(path); err == nil {
+		if err := explicitContextConflicts(context); err != nil {
+			return nil, err
+		}
+		return context, nil
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return nil, fmt.Errorf("failed to create run context directory: %w", err)
+	}
+	release, err := acquireRunContextLock(path)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	if context, err := readRunContext(path); err == nil {
+		if err := explicitContextConflicts(context); err != nil {
+			return nil, err
+		}
+		return context, nil
+	}
+
+	context := &RunContext{}
+	for _, legacyPath := range legacyDeploymentStatePaths(path) {
+		legacy, tags, legacyErr := readLegacyRunContext(legacyPath)
+		if legacyErr == nil {
+			*context = *legacy
+			cachedResourceTags = tags
+			break
+		}
+		if !os.IsNotExist(legacyErr) {
+			return nil, legacyErr
+		}
+	}
+
+	provider := GetEnvOrDefault("INFRA_PROVIDER", "aro")
+	defaultWorkloadCluster := "capz-tests"
+	defaultNamespacePrefix := "capz-test"
+	if provider == "rosa" {
+		defaultWorkloadCluster = "capa-tests"
+		defaultNamespacePrefix = "capa-test"
+	}
+	capiUser := getCAPIUser()
+	if context.CAPIUser == "" {
+		context.CAPIUser = capiUser
+	}
+	if context.WorkloadClusterName == "" {
+		context.WorkloadClusterName = GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", defaultWorkloadCluster)
+	}
+	if context.ClusterNamePrefix == "" {
+		if explicit := os.Getenv("CS_CLUSTER_NAME"); explicit != "" {
+			context.ClusterNamePrefix = explicit
+		} else {
+			maxUserLen := MaxClusterNamePrefixLength - 1 - 5
+			userPrefix := capiUser
+			if len(userPrefix) > maxUserLen {
+				userPrefix = userPrefix[:maxUserLen]
+			}
+			context.TestRunID = generateRunID(5)
+			context.ClusterNamePrefix = fmt.Sprintf("%s-%s", userPrefix, context.TestRunID)
+		}
+	}
+	if context.TestRunID == "" {
+		if prefix := context.CAPIUser + "-"; strings.HasPrefix(context.ClusterNamePrefix, prefix) {
+			context.TestRunID = strings.TrimPrefix(context.ClusterNamePrefix, prefix)
+		}
+		if context.TestRunID == "" {
+			context.TestRunID = generateRunID(5)
+		}
+	}
+	if context.ResourceGroupName == "" {
+		if explicit := os.Getenv("RESOURCEGROUPNAME"); explicit != "" {
+			context.ResourceGroupName = explicit
+		} else {
+			context.ResourceGroupName = fmt.Sprintf("%s-%s-resgroup", context.WorkloadClusterName, context.TestRunID)
+		}
+	}
+	if context.WorkloadClusterNamespace == "" {
+		if explicit := os.Getenv("WORKLOAD_CLUSTER_NAMESPACE"); explicit != "" {
+			context.WorkloadClusterNamespace = explicit
+		} else {
+			prefix := GetEnvOrDefault("WORKLOAD_CLUSTER_NAMESPACE_PREFIX", defaultNamespacePrefix)
+			context.WorkloadClusterNamespace = fmt.Sprintf("%s-%s", prefix, time.Now().Format("20060102-150405"))
+		}
+	}
+	if err := explicitContextConflicts(context); err != nil {
+		return nil, err
+	}
+	if err := writeRunContext(path, context); err != nil {
+		return nil, err
+	}
+	return context, nil
+}
+
 // getDefaultRepoDir returns the default repository directory path.
 // The path is stable across test runs to allow sequential execution via separate
 // make commands (test-prereq, test-setup, test-kind, etc.).
@@ -316,31 +595,13 @@ func getCAPIUser() string {
 // (run as separate go test invocations) use the same namespace as YAML generation.
 func getWorkloadClusterNamespace(defaultPrefix string) string {
 	workloadClusterNamespaceOnce.Do(func() {
-		// Check if a full namespace is explicitly provided (for resume scenarios)
-		if ns := os.Getenv("WORKLOAD_CLUSTER_NAMESPACE"); ns != "" {
-			workloadClusterNamespace = ns
+		context, err := EnsureRunContext()
+		if err != nil {
+			errMsg := err.Error()
+			configError = &errMsg
 			return
 		}
-
-		// Check for existing deployment state file in RepoDir
-		// This handles the case where YAML generation ran in a previous test invocation
-		// and we need to use the same namespace for subsequent phases
-		repoDir := getDefaultRepoDir()
-		_, data, err := readDeploymentStateFileFromRepo(repoDir)
-		if err == nil && data != nil {
-			var state struct {
-				WorkloadClusterNamespace string `json:"workload_cluster_namespace"`
-			}
-			if err := json.Unmarshal(data, &state); err == nil && state.WorkloadClusterNamespace != "" {
-				workloadClusterNamespace = state.WorkloadClusterNamespace
-				return
-			}
-		}
-
-		// Generate unique namespace with timestamp for fresh runs
-		prefix := GetEnvOrDefault("WORKLOAD_CLUSTER_NAMESPACE_PREFIX", defaultPrefix)
-		timestamp := time.Now().Format("20060102-150405")
-		workloadClusterNamespace = fmt.Sprintf("%s-%s", prefix, timestamp)
+		workloadClusterNamespace = context.WorkloadClusterNamespace
 	})
 
 	return workloadClusterNamespace
@@ -360,52 +621,13 @@ func getWorkloadClusterNamespace(defaultPrefix string) string {
 // (run as separate go test invocations) use the same prefix as the initial phase.
 func getClusterNamePrefix(capiUser string) string {
 	clusterNamePrefixOnce.Do(func() {
-		// Check if explicitly provided
-		if prefix := GetEnvOrDefault("CS_CLUSTER_NAME", ""); prefix != "" {
-			clusterNamePrefix = prefix
+		context, err := EnsureRunContext()
+		if err != nil {
+			errMsg := err.Error()
+			configError = &errMsg
 			return
 		}
-
-		// Check for existing deployment state file in RepoDir
-		// This handles the case where a previous test invocation already generated
-		// a unique prefix and we need to reuse it for subsequent phases
-		repoDir := getDefaultRepoDir()
-		stateFilePath, data, err := readDeploymentStateFileFromRepo(repoDir)
-		if err == nil && data != nil {
-			var state struct {
-				ClusterNamePrefix string            `json:"cluster_name_prefix"`
-				ResourceTags      map[string]string `json:"resource_tags,omitempty"`
-				AzureResourceTags map[string]string `json:"azure_resource_tags,omitempty"`
-			}
-			if unmarshalErr := json.Unmarshal(data, &state); unmarshalErr != nil {
-				errMsg := fmt.Sprintf("deployment state file %s exists but cannot be parsed: %v\n"+
-					"Generating a new prefix would orphan cloud resources from the previous run.\n"+
-					"Delete the file to start fresh, or fix the JSON to resume.", stateFilePath, unmarshalErr)
-				configError = &errMsg
-				return
-			} else if state.ClusterNamePrefix != "" {
-				clusterNamePrefix = state.ClusterNamePrefix
-				cachedResourceTags = state.ResourceTags
-				if cachedResourceTags == nil {
-					cachedResourceTags = state.AzureResourceTags
-				}
-				return
-			}
-		} else if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: cannot read deployment state file %s: %v\n", stateFilePath, err)
-		}
-
-		// Generate unique prefix: ${CAPI_USER}-${random5hex}
-		// CAPI_USER must be short enough that the result fits within MaxClusterNamePrefixLength (12).
-		// With 5 hex chars + hyphen, CAPI_USER can be at most 6 chars (6 + 1 + 5 = 12).
-		maxUserLen := MaxClusterNamePrefixLength - 1 - 5 // hyphen + 5 hex chars
-		if len(capiUser) > maxUserLen {
-			fmt.Fprintf(os.Stderr, "Warning: CAPI_USER %q is %d chars, exceeds max %d for auto-generated CS_CLUSTER_NAME (max %d chars). Truncating.\n",
-				capiUser, len(capiUser), maxUserLen, MaxClusterNamePrefixLength)
-			capiUser = capiUser[:maxUserLen]
-		}
-		runID := generateRunID(5)
-		clusterNamePrefix = fmt.Sprintf("%s-%s", capiUser, runID)
+		clusterNamePrefix = context.ClusterNamePrefix
 	})
 
 	return clusterNamePrefix
@@ -421,28 +643,13 @@ func getClusterNamePrefix(capiUser string) string {
 // 3. Generate unique name: ${workloadClusterName}-${runID}-resgroup
 func getResourceGroupName(workloadClusterName, runID string) string {
 	resourceGroupNameOnce.Do(func() {
-		if rg := GetEnvOrDefault("RESOURCEGROUPNAME", ""); rg != "" {
-			resourceGroupName = rg
+		context, err := EnsureRunContext()
+		if err != nil {
+			errMsg := err.Error()
+			configError = &errMsg
 			return
 		}
-
-		repoDir := getDefaultRepoDir()
-		_, data, err := readDeploymentStateFileFromRepo(repoDir)
-		if err == nil && data != nil {
-			var state struct {
-				ResourceGroup string `json:"resource_group"`
-			}
-			if err := json.Unmarshal(data, &state); err == nil && state.ResourceGroup != "" {
-				resourceGroupName = state.ResourceGroup
-				return
-			}
-		}
-
-		if runID != "" {
-			resourceGroupName = fmt.Sprintf("%s-%s-resgroup", workloadClusterName, runID)
-		} else {
-			resourceGroupName = fmt.Sprintf("%s-resgroup", workloadClusterName)
-		}
+		resourceGroupName = context.ResourceGroupName
 	})
 
 	return resourceGroupName
@@ -476,7 +683,6 @@ type TestConfig struct {
 	OCPVersionMP             string // Full x.y.z OpenShift version for MachinePool workers (from OCP_VERSION_MP env var)
 	Region                   string
 	AzureSubscriptionName    string // Azure subscription name (from AZURE_SUBSCRIPTION_NAME env var)
-	AzureSubscriptionID      string // Azure subscription ID (from AZURE_SUBSCRIPTION_ID env var)
 	Environment              string
 	CAPIUser                 string            // User identifier for CAPI resources (from CAPI_USER env var)
 	WorkloadClusterNamespace string            // Namespace for workload cluster resources on management cluster (unique per test run)
@@ -484,9 +690,6 @@ type TestConfig struct {
 	TestRunID                string            // Unique run identifier extracted from ClusterNamePrefix (the part after CAPI_USER-). Empty when prefix does not start with CAPI_USER-.
 	ResourceTags             map[string]string // Tags applied to all created cloud resources (Azure RGs, AWS stacks/VPCs) for ownership tracking and cleanup
 	ResourceGroupName        string            // Azure resource group name (env: RESOURCEGROUPNAME, default: ${WorkloadClusterName}-${runID}-resgroup)
-	HCPResourceID            string            // Optional full ARM resource ID override for the HCP check
-	HCPResourceName          string            // ARM HCP resource name override
-	CheckHCPScriptPath       string            // Path to the ARM-state check script
 	CAPINamespace            string            // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" in K8S mode)
 	CAPZNamespace            string            // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" in K8S mode)
 
@@ -704,6 +907,11 @@ func NewTestConfig() *TestConfig {
 	// Resolve CAPI_USER
 	capiUser := getCAPIUser()
 	environment := GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv)
+	runContext, contextErr := EnsureRunContext()
+	if contextErr != nil {
+		errMsg := contextErr.Error()
+		configError = &errMsg
+	}
 
 	// Resolve CS_CLUSTER_NAME with auto-uniqueness for parallel runs
 	prefix := getClusterNamePrefix(capiUser)
@@ -717,6 +925,14 @@ func NewTestConfig() *TestConfig {
 	// Resolve workload cluster name and resource group name
 	workloadClusterName := GetEnvOrDefault("WORKLOAD_CLUSTER_NAME", defaultWorkloadCluster)
 	rgName := getResourceGroupName(workloadClusterName, testRunID)
+	namespace := getWorkloadClusterNamespace(testLabelPrefix)
+	if runContext != nil {
+		prefix = runContext.ClusterNamePrefix
+		testRunID = runContext.TestRunID
+		workloadClusterName = runContext.WorkloadClusterName
+		rgName = runContext.ResourceGroupName
+		namespace = runContext.WorkloadClusterNamespace
+	}
 
 	// Build resource tags for cleanup and ownership tracking (used for both Azure and AWS).
 	// On resume, use cached tags from the deployment state to preserve the original created-at timestamp.
@@ -747,17 +963,13 @@ func NewTestConfig() *TestConfig {
 		OCPVersionMP:             GetEnvOrDefault("OCP_VERSION_MP", "4.20.17"),
 		Region:                   GetEnvOrDefault(regionEnvVar, defaultRegion),
 		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),
-		AzureSubscriptionID:      os.Getenv("AZURE_SUBSCRIPTION_ID"),
 		Environment:              environment,
 		CAPIUser:                 capiUser,
-		WorkloadClusterNamespace: getWorkloadClusterNamespace(testLabelPrefix),
+		WorkloadClusterNamespace: namespace,
 		TestLabelPrefix:          testLabelPrefix,
 		TestRunID:                testRunID,
 		ResourceTags:             resourceTags,
 		ResourceGroupName:        rgName,
-		HCPResourceID:            os.Getenv("HCP_RESOURCE_ID"),
-		HCPResourceName:          os.Getenv("HCP_RESOURCE_NAME"),
-		CheckHCPScriptPath:       GetEnvOrDefault("CHECK_HCP_SCRIPT", "../scripts/check-hcp"),
 		CAPINamespace:            getControllerNamespace(useK8S, "CAPI_NAMESPACE", "capi-system"),
 		CAPZNamespace:            providerNamespace,
 
@@ -1022,25 +1234,6 @@ func (c *TestConfig) GetProvisionedControlPlaneName() string {
 	}
 
 	return name
-}
-
-// BuildHCPResourceID returns the ARM resource ID used by the HCP state check.
-// HCP_RESOURCE_ID takes precedence to support non-standard resource layouts.
-func (c *TestConfig) BuildHCPResourceID() string {
-	if c.HCPResourceID != "" {
-		return c.HCPResourceID
-	}
-
-	name := c.HCPResourceName
-	if name == "" {
-		name = c.GetProvisionedControlPlaneName()
-	}
-	if c.AzureSubscriptionID == "" || c.ResourceGroupName == "" || name == "" {
-		return ""
-	}
-
-	return fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.RedHatOpenShift/HCPOpenShiftClusters/%s",
-		c.AzureSubscriptionID, c.ResourceGroupName, name)
 }
 
 // GetProvisionedMachinePoolName returns the actual MachinePool resource name

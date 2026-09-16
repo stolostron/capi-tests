@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-aws clean-my-resources check-stale help summary scheduled-review fuzz
+.PHONY: test _init-run-context _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-aws clean-my-resources check-stale help summary scheduled-review fuzz
 
 # Use bash for shell commands (required for PIPESTATUS in test-all target)
 SHELL := /bin/bash
@@ -31,6 +31,11 @@ endif
 
 # Repository directory for cluster-api-installer (matches Go default in test/config.go:getDefaultRepoDir)
 ARO_REPO_DIR ?= $(shell echo $${TMPDIR:-/tmp})/cluster-api-installer-aro
+
+# Immutable run context is shared by every separate go test process.
+# Export it so Make-invoked phases and direct CI targets use the same path.
+CAPI_TEST_CONTEXT_FILE ?= $(CURDIR)/.run-context.json
+export CAPI_TEST_CONTEXT_FILE
 
 # Deployment state file - written by Go tests to config.RepoDir during execution.
 # Must point to the repo dir because Go tests os.Chdir(config.RepoDir) before writing.
@@ -169,7 +174,14 @@ help: ## Display this help message
 
 test: _check-dep ## Run check dependencies tests only
 
-_check-dep: check-gotestsum
+# Initialize immutable identity before any phase can reconstruct TestConfig.
+# The Go test is deliberately shared with normal phase configuration logic so
+# shell targets do not duplicate random-name generation algorithms.
+_init-run-context: check-gotestsum
+	@mkdir -p $(RESULTS_DIR)
+	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-init-run-context.xml -- $(TEST_VERBOSITY) ./test -count=1 -run '^TestInitializeRunContext$$'
+
+_check-dep: _init-run-context check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Check Dependencies Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -190,7 +202,7 @@ _check-dep: check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_setup: check-gotestsum
+_setup: _init-run-context check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Repository Setup Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -211,7 +223,7 @@ _setup: check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_management_cluster: check-gotestsum
+_management_cluster: _init-run-context check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Cluster Deployment Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -232,7 +244,7 @@ _management_cluster: check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_generate-yamls: check-gotestsum
+_generate-yamls: _init-run-context check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running YAML Generation Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -253,7 +265,7 @@ _generate-yamls: check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_deploy-crs: check-gotestsum
+_deploy-crs: _init-run-context check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running CR Deployment Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -280,7 +292,7 @@ _deploy-crs: check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_verify-workload-cluster: check-gotestsum
+_verify-workload-cluster: _init-run-context check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Workload Cluster Verification Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -301,7 +313,7 @@ _verify-workload-cluster: check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_delete-workload-cluster: check-gotestsum
+_delete-workload-cluster: _init-run-context check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Workload Cluster Deletion Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -322,7 +334,7 @@ _delete-workload-cluster: check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_mce-teardown: check-gotestsum
+_mce-teardown: _init-run-context check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running MCE Teardown Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -343,7 +355,7 @@ _mce-teardown: check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-_validate-cleanup: check-gotestsum
+_validate-cleanup: _init-run-context check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@echo "=== Running Cleanup Validation Tests ==="
 	@echo "Results will be saved to: $(RESULTS_DIR)"
@@ -388,6 +400,7 @@ test-all: ## Run all test phases sequentially
 # Internal target for test-all implementation (called with tee to capture output)
 .PHONY: _test-all-impl
 _test-all-impl:
+	@$(MAKE) --no-print-directory _init-run-context RESULTS_DIR=$(RESULTS_DIR)
 	@echo "========================================"
 	@echo "=== Running Full Test Suite ==="
 	@echo "========================================"

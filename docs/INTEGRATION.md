@@ -194,6 +194,35 @@ jobs:
 
 ## Variable Flow: capi-tests → gen.sh
 
+### Stable run context across phase processes
+
+`make test-all` runs each phase in a separate `go test` process. Before
+`_check-dep`, Make invokes the shared `TestInitializeRunContext` entry point.
+It creates or loads the absolute `.run-context.json` file in the capi-tests
+workspace and persists the immutable run identity: `CS_CLUSTER_NAME`,
+`RESOURCEGROUPNAME`, `WORKLOAD_CLUSTER_NAME`,
+`WORKLOAD_CLUSTER_NAMESPACE`, and the run ID. Later phase processes load the
+same values before generating defaults, even if a phase changes directory into
+the cluster-api-installer checkout.
+
+Set `CAPI_TEST_CONTEXT_FILE` to an absolute path when CI steps do not share the
+repository workspace. The path must be preserved and readable by every phase
+process. GitHub Actions jobs normally share the checkout workspace; Prow jobs
+using separate pods or workspaces must either preserve this file in a shared
+volume or provide equivalent explicit identity environment variables to every
+step.
+
+Explicit identity values are accepted when the context is first created. If a
+later phase supplies a different explicit value, initialization stops with an
+error naming the conflicting field and values. Deployment status remains in
+`.deployment-state.json`, separately from immutable identity; existing state
+files are migrated when a new context is first created.
+
+The generated Azure `ResourceGroup` nested under `AROCluster.spec.resources`
+is logged for observability only. Failure to parse that diagnostic structure,
+or a difference between the planned and manifest names, does not create a new
+deployment failure gate.
+
 When capi-tests runs the YAML generation phase (`04_generate_yamls_test.go`), it sets environment variables that `gen.sh` in cluster-api-installer consumes. The mapping is not one-to-one — variable names differ between the two repos, and `gen.sh` applies its own defaulting and override logic.
 
 ### ARO Variable Mapping (scripts/aro-hcp/gen.sh)

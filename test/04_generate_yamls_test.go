@@ -295,6 +295,11 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	}
 	PrintToTTY("\n")
 
+	if config.HasProvider("aro") {
+		clusterYAMLPath := filepath.Join(outputDir, config.ClusterYAML)
+		LogGeneratedResourceGroup(t, config.ResourceGroupName, clusterYAMLPath)
+	}
+
 	// Mark generation as successful only if no errors occurred
 	if !t.Failed() {
 		infrastructureGenerationSucceeded = true

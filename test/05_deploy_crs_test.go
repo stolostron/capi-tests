@@ -221,6 +221,10 @@ func TestDeployment_ApplyClusterYAMLs(t *testing.T) {
 				file, filePath)
 		}
 
+		if config.HasProvider("aro") && file == config.ClusterYAML {
+			LogGeneratedResourceGroup(t, config.ResourceGroupName, filePath)
+		}
+
 		PrintToTTY("[%d/%d] Applying %s...\n", i+1, len(expectedFiles), file)
 		t.Logf("Applying %s (%d/%d)", file, i+1, len(expectedFiles))
 
