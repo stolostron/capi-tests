@@ -205,6 +205,11 @@ workspace and persists the immutable run identity: `CS_CLUSTER_NAME`,
 same values before generating defaults, even if a phase changes directory into
 the cluster-api-installer checkout.
 
+The context also records `INFRA_PROVIDER` and `DEPLOYMENT_ENV`; explicit
+values that conflict with either persisted value stop the run. `make test-all`
+initializes the context once and passes that initialization state to nested
+phase targets. Direct phase targets initialize or reuse it themselves.
+
 Set `CAPI_TEST_CONTEXT_FILE` to an absolute path when CI steps do not share the
 repository workspace. The path must be preserved and readable by every phase
 process. GitHub Actions jobs normally share the checkout workspace; Prow jobs
@@ -217,6 +222,9 @@ later phase supplies a different explicit value, initialization stops with an
 error naming the conflicting field and values. Deployment status remains in
 `.deployment-state.json`, separately from immutable identity; existing state
 files are migrated when a new context is first created.
+
+Successful cleanup removes both `.deployment-state.json` and the run-context
+file, so the next run receives a new identity.
 
 The generated Azure `ResourceGroup` nested under `AROCluster.spec.resources`
 is logged for observability only. Failure to parse that diagnostic structure,

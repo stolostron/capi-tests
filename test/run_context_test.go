@@ -25,6 +25,8 @@ func TestEnsureRunContextInitializesAndPersistsExplicitIdentity(t *testing.T) {
 	t.Setenv("CS_CLUSTER_NAME", "cate-fixed")
 	t.Setenv("RESOURCEGROUPNAME", "cate-fixed-resgroup")
 	t.Setenv("WORKLOAD_CLUSTER_NAMESPACE", "capz-test-fixed")
+	t.Setenv("INFRA_PROVIDER", "aro")
+	t.Setenv("DEPLOYMENT_ENV", "stage")
 
 	context, err := EnsureRunContext()
 	if err != nil {
@@ -42,6 +44,9 @@ func TestEnsureRunContextInitializesAndPersistsExplicitIdentity(t *testing.T) {
 	}
 	if context.TestRunID == "" {
 		t.Fatal("TestRunID is empty; initialization must persist a run identity")
+	}
+	if context.InfraProvider != "aro" || context.DeploymentEnvironment != "stage" {
+		t.Errorf("provider/environment = %q/%q, want %q/%q", context.InfraProvider, context.DeploymentEnvironment, "aro", "stage")
 	}
 
 	data, err := os.ReadFile(contextPath)
@@ -108,6 +113,21 @@ func TestEnsureRunContextRejectsConflictingExplicitIdentity(t *testing.T) {
 		if !strings.Contains(err.Error(), expected) {
 			t.Errorf("error %q does not identify conflict value %q", err, expected)
 		}
+	}
+}
+
+func TestEnsureRunContextRejectsProviderAndEnvironmentConflicts(t *testing.T) {
+	contextPath := filepath.Join(t.TempDir(), "run-context.json")
+	original := `{"cluster_name_prefix":"cate-a1b2c","resource_group_name":"capz-tests-a1b2c-resgroup","workload_cluster_namespace":"capz-test-20260916-120000","test_run_id":"a1b2c","infra_provider":"aro","deployment_environment":"stage"}`
+	if err := os.WriteFile(contextPath, []byte(original), 0600); err != nil {
+		t.Fatalf("failed to write context fixture: %v", err)
+	}
+	t.Setenv("CAPI_TEST_CONTEXT_FILE", contextPath)
+	t.Setenv("INFRA_PROVIDER", "rosa")
+
+	_, err := EnsureRunContext()
+	if err == nil || !strings.Contains(err.Error(), "INFRA_PROVIDER") {
+		t.Fatalf("EnsureRunContext() error = %v, want INFRA_PROVIDER conflict", err)
 	}
 }
 
@@ -191,5 +211,29 @@ func TestSaveMCEOriginalStatesPreservesImmutableRunIdentity(t *testing.T) {
 		state.WorkloadClusterNamespace != "capz-test-20260916-120000" ||
 		state.TestRunID != "a1b2c" {
 		t.Errorf("MCE state update lost immutable identity: %+v", state)
+	}
+}
+
+func TestDeleteDeploymentStateRemovesContextAndNextRunGetsNewIdentity(t *testing.T) {
+	contextPath := filepath.Join(t.TempDir(), "run-context.json")
+	t.Setenv("CAPI_TEST_CONTEXT_FILE", contextPath)
+
+	first, err := EnsureRunContext()
+	if err != nil {
+		t.Fatalf("first EnsureRunContext() unexpected error: %v", err)
+	}
+	if err := DeleteDeploymentState(); err != nil {
+		t.Fatalf("DeleteDeploymentState() unexpected error: %v", err)
+	}
+	if _, err := os.Stat(contextPath); !os.IsNotExist(err) {
+		t.Fatalf("run context still exists after cleanup: %v", err)
+	}
+
+	second, err := EnsureRunContext()
+	if err != nil {
+		t.Fatalf("second EnsureRunContext() unexpected error: %v", err)
+	}
+	if first.ClusterNamePrefix == second.ClusterNamePrefix || first.TestRunID == second.TestRunID {
+		t.Fatalf("next run reused identity: first=%+v second=%+v", *first, *second)
 	}
 }

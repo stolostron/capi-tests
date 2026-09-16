@@ -3365,7 +3365,7 @@ func ReadDeploymentState() (*DeploymentState, error) {
 	for _, path := range deploymentStateFileCandidates(".") {
 		// #nosec G304 -- candidates are the sanitized run-scoped filename, the
 		// explicitly configured state file, or the fixed legacy filename.
-		data, err = os.ReadFile(path)
+		data, err = readValidatedStateFile(path, "")
 		if err == nil {
 			break
 		}
