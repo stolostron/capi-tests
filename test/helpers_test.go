@@ -189,6 +189,33 @@ func TestWriteDeploymentStateUsesRunScopedFile(t *testing.T) {
 	}
 }
 
+func TestReadDeploymentStateFallsBackToHistoricalPath(t *testing.T) {
+	workspace := t.TempDir()
+	customContextPath := filepath.Join(workspace, "custom", "run-context.json")
+	historicalStatePath := filepath.Join(workspace, "historical", ".deployment-state.json")
+
+	state := `{"resource_group":"legacy-resgroup","workload_cluster_name":"capz-tests","workload_cluster_namespace":"capz-test-legacy","cluster_name_prefix":"cate-legacy","test_run_id":"legacy"}`
+	if err := os.MkdirAll(filepath.Dir(historicalStatePath), 0700); err != nil {
+		t.Fatalf("failed to create historical state directory: %v", err)
+	}
+	if err := os.WriteFile(historicalStatePath, []byte(state), 0600); err != nil {
+		t.Fatalf("failed to write historical state: %v", err)
+	}
+
+	t.Setenv("CAPI_TEST_CONTEXT_FILE", customContextPath)
+	originalDeploymentStateFile := DeploymentStateFile
+	DeploymentStateFile = historicalStatePath
+	t.Cleanup(func() { DeploymentStateFile = originalDeploymentStateFile })
+
+	got, err := ReadDeploymentState()
+	if err != nil {
+		t.Fatalf("ReadDeploymentState() unexpected error: %v", err)
+	}
+	if got == nil || got.ResourceGroup != "legacy-resgroup" {
+		t.Fatalf("ReadDeploymentState() = %+v, want historical state", got)
+	}
+}
+
 func TestExtractResourceGroupNameFromYAML_NestedAROClusterResource(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "aro.yaml")
 	content := `---

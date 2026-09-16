@@ -3128,7 +3128,7 @@ type DeploymentState struct {
 const legacyDeploymentStateFile = ".deployment-state.json"
 
 // DeploymentStateFile is retained for callers that need the legacy filename.
-const DeploymentStateFile = legacyDeploymentStateFile
+var DeploymentStateFile = legacyDeploymentStateFile
 
 // deploymentStateFilePath returns the state-file path for the current run.
 // Prow provides RESOURCEGROUPNAME consistently across its phase invocations;
@@ -3374,7 +3374,19 @@ func ReadDeploymentState() (*DeploymentState, error) {
 		}
 	}
 	if err != nil {
-		return nil, nil // No state file, return nil without error
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to read deployment state file: %w", err)
+		}
+		if DeploymentStateFile == legacyDeploymentStateFile {
+			return nil, nil // No state file, return nil without error
+		}
+		data, err = readValidatedStateFile(DeploymentStateFile, legacyDeploymentStateFile)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("failed to read deployment state file: %w", err)
+		}
 	}
 
 	var state DeploymentState
