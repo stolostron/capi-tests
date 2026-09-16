@@ -862,6 +862,24 @@ func ExtractResourceGroupNameFromYAML(filePath string) (string, error) {
 	return "", fmt.Errorf("no Azure ResourceGroup resource found in %s", filePath)
 }
 
+// LogGeneratedResourceGroup reports the ResourceGroup found in a generated
+// manifest. This is diagnostic-only: a parser failure must not turn successful
+// YAML generation into a deployment failure.
+func LogGeneratedResourceGroup(t *testing.T, plannedName, filePath string) {
+	t.Helper()
+
+	generatedName, err := ExtractResourceGroupNameFromYAML(filePath)
+	if err != nil {
+		t.Logf("Warning: unable to inspect generated ResourceGroup in %s: %v", filePath, err)
+		return
+	}
+	if plannedName == "" {
+		t.Logf("Generated ResourceGroup: %s", generatedName)
+		return
+	}
+	t.Logf("ResourceGroup identity: planned=%s, manifest=%s", plannedName, generatedName)
+}
+
 func findResourceGroupName(value interface{}) (string, bool) {
 	switch current := value.(type) {
 	case map[string]interface{}:
@@ -3123,9 +3141,10 @@ type DeploymentState struct {
 	MCEOriginalStates        map[string]bool   `json:"mce_original_states,omitempty"`
 }
 
-// DeploymentStateFile is the path to the deployment state file.
-// This file is written during test deployment and read during cleanup.
-const DeploymentStateFile = ".deployment-state.json"
+// DeploymentStateFile is the default absolute path used for display and
+// compatibility. Internal reads and writes resolve the path from the run
+// context so they remain stable after a phase changes directories.
+var DeploymentStateFile = filepath.Join(runContextWorkspace(), ".deployment-state.json")
 
 // WriteDeploymentState writes the current deployment configuration to a state file.
 // This allows cleanup commands to know which Azure resources were actually created,
@@ -3134,16 +3153,28 @@ func WriteDeploymentState(config *TestConfig) error {
 	// Preserve data saved by other phases (e.g., MCE original states from phase 03)
 	existing, _ := ReadDeploymentState()
 
-	state := DeploymentState{
-		ResourceGroup:            config.ResourceGroupName,
-		ManagementClusterName:    config.ManagementClusterName,
+	identity := RunContext{
+		ClusterNamePrefix:        config.ClusterNamePrefix,
+		ResourceGroupName:        config.ResourceGroupName,
 		WorkloadClusterName:      config.WorkloadClusterName,
 		WorkloadClusterNamespace: config.WorkloadClusterNamespace,
-		ClusterNamePrefix:        config.ClusterNamePrefix,
-		Region:                   config.Region,
-		User:                     config.CAPIUser,
-		Environment:              config.Environment,
 		TestRunID:                config.TestRunID,
+		CAPIUser:                 config.CAPIUser,
+	}
+	if persisted, err := readRunContext(RunContextFilePath()); err == nil {
+		identity = *persisted
+	}
+
+	state := DeploymentState{
+		ResourceGroup:            identity.ResourceGroupName,
+		ManagementClusterName:    config.ManagementClusterName,
+		WorkloadClusterName:      identity.WorkloadClusterName,
+		WorkloadClusterNamespace: identity.WorkloadClusterNamespace,
+		ClusterNamePrefix:        identity.ClusterNamePrefix,
+		Region:                   config.Region,
+		User:                     identity.CAPIUser,
+		Environment:              config.Environment,
+		TestRunID:                identity.TestRunID,
 		ResourceTags:             config.ResourceTags,
 	}
 
@@ -3156,7 +3187,7 @@ func WriteDeploymentState(config *TestConfig) error {
 		return fmt.Errorf("failed to marshal deployment state: %w", err)
 	}
 
-	if err := os.WriteFile(DeploymentStateFile, data, 0600); err != nil {
+	if err := os.WriteFile(deploymentStatePath(), data, 0600); err != nil {
 		return fmt.Errorf("failed to write deployment state file: %w", err)
 	}
 
@@ -3304,10 +3335,19 @@ func sortedTagPairs(tags map[string]string, sep string) []string {
 // ReadDeploymentState reads the deployment state from the state file.
 // Returns nil if the file doesn't exist (no deployment has been recorded).
 func ReadDeploymentState() (*DeploymentState, error) {
-	data, err := os.ReadFile(DeploymentStateFile)
+	path := deploymentStatePath()
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil // No state file, return nil without error
+			// Read the historical default path when a custom context path is used.
+			if path != DeploymentStateFile {
+				data, err = os.ReadFile(DeploymentStateFile)
+				if os.IsNotExist(err) {
+					return nil, nil
+				}
+			} else {
+				return nil, nil // No state file, return nil without error
+			}
 		}
 		return nil, fmt.Errorf("failed to read deployment state file: %w", err)
 	}
@@ -3333,7 +3373,7 @@ func ReadDeploymentState() (*DeploymentState, error) {
 // DeleteDeploymentState removes the deployment state file.
 // Called after successful cleanup to indicate no active deployment.
 func DeleteDeploymentState() error {
-	err := os.Remove(DeploymentStateFile)
+	err := os.Remove(deploymentStatePath())
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to delete deployment state file: %w", err)
 	}
@@ -3367,6 +3407,14 @@ func SaveMCEOriginalStates(states map[string]bool) error {
 
 	if existing == nil {
 		existing = &DeploymentState{}
+		if context, contextErr := readRunContext(RunContextFilePath()); contextErr == nil {
+			existing.ResourceGroup = context.ResourceGroupName
+			existing.WorkloadClusterName = context.WorkloadClusterName
+			existing.WorkloadClusterNamespace = context.WorkloadClusterNamespace
+			existing.ClusterNamePrefix = context.ClusterNamePrefix
+			existing.TestRunID = context.TestRunID
+			existing.User = context.CAPIUser
+		}
 	}
 
 	if existing.MCEOriginalStates == nil {
@@ -3384,7 +3432,7 @@ func SaveMCEOriginalStates(states map[string]bool) error {
 		return fmt.Errorf("failed to marshal deployment state: %w", err)
 	}
 
-	if err := os.WriteFile(DeploymentStateFile, data, 0600); err != nil {
+	if err := os.WriteFile(deploymentStatePath(), data, 0600); err != nil {
 		return fmt.Errorf("failed to write deployment state file: %w", err)
 	}
 
