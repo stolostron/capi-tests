@@ -498,11 +498,13 @@ func EnsureRunContext() (*RunContext, error) {
 	}
 
 	context := &RunContext{}
+	var migratedLegacyPath string
 	for _, legacyPath := range legacyDeploymentStatePaths(path) {
 		legacy, tags, legacyErr := readLegacyRunContext(legacyPath)
 		if legacyErr == nil {
 			*context = *legacy
 			cachedResourceTags = tags
+			migratedLegacyPath = legacyPath
 			break
 		}
 		if !os.IsNotExist(legacyErr) {
@@ -571,6 +573,11 @@ func EnsureRunContext() (*RunContext, error) {
 	}
 	if err := writeRunContext(path, context); err != nil {
 		return nil, err
+	}
+	if migratedLegacyPath != "" {
+		if err := os.Remove(migratedLegacyPath); err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to remove migrated legacy deployment state %s: %w", migratedLegacyPath, err)
+		}
 	}
 	return context, nil
 }
@@ -886,8 +893,20 @@ func NewTestConfig() *TestConfig {
 		useK8S = true
 	}
 
+	// Initialize/read the immutable identity before resolving provider-specific
+	// defaults. Separate phase processes must use the persisted provider,
+	// environment, and user as well as the cluster identity fields.
+	runContext, contextErr := EnsureRunContext()
+	if contextErr != nil {
+		errMsg := contextErr.Error()
+		configError = &errMsg
+	}
+
 	// Determine infrastructure provider
 	infraProviderName := GetEnvOrDefault("INFRA_PROVIDER", "aro")
+	if runContext != nil && runContext.InfraProvider != "" {
+		infraProviderName = runContext.InfraProvider
+	}
 
 	// Parse ASO controller timeout unconditionally so that
 	// ASOControllerTimeout is always a valid duration (used by ValidateAllConfigurations).
@@ -934,13 +953,18 @@ func NewTestConfig() *TestConfig {
 		defaultRegion = "uksouth"
 	}
 
-	// Resolve CAPI_USER
+	// Resolve immutable identity values from the persisted context when one
+	// exists. EnsureRunContext has already checked explicit environment values
+	// for conflicts, so omitted values safely inherit the original run.
 	capiUser := getCAPIUser()
 	environment := GetEnvOrDefault("DEPLOYMENT_ENV", DefaultDeploymentEnv)
-	runContext, contextErr := EnsureRunContext()
-	if contextErr != nil {
-		errMsg := contextErr.Error()
-		configError = &errMsg
+	if runContext != nil {
+		if runContext.CAPIUser != "" {
+			capiUser = runContext.CAPIUser
+		}
+		if runContext.DeploymentEnvironment != "" {
+			environment = runContext.DeploymentEnvironment
+		}
 	}
 
 	// Resolve CS_CLUSTER_NAME with auto-uniqueness for parallel runs
