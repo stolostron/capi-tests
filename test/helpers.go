@@ -3404,6 +3404,14 @@ func DeleteDeploymentState() error {
 			return fmt.Errorf("failed to delete deployment state file: %w", err)
 		}
 	}
+	for _, path := range legacyDeploymentStatePaths(RunContextFilePath()) {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to delete deployment state file %s: %w", path, err)
+		}
+	}
+	if err := os.Remove(RunContextFilePath()); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to delete run context file: %w", err)
+	}
 	return nil
 }
 
