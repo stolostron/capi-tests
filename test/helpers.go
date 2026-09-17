@@ -3127,18 +3127,62 @@ func ExtractNamespaceFromYAML(filePath string) (string, error) {
 // DeploymentState holds information about the deployed test resources.
 // This is written to a state file during deployment and read during cleanup
 // to ensure the cleanup targets the correct Azure resources.
+const DeploymentStateSchemaVersion = 2
+
+type DeploymentPhaseStatus string
+
+const (
+	DeploymentPhasePending   DeploymentPhaseStatus = "pending"
+	DeploymentPhaseRunning   DeploymentPhaseStatus = "running"
+	DeploymentPhaseSucceeded DeploymentPhaseStatus = "succeeded"
+	DeploymentPhaseFailed    DeploymentPhaseStatus = "failed"
+)
+
+type DeploymentPhaseRecord struct {
+	Phase       string                `json:"phase"`
+	Status      DeploymentPhaseStatus `json:"status"`
+	StartedAt   string                `json:"started_at"`
+	CompletedAt string                `json:"completed_at,omitempty"`
+	Error       string                `json:"error,omitempty"`
+}
+
+type DeploymentResource struct {
+	Provider      string `json:"provider"`
+	Type          string `json:"type"`
+	Name          string `json:"name"`
+	Namespace     string `json:"namespace,omitempty"`
+	ResourceGroup string `json:"resource_group,omitempty"`
+	Status        string `json:"status,omitempty"`
+}
+
+func (resource DeploymentResource) resourceKey() string {
+	return strings.Join([]string{
+		resource.Provider,
+		resource.Type,
+		resource.Namespace,
+		resource.ResourceGroup,
+		resource.Name,
+	}, "|")
+}
+
 type DeploymentState struct {
-	ResourceGroup            string            `json:"resource_group"`
-	ManagementClusterName    string            `json:"management_cluster_name"`
-	WorkloadClusterName      string            `json:"workload_cluster_name"`
-	WorkloadClusterNamespace string            `json:"workload_cluster_namespace"`
-	ClusterNamePrefix        string            `json:"cluster_name_prefix"`
-	Region                   string            `json:"region"`
-	User                     string            `json:"user"`
-	Environment              string            `json:"environment"`
-	TestRunID                string            `json:"test_run_id,omitempty"`
-	ResourceTags             map[string]string `json:"resource_tags,omitempty"`
-	MCEOriginalStates        map[string]bool   `json:"mce_original_states,omitempty"`
+	SchemaVersion            int                     `json:"schema_version,omitempty"`
+	ResourceGroup            string                  `json:"resource_group"`
+	ManagementClusterName    string                  `json:"management_cluster_name"`
+	WorkloadClusterName      string                  `json:"workload_cluster_name"`
+	WorkloadClusterNamespace string                  `json:"workload_cluster_namespace"`
+	ClusterNamePrefix        string                  `json:"cluster_name_prefix"`
+	Region                   string                  `json:"region"`
+	User                     string                  `json:"user"`
+	Environment              string                  `json:"environment"`
+	TestRunID                string                  `json:"test_run_id,omitempty"`
+	ResourceTags             map[string]string       `json:"resource_tags,omitempty"`
+	MCEOriginalStates        map[string]bool         `json:"mce_original_states,omitempty"`
+	Phase                    string                  `json:"phase,omitempty"`
+	PhaseStatus              DeploymentPhaseStatus   `json:"phase_status,omitempty"`
+	PhaseHistory             []DeploymentPhaseRecord `json:"phase_history,omitempty"`
+	LastError                string                  `json:"last_error,omitempty"`
+	Resources                []DeploymentResource    `json:"resources,omitempty"`
 }
 
 // DeploymentStateFile is the default absolute path used for display and

@@ -1,6 +1,7 @@
 package test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,62 @@ import (
 	"testing"
 	"time"
 )
+
+func TestDeploymentStateSchemaSerialization(t *testing.T) {
+	state := DeploymentState{
+		SchemaVersion: DeploymentStateSchemaVersion,
+		Phase:         "infrastructure",
+		PhaseStatus:   DeploymentPhaseRunning,
+		LastError:     "temporary failure",
+		PhaseHistory: []DeploymentPhaseRecord{{
+			Phase:     "infrastructure",
+			Status:    DeploymentPhaseRunning,
+			StartedAt: "2026-09-17T12:00:00Z",
+		}},
+		Resources: []DeploymentResource{{
+			Provider:      "azure",
+			Type:          "resource_group",
+			Name:          "capz-tests-resgroup",
+			ResourceGroup: "capz-tests-resgroup",
+			Status:        "created",
+		}},
+	}
+
+	data, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("failed to marshal state: %v", err)
+	}
+
+	var encoded map[string]interface{}
+	if err := json.Unmarshal(data, &encoded); err != nil {
+		t.Fatalf("failed to decode state JSON: %v", err)
+	}
+	if got := encoded["schema_version"]; got != float64(DeploymentStateSchemaVersion) {
+		t.Errorf("schema_version = %v, want %d", got, DeploymentStateSchemaVersion)
+	}
+	if got := encoded["phase_status"]; got != string(DeploymentPhaseRunning) {
+		t.Errorf("phase_status = %v, want %q", got, DeploymentPhaseRunning)
+	}
+	if _, ok := encoded["phase_history"]; !ok {
+		t.Error("phase_history missing from serialized state")
+	}
+	if _, ok := encoded["resources"]; !ok {
+		t.Error("resources missing from serialized state")
+	}
+}
+
+func TestDeploymentResourceKeyIsStable(t *testing.T) {
+	resource := DeploymentResource{
+		Provider:      "azure",
+		Type:          "resource_group",
+		Name:          "capz-tests-resgroup",
+		ResourceGroup: "capz-tests-resgroup",
+	}
+
+	if got, want := resource.resourceKey(), "azure|resource_group|||capz-tests-resgroup"; got != want {
+		t.Fatalf("resource key = %q, want %q", got, want)
+	}
+}
 
 func TestIsKubectlApplySuccess(t *testing.T) {
 	tests := []struct {
