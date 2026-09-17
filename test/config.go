@@ -720,6 +720,7 @@ type TestConfig struct {
 	OCPVersionMP             string // Full x.y.z OpenShift version for MachinePool workers (from OCP_VERSION_MP env var)
 	Region                   string
 	AzureSubscriptionName    string // Azure subscription name (from AZURE_SUBSCRIPTION_NAME env var)
+	AzureSubscriptionID      string // Azure subscription ID (from AZURE_SUBSCRIPTION_ID env var)
 	Environment              string
 	CAPIUser                 string            // User identifier for CAPI resources (from CAPI_USER env var)
 	WorkloadClusterNamespace string            // Namespace for workload cluster resources on management cluster (unique per test run)
@@ -727,6 +728,9 @@ type TestConfig struct {
 	TestRunID                string            // Unique run identifier extracted from ClusterNamePrefix (the part after CAPI_USER-). Empty when prefix does not start with CAPI_USER-.
 	ResourceTags             map[string]string // Tags applied to all created cloud resources (Azure RGs, AWS stacks/VPCs) for ownership tracking and cleanup
 	ResourceGroupName        string            // Azure resource group name (env: RESOURCEGROUPNAME, default: ${WorkloadClusterName}-${runID}-resgroup)
+	HCPResourceID            string            // Optional full ARM resource ID override for the HCP check
+	HCPResourceName          string            // ARM HCP resource name override
+	CheckHCPScriptPath       string            // Path to the ARM-state check script
 	CAPINamespace            string            // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" in K8S mode)
 	CAPZNamespace            string            // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" in K8S mode)
 
@@ -1017,6 +1021,7 @@ func NewTestConfig() *TestConfig {
 		OCPVersionMP:             GetEnvOrDefault("OCP_VERSION_MP", "4.20.17"),
 		Region:                   GetEnvOrDefault(regionEnvVar, defaultRegion),
 		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),
+		AzureSubscriptionID:      os.Getenv("AZURE_SUBSCRIPTION_ID"),
 		Environment:              environment,
 		CAPIUser:                 capiUser,
 		WorkloadClusterNamespace: namespace,
@@ -1024,6 +1029,9 @@ func NewTestConfig() *TestConfig {
 		TestRunID:                testRunID,
 		ResourceTags:             resourceTags,
 		ResourceGroupName:        rgName,
+		HCPResourceID:            os.Getenv("HCP_RESOURCE_ID"),
+		HCPResourceName:          os.Getenv("HCP_RESOURCE_NAME"),
+		CheckHCPScriptPath:       GetEnvOrDefault("CHECK_HCP_SCRIPT", "../scripts/check-hcp"),
 		CAPINamespace:            getControllerNamespace(useK8S, "CAPI_NAMESPACE", "capi-system"),
 		CAPZNamespace:            providerNamespace,
 
@@ -1288,6 +1296,25 @@ func (c *TestConfig) GetProvisionedControlPlaneName() string {
 	}
 
 	return name
+}
+
+// BuildHCPResourceID returns the ARM resource ID used by the HCP state check.
+// HCP_RESOURCE_ID takes precedence to support non-standard resource layouts.
+func (c *TestConfig) BuildHCPResourceID() string {
+	if c.HCPResourceID != "" {
+		return c.HCPResourceID
+	}
+
+	name := c.HCPResourceName
+	if name == "" {
+		name = c.GetProvisionedControlPlaneName()
+	}
+	if c.AzureSubscriptionID == "" || c.ResourceGroupName == "" || name == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.RedHatOpenShift/HCPOpenShiftClusters/%s",
+		c.AzureSubscriptionID, c.ResourceGroupName, name)
 }
 
 // GetProvisionedMachinePoolName returns the actual MachinePool resource name

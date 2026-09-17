@@ -862,6 +862,24 @@ func ExtractResourceGroupNameFromYAML(filePath string) (string, error) {
 	return "", fmt.Errorf("no Azure ResourceGroup resource found in %s", filePath)
 }
 
+// LogGeneratedResourceGroup reports the ResourceGroup found in a generated
+// manifest. This is diagnostic-only: a parser failure must not turn successful
+// YAML generation into a deployment failure.
+func LogGeneratedResourceGroup(t *testing.T, plannedName, filePath string) {
+	t.Helper()
+
+	generatedName, err := ExtractResourceGroupNameFromYAML(filePath)
+	if err != nil {
+		t.Logf("Warning: unable to inspect generated ResourceGroup in %s: %v", filePath, err)
+		return
+	}
+	if plannedName == "" {
+		t.Logf("Generated ResourceGroup: %s", generatedName)
+		return
+	}
+	t.Logf("ResourceGroup identity: planned=%s, manifest=%s", plannedName, generatedName)
+}
+
 func findResourceGroupName(value interface{}) (string, bool) {
 	switch current := value.(type) {
 	case map[string]interface{}:
