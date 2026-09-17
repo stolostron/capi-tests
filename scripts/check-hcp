@@ -55,8 +55,9 @@ echo
 echo "ARM role assignments in resource group:"
 ARM_RA_JSON=$(mktemp)
 trap 'rm -f "$tmp_json" "$ARM_RA_JSON"' EXIT
+RG_SCOPE="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RG_NAME"
 az role assignment list --all --subscription "$SUBSCRIPTION_ID" -o json \
-  | jq --arg rg "/resourceGroups/$RG_NAME/" '[.[] | select(.scope | contains($rg))] | unique_by(.id)' >"$ARM_RA_JSON"
+  | jq --arg rg "$RG_SCOPE" '[.[] | select(.scope == $rg or (.scope | startswith($rg + "/"))) ] | unique_by(.id)' >"$ARM_RA_JSON"
 echo "  count: $(jq 'length' "$ARM_RA_JSON")"
 if [[ "$VERBOSE" == true ]]; then
   jq -r '.[] | "  role: \(.roleDefinitionName)\n  principalId: \(.principalId)\n  scope: \(.scope)\n  assignmentId: \(.id)\n"' "$ARM_RA_JSON"

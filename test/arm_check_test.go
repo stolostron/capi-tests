@@ -1,6 +1,7 @@
 package test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,7 +33,14 @@ case "${1:-} ${2:-}" in
 {"properties":{"provisioningState":"Succeeded","platform":{"subnetId":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/subnet","vnetIntegrationSubnetId":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/integration","networkSecurityGroupId":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkSecurityGroups/nsg"},"status":{"conditions":[{"type":"RequirementsValid","status":"False","reason":"Degraded"}]},"identities":["/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/available","/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/missing"]}}
 JSON
     ;;
-  "role assignment list") echo '[]' ;;
+  "role assignment") cat <<'JSON'
+[
+  {"id":"/assignments/resource-group","scope":"/subscriptions/sub/resourceGroups/rg"},
+  {"id":"/assignments/child","scope":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet"},
+  {"id":"/assignments/other","scope":"/subscriptions/sub/resourceGroups/other"}
+]
+JSON
+    ;;
   "identity show")
     [[ "$*" == *"/available"* ]]
     ;;
@@ -51,5 +59,41 @@ esac
 	}
 	if !strings.Contains(string(output), "RequirementsValid: ❌ False (Degraded)") {
 		t.Fatalf("check-hcp output did not contain the degraded requirement:\n%s", output)
+	}
+	if !strings.Contains(string(output), "  count: 2") {
+		t.Fatalf("check-hcp output did not include exact and descendant resource-group scopes:\n%s", output)
+	}
+}
+
+func TestResolveHCPSubscriptionIDFromAzureCLI(t *testing.T) {
+	binDir := t.TempDir()
+	azPath := filepath.Join(binDir, "az")
+	azScript := `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$*" == *"account show"* ]]; then
+  echo "subscription-from-cli"
+  exit 0
+fi
+exit 1
+`
+	if err := os.WriteFile(azPath, []byte(azScript), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	config := &TestConfig{AzureSubscriptionName: "configured-subscription"}
+	if err := resolveHCPSubscriptionID(t, config); err != nil {
+		t.Fatalf("resolveHCPSubscriptionID() returned error: %v", err)
+	}
+	if config.AzureSubscriptionID != "subscription-from-cli" {
+		t.Fatalf("AzureSubscriptionID = %q, want %q", config.AzureSubscriptionID, "subscription-from-cli")
+	}
+}
+
+func TestReportHCPARMCheckFailureLogsWarning(t *testing.T) {
+	if !t.Run("warning", func(t *testing.T) {
+		reportHCPARMCheckFailure(t, fmt.Errorf("diagnostic failed"))
+	}) {
+		t.Fatal("reportHCPARMCheckFailure marked the test as failed")
 	}
 }

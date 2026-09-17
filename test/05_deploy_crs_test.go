@@ -481,11 +481,7 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 
 	config := NewTestConfig()
 	defer func() {
-		if err := RunHCPARMCheck(t, config); err != nil {
-			// Keep the original deployment result intact while making the ARM check
-			// failure visible in the test result and logs.
-			t.Errorf("HCP ARM state check: %v", err)
-		}
+		reportHCPARMCheckFailure(t, RunHCPARMCheck(t, config))
 	}()
 
 	// Set KUBECONFIG for external cluster mode

@@ -123,6 +123,9 @@ When using `INFRA_PROVIDER=rosa`, the following credentials are required:
 - `OCP_VERSION_MP` - Full `x.y.z` OpenShift version for MachinePool workers (default: `4.20.17`)
 - `REGION` - Azure region (default: `uksouth`)
 - `AZURE_SUBSCRIPTION_NAME` - Azure subscription ID
+- `HCP_RESOURCE_ID` - Optional full Azure Resource Manager ID for the HCP resource. Takes precedence over the constructed resource ID.
+- `HCP_RESOURCE_NAME` - Optional HCP resource name override used when constructing the resource ID.
+- `CHECK_HCP_SCRIPT` - Path to the HCP ARM-state inspection script (default: `../scripts/check-hcp`)
 - `DEPLOYMENT_ENV` - Deployment environment identifier (default: `stage`). Used in Azure resource tags and domain prefix validation.
 - `CAPI_USER` - User identifier and base for auto-generated `CS_CLUSTER_NAME` (default: `cate`)
 - `WORKLOAD_CLUSTER_NAMESPACE` - Namespace for workload cluster resources. If set, uses the exact value provided (for resume scenarios). If not set, auto-generates a unique namespace per test run using `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` format.
