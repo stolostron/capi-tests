@@ -528,9 +528,7 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 
 	// Set kubeconfig for external cluster mode
 	// (for Kind mode, kubectl defaults to ~/.kube/config)
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	output, err = RunCommand(t, "kubectl", "--context", config.GetKubeContext(), "get", "nodes")
 	if err != nil {
@@ -639,9 +637,7 @@ func TestKindCluster_CAPINamespacesExists(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	PrintToTTY("\n=== Checking for controller namespaces ===\n")
 	t.Log("Checking for controller namespaces...")
@@ -687,9 +683,7 @@ func TestKindCluster_CAPIControllerReady(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 
@@ -787,9 +781,7 @@ func TestKindCluster_InfraControllersReady(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 
@@ -889,9 +881,7 @@ func TestKindCluster_WebhooksReady(t *testing.T) {
 	config := NewTestConfig()
 
 	// Set KUBECONFIG for external cluster mode
-	if config.IsExternalCluster() {
-		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
-	}
+	SetupKubeconfig(t, config)
 
 	context := config.GetKubeContext()
 
