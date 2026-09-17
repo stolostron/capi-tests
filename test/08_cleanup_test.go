@@ -3,6 +3,7 @@ package test
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -665,6 +666,64 @@ func TestCleanup_PrefixValidation(t *testing.T) {
 	} else {
 		PrintToTTY("Unexpected rejection of valid prefix\n\n")
 		t.Log("Prefix validation may have issues - check script")
+	}
+}
+
+// TestCleanup_AzureResourceDeletionIsVerified verifies that Azure resource
+// deletion does not report success until Azure confirms the resource is gone.
+func TestCleanup_AzureResourceDeletionIsVerified(t *testing.T) {
+	cleanupScript := "../scripts/cleanup-azure-resources.sh"
+	binDir := t.TempDir()
+	azLog := filepath.Join(t.TempDir(), "az.log")
+
+	fakeAzureCLI := `#!/usr/bin/env bash
+set -euo pipefail
+echo "$*" >> "$FAKE_AZ_LOG"
+case "$1 ${2:-}" in
+  "account show"|"extension show") exit 0 ;;
+  "group show") echo '{"name":"test-rg","tags":{}}' ;;
+  "group delete") exit 0 ;;
+  "keyvault list"|"keyvault list-deleted") echo '[]' ;;
+  "graph query") echo '{"data":[{"id":"/subscriptions/test/resourceGroups/test-rg/providers/Microsoft.Compute/virtualMachines/foo-vm","name":"foo-vm","type":"Microsoft.Compute/virtualMachines","tags":{"capi-test-user":"test"}}]}' ;;
+  "resource show") exit 0 ;;
+  "resource delete") exit "${FAKE_AZ_DELETE_EXIT:-0}" ;;
+  "resource wait") exit "${FAKE_AZ_WAIT_EXIT:-0}" ;;
+  "ad app"|"ad sp") echo '[]' ;;
+  *) echo '[]' ;;
+esac
+`
+	azPath := filepath.Join(binDir, "az")
+	if err := os.WriteFile(azPath, []byte(fakeAzureCLI), 0o755); err != nil {
+		t.Fatalf("failed to write fake Azure CLI: %v", err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("FAKE_AZ_LOG", azLog)
+	t.Setenv("FAKE_AZ_DELETE_EXIT", "0")
+	t.Setenv("FAKE_AZ_WAIT_EXIT", "1")
+
+	cmd := exec.Command("bash", cleanupScript, "--resource-group", "test-rg", "--prefix", "foo", "--force")
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("cleanup succeeded after Azure deletion verification failed; output:\n%s", output)
+	}
+
+	logBytes, readErr := os.ReadFile(azLog)
+	if readErr != nil {
+		t.Fatalf("failed to read fake Azure CLI log: %v", readErr)
+	}
+	if !strings.Contains(string(logBytes), "resource wait") {
+		t.Fatalf("cleanup did not wait for resource deletion; Azure calls:\n%s", logBytes)
+	}
+
+	if err := os.WriteFile(azLog, nil, 0o644); err != nil {
+		t.Fatalf("failed to reset fake Azure CLI log: %v", err)
+	}
+	t.Setenv("FAKE_AZ_DELETE_EXIT", "1")
+	t.Setenv("FAKE_AZ_WAIT_EXIT", "0")
+	cmd = exec.Command("bash", cleanupScript, "--resource-group", "test-rg", "--prefix", "foo", "--force")
+	output, err = cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("cleanup succeeded after Azure resource deletion failed; output:\n%s", output)
 	}
 }
 
