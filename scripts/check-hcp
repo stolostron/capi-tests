@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() { echo "Usage: $0 [--verbose] <hcp-resource-id>" >&2; exit 2; }
+VERBOSE=false
+if [[ ${1:-} == "--verbose" ]]; then VERBOSE=true; shift; fi
+[[ $# -eq 1 ]] || usage
+HCP_ID="$1"
+RG_NAME=$(sed -n 's#^.*/resourceGroups/\([^/]*\)/providers/.*$#\1#p' <<< "$HCP_ID")
+SUBSCRIPTION_ID=$(sed -n 's#^/subscriptions/\([^/]*\)/.*$#\1#p' <<< "$HCP_ID")
+
+command -v az >/dev/null || { echo "ERROR: az CLI is required" >&2; exit 1; }
+command -v jq >/dev/null || { echo "ERROR: jq is required" >&2; exit 1; }
+
+tmp_json=$(mktemp)
+trap 'rm -f "$tmp_json"' EXIT
+az resource show --ids "$HCP_ID" -o json >"$tmp_json"
+
+SUBNET_ID=$(jq -r '.properties.platform.subnetId // empty' "$tmp_json")
+INTEGRATION_SUBNET_ID=$(jq -r '.properties.platform.vnetIntegrationSubnetId // empty' "$tmp_json")
+VNET_ID=$(sed 's#/subnets/.*##' <<< "$SUBNET_ID")
+NSG_ID=$(jq -r '.properties.platform.networkSecurityGroupId // empty' "$tmp_json")
+CONDITION_TEXT=$(jq -r '.properties.status.conditions[]?.message // empty' "$tmp_json")
+CHECK_FAILED=false
+
+resource_status() {
+  local id="$1"
+  if [[ -n "$id" ]] && az resource show --ids "$id" --query id -o tsv >/dev/null 2>&1; then echo "✅"; else echo "❌"; fi
+}
+
+show_scope_assignments() {
+  local principal_id="$1"
+  local scope="$2"
+  local result
+  result=$(az role assignment list --assignee-object-id "$principal_id" --scope "$scope" --include-inherited -o json)
+  if [[ $(jq 'length' <<< "$result") -eq 0 ]]; then
+    echo "      none"
+  else
+    jq -r '.[] | "      role: \(.roleDefinitionName)\n      scope: \(.scope)\n      assignmentId: \(.id)\n"' <<< "$result"
+  fi
+}
+
+echo "HCP: $(basename "$HCP_ID")"
+PROVISIONING_STATE=$(jq -r '.properties.provisioningState // "unknown"' "$tmp_json")
+REQUIREMENTS=$(jq -r '[.properties.status.conditions[]? | select(.type == "RequirementsValid") | (.status + " (" + .reason + ")")] | first // "unknown"' "$tmp_json")
+if [[ "$REQUIREMENTS" == True* ]]; then
+  echo "  RequirementsValid: ✅ $REQUIREMENTS"
+else
+  echo "  RequirementsValid: ❌ $REQUIREMENTS"
+  CHECK_FAILED=true
+fi
+echo "  provisioningState: $PROVISIONING_STATE"
+
+echo
+echo "ARM role assignments in resource group:"
+ARM_RA_JSON=$(mktemp)
+trap 'rm -f "$tmp_json" "$ARM_RA_JSON"' EXIT
+RG_SCOPE="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RG_NAME"
+az role assignment list --all --subscription "$SUBSCRIPTION_ID" -o json \
+  | jq --arg rg "$RG_SCOPE" '[.[] | select(.scope == $rg or (.scope | startswith($rg + "/"))) ] | unique_by(.id)' >"$ARM_RA_JSON"
+echo "  count: $(jq 'length' "$ARM_RA_JSON")"
+if [[ "$VERBOSE" == true ]]; then
+  jq -r '.[] | "  role: \(.roleDefinitionName)\n  principalId: \(.principalId)\n  scope: \(.scope)\n  assignmentId: \(.id)\n"' "$ARM_RA_JSON"
+fi
+
+echo
+echo "Network resources:"
+printf '  VNet:   %s %s\n' "$(resource_status "$VNET_ID")" "${VNET_ID##*/}"
+printf '  Subnet: %s %s\n' "$(resource_status "$SUBNET_ID")" "${SUBNET_ID##*/}"
+printf '  Integration subnet: %s %s\n' "$(resource_status "$INTEGRATION_SUBNET_ID")" "${INTEGRATION_SUBNET_ID##*/}"
+printf '  NSG:    %s %s\n' "$(resource_status "$NSG_ID")" "${NSG_ID##*/}"
+
+echo
+echo "Referenced managed identities:"
+IDENTITIES=$(jq -r '.. | strings | scan("/subscriptions/[^\"]*/resourceGroups/[^\"]*/providers/Microsoft.ManagedIdentity/userAssignedIdentities/[^\"]+") | .' "$tmp_json" | sort -u)
+while IFS= read -r IDENTITY_ID; do
+  [[ -n "$IDENTITY_ID" ]] || continue
+  NAME=${IDENTITY_ID##*/}
+  if grep -Fq "$IDENTITY_ID" <<< "$CONDITION_TEXT"; then
+    printf '  ❌ %s\n' "$NAME"
+  elif az identity show --ids "$IDENTITY_ID" --query id -o tsv >/dev/null 2>&1; then
+    printf '  ✅ %s\n' "$NAME"
+  else
+    printf '  ❌ %s (not found)\n' "$NAME"
+    CHECK_FAILED=true
+  fi
+
+  if [[ "$VERBOSE" == true ]]; then
+    PRINCIPAL_ID=$(az identity show --ids "$IDENTITY_ID" --query principalId -o tsv 2>/dev/null || true)
+    echo "    principalId: ${PRINCIPAL_ID:-<not found>}"
+    if [[ -n "$PRINCIPAL_ID" && -n "$VNET_ID" ]]; then
+      echo "    VNet assignments:"
+      show_scope_assignments "$PRINCIPAL_ID" "$VNET_ID"
+    fi
+    if [[ -n "$PRINCIPAL_ID" && -n "$SUBNET_ID" ]]; then
+      echo "    Subnet assignments:"
+      show_scope_assignments "$PRINCIPAL_ID" "$SUBNET_ID"
+    fi
+    if [[ -n "$PRINCIPAL_ID" && -n "$INTEGRATION_SUBNET_ID" ]]; then
+      echo "    Integration subnet assignments:"
+      show_scope_assignments "$PRINCIPAL_ID" "$INTEGRATION_SUBNET_ID"
+    fi
+  fi
+done <<< "$IDENTITIES"
+
+if [[ "$VERBOSE" == true ]]; then
+  echo
+  echo "Role definitions containing required network actions:"
+  az role definition list \
+    --query "[?contains(join(',', permissions[].actions[]), 'Microsoft.Network/virtualNetworks/join/action')].{role:roleName,id:id}" \
+    -o table
+fi
+
+if [[ "$CHECK_FAILED" == true ]]; then
+  exit 1
+fi

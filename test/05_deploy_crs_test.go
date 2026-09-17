@@ -480,6 +480,9 @@ func TestDeployment_MonitorCluster(t *testing.T) {
 func TestDeployment_WaitForControlPlane(t *testing.T) {
 
 	config := NewTestConfig()
+	defer func() {
+		reportHCPARMCheckFailure(t, RunHCPARMCheck(t, config))
+	}()
 
 	// Set KUBECONFIG for external cluster mode
 	SetupKubeconfig(t, config)
