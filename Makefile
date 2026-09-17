@@ -1,4 +1,4 @@
-.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-aws clean-my-resources check-stale help summary scheduled-review fuzz
+.PHONY: test _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup test-all _test-all-impl recover clean clean-all clean-azure clean-aws clean-my-resources check-stale help summary scheduled-review fuzz
 
 # Use bash for shell commands (required for PIPESTATUS in test-all target)
 SHELL := /bin/bash
@@ -57,11 +57,19 @@ endef
 STATE_RESOURCE_GROUP := $(call read_state_field,resource_group)
 STATE_MANAGEMENT_CLUSTER := $(call read_state_field,management_cluster_name)
 STATE_CLUSTER_PREFIX := $(call read_state_field,cluster_name_prefix)
+STATE_WORKLOAD_CLUSTER := $(call read_state_field,workload_cluster_name)
+STATE_WORKLOAD_NAMESPACE := $(call read_state_field,workload_cluster_namespace)
+STATE_INFRA_PROVIDER := $(call read_state_field,infra_provider)
 
 # Use state file values if available, otherwise use defaults
 CLEANUP_RESOURCE_GROUP := $(if $(STATE_RESOURCE_GROUP),$(STATE_RESOURCE_GROUP),$(AZURE_RESOURCE_GROUP))
 CLEANUP_MANAGEMENT_CLUSTER := $(if $(STATE_MANAGEMENT_CLUSTER),$(STATE_MANAGEMENT_CLUSTER),$(MANAGEMENT_CLUSTER_NAME))
 CLEANUP_CLUSTER_PREFIX := $(if $(STATE_CLUSTER_PREFIX),$(STATE_CLUSTER_PREFIX),$(CS_CLUSTER_NAME))
+
+# Recovery uses persisted identity values and never creates a new deployment
+# identity. Older state files may not contain infra_provider; in that case the
+# operator must provide INFRA_PROVIDER explicitly.
+RECOVERY_INFRA_PROVIDER := $(if $(STATE_INFRA_PROVIDER),$(STATE_INFRA_PROVIDER),$(if $(filter environment command line override,$(origin INFRA_PROVIDER)),$(INFRA_PROVIDER),))
 
 # Test configuration
 GOTESTSUM_FORMAT ?= testname
@@ -154,6 +162,7 @@ help: ## Display this help message
 	@echo "  7. make _delete-workload-cluster  # Delete workload cluster and verify deletion"
 	@echo "  8. make _mce-teardown             # Revert MCE components to original state (MCE clusters only)"
 	@echo "  9. make _validate-cleanup         # Validate cleanup operations (optional, standalone)"
+	@echo " 10. make recover                   # Resume an interrupted deployment from persisted state"
 	@echo ""
 	@echo "Quick start:"
 	@echo ""
@@ -168,6 +177,24 @@ help: ## Display this help message
 	@echo "  make _check-dep && make _setup && make _management_cluster"
 
 test: _check-dep ## Run check dependencies tests only
+
+recover: check-gotestsum ## Resume an interrupted deployment from persisted state
+	@if [ ! -f "$(DEPLOYMENT_STATE_FILE)" ] && [ ! -f "$(ARO_REPO_DIR)/.deployment-state.json" ]; then \
+		echo "❌ No deployment state found. Run 'make test-all' for a new deployment or set DEPLOYMENT_STATE_FILE/CS_CLUSTER_NAME to the interrupted run's state."; \
+		exit 1; \
+	fi
+	@if [ -z "$(STATE_INFRA_PROVIDER)" ] && [ -z "$(RECOVERY_INFRA_PROVIDER)" ]; then \
+		echo "❌ The deployment state has no provider. Set INFRA_PROVIDER=aro or INFRA_PROVIDER=rosa and retry."; \
+		exit 1; \
+	fi
+	@echo "=== Recovering interrupted deployment ==="
+	@echo "Using state: $(DEPLOYMENT_STATE_FILE)"
+	@RECOVERY_PREFLIGHT=1 DEPLOYMENT_STATE_FILE="$(DEPLOYMENT_STATE_FILE)" INFRA_PROVIDER="$(RECOVERY_INFRA_PROVIDER)" TEST_RESULTS_DIR="$(TEST_RESULTS_DIR)" $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-recovery-preflight.xml -- $(TEST_VERBOSITY) ./test -count=1 -run '^TestRecovery_Preflight$$' -timeout 5m
+	@$(MAKE) --no-print-directory _management_cluster RESULTS_DIR=$(RESULTS_DIR) RUN_CONTEXT_INITIALIZED=1 DEPLOYMENT_STATE_FILE="$(DEPLOYMENT_STATE_FILE)" INFRA_PROVIDER="$(RECOVERY_INFRA_PROVIDER)" CS_CLUSTER_NAME="$(STATE_CLUSTER_PREFIX)" RESOURCEGROUPNAME="$(STATE_RESOURCE_GROUP)" WORKLOAD_CLUSTER_NAME="$(STATE_WORKLOAD_CLUSTER)" WORKLOAD_CLUSTER_NAMESPACE="$(STATE_WORKLOAD_NAMESPACE)"
+	@$(MAKE) --no-print-directory _generate-yamls RESULTS_DIR=$(RESULTS_DIR) RUN_CONTEXT_INITIALIZED=1 DEPLOYMENT_STATE_FILE="$(DEPLOYMENT_STATE_FILE)" INFRA_PROVIDER="$(RECOVERY_INFRA_PROVIDER)" CS_CLUSTER_NAME="$(STATE_CLUSTER_PREFIX)" RESOURCEGROUPNAME="$(STATE_RESOURCE_GROUP)" WORKLOAD_CLUSTER_NAME="$(STATE_WORKLOAD_CLUSTER)" WORKLOAD_CLUSTER_NAMESPACE="$(STATE_WORKLOAD_NAMESPACE)"
+	@$(MAKE) --no-print-directory _deploy-crs RESULTS_DIR=$(RESULTS_DIR) RUN_CONTEXT_INITIALIZED=1 DEPLOYMENT_STATE_FILE="$(DEPLOYMENT_STATE_FILE)" INFRA_PROVIDER="$(RECOVERY_INFRA_PROVIDER)" CS_CLUSTER_NAME="$(STATE_CLUSTER_PREFIX)" RESOURCEGROUPNAME="$(STATE_RESOURCE_GROUP)" WORKLOAD_CLUSTER_NAME="$(STATE_WORKLOAD_CLUSTER)" WORKLOAD_CLUSTER_NAMESPACE="$(STATE_WORKLOAD_NAMESPACE)"
+	@$(MAKE) --no-print-directory _verify-workload-cluster RESULTS_DIR=$(RESULTS_DIR) RUN_CONTEXT_INITIALIZED=1 DEPLOYMENT_STATE_FILE="$(DEPLOYMENT_STATE_FILE)" INFRA_PROVIDER="$(RECOVERY_INFRA_PROVIDER)" CS_CLUSTER_NAME="$(STATE_CLUSTER_PREFIX)" RESOURCEGROUPNAME="$(STATE_RESOURCE_GROUP)" WORKLOAD_CLUSTER_NAME="$(STATE_WORKLOAD_CLUSTER)" WORKLOAD_CLUSTER_NAMESPACE="$(STATE_WORKLOAD_NAMESPACE)"
+	@echo "✅ Interrupted deployment recovery completed"
 
 _check-dep: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
