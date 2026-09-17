@@ -3085,6 +3085,8 @@ func deploymentStateFileCandidates(repoDir string) []string {
 
 func readDeploymentStateFileFromRepo(repoDir string) (string, []byte, error) {
 	for _, path := range deploymentStateFileCandidates(repoDir) {
+		// #nosec G304 -- candidates are the sanitized run-scoped filename, the
+		// explicitly configured state file, or the fixed legacy filename.
 		data, err := os.ReadFile(path)
 		if err == nil {
 			return path, data, nil
@@ -3276,6 +3278,8 @@ func ReadDeploymentState() (*DeploymentState, error) {
 	var data []byte
 	var err error
 	for _, path := range deploymentStateFileCandidates(".") {
+		// #nosec G304 -- candidates are the sanitized run-scoped filename, the
+		// explicitly configured state file, or the fixed legacy filename.
 		data, err = os.ReadFile(path)
 		if err == nil {
 			break
