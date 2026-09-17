@@ -220,11 +220,16 @@ step.
 Explicit identity values are accepted when the context is first created. If a
 later phase supplies a different explicit value, initialization stops with an
 error naming the conflicting field and values. Deployment status remains in
-`.deployment-state.json`, separately from immutable identity; existing state
-files are migrated when a new context is first created.
+`.deployment-state.json`, separately from immutable identity. The deployment
+state is schema-versioned and records phase status, failure details, and
+deduplicated managed-resource identities. State updates are atomic, and
+existing version-1 or historical-tag files are migrated on their next
+successful write. A malformed state file fails closed rather than allowing a
+later phase or cleanup to regenerate a different identity.
 
-Successful cleanup removes both `.deployment-state.json` and the run-context
-file, so the next run receives a new identity.
+The state file remains available after an interrupted or failed phase as the
+recovery record. Successful cleanup removes both `.deployment-state.json` and
+the run-context file, so the next run receives a new identity.
 
 The generated Azure `ResourceGroup` nested under `AROCluster.spec.resources`
 is logged for observability only. Failure to parse that diagnostic structure,

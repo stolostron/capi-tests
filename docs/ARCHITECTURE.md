@@ -63,6 +63,26 @@ creates-or-updates without duplicating. This lets an interrupted run resume from
 where it stopped. Deployment state that must survive across phases is persisted
 via the `WriteDeploymentState` / `ReadDeploymentState` helpers.
 
+### Deployment state contract
+
+`.deployment-state.json` is a schema-versioned recovery record shared by the
+separate Go test processes used for each phase. Schema version 2 records the
+current or last phase, its status (`pending`, `running`, `succeeded`, or
+`failed`), phase history, the latest failure summary, and deduplicated managed
+resources in addition to the deployment identity and configuration.
+
+Every state update is atomic: the complete JSON document is written and synced
+to a same-directory temporary file with mode `0600`, then renamed over the
+destination. If any step fails, the previous state remains available. Missing
+schema versions are read as legacy version 1 and upgraded on the next
+successful write; malformed state is an error and never causes cleanup to fall
+back to generated defaults.
+
+State is retained as the recovery record after an interrupted or failed phase.
+It is removed only by the existing successful cleanup path, after cleanup has
+completed. Resource entries contain ownership identifiers only and never
+credentials or other secrets.
+
 ## Configuration system
 
 All configuration is centralized in the `TestConfig` struct in

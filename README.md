@@ -445,7 +445,8 @@ Multiple users (or CI jobs) can run the test suite simultaneously against the sa
 - `CS_CLUSTER_NAME` is auto-generated as `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c`)
 - Each run creates its own Azure resource group (e.g., `capz-tests-resgroup`)
 - All Azure resources are tagged with `capi-test-user`, `capi-test-env`, `capi-test-run-id`, and `capi-test-created-at`
-- The deployment state file (`.deployment-state.json`) tracks the generated prefix for cleanup
+- The schema-versioned deployment state file (`.deployment-state.json`) atomically tracks the run identity, current/last phase, failure status, and deduplicated managed resources for cleanup and recovery
+- State is retained after interrupted or failed phases and removed only after successful cleanup; malformed state fails closed instead of falling back to generated defaults
 
 **Recommended setup for each user**:
 ```bash
