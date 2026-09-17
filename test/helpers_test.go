@@ -4480,3 +4480,25 @@ func TestRedactCommand(t *testing.T) {
 		})
 	}
 }
+
+func TestSetupKubeconfig_ExternalCluster(t *testing.T) {
+	t.Setenv("KUBECONFIG", "existing-kubeconfig")
+	config := &TestConfig{UseKubeconfig: "external-kubeconfig"}
+
+	SetupKubeconfig(t, config)
+
+	if got := os.Getenv("KUBECONFIG"); got != config.UseKubeconfig {
+		t.Fatalf("KUBECONFIG = %q, want %q", got, config.UseKubeconfig)
+	}
+}
+
+func TestSetupKubeconfig_LocalCluster(t *testing.T) {
+	t.Setenv("KUBECONFIG", "existing-kubeconfig")
+	config := &TestConfig{}
+
+	SetupKubeconfig(t, config)
+
+	if got := os.Getenv("KUBECONFIG"); got != "existing-kubeconfig" {
+		t.Fatalf("KUBECONFIG = %q, want existing-kubeconfig", got)
+	}
+}

@@ -21,7 +21,7 @@ func TestTeardown_RevertMCEComponents(t *testing.T) {
 		t.Skip("Not using external cluster (USE_KUBECONFIG not set)")
 	}
 
-	SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
+	SetupKubeconfig(t, config)
 	context := config.GetKubeContext()
 
 	if !IsMCECluster(t, context) {
