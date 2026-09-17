@@ -123,6 +123,7 @@ env:
   ASO_PR_NO: ${{ inputs.aso_pr_no }}
   CLUSTER_DEPLOYMENT_TIMEOUT_MINUTES: ${{ inputs.deployment_timeout_minutes || 60 }}
   CLUSTER_DELETION_TIMEOUT_MINUTES: ${{ inputs.deletion_timeout_minutes || 60 }}
+  ARO_HCP_SWEEPER_TAGS: "true"
   # Global variables (not environment-specific)
   QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
 
