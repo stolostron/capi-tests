@@ -933,6 +933,56 @@ func TestDeploymentState_Namespace(t *testing.T) {
 	})
 }
 
+func TestValidateDeploymentStateForRecovery(t *testing.T) {
+	tests := []struct {
+		name    string
+		state   *DeploymentState
+		wantErr string
+	}{
+		{
+			name: "valid state",
+			state: &DeploymentState{
+				ResourceGroup:            "capz-tests-resgroup",
+				ManagementClusterName:    "capz-tests-stage",
+				WorkloadClusterName:      "capz-tests",
+				WorkloadClusterNamespace: "capz-test-20260917-120000",
+				ClusterNamePrefix:        "rcap-a1b2c",
+				InfraProvider:            "aro",
+			},
+		},
+		{
+			name: "missing provider",
+			state: &DeploymentState{
+				ResourceGroup:            "capz-tests-resgroup",
+				ManagementClusterName:    "capz-tests-stage",
+				WorkloadClusterName:      "capz-tests",
+				WorkloadClusterNamespace: "capz-test-20260917-120000",
+				ClusterNamePrefix:        "rcap-a1b2c",
+			},
+			wantErr: "infra provider",
+		},
+		{
+			name:    "missing state",
+			wantErr: "deployment state is missing",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDeploymentStateForRecovery(tt.state)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("ValidateDeploymentStateForRecovery() unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("ValidateDeploymentStateForRecovery() error = %v, want substring %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestFormatControlPlaneConditions(t *testing.T) {
 	tests := []struct {
 		name     string

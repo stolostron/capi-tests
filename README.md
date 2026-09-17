@@ -315,6 +315,23 @@ These targets are called by `make test-all` but can be run individually for debu
 | `make _verify-workload-cluster` | Verify deployed workload cluster |
 | `make _delete-workload-cluster` | Delete workload cluster and verify deletion |
 | `make _validate-cleanup` | Validate cleanup operations completed successfully |
+| `make recover` | Resume an interrupted deployment from persisted state |
+
+To recover after the test process is interrupted, run `make recover`. The target
+requires the deployment state file, validates that it contains the resource
+identity needed to avoid targeting a new deployment, and reruns only the
+idempotent management-cluster, YAML-generation, CR-deployment, and workload
+verification phases. It does not delete resources or start a new run.
+
+For older state files that do not record the provider, specify it explicitly:
+
+```bash
+INFRA_PROVIDER=aro make recover
+```
+
+If the state file is run-scoped or stored elsewhere, provide its path with
+`DEPLOYMENT_STATE_FILE`. Use `make clean` or `make clean-all` separately when
+the intended action is cleanup rather than recovery.
 
 #### Cleanup Targets
 

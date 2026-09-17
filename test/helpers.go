@@ -3034,12 +3034,54 @@ type DeploymentState struct {
 	WorkloadClusterName      string            `json:"workload_cluster_name"`
 	WorkloadClusterNamespace string            `json:"workload_cluster_namespace"`
 	ClusterNamePrefix        string            `json:"cluster_name_prefix"`
+	InfraProvider            string            `json:"infra_provider"`
 	Region                   string            `json:"region"`
 	User                     string            `json:"user"`
 	Environment              string            `json:"environment"`
 	TestRunID                string            `json:"test_run_id,omitempty"`
 	ResourceTags             map[string]string `json:"resource_tags,omitempty"`
 	MCEOriginalStates        map[string]bool   `json:"mce_original_states,omitempty"`
+}
+
+// ValidateDeploymentStateForRecovery verifies that the persisted identity is
+// sufficient to safely resume an interrupted deployment. Recovery must never
+// fall back to generated defaults because that could target a different set of
+// cloud resources.
+func ValidateDeploymentStateForRecovery(state *DeploymentState) error {
+	if state == nil {
+		return fmt.Errorf("deployment state is missing; run the normal deployment workflow first")
+	}
+
+	missing := make([]string, 0, 6)
+	provider := state.InfraProvider
+	if provider == "" {
+		// Older state files predate provider persistence. Requiring an explicit
+		// operator override avoids guessing when recovering those deployments.
+		provider = strings.TrimSpace(os.Getenv("INFRA_PROVIDER"))
+	}
+
+	fields := map[string]string{
+		"resource group":             state.ResourceGroup,
+		"management cluster name":    state.ManagementClusterName,
+		"workload cluster name":      state.WorkloadClusterName,
+		"workload cluster namespace": state.WorkloadClusterNamespace,
+		"cluster name prefix":        state.ClusterNamePrefix,
+		"infra provider":             provider,
+	}
+	for name, value := range fields {
+		if strings.TrimSpace(value) == "" {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return fmt.Errorf("deployment state is incomplete for recovery; missing %s", strings.Join(missing, ", "))
+	}
+
+	if provider != "aro" && provider != "rosa" {
+		return fmt.Errorf("deployment state has unsupported infra provider %q", provider)
+	}
+	return nil
 }
 
 // legacyDeploymentStateFile is the state-file name used before state files
@@ -3115,6 +3157,7 @@ func WriteDeploymentState(config *TestConfig) error {
 		WorkloadClusterName:      config.WorkloadClusterName,
 		WorkloadClusterNamespace: config.WorkloadClusterNamespace,
 		ClusterNamePrefix:        config.ClusterNamePrefix,
+		InfraProvider:            config.InfraProviderName,
 		Region:                   config.Region,
 		User:                     config.CAPIUser,
 		Environment:              config.Environment,
