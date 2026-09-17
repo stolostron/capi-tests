@@ -54,6 +54,13 @@ func TestDeploymentStateSchemaSerialization(t *testing.T) {
 	}
 }
 
+func isolateDeploymentStateFile(t *testing.T, workspace string) {
+	t.Helper()
+	original := DeploymentStateFile
+	DeploymentStateFile = filepath.Join(workspace, "legacy", ".deployment-state.json")
+	t.Cleanup(func() { DeploymentStateFile = original })
+}
+
 func TestDeploymentResourceKeyIsStable(t *testing.T) {
 	resource := DeploymentResource{
 		Provider:      "azure",
@@ -71,6 +78,7 @@ func TestWriteDeploymentStateUsesVersionedAtomicFile(t *testing.T) {
 	workspace := t.TempDir()
 	contextPath := filepath.Join(workspace, ".run-context.json")
 	t.Setenv("CAPI_TEST_CONTEXT_FILE", contextPath)
+	isolateDeploymentStateFile(t, workspace)
 
 	config := &TestConfig{
 		ClusterNamePrefix:        "capz-tests",
@@ -109,6 +117,7 @@ func TestWriteDeploymentStateUsesVersionedAtomicFile(t *testing.T) {
 func TestReadDeploymentStateMigratesVersionOneInMemory(t *testing.T) {
 	workspace := t.TempDir()
 	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+	isolateDeploymentStateFile(t, workspace)
 	path := filepath.Join(workspace, ".deployment-state.json")
 	legacy := `{"resource_group":"legacy-resgroup","workload_cluster_name":"legacy-cluster"}`
 	if err := os.WriteFile(path, []byte(legacy), 0600); err != nil {
@@ -127,6 +136,7 @@ func TestReadDeploymentStateMigratesVersionOneInMemory(t *testing.T) {
 func TestWriteDeploymentStateRejectsMalformedExistingState(t *testing.T) {
 	workspace := t.TempDir()
 	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+	isolateDeploymentStateFile(t, workspace)
 	path := filepath.Join(workspace, ".deployment-state.json")
 	original := []byte(`{"resource_group":`)
 	if err := os.WriteFile(path, original, 0600); err != nil {
@@ -149,6 +159,7 @@ func TestWriteDeploymentStateRejectsMalformedExistingState(t *testing.T) {
 func TestAtomicDeploymentStateWritePreservesExistingFileOnRenameFailure(t *testing.T) {
 	workspace := t.TempDir()
 	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+	isolateDeploymentStateFile(t, workspace)
 	path := filepath.Join(workspace, ".deployment-state.json")
 	original := []byte(`{"resource_group":"original"}`)
 	if err := os.WriteFile(path, original, 0600); err != nil {
@@ -175,6 +186,7 @@ func TestAtomicDeploymentStateWritePreservesExistingFileOnRenameFailure(t *testi
 func TestDeploymentPhaseLifecycleIsIdempotent(t *testing.T) {
 	workspace := t.TempDir()
 	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+	isolateDeploymentStateFile(t, workspace)
 
 	if err := writeDeploymentState(&DeploymentState{}); err != nil {
 		t.Fatalf("failed to initialize state: %v", err)
@@ -222,6 +234,7 @@ func TestDeploymentPhaseLifecycleIsIdempotent(t *testing.T) {
 func TestFailDeploymentPhaseRetainsRecoveryState(t *testing.T) {
 	workspace := t.TempDir()
 	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+	isolateDeploymentStateFile(t, workspace)
 
 	if err := StartDeploymentPhase("deployment"); err != nil {
 		t.Fatalf("StartDeploymentPhase() unexpected error: %v", err)
@@ -245,6 +258,7 @@ func TestFailDeploymentPhaseRetainsRecoveryState(t *testing.T) {
 func TestRecordDeploymentResourceUpsertsDeterministically(t *testing.T) {
 	workspace := t.TempDir()
 	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+	isolateDeploymentStateFile(t, workspace)
 
 	resource := DeploymentResource{Provider: "azure", Type: "resource_group", Name: "rg", Status: "pending"}
 	if err := RecordDeploymentResource(resource); err != nil {
@@ -273,6 +287,7 @@ func TestRecordDeploymentResourceUpsertsDeterministically(t *testing.T) {
 func TestTrackDeploymentPhaseCompletesAtTestCleanup(t *testing.T) {
 	workspace := t.TempDir()
 	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+	isolateDeploymentStateFile(t, workspace)
 
 	t.Run("tracked phase", func(t *testing.T) {
 		TrackDeploymentPhase(t, "setup")
@@ -290,6 +305,7 @@ func TestTrackDeploymentPhaseCompletesAtTestCleanup(t *testing.T) {
 func TestRecordConfiguredDeploymentResources(t *testing.T) {
 	workspace := t.TempDir()
 	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+	isolateDeploymentStateFile(t, workspace)
 	config := &TestConfig{
 		InfraProviderName:        "aro",
 		InfraProviders:           []InfraProvider{{Name: "aro"}},
@@ -1220,6 +1236,12 @@ metadata:
 }
 
 func TestDeploymentState_Namespace(t *testing.T) {
+	workspace := t.TempDir()
+	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+	originalDeploymentStateFile := DeploymentStateFile
+	DeploymentStateFile = filepath.Join(workspace, ".deployment-state.json")
+	t.Cleanup(func() { DeploymentStateFile = originalDeploymentStateFile })
+
 	// Save original state file if it exists
 	originalData, originalExists := func() ([]byte, bool) {
 		data, err := os.ReadFile(DeploymentStateFile)
