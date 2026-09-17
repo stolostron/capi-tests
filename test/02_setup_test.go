@@ -16,6 +16,7 @@ func TestSetup_CloneRepository(t *testing.T) {
 	}
 
 	config := NewTestConfig()
+	TrackDeploymentPhase(t, "setup")
 
 	// Note: We still need the repo in external cluster mode for YAML generation (Phase 04)
 	// Only the Kind cluster deployment (Phase 03) is skipped

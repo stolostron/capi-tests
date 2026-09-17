@@ -270,6 +270,47 @@ func TestRecordDeploymentResourceUpsertsDeterministically(t *testing.T) {
 	}
 }
 
+func TestTrackDeploymentPhaseCompletesAtTestCleanup(t *testing.T) {
+	workspace := t.TempDir()
+	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+
+	t.Run("tracked phase", func(t *testing.T) {
+		TrackDeploymentPhase(t, "setup")
+	})
+
+	state, err := ReadDeploymentState()
+	if err != nil {
+		t.Fatalf("ReadDeploymentState() unexpected error: %v", err)
+	}
+	if state.Phase != "setup" || state.PhaseStatus != DeploymentPhaseSucceeded {
+		t.Fatalf("tracked phase = %q/%q, want setup/succeeded", state.Phase, state.PhaseStatus)
+	}
+}
+
+func TestRecordConfiguredDeploymentResources(t *testing.T) {
+	workspace := t.TempDir()
+	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+	config := &TestConfig{
+		InfraProviderName:        "aro",
+		InfraProviders:           []InfraProvider{{Name: "aro"}},
+		ManagementClusterName:    "management",
+		WorkloadClusterName:      "workload",
+		WorkloadClusterNamespace: "namespace",
+		ResourceGroupName:        "resource-group",
+	}
+
+	if err := RecordConfiguredDeploymentResources(config); err != nil {
+		t.Fatalf("RecordConfiguredDeploymentResources() unexpected error: %v", err)
+	}
+	state, err := ReadDeploymentState()
+	if err != nil {
+		t.Fatalf("ReadDeploymentState() unexpected error: %v", err)
+	}
+	if len(state.Resources) != 4 {
+		t.Fatalf("resource count = %d, want 4", len(state.Resources))
+	}
+}
+
 func TestIsKubectlApplySuccess(t *testing.T) {
 	tests := []struct {
 		name     string

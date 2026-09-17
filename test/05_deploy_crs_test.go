@@ -20,6 +20,10 @@ func TestDeployment_00_CreateNamespace(t *testing.T) {
 	}
 
 	config := NewTestConfig()
+	TrackDeploymentPhase(t, "deployment")
+	if err := RecordConfiguredDeploymentResources(config); err != nil {
+		t.Logf("Warning: failed to record configured deployment resources: %v", err)
+	}
 
 	// Set KUBECONFIG for external cluster mode
 	SetupKubeconfig(t, config)

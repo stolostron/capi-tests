@@ -48,6 +48,7 @@ func TestVerification_RetrieveKubeconfig(t *testing.T) {
 		t.Skipf("Cluster is not ready (current phase: %s), skipping kubeconfig retrieval. "+
 			"Wait for cluster provisioning to complete or run TestDeployment_WaitForControlPlane first.", clusterPhase)
 	}
+	TrackDeploymentPhase(t, "verification")
 
 	// Kubeconfig output path - use helper for consistency
 	kubeconfigPath := getKubeconfigPath(config)

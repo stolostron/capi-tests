@@ -3592,6 +3592,55 @@ func RecordDeploymentResource(resource DeploymentResource) error {
 	return writeDeploymentState(state)
 }
 
+// TrackDeploymentPhase records the phase start and attaches a cleanup callback
+// that persists success or failure when the test finishes, including after
+// t.Fatalf triggers testing.T cleanup handlers.
+func TrackDeploymentPhase(t *testing.T, phase string) {
+	t.Helper()
+	if err := StartDeploymentPhase(phase); err != nil {
+		t.Logf("Warning: failed to record start of deployment phase %q: %v", phase, err)
+	}
+	t.Cleanup(func() {
+		if t.Skipped() {
+			return
+		}
+		var err error
+		if t.Failed() {
+			err = FailDeploymentPhase(phase, fmt.Errorf("phase %q failed", phase))
+		} else {
+			err = CompleteDeploymentPhase(phase)
+		}
+		if err != nil {
+			t.Logf("Warning: failed to record completion of deployment phase %q: %v", phase, err)
+		}
+	})
+}
+
+// RecordConfiguredDeploymentResources stores the resource identities available
+// from TestConfig before provider reconciliation creates cloud resources.
+func RecordConfiguredDeploymentResources(config *TestConfig) error {
+	resources := []DeploymentResource{
+		{Provider: "kubernetes", Type: "management_cluster", Name: config.ManagementClusterName, Status: "configured"},
+		{Provider: "kubernetes", Type: "workload_cluster", Name: config.WorkloadClusterName, Namespace: config.WorkloadClusterNamespace, Status: "configured"},
+		{Provider: "kubernetes", Type: "namespace", Name: config.WorkloadClusterNamespace, Status: "configured"},
+	}
+	if config.HasProvider("aro") && config.ResourceGroupName != "" {
+		resources = append(resources, DeploymentResource{
+			Provider:      "azure",
+			Type:          "resource_group",
+			Name:          config.ResourceGroupName,
+			ResourceGroup: config.ResourceGroupName,
+			Status:        "configured",
+		})
+	}
+	for _, resource := range resources {
+		if err := RecordDeploymentResource(resource); err != nil {
+			return fmt.Errorf("failed to record %s resource %s: %w", resource.Type, resource.Name, err)
+		}
+	}
+	return nil
+}
+
 // DeleteDeploymentState removes the deployment state file.
 // Called after successful cleanup to indicate no active deployment.
 func DeleteDeploymentState() error {

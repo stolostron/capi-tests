@@ -36,6 +36,7 @@ func TestDeletion_DeleteCluster(t *testing.T) {
 		PrintToTTY("⚠️  Cluster '%s' not found in namespace '%s'\n", provisionedClusterName, config.WorkloadClusterNamespace)
 		t.Skipf("Cluster '%s' not found (may not have been deployed or already deleted)", provisionedClusterName)
 	}
+	TrackDeploymentPhase(t, "deletion")
 
 	PrintToTTY("📋 Cluster '%s' found in namespace '%s'\n", provisionedClusterName, config.WorkloadClusterNamespace)
 	PrintToTTY("🗑️  Initiating cluster deletion...\n\n")

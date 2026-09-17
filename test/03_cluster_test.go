@@ -22,6 +22,10 @@ func TestExternalCluster_01_Connectivity(t *testing.T) {
 	if !config.IsExternalCluster() {
 		t.Skip("Not using external cluster (USE_KUBECONFIG not set)")
 	}
+	TrackDeploymentPhase(t, "management-cluster")
+	if err := RecordConfiguredDeploymentResources(config); err != nil {
+		t.Logf("Warning: failed to record configured deployment resources: %v", err)
+	}
 
 	PrintTestHeader(t, "TestExternalCluster_01_Connectivity",
 		"Validate external cluster is reachable via kubeconfig")
@@ -338,6 +342,10 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 	// Skip in external cluster mode unless DEPLOY_CHARTS=true
 	if config.IsExternalCluster() && !config.DeployCharts {
 		t.Skip("Using external cluster (USE_KUBECONFIG set), skipping Kind cluster deployment")
+	}
+	TrackDeploymentPhase(t, "management-cluster")
+	if err := RecordConfiguredDeploymentResources(config); err != nil {
+		t.Logf("Warning: failed to record configured deployment resources: %v", err)
 	}
 
 	PrintTestHeader(t, "TestKindCluster_KindClusterReady",

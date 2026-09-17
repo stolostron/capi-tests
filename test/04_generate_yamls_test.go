@@ -120,6 +120,10 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 	if !DirExists(config.RepoDir) {
 		t.Skipf("Repository not cloned yet at %s", config.RepoDir)
 	}
+	TrackDeploymentPhase(t, "infrastructure")
+	if err := RecordConfiguredDeploymentResources(config); err != nil {
+		t.Logf("Warning: failed to record configured deployment resources: %v", err)
+	}
 
 	// Validate domain prefix length before attempting YAML generation
 	// The domain prefix is derived from USER and DEPLOYMENT_ENV and must not exceed 15 characters
