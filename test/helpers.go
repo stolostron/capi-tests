@@ -3478,6 +3478,120 @@ func ReadDeploymentState() (*DeploymentState, error) {
 	return &state, nil
 }
 
+func deploymentStateForUpdate() (*DeploymentState, error) {
+	state, err := ReadDeploymentState()
+	if err != nil {
+		return nil, err
+	}
+	if state == nil {
+		state = &DeploymentState{SchemaVersion: DeploymentStateSchemaVersion}
+	}
+	return state, nil
+}
+
+func phaseRecord(state *DeploymentState, phase string) *DeploymentPhaseRecord {
+	for index := range state.PhaseHistory {
+		if state.PhaseHistory[index].Phase == phase {
+			return &state.PhaseHistory[index]
+		}
+	}
+	state.PhaseHistory = append(state.PhaseHistory, DeploymentPhaseRecord{Phase: phase})
+	return &state.PhaseHistory[len(state.PhaseHistory)-1]
+}
+
+func StartDeploymentPhase(phase string) error {
+	if strings.TrimSpace(phase) == "" {
+		return fmt.Errorf("deployment phase must not be empty")
+	}
+	state, err := deploymentStateForUpdate()
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	record := phaseRecord(state, phase)
+	record.Status = DeploymentPhaseRunning
+	record.StartedAt = now
+	record.CompletedAt = ""
+	record.Error = ""
+	state.Phase = phase
+	state.PhaseStatus = DeploymentPhaseRunning
+	state.LastError = ""
+	return writeDeploymentState(state)
+}
+
+func CompleteDeploymentPhase(phase string) error {
+	if strings.TrimSpace(phase) == "" {
+		return fmt.Errorf("deployment phase must not be empty")
+	}
+	state, err := deploymentStateForUpdate()
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	record := phaseRecord(state, phase)
+	if record.StartedAt == "" {
+		record.StartedAt = now
+	}
+	record.Status = DeploymentPhaseSucceeded
+	record.CompletedAt = now
+	record.Error = ""
+	state.Phase = phase
+	state.PhaseStatus = DeploymentPhaseSucceeded
+	state.LastError = ""
+	return writeDeploymentState(state)
+}
+
+func FailDeploymentPhase(phase string, cause error) error {
+	if strings.TrimSpace(phase) == "" {
+		return fmt.Errorf("deployment phase must not be empty")
+	}
+	if cause == nil {
+		return fmt.Errorf("deployment phase failure cause must not be nil")
+	}
+	state, err := deploymentStateForUpdate()
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	record := phaseRecord(state, phase)
+	if record.StartedAt == "" {
+		record.StartedAt = now
+	}
+	record.Status = DeploymentPhaseFailed
+	record.CompletedAt = now
+	record.Error = cause.Error()
+	state.Phase = phase
+	state.PhaseStatus = DeploymentPhaseFailed
+	state.LastError = cause.Error()
+	return writeDeploymentState(state)
+}
+
+func RecordDeploymentResource(resource DeploymentResource) error {
+	if strings.TrimSpace(resource.Provider) == "" || strings.TrimSpace(resource.Type) == "" || strings.TrimSpace(resource.Name) == "" {
+		return fmt.Errorf("deployment resource requires provider, type, and name")
+	}
+	state, err := deploymentStateForUpdate()
+	if err != nil {
+		return err
+	}
+	key := resource.resourceKey()
+	replaced := false
+	for index := range state.Resources {
+		if state.Resources[index].resourceKey() == key {
+			state.Resources[index] = resource
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		state.Resources = append(state.Resources, resource)
+	}
+	sort.Slice(state.Resources, func(i, j int) bool {
+		return state.Resources[i].resourceKey() < state.Resources[j].resourceKey()
+	})
+	return writeDeploymentState(state)
+}
+
 // DeleteDeploymentState removes the deployment state file.
 // Called after successful cleanup to indicate no active deployment.
 func DeleteDeploymentState() error {

@@ -2,6 +2,7 @@ package test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -61,7 +62,7 @@ func TestDeploymentResourceKeyIsStable(t *testing.T) {
 		ResourceGroup: "capz-tests-resgroup",
 	}
 
-	if got, want := resource.resourceKey(), "azure|resource_group|||capz-tests-resgroup"; got != want {
+	if got, want := resource.resourceKey(), "azure|resource_group||capz-tests-resgroup|capz-tests-resgroup"; got != want {
 		t.Fatalf("resource key = %q, want %q", got, want)
 	}
 }
@@ -168,6 +169,104 @@ func TestAtomicDeploymentStateWritePreservesExistingFileOnRenameFailure(t *testi
 	}
 	if string(got) != string(original) {
 		t.Fatalf("original state changed after failed atomic write: got %q, want %q", got, original)
+	}
+}
+
+func TestDeploymentPhaseLifecycleIsIdempotent(t *testing.T) {
+	workspace := t.TempDir()
+	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+
+	if err := writeDeploymentState(&DeploymentState{}); err != nil {
+		t.Fatalf("failed to initialize state: %v", err)
+	}
+	if err := StartDeploymentPhase("infrastructure"); err != nil {
+		t.Fatalf("StartDeploymentPhase() unexpected error: %v", err)
+	}
+	if err := StartDeploymentPhase("infrastructure"); err != nil {
+		t.Fatalf("repeated StartDeploymentPhase() unexpected error: %v", err)
+	}
+
+	state, err := ReadDeploymentState()
+	if err != nil {
+		t.Fatalf("ReadDeploymentState() unexpected error: %v", err)
+	}
+	if state.Phase != "infrastructure" || state.PhaseStatus != DeploymentPhaseRunning {
+		t.Fatalf("active phase = %q/%q, want infrastructure/running", state.Phase, state.PhaseStatus)
+	}
+	if len(state.PhaseHistory) != 1 {
+		t.Fatalf("phase history length = %d, want 1 after repeated start", len(state.PhaseHistory))
+	}
+	if state.PhaseHistory[0].StartedAt == "" {
+		t.Fatal("phase start timestamp is empty")
+	}
+
+	if err := CompleteDeploymentPhase("infrastructure"); err != nil {
+		t.Fatalf("CompleteDeploymentPhase() unexpected error: %v", err)
+	}
+	if err := CompleteDeploymentPhase("infrastructure"); err != nil {
+		t.Fatalf("repeated CompleteDeploymentPhase() unexpected error: %v", err)
+	}
+
+	state, err = ReadDeploymentState()
+	if err != nil {
+		t.Fatalf("ReadDeploymentState() after completion unexpected error: %v", err)
+	}
+	if state.PhaseStatus != DeploymentPhaseSucceeded {
+		t.Errorf("phase status = %q, want succeeded", state.PhaseStatus)
+	}
+	if state.PhaseHistory[0].CompletedAt == "" {
+		t.Error("phase completion timestamp is empty")
+	}
+}
+
+func TestFailDeploymentPhaseRetainsRecoveryState(t *testing.T) {
+	workspace := t.TempDir()
+	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+
+	if err := StartDeploymentPhase("deployment"); err != nil {
+		t.Fatalf("StartDeploymentPhase() unexpected error: %v", err)
+	}
+	if err := FailDeploymentPhase("deployment", errors.New("apply failed")); err != nil {
+		t.Fatalf("FailDeploymentPhase() unexpected error: %v", err)
+	}
+
+	state, err := ReadDeploymentState()
+	if err != nil {
+		t.Fatalf("ReadDeploymentState() unexpected error: %v", err)
+	}
+	if state.PhaseStatus != DeploymentPhaseFailed || state.LastError != "apply failed" {
+		t.Fatalf("failed state = %q/%q, want failed/apply failed", state.PhaseStatus, state.LastError)
+	}
+	if state.PhaseHistory[0].Error != "apply failed" {
+		t.Errorf("phase history error = %q, want apply failed", state.PhaseHistory[0].Error)
+	}
+}
+
+func TestRecordDeploymentResourceUpsertsDeterministically(t *testing.T) {
+	workspace := t.TempDir()
+	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+
+	resource := DeploymentResource{Provider: "azure", Type: "resource_group", Name: "rg", Status: "pending"}
+	if err := RecordDeploymentResource(resource); err != nil {
+		t.Fatalf("RecordDeploymentResource() unexpected error: %v", err)
+	}
+	resource.Status = "created"
+	if err := RecordDeploymentResource(resource); err != nil {
+		t.Fatalf("RecordDeploymentResource() update unexpected error: %v", err)
+	}
+	if err := RecordDeploymentResource(DeploymentResource{Provider: "kubernetes", Type: "namespace", Name: "ns", Status: "created"}); err != nil {
+		t.Fatalf("RecordDeploymentResource() second resource unexpected error: %v", err)
+	}
+
+	state, err := ReadDeploymentState()
+	if err != nil {
+		t.Fatalf("ReadDeploymentState() unexpected error: %v", err)
+	}
+	if len(state.Resources) != 2 {
+		t.Fatalf("resource count = %d, want 2", len(state.Resources))
+	}
+	if state.Resources[0].Provider != "azure" || state.Resources[0].Status != "created" {
+		t.Errorf("first resource = %+v, want updated Azure resource", state.Resources[0])
 	}
 }
 
