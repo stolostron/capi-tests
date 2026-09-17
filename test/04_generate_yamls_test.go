@@ -303,7 +303,7 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 		if err := WriteDeploymentState(config); err != nil {
 			t.Logf("Warning: failed to write deployment state: %v", err)
 		} else {
-			PrintToTTY("📝 Deployment state saved to %s\n", DeploymentStateFile)
+			PrintToTTY("📝 Deployment state saved to %s\n", deploymentStateFilePath())
 			t.Logf("Deployment state saved (namespace: %s)", config.WorkloadClusterNamespace)
 		}
 

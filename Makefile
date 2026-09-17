@@ -34,14 +34,29 @@ ARO_REPO_DIR ?= $(shell echo $${TMPDIR:-/tmp})/cluster-api-installer-aro
 
 # Deployment state file - written by Go tests to config.RepoDir during execution.
 # Must point to the repo dir because Go tests os.Chdir(config.RepoDir) before writing.
-DEPLOYMENT_STATE_FILE := $(ARO_REPO_DIR)/.deployment-state.json
+# Prow exports RESOURCEGROUPNAME for the whole job, so use it to select the
+# same run-scoped file across separate Make/go-test invocations.
+DEPLOYMENT_STATE_FILE_NAME := .deployment-state.json
+ifneq ($(strip $(DEPLOYMENT_STATE_FILE)),)
+DEPLOYMENT_STATE_FILE_NAME := $(notdir $(DEPLOYMENT_STATE_FILE))
+else ifneq ($(strip $(RESOURCEGROUPNAME)),)
+DEPLOYMENT_STATE_FILE_NAME := .deployment-state-$(RESOURCEGROUPNAME).json
+else ifneq ($(strip $(shell printenv CS_CLUSTER_NAME)),)
+DEPLOYMENT_STATE_FILE_NAME := .deployment-state-$(shell printenv CS_CLUSTER_NAME).json
+endif
+DEPLOYMENT_STATE_FILE := $(ARO_REPO_DIR)/$(DEPLOYMENT_STATE_FILE_NAME)
+
+STATE_FILE_CANDIDATES := $(DEPLOYMENT_STATE_FILE) $(ARO_REPO_DIR)/.deployment-state.json
+define read_state_field
+$(shell for f in $(STATE_FILE_CANDIDATES); do if [ -f "$$f" ]; then grep '"$(1)"' "$$f" | sed 's/.*: *"\([^"]*\)".*/\1/' && break; fi; done)
+endef
 
 # Read from deployment state file if it exists (for cleanup to target correct resources)
 # This ensures cleanup targets the same resources that were actually deployed,
 # even if environment variables or defaults have changed since deployment.
-STATE_RESOURCE_GROUP := $(shell if [ -f $(DEPLOYMENT_STATE_FILE) ]; then cat $(DEPLOYMENT_STATE_FILE) | grep '"resource_group"' | sed 's/.*: *"\([^"]*\)".*/\1/'; fi)
-STATE_MANAGEMENT_CLUSTER := $(shell if [ -f $(DEPLOYMENT_STATE_FILE) ]; then cat $(DEPLOYMENT_STATE_FILE) | grep '"management_cluster_name"' | sed 's/.*: *"\([^"]*\)".*/\1/'; fi)
-STATE_CLUSTER_PREFIX := $(shell if [ -f $(DEPLOYMENT_STATE_FILE) ]; then cat $(DEPLOYMENT_STATE_FILE) | grep '"cluster_name_prefix"' | sed 's/.*: *"\([^"]*\)".*/\1/'; fi)
+STATE_RESOURCE_GROUP := $(call read_state_field,resource_group)
+STATE_MANAGEMENT_CLUSTER := $(call read_state_field,management_cluster_name)
+STATE_CLUSTER_PREFIX := $(call read_state_field,cluster_name_prefix)
 
 # Use state file values if available, otherwise use defaults
 CLEANUP_RESOURCE_GROUP := $(if $(STATE_RESOURCE_GROUP),$(STATE_RESOURCE_GROUP),$(AZURE_RESOURCE_GROUP))

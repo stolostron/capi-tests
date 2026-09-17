@@ -3042,9 +3042,65 @@ type DeploymentState struct {
 	MCEOriginalStates        map[string]bool   `json:"mce_original_states,omitempty"`
 }
 
-// DeploymentStateFile is the path to the deployment state file.
-// This file is written during test deployment and read during cleanup.
-const DeploymentStateFile = ".deployment-state.json"
+// legacyDeploymentStateFile is the state-file name used before state files
+// became run-scoped. It remains a fallback for existing deployments.
+const legacyDeploymentStateFile = ".deployment-state.json"
+
+// DeploymentStateFile is retained for callers that need the legacy filename.
+const DeploymentStateFile = legacyDeploymentStateFile
+
+// deploymentStateFilePath returns the state-file path for the current run.
+// Prow provides RESOURCEGROUPNAME consistently across its phase invocations;
+// local callers can use CS_CLUSTER_NAME or explicitly set DEPLOYMENT_STATE_FILE.
+func deploymentStateFilePath() string {
+	if path := strings.TrimSpace(os.Getenv("DEPLOYMENT_STATE_FILE")); path != "" {
+		return path
+	}
+
+	key := strings.TrimSpace(os.Getenv("RESOURCEGROUPNAME"))
+	if key == "" {
+		key = strings.TrimSpace(os.Getenv("CS_CLUSTER_NAME"))
+	}
+	if key == "" {
+		return legacyDeploymentStateFile
+	}
+
+	key = regexp.MustCompile(`[^A-Za-z0-9._-]+`).ReplaceAllString(key, "-")
+	key = strings.Trim(key, ".-")
+	if key == "" {
+		return legacyDeploymentStateFile
+	}
+	return fmt.Sprintf(".deployment-state-%s.json", key)
+}
+
+// deploymentStateFileCandidates returns the preferred run-scoped state file
+// followed by the legacy file for backward-compatible resume and cleanup.
+func deploymentStateFileCandidates(repoDir string) []string {
+	preferred := deploymentStateFilePath()
+	if !filepath.IsAbs(preferred) {
+		preferred = filepath.Join(repoDir, preferred)
+	}
+	legacy := filepath.Join(repoDir, legacyDeploymentStateFile)
+	if preferred == legacy {
+		return []string{preferred}
+	}
+	return []string{preferred, legacy}
+}
+
+func readDeploymentStateFileFromRepo(repoDir string) (string, []byte, error) {
+	for _, path := range deploymentStateFileCandidates(repoDir) {
+		// #nosec G304 -- candidates are the sanitized run-scoped filename, the
+		// explicitly configured state file, or the fixed legacy filename.
+		data, err := os.ReadFile(path)
+		if err == nil {
+			return path, data, nil
+		}
+		if !os.IsNotExist(err) {
+			return path, nil, err
+		}
+	}
+	return "", nil, nil
+}
 
 // WriteDeploymentState writes the current deployment configuration to a state file.
 // This allows cleanup commands to know which Azure resources were actually created,
@@ -3075,7 +3131,7 @@ func WriteDeploymentState(config *TestConfig) error {
 		return fmt.Errorf("failed to marshal deployment state: %w", err)
 	}
 
-	if err := os.WriteFile(DeploymentStateFile, data, 0600); err != nil {
+	if err := os.WriteFile(deploymentStateFilePath(), data, 0600); err != nil {
 		return fmt.Errorf("failed to write deployment state file: %w", err)
 	}
 
@@ -3223,12 +3279,21 @@ func sortedTagPairs(tags map[string]string, sep string) []string {
 // ReadDeploymentState reads the deployment state from the state file.
 // Returns nil if the file doesn't exist (no deployment has been recorded).
 func ReadDeploymentState() (*DeploymentState, error) {
-	data, err := os.ReadFile(DeploymentStateFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil // No state file, return nil without error
+	var data []byte
+	var err error
+	for _, path := range deploymentStateFileCandidates(".") {
+		// #nosec G304 -- candidates are the sanitized run-scoped filename, the
+		// explicitly configured state file, or the fixed legacy filename.
+		data, err = os.ReadFile(path)
+		if err == nil {
+			break
 		}
-		return nil, fmt.Errorf("failed to read deployment state file: %w", err)
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to read deployment state file: %w", err)
+		}
+	}
+	if err != nil {
+		return nil, nil // No state file, return nil without error
 	}
 
 	var state DeploymentState
@@ -3252,9 +3317,11 @@ func ReadDeploymentState() (*DeploymentState, error) {
 // DeleteDeploymentState removes the deployment state file.
 // Called after successful cleanup to indicate no active deployment.
 func DeleteDeploymentState() error {
-	err := os.Remove(DeploymentStateFile)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to delete deployment state file: %w", err)
+	for _, path := range deploymentStateFileCandidates(".") {
+		err := os.Remove(path)
+		if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to delete deployment state file: %w", err)
+		}
 	}
 	return nil
 }
@@ -3303,7 +3370,7 @@ func SaveMCEOriginalStates(states map[string]bool) error {
 		return fmt.Errorf("failed to marshal deployment state: %w", err)
 	}
 
-	if err := os.WriteFile(DeploymentStateFile, data, 0600); err != nil {
+	if err := os.WriteFile(deploymentStateFilePath(), data, 0600); err != nil {
 		return fmt.Errorf("failed to write deployment state file: %w", err)
 	}
 
