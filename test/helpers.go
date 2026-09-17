@@ -3190,12 +3190,70 @@ type DeploymentState struct {
 // context so they remain stable after a phase changes directories.
 var DeploymentStateFile = filepath.Join(runContextWorkspace(), ".deployment-state.json")
 
+// deploymentStateRename is a variable so atomic replacement failures can be
+// tested without changing the filesystem or weakening the production path.
+var deploymentStateRename = os.Rename
+
+func writeDeploymentState(state *DeploymentState) error {
+	if state == nil {
+		return fmt.Errorf("deployment state must not be nil")
+	}
+
+	state.SchemaVersion = DeploymentStateSchemaVersion
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal deployment state: %w", err)
+	}
+
+	path := deploymentStatePath()
+	directory := filepath.Dir(path)
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		return fmt.Errorf("failed to create deployment state directory: %w", err)
+	}
+
+	temporary, err := os.CreateTemp(directory, ".deployment-state-*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary deployment state file: %w", err)
+	}
+	temporaryPath := temporary.Name()
+	cleanupTemporary := true
+	defer func() {
+		if cleanupTemporary {
+			_ = os.Remove(temporaryPath)
+		}
+	}()
+
+	if err := temporary.Chmod(0600); err != nil {
+		_ = temporary.Close()
+		return fmt.Errorf("failed to set temporary deployment state permissions: %w", err)
+	}
+	if _, err := temporary.Write(data); err != nil {
+		_ = temporary.Close()
+		return fmt.Errorf("failed to write temporary deployment state file: %w", err)
+	}
+	if err := temporary.Sync(); err != nil {
+		_ = temporary.Close()
+		return fmt.Errorf("failed to sync temporary deployment state file: %w", err)
+	}
+	if err := temporary.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary deployment state file: %w", err)
+	}
+	if err := deploymentStateRename(temporaryPath, path); err != nil {
+		return fmt.Errorf("failed to replace deployment state file: %w", err)
+	}
+	cleanupTemporary = false
+	return nil
+}
+
 // WriteDeploymentState writes the current deployment configuration to a state file.
 // This allows cleanup commands to know which Azure resources were actually created,
 // regardless of current environment variables or config defaults.
 func WriteDeploymentState(config *TestConfig) error {
 	// Preserve data saved by other phases (e.g., MCE original states from phase 03)
-	existing, _ := ReadDeploymentState()
+	existing, err := ReadDeploymentState()
+	if err != nil {
+		return err
+	}
 
 	identity := RunContext{
 		ClusterNamePrefix:        config.ClusterNamePrefix,
@@ -3210,6 +3268,7 @@ func WriteDeploymentState(config *TestConfig) error {
 	}
 
 	state := DeploymentState{
+		SchemaVersion:            DeploymentStateSchemaVersion,
 		ResourceGroup:            identity.ResourceGroupName,
 		ManagementClusterName:    config.ManagementClusterName,
 		WorkloadClusterName:      identity.WorkloadClusterName,
@@ -3222,20 +3281,16 @@ func WriteDeploymentState(config *TestConfig) error {
 		ResourceTags:             config.ResourceTags,
 	}
 
-	if existing != nil && len(existing.MCEOriginalStates) > 0 {
+	if existing != nil {
+		state.Phase = existing.Phase
+		state.PhaseStatus = existing.PhaseStatus
+		state.PhaseHistory = existing.PhaseHistory
+		state.LastError = existing.LastError
+		state.Resources = existing.Resources
 		state.MCEOriginalStates = existing.MCEOriginalStates
 	}
 
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal deployment state: %w", err)
-	}
-
-	if err := os.WriteFile(deploymentStatePath(), data, 0600); err != nil {
-		return fmt.Errorf("failed to write deployment state file: %w", err)
-	}
-
-	return nil
+	return writeDeploymentState(&state)
 }
 
 // TagAzureResourceGroup applies Azure resource tags to the resource group.
@@ -3402,6 +3457,13 @@ func ReadDeploymentState() (*DeploymentState, error) {
 	if err := json.Unmarshal(data, &state); err != nil {
 		return nil, fmt.Errorf("failed to parse deployment state file: %w", err)
 	}
+	if state.SchemaVersion == 0 {
+		state.SchemaVersion = 1
+	}
+	if state.SchemaVersion > DeploymentStateSchemaVersion {
+		return nil, fmt.Errorf("unsupported deployment state schema version %d", state.SchemaVersion)
+	}
+	state.SchemaVersion = DeploymentStateSchemaVersion
 
 	// Backward compatibility: older state files use "azure_resource_tags" instead of "resource_tags".
 	if state.ResourceTags == nil {
@@ -3477,16 +3539,7 @@ func SaveMCEOriginalStates(states map[string]bool) error {
 		}
 	}
 
-	data, err := json.MarshalIndent(existing, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal deployment state: %w", err)
-	}
-
-	if err := os.WriteFile(deploymentStatePath(), data, 0600); err != nil {
-		return fmt.Errorf("failed to write deployment state file: %w", err)
-	}
-
-	return nil
+	return writeDeploymentState(existing)
 }
 
 // RestoreMCEOriginalStates reads saved MCE component states from the deployment state file

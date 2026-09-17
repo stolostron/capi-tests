@@ -66,6 +66,111 @@ func TestDeploymentResourceKeyIsStable(t *testing.T) {
 	}
 }
 
+func TestWriteDeploymentStateUsesVersionedAtomicFile(t *testing.T) {
+	workspace := t.TempDir()
+	contextPath := filepath.Join(workspace, ".run-context.json")
+	t.Setenv("CAPI_TEST_CONTEXT_FILE", contextPath)
+
+	config := &TestConfig{
+		ClusterNamePrefix:        "capz-tests",
+		ResourceGroupName:        "capz-tests-resgroup",
+		WorkloadClusterName:      "capz-tests",
+		WorkloadClusterNamespace: "capz-tests",
+		ManagementClusterName:    "capz-management",
+		Region:                   "uksouth",
+		CAPIUser:                 "tester",
+		Environment:              "stage",
+		TestRunID:                "abc123",
+	}
+
+	if err := WriteDeploymentState(config); err != nil {
+		t.Fatalf("WriteDeploymentState() unexpected error: %v", err)
+	}
+
+	path := filepath.Join(workspace, ".deployment-state.json")
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("failed to stat deployment state: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0600 {
+		t.Errorf("deployment state mode = %o, want 0600", got)
+	}
+
+	state, err := ReadDeploymentState()
+	if err != nil {
+		t.Fatalf("ReadDeploymentState() unexpected error: %v", err)
+	}
+	if state.SchemaVersion != DeploymentStateSchemaVersion {
+		t.Errorf("schema version = %d, want %d", state.SchemaVersion, DeploymentStateSchemaVersion)
+	}
+}
+
+func TestReadDeploymentStateMigratesVersionOneInMemory(t *testing.T) {
+	workspace := t.TempDir()
+	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+	path := filepath.Join(workspace, ".deployment-state.json")
+	legacy := `{"resource_group":"legacy-resgroup","workload_cluster_name":"legacy-cluster"}`
+	if err := os.WriteFile(path, []byte(legacy), 0600); err != nil {
+		t.Fatalf("failed to write legacy state: %v", err)
+	}
+
+	state, err := ReadDeploymentState()
+	if err != nil {
+		t.Fatalf("ReadDeploymentState() unexpected error: %v", err)
+	}
+	if state.SchemaVersion != DeploymentStateSchemaVersion {
+		t.Errorf("schema version = %d, want %d", state.SchemaVersion, DeploymentStateSchemaVersion)
+	}
+}
+
+func TestWriteDeploymentStateRejectsMalformedExistingState(t *testing.T) {
+	workspace := t.TempDir()
+	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+	path := filepath.Join(workspace, ".deployment-state.json")
+	original := []byte(`{"resource_group":`)
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatalf("failed to write malformed state: %v", err)
+	}
+
+	err := WriteDeploymentState(&TestConfig{ResourceGroupName: "new-resgroup"})
+	if err == nil {
+		t.Fatal("WriteDeploymentState() expected malformed-state error")
+	}
+	got, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatalf("failed to reread malformed state: %v", readErr)
+	}
+	if string(got) != string(original) {
+		t.Fatalf("malformed state changed after failed update: got %q, want %q", got, original)
+	}
+}
+
+func TestAtomicDeploymentStateWritePreservesExistingFileOnRenameFailure(t *testing.T) {
+	workspace := t.TempDir()
+	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, ".run-context.json"))
+	path := filepath.Join(workspace, ".deployment-state.json")
+	original := []byte(`{"resource_group":"original"}`)
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatalf("failed to write original state: %v", err)
+	}
+
+	originalRename := deploymentStateRename
+	deploymentStateRename = func(_, _ string) error { return fmt.Errorf("injected rename failure") }
+	t.Cleanup(func() { deploymentStateRename = originalRename })
+
+	err := writeDeploymentState(&DeploymentState{SchemaVersion: DeploymentStateSchemaVersion})
+	if err == nil {
+		t.Fatal("writeDeploymentState() expected injected rename error")
+	}
+	got, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatalf("failed to reread original state: %v", readErr)
+	}
+	if string(got) != string(original) {
+		t.Fatalf("original state changed after failed atomic write: got %q, want %q", got, original)
+	}
+}
+
 func TestIsKubectlApplySuccess(t *testing.T) {
 	tests := []struct {
 		name     string
