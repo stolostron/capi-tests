@@ -574,6 +574,62 @@ func TestCleanup_ScriptHelpWorks(t *testing.T) {
 	}
 }
 
+// TestCleanup_StateFileDiscoversTaggedResourcesOutsideResourceGroup verifies
+// that persisted ownership metadata is preferred for orphan discovery and that
+// resources in a different resource group are included in the scan.
+func TestCleanup_StateFileDiscoversTaggedResourcesOutsideResourceGroup(t *testing.T) {
+	scriptPath := "../scripts/cleanup-azure-resources.sh"
+	workspace := t.TempDir()
+	binDir := filepath.Join(workspace, "bin")
+	if err := os.Mkdir(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	statePath := filepath.Join(workspace, ".deployment-state.json")
+	state := `{"resource_group":"primary-rg","resource_tags":{"capi-test-run-id":"run-123"}}`
+	if err := os.WriteFile(statePath, []byte(state), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	azScript := `#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  account) exit 0 ;;
+  extension) exit 0 ;;
+  group)
+    if [[ "${2:-}" == "list" ]]; then
+      echo '[{"name":"primary-rg","location":"uksouth"}]'
+    else
+      echo '{}'
+    fi
+    ;;
+  graph)
+    echo '{"data":[{"name":"orphaned-dns","type":"Microsoft.Network/dnszones","resourceGroup":"other-rg","subscriptionId":"sub-1","tags":{"capi-test-run-id":"run-123"}}]}'
+    ;;
+  ad) echo '[]' ;;
+  *) echo '[]' ;;
+esac
+`
+	azPath := filepath.Join(binDir, "az")
+	if err := os.WriteFile(azPath, []byte(azScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	oldPath := os.Getenv("PATH")
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+oldPath)
+
+	output, err := RunCommand(t, "bash", scriptPath, "--state-file", statePath, "--dry-run")
+	if err != nil {
+		t.Fatalf("cleanup script failed: %v\n%s", err, output)
+	}
+	if !strings.Contains(output, "Tag filter: capi-test-run-id=run-123") {
+		t.Fatalf("cleanup did not use persisted ownership tag:\n%s", output)
+	}
+	if !strings.Contains(output, "orphaned-dns") || !strings.Contains(output, "other-rg") {
+		t.Fatalf("cleanup did not report resource outside primary resource group:\n%s", output)
+	}
+}
+
 // TestCleanup_DryRunMode verifies the cleanup script dry-run mode works.
 func TestCleanup_DryRunMode(t *testing.T) {
 	config := NewTestConfig()

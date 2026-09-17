@@ -21,6 +21,7 @@
 #   --match-mode MODE      How to match resource names: 'startswith' (default, safer) or 'contains' (broader)
 #   --my-resources         Find all resources tagged with capi-test-user=$CAPI_USER (or $USER fallback) (dry-run)
 #   --tag KEY=VALUE        Find resources by Azure tag (e.g., 'capi-test-user=alice')
+#   --state-file PATH      Read persisted ownership metadata from a deployment state file
 #   --dry-run              Show what would be deleted without actually deleting
 #   --force                Skip confirmation prompts
 #   --help                 Show this help message
@@ -56,6 +57,7 @@ fi
 RESOURCE_GROUP=""
 MATCH_MODE="startswith"
 TAG_FILTER=""
+STATE_FILE="${CAPI_TEST_STATE_FILE:-.deployment-state.json}"
 DRY_RUN=false
 FORCE=false
 
@@ -121,6 +123,14 @@ while [[ $# -gt 0 ]]; do
             fi
             shift 2
             ;;
+        --state-file)
+            if [[ $# -lt 2 ]]; then
+                print_error "Missing value for --state-file"
+                exit 1
+            fi
+            STATE_FILE="$2"
+            shift 2
+            ;;
         --my-resources)
             # Use CAPI_USER to match the tag set by the Go test suite (config.go).
             # Fall back to USER (OS login) if CAPI_USER is not set.
@@ -154,6 +164,21 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Prefer the exact per-run ownership tag persisted by the test suite. This
+# discovers resources across the subscription, including resources that were
+# created outside the primary resource group or whose names do not match the
+# cluster prefix. Explicit --tag always takes precedence.
+if [[ -z "$TAG_FILTER" && -f "$STATE_FILE" ]]; then
+    persisted_run_id=$(jq -r '.resource_tags["capi-test-run-id"] // empty' "$STATE_FILE" 2>/dev/null || true)
+    if [[ -n "$persisted_run_id" ]]; then
+        if [[ "$persisted_run_id" =~ ^[a-zA-Z0-9_.@:/+-]+$ ]]; then
+            TAG_FILTER="capi-test-run-id=${persisted_run_id}"
+        else
+            print_warning "Ignoring invalid persisted capi-test-run-id in ${STATE_FILE}"
+        fi
+    fi
+fi
 
 # Validate prefix to prevent OData filter injection (skip when using tag mode only)
 # Must be lowercase alphanumeric with optional hyphens, starting with alphanumeric
