@@ -595,8 +595,12 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 			echo ""; \
 			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 				echo "Deleting Azure resource group (this may take several minutes)..."; \
-				az group delete --name $(CLEANUP_RESOURCE_GROUP) --yes --no-wait && \
-				echo "✅ Resource group deletion initiated (running in background)"; \
+				if az group delete --name $(CLEANUP_RESOURCE_GROUP) --yes; then \
+					echo "✅ Resource group deleted"; \
+				else \
+					echo "❌ Resource group deletion failed"; \
+					exit 1; \
+				fi; \
 			else \
 				echo "Skipped Azure resource group deletion."; \
 			fi; \
@@ -615,7 +619,10 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 			read -p "Search for and delete orphaned Azure resources with prefix '$(CLEANUP_CLUSTER_PREFIX)'? [y/N] " -n 1 -r; \
 			echo ""; \
 			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-				./scripts/cleanup-azure-resources.sh --prefix "$(CLEANUP_CLUSTER_PREFIX)" --match-mode contains || echo "Orphaned resources cleanup encountered an error"; \
+				if ! ./scripts/cleanup-azure-resources.sh --prefix "$(CLEANUP_CLUSTER_PREFIX)" --match-mode contains; then \
+					echo "❌ Orphaned Azure resources cleanup failed"; \
+					exit 1; \
+				fi; \
 			else \
 				echo "Skipped orphaned resources cleanup."; \
 				echo "Tip: Run 'make clean-azure' to clean all Azure resources (including orphaned)."; \
@@ -750,7 +757,7 @@ clean-azure: ## Delete all Azure resources (resource group, orphaned resources, 
 # Internal target: force delete all Azure resources without prompting
 .PHONY: _clean-azure-force
 _clean-azure-force:
-	@./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CLEANUP_CLUSTER_PREFIX)" --match-mode contains --force 2>/dev/null || true
+	@./scripts/cleanup-azure-resources.sh --resource-group "$(CLEANUP_RESOURCE_GROUP)" --prefix "$(CLEANUP_CLUSTER_PREFIX)" --match-mode contains --force
 
 # Internal target: conditionally clean Azure resources (only for ARO)
 .PHONY: _clean-azure-conditional

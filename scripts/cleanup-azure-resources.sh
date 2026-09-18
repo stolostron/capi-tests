@@ -275,8 +275,7 @@ find_resources() {
     resources_json=$(az graph query -q "$query" -o json 2>/dev/null)
     if [[ $? -ne 0 ]]; then
         print_error "Failed to search for ARM resources with prefix '${prefix}'" >&2
-        echo '{"data": []}'
-        return
+        return 1
     fi
     echo "$resources_json"
 }
@@ -489,9 +488,10 @@ delete_resources() {
             fi
         fi
 
-        # Attempt deletion
-        if az resource delete --ids "$resource_id" --no-wait 2>/dev/null; then
-            echo "INITIATED"
+        # Delete the resource and wait until Azure confirms it is gone.
+        if az resource delete --ids "$resource_id" 2>/dev/null &&
+            az resource wait --deleted --ids "$resource_id" 2>/dev/null; then
+            echo "DELETED"
             ((deleted++)) || true
         else
             echo "FAILED"
@@ -505,9 +505,9 @@ delete_resources() {
     echo "  - Failed: ${failed}"
     echo "  - Skipped: ${skipped}"
 
-    if [[ "$deleted" -gt 0 ]]; then
-        print_warning "Note: Deletions run asynchronously. Resources may take a few minutes to be fully removed."
-        print_info "Run this script again to verify cleanup is complete."
+    if [[ "$failed" -gt 0 ]]; then
+        print_error "${failed} Azure resource deletion(s) failed or were not verified"
+        return 1
     fi
 }
 
@@ -607,6 +607,11 @@ delete_ad_applications() {
     print_info "Azure AD Application deletion summary:"
     echo "  - Deleted: ${deleted}"
     echo "  - Failed: ${failed}"
+
+    if [[ "$failed" -gt 0 ]]; then
+        print_error "${failed} Azure AD application deletion(s) failed"
+        return 1
+    fi
 }
 
 # Display Service Principals
@@ -809,6 +814,11 @@ purge_soft_deleted_vaults() {
     print_info "Key Vault purge summary:"
     echo "  - Purged: ${purged}"
     echo "  - Failed: ${failed}"
+
+    if [[ "$failed" -gt 0 ]]; then
+        print_error "${failed} Key Vault purge(s) failed"
+        return 1
+    fi
 }
 
 # Main function
@@ -960,10 +970,14 @@ main() {
         echo ""
         print_info "Searching for active Key Vaults in '${RESOURCE_GROUP}' with prefix '${PREFIX}'..."
         local active_kvs
-        active_kvs=$(az keyvault list --resource-group "$RESOURCE_GROUP" \
-            --query "[?starts_with(name, '${PREFIX}')].{name: name, location: location}" -o json 2>/dev/null || echo "[]")
+        if ! active_kvs=$(az keyvault list --resource-group "$RESOURCE_GROUP" \
+            --query "[?starts_with(name, '${PREFIX}')].{name: name, location: location}" -o json 2>/dev/null); then
+            print_error "Failed to list active Key Vaults in '${RESOURCE_GROUP}'"
+            return 1
+        fi
         local active_count
         active_count=$(echo "$active_kvs" | jq -r 'length // 0')
+        local active_failed=0
 
         if [[ "$active_count" -gt 0 ]]; then
             found_any=true
@@ -986,9 +1000,14 @@ main() {
                         echo "OK (soft-deleted)"
                     else
                         echo "FAILED"
+                        ((active_failed++)) || true
                     fi
                 fi
             done < <(echo "$active_kvs" | jq -r '.[] | "\(.name)|\(.location)"')
+            if [[ "$active_failed" -gt 0 ]]; then
+                print_error "${active_failed} active Key Vault deletion(s) failed"
+                return 1
+            fi
         else
             print_info "No active Key Vaults found in '${RESOURCE_GROUP}'"
         fi
@@ -997,7 +1016,8 @@ main() {
     echo ""
     local vaults_json
     if ! vaults_json=$(find_soft_deleted_vaults "$PREFIX"); then
-        print_warning "Failed to query soft-deleted Key Vaults — skipping purge"
+        print_error "Failed to query soft-deleted Key Vaults"
+        return 1
     elif display_soft_deleted_vaults "$vaults_json"; then
         found_any=true
         purge_soft_deleted_vaults "$vaults_json"
@@ -1024,7 +1044,7 @@ main() {
     # Find and cleanup Azure AD Applications
     echo ""
     local apps_json
-    apps_json=$(find_ad_applications "$PREFIX") || true
+    apps_json=$(find_ad_applications "$PREFIX")
 
     if display_ad_applications "$apps_json"; then
         found_any=true
@@ -1034,7 +1054,7 @@ main() {
     # Find and cleanup Service Principals
     echo ""
     local sps_json
-    sps_json=$(find_service_principals "$PREFIX") || true
+    sps_json=$(find_service_principals "$PREFIX")
 
     if display_service_principals "$sps_json"; then
         found_any=true

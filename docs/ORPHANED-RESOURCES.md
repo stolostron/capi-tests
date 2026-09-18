@@ -184,7 +184,10 @@ You may lack permissions. Ensure you have:
 
 ### Deletion hangs or times out
 
-Some resources take time to delete. Add `--no-wait` for async deletion:
+The cleanup script waits for every ARM resource deletion to complete and
+returns a non-zero status if Azure cannot confirm that the resource is gone.
+For a fire-and-forget deletion outside this script, Azure CLI supports:
+
 ```bash
 az resource delete --ids "<RESOURCE_ID>" --no-wait
 ```
