@@ -829,6 +829,105 @@ func ExtractMachinePoolNameFromYAML(filePath string) (string, error) {
 	return "", fmt.Errorf("no MachinePool resource found in %s", filePath)
 }
 
+// ExtractResourceGroupNameFromYAML extracts the Azure ResourceGroup name from a
+// multi-document YAML file.
+func ExtractResourceGroupNameFromYAML(filePath string) (string, error) {
+	if _, err := os.Stat(filePath); err != nil {
+		return "", fmt.Errorf("file not accessible: %w", err)
+	}
+
+	// #nosec G304 - filePath comes from test configuration
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %w", err)
+	}
+
+	docs := strings.Split(string(data), "---")
+	for _, doc := range docs {
+		doc = strings.TrimSpace(doc)
+		if doc == "" {
+			continue
+		}
+
+		var content map[string]interface{}
+		if err := yaml.Unmarshal([]byte(doc), &content); err != nil {
+			continue
+		}
+
+		if name, ok := findResourceGroupName(content); ok {
+			return name, nil
+		}
+	}
+
+	return "", fmt.Errorf("no Azure ResourceGroup resource found in %s", filePath)
+}
+
+// LogGeneratedResourceGroup reports the ResourceGroup found in a generated
+// manifest. This is diagnostic-only: a parser failure must not turn successful
+// YAML generation into a deployment failure.
+func LogGeneratedResourceGroup(t *testing.T, plannedName, filePath string) {
+	t.Helper()
+
+	generatedName, err := ExtractResourceGroupNameFromYAML(filePath)
+	if err != nil {
+		t.Logf("Warning: unable to inspect generated ResourceGroup in %s: %v", filePath, err)
+		return
+	}
+	if plannedName == "" {
+		t.Logf("Generated ResourceGroup: %s", generatedName)
+		return
+	}
+	t.Logf("ResourceGroup identity: planned=%s, manifest=%s", plannedName, generatedName)
+}
+
+func findResourceGroupName(value interface{}) (string, bool) {
+	switch current := value.(type) {
+	case map[string]interface{}:
+		if current["kind"] == "ResourceGroup" {
+			metadata, ok := current["metadata"].(map[string]interface{})
+			if !ok {
+				return "", false
+			}
+
+			name, ok := metadata["name"].(string)
+			return name, ok && name != ""
+		}
+
+		for _, nested := range current {
+			if name, ok := findResourceGroupName(nested); ok {
+				return name, true
+			}
+		}
+	case []interface{}:
+		for _, nested := range current {
+			if name, ok := findResourceGroupName(nested); ok {
+				return name, true
+			}
+		}
+	}
+
+	return "", false
+}
+
+// ValidateGeneratedResourceGroupName verifies that the generated manifest uses
+// the same resource group as the test configuration.
+func ValidateGeneratedResourceGroupName(configuredName, generatedName string) error {
+	if configuredName != generatedName {
+		return fmt.Errorf("configured resource group %q differs from generated resource group %q", configuredName, generatedName)
+	}
+	return nil
+}
+
+// ValidateGeneratedResourceGroupFile verifies the ResourceGroup in a generated
+// manifest against the configured Azure resource group.
+func ValidateGeneratedResourceGroupFile(configuredName, filePath string) error {
+	generatedName, err := ExtractResourceGroupNameFromYAML(filePath)
+	if err != nil {
+		return err
+	}
+	return ValidateGeneratedResourceGroupName(configuredName, generatedName)
+}
+
 // CheckYAMLConfigMatch verifies that existing YAML files match the current configuration.
 // It extracts the cluster name from the cluster YAML file and compares it with the expected
 // cluster name prefix. This is used to detect configuration mismatches that would cause
@@ -3047,7 +3146,7 @@ type DeploymentState struct {
 const legacyDeploymentStateFile = ".deployment-state.json"
 
 // DeploymentStateFile is retained for callers that need the legacy filename.
-const DeploymentStateFile = legacyDeploymentStateFile
+var DeploymentStateFile = legacyDeploymentStateFile
 
 // deploymentStateFilePath returns the state-file path for the current run.
 // Prow provides RESOURCEGROUPNAME consistently across its phase invocations;
@@ -3284,7 +3383,7 @@ func ReadDeploymentState() (*DeploymentState, error) {
 	for _, path := range deploymentStateFileCandidates(".") {
 		// #nosec G304 -- candidates are the sanitized run-scoped filename, the
 		// explicitly configured state file, or the fixed legacy filename.
-		data, err = os.ReadFile(path)
+		data, err = readValidatedStateFile(path, "")
 		if err == nil {
 			break
 		}
@@ -3293,7 +3392,19 @@ func ReadDeploymentState() (*DeploymentState, error) {
 		}
 	}
 	if err != nil {
-		return nil, nil // No state file, return nil without error
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to read deployment state file: %w", err)
+		}
+		if DeploymentStateFile == legacyDeploymentStateFile {
+			return nil, nil // No state file, return nil without error
+		}
+		data, err = readValidatedStateFile(DeploymentStateFile, legacyDeploymentStateFile)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("failed to read deployment state file: %w", err)
+		}
 	}
 
 	var state DeploymentState
@@ -3322,6 +3433,14 @@ func DeleteDeploymentState() error {
 		if err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("failed to delete deployment state file: %w", err)
 		}
+	}
+	for _, path := range legacyDeploymentStatePaths(RunContextFilePath()) {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to delete deployment state file %s: %w", path, err)
+		}
+	}
+	if err := os.Remove(RunContextFilePath()); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to delete run context file: %w", err)
 	}
 	return nil
 }
