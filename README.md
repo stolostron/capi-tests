@@ -3,6 +3,7 @@
 **ARO:**
 
 [![Management Cluster (ARO)](https://github.com/stolostron/capi-tests/actions/workflows/management-cluster-aro.yml/badge.svg)](https://github.com/stolostron/capi-tests/actions/workflows/management-cluster-aro.yml)
+[![Management Cluster (MCE/ARO)](https://github.com/stolostron/capi-tests/actions/workflows/management-cluster-mce-aro.yml/badge.svg)](https://github.com/stolostron/capi-tests/actions/workflows/management-cluster-mce-aro.yml)
 [![Full Cluster Deployment (ARO)](https://github.com/stolostron/capi-tests/actions/workflows/workload-cluster-aro.yml/badge.svg)](https://github.com/stolostron/capi-tests/actions/workflows/workload-cluster-aro.yml)
 
 **ROSA:**
@@ -525,6 +526,7 @@ The test suite integrates with GitHub Actions:
 
 **Test Workflows:**
 - **Management Cluster (ARO)** - ARO management cluster deployment tests
+- **Management Cluster (MCE/ARO)** - Manually triggered MCE management cluster validation
 - **Management Cluster (ROSA)** - ROSA management cluster deployment tests
 - **Full Cluster Deployment (ARO)** - Complete ARO workload cluster lifecycle
 - **Full Cluster Deployment (ROSA)** - Complete ROSA workload cluster lifecycle
@@ -536,6 +538,12 @@ When manually dispatching a Full Cluster Deployment workflow, choose the
 workload-cluster deployment and deletion timeouts from `60`, `90`, or `120`
 minutes. The defaults are `60` minutes for both operations; scheduled runs use
 those defaults.
+
+The **Management Cluster (MCE/ARO)** workflow is manually triggered and uses
+the selected GitHub environment's `MCE_API_URL`, `MCE_API_USER`, and
+`MCE_API_PASSWORD` settings. It validates the external MCE management cluster
+without creating a Kind or workload cluster. Optionally provide the MCE version
+when dispatching the workflow to include it in the run name and summary.
 
 **Security Scanning:**
 - **govulncheck** - Go vulnerability scanning

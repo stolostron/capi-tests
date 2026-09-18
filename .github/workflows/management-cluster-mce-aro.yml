@@ -1,0 +1,36 @@
+name: Management Cluster (MCE/ARO)
+
+# Dedicated MCE management-cluster validation.
+# This caller keeps MCE runs separate from the general Kind workflow while
+# reusing the same tested management-cluster implementation.
+run-name: Management Cluster (MCE/ARO)${{ inputs.mce_version != '' && format(' - MCE {0}', inputs.mce_version) || '' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'GitHub environment containing MCE settings'
+        required: true
+        type: choice
+        default: 'aro-stage'
+        options:
+          - aro-int
+          - aro-stage
+      mce_version:
+        description: 'MCE version being tested (shown in the run summary)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  management-cluster:
+    uses: ./.github/workflows/management-cluster-aro.yml
+    with:
+      cluster_mode: mce
+      environment: ${{ inputs.environment }}
+      mce_version: ${{ inputs.mce_version }}
+    secrets: inherit
