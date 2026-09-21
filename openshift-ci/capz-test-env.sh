@@ -88,6 +88,13 @@ export OPERATORS_UAMIS_SUFFIX_FILE
 : "${ARO_REPO_DIR:=/tmp/cluster-api-installer-aro}"
 export ARO_REPO_URL ARO_REPO_BRANCH ARO_REPO_DIR
 
+# Each Prow step runs in a separate container, so the repository checkout is
+# not a writable or shared location for the immutable run context. SHARED_DIR
+# is writable and persists across all steps in the job.
+if [[ -n "${SHARED_DIR:-}" && -z "${CAPI_TEST_CONTEXT_FILE:-}" ]]; then
+  export CAPI_TEST_CONTEXT_FILE="${SHARED_DIR}/run-context.json"
+fi
+
 # Use the IPI-provisioned cluster kubeconfig (when available).
 if [[ -n "${SHARED_DIR:-}" && -z "${USE_KUBECONFIG:-}" ]]; then
   export USE_KUBECONFIG="${SHARED_DIR}/kubeconfig"
