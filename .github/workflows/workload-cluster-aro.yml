@@ -38,6 +38,11 @@ on:
         options:
           - kind
           - mce
+      mce_insecure_tls:
+        description: 'Disable TLS verification for MCE API access'
+        required: true
+        type: boolean
+        default: false
       aro_repo_branch:
         description: 'cluster-api-installer branch to test against'
         required: false
@@ -83,6 +88,11 @@ on:
         required: false
         type: string
         default: 'kind'
+      mce_insecure_tls:
+        description: 'Disable TLS verification for MCE API access'
+        required: false
+        type: boolean
+        default: false
       aro_repo_branch:
         description: 'cluster-api-installer branch to test against'
         required: false
@@ -196,6 +206,7 @@ jobs:
       MCE_API_URL: ${{ vars.MCE_API_URL }}
       MCE_API_USER: ${{ vars.MCE_API_USER }}
       MCE_API_PASSWORD: ${{ secrets.MCE_API_PASSWORD }}
+      MCE_INSECURE_TLS: ${{ inputs.mce_insecure_tls || false }}
 
     steps:
     - name: Validate credentials
