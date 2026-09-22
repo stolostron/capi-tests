@@ -23,7 +23,6 @@ tests:
     env:
       DEPLOY_CHARTS: "true"
       SIZE_VARIANT: compact
-      WORKLOAD_CLUSTER_NAMESPACE: capz-test-prow
     pre:
     - chain: ipi-azure-pre
     - ref: capz-test-check-dependencies
