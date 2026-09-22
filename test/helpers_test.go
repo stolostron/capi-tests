@@ -349,6 +349,30 @@ func TestValidateGeneratedResourceGroupFile(t *testing.T) {
 	}
 }
 
+func TestValidateAzureResourceGroupName(t *testing.T) {
+	tests := []struct {
+		name        string
+		value       string
+		expectError bool
+	}{
+		{name: "valid", value: "capz-tests_1.(stage)"},
+		{name: "unicode letters are valid", value: "groupe-équipe"},
+		{name: "empty", value: "", expectError: true},
+		{name: "invalid character", value: "capz/tests", expectError: true},
+		{name: "trailing period", value: "capz-tests.", expectError: true},
+		{name: "too long", value: strings.Repeat("a", MaxAzureResourceGroupNameLength+1), expectError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateAzureResourceGroupName(tt.value)
+			if (err != nil) != tt.expectError {
+				t.Fatalf("ValidateAzureResourceGroupName(%q) error = %v, expectError = %v", tt.value, err, tt.expectError)
+			}
+		})
+	}
+}
+
 func TestExtractClusterNameFromYAML(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir := t.TempDir()
@@ -1854,6 +1878,15 @@ func TestValidateRFC1123Name(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestValidateRFC1123Name_MaxLength(t *testing.T) {
+	if err := ValidateRFC1123Name(strings.Repeat("a", MaxRFC1123NameLength), "TEST_NAME"); err != nil {
+		t.Fatalf("name at RFC 1123 maximum length should be valid: %v", err)
+	}
+	if err := ValidateRFC1123Name(strings.Repeat("a", MaxRFC1123NameLength+1), "TEST_NAME"); err == nil {
+		t.Fatal("name longer than RFC 1123 maximum length should be rejected")
 	}
 }
 
@@ -4151,9 +4184,12 @@ func TestValidateAllConfigurations(t *testing.T) {
 		CAPIUser:                 "cate",
 		Environment:              "stage",
 		ClusterNamePrefix:        "cate-stage",
+		WorkloadClusterName:      "cate-stage",
 		WorkloadClusterNamespace: "capz-test-20260101-120000",
+		ResourceGroupName:        "cate-stage-resgroup",
 		Region:                   "uksouth",
-		DeploymentTimeout:        45 * time.Minute,
+		ClusterDeploymentTimeout: 45 * time.Minute,
+		ClusterDeletionTimeout:   45 * time.Minute,
 		ASOControllerTimeout:     10 * time.Minute,
 	}
 
@@ -4179,9 +4215,12 @@ func TestValidateAllConfigurations_InvalidConfig(t *testing.T) {
 		CAPIUser:                 "RCAP", // Invalid - uppercase
 		Environment:              "stage",
 		ClusterNamePrefix:        "RCAP-stage", // Invalid - uppercase
+		WorkloadClusterName:      "RCAP-stage",
 		WorkloadClusterNamespace: "capz-test-20260101-120000",
+		ResourceGroupName:        "RCAP-stage-resgroup",
 		Region:                   "uksouth",
-		DeploymentTimeout:        45 * time.Minute,
+		ClusterDeploymentTimeout: 45 * time.Minute,
+		ClusterDeletionTimeout:   45 * time.Minute,
 		ASOControllerTimeout:     10 * time.Minute,
 	}
 

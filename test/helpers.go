@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 )
@@ -1988,6 +1989,9 @@ func ValidateNamePrefix(namePrefix string) error {
 // and end with an alphanumeric character.
 var RFC1123NameRegex = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 
+const MaxRFC1123NameLength = 63
+const MaxAzureResourceGroupNameLength = 90
+
 // SanitizeToRFC1123 converts an arbitrary string into an RFC 1123 compliant name.
 // Lowercases, replaces non-alphanumeric characters with hyphens, collapses
 // consecutive hyphens, and trims leading/trailing hyphens.
@@ -2016,6 +2020,9 @@ func SanitizeToRFC1123(name string) string {
 func ValidateRFC1123Name(name, varName string) error {
 	if name == "" {
 		return fmt.Errorf("%s is empty: must be a non-empty RFC 1123 compliant name", varName)
+	}
+	if len(name) > MaxRFC1123NameLength {
+		return fmt.Errorf("%s '%s' is %d characters long; RFC 1123 names must be at most %d characters", varName, name, len(name), MaxRFC1123NameLength)
 	}
 
 	if RFC1123NameRegex.MatchString(name) {
@@ -2060,6 +2067,27 @@ func ValidateRFC1123Name(name, varName string) error {
 			"  RFC 1123 requires: lowercase alphanumeric characters or '-', must start and end with alphanumeric\n"+
 			"  Suggested fix: export %s=%s",
 		varName, name, strings.Join(issues, "; "), varName, suggested)
+}
+
+// ValidateAzureResourceGroupName validates an Azure resource group name.
+func ValidateAzureResourceGroupName(name string) error {
+	if name == "" {
+		return fmt.Errorf("RESOURCEGROUPNAME is empty: an Azure resource group name is required")
+	}
+	runeCount := len([]rune(name))
+	if runeCount > MaxAzureResourceGroupNameLength {
+		return fmt.Errorf("RESOURCEGROUPNAME '%s' is %d characters long; Azure resource group names must be at most %d characters", name, runeCount, MaxAzureResourceGroupNameLength)
+	}
+	if strings.HasSuffix(name, ".") {
+		return fmt.Errorf("RESOURCEGROUPNAME '%s' cannot end with a period", name)
+	}
+	for _, r := range name {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || strings.ContainsRune("_().-", r) {
+			continue
+		}
+		return fmt.Errorf("RESOURCEGROUPNAME '%s' contains invalid character %q; use letters, numbers, underscores, parentheses, hyphens, or periods", name, r)
+	}
+	return nil
 }
 
 // GetExternalAuthID returns the ExternalAuth resource ID that will be created for the ARO cluster.
@@ -4722,6 +4750,7 @@ func ValidateAllConfigurations(t *testing.T, config *TestConfig) []ConfigValidat
 		{"CAPI_USER", config.CAPIUser},
 		{"DEPLOYMENT_ENV", config.Environment},
 		{"CS_CLUSTER_NAME", config.ClusterNamePrefix},
+		{"WORKLOAD_CLUSTER_NAME", config.WorkloadClusterName},
 		{"WORKLOAD_CLUSTER_NAMESPACE", config.WorkloadClusterNamespace},
 	} {
 		result := ConfigValidationResult{
@@ -4802,12 +4831,18 @@ func ValidateAllConfigurations(t *testing.T, config *TestConfig) []ConfigValidat
 		}
 	}
 
-	// Display resource group name (informational, no validation needed)
-	results = append(results, ConfigValidationResult{
-		Variable: "RESOURCEGROUPNAME",
-		Value:    config.ResourceGroupName,
-		IsValid:  true,
-	})
+	resourceGroupResult := ConfigValidationResult{
+		Variable:   "RESOURCEGROUPNAME",
+		Value:      config.ResourceGroupName,
+		IsCritical: true,
+	}
+	if err := ValidateAzureResourceGroupName(config.ResourceGroupName); err != nil {
+		resourceGroupResult.Error = err
+		resourceGroupResult.IsValid = false
+	} else {
+		resourceGroupResult.IsValid = true
+	}
+	results = append(results, resourceGroupResult)
 
 	// Validate timeout values
 	deployTimeoutResult := ConfigValidationResult{
