@@ -3524,6 +3524,69 @@ func SaveMCEOriginalStates(states map[string]bool) error {
 	return nil
 }
 
+// orderedMCEComponentNames returns component names with disabled states first,
+// then enabled states, sorting each group by name. Disabling components first
+// prevents transient violations of MCE's HyperShift/CAPI exclusivity rule.
+func orderedMCEComponentNames(states map[string]bool) []string {
+	names := make([]string, 0, len(states))
+	for name := range states {
+		names = append(names, name)
+	}
+
+	sort.Slice(names, func(i, j int) bool {
+		if states[names[i]] != states[names[j]] {
+			return !states[names[i]]
+		}
+		return names[i] < names[j]
+	})
+
+	return names
+}
+
+func restoreMCEComponentStates(
+	originalStates map[string]bool,
+	getCurrentState func(string) (bool, error),
+	setState func(string, bool) error,
+) (reverted, failed []string) {
+	disableFailed := false
+	for _, component := range orderedMCEComponentNames(originalStates) {
+		originalEnabled := originalStates[component]
+		currentEnabled, err := getCurrentState(component)
+		if err != nil {
+			failed = append(failed, fmt.Sprintf("%s: query failed: %v", component, err))
+			if !originalEnabled {
+				disableFailed = true
+			}
+			continue
+		}
+
+		if currentEnabled == originalEnabled {
+			continue
+		}
+
+		if originalEnabled && disableFailed {
+			failed = append(failed, fmt.Sprintf("%s: restore skipped because one or more components could not be disabled", component))
+			continue
+		}
+
+		if err := setState(component, originalEnabled); err != nil {
+			failed = append(failed, fmt.Sprintf("%s: revert failed: %v", component, err))
+			if !originalEnabled {
+				disableFailed = true
+			}
+			continue
+		}
+
+		stateStr := "disabled"
+		if originalEnabled {
+			stateStr = "enabled"
+		}
+		reverted = append(reverted, fmt.Sprintf("%s → %s", component, stateStr))
+	}
+
+	return reverted, failed
+}
+
 // RestoreMCEOriginalStates reads saved MCE component states from the deployment state file
 // and reverts any components that have been changed back to their original state.
 // Safe for cleanup paths — uses t.Errorf (non-fatal) on revert failures so subsequent steps still run.
@@ -3543,29 +3606,19 @@ func RestoreMCEOriginalStates(t *testing.T, kubeContext string) {
 
 	PrintToTTY("\n=== MCE component restore (cleanup) ===\n")
 
-	var reverted, failed []string
-
-	for component, originalEnabled := range state.MCEOriginalStates {
-		current, err := GetMCEComponentStatus(t, kubeContext, component)
-		if err != nil {
-			failed = append(failed, fmt.Sprintf("%s: query failed: %v", component, err))
-			continue
-		}
-
-		if current.Enabled == originalEnabled {
-			continue
-		}
-
-		if err := SetMCEComponentState(t, kubeContext, component, originalEnabled); err != nil {
-			failed = append(failed, fmt.Sprintf("%s: revert failed: %v", component, err))
-		} else {
-			stateStr := "disabled"
-			if originalEnabled {
-				stateStr = "enabled"
+	reverted, failed := restoreMCEComponentStates(
+		state.MCEOriginalStates,
+		func(component string) (bool, error) {
+			current, err := GetMCEComponentStatus(t, kubeContext, component)
+			if err != nil {
+				return false, err
 			}
-			reverted = append(reverted, fmt.Sprintf("%s → %s", component, stateStr))
-		}
-	}
+			return current.Enabled, nil
+		},
+		func(component string, enabled bool) error {
+			return SetMCEComponentState(t, kubeContext, component, enabled)
+		},
+	)
 
 	if len(reverted) > 0 {
 		PrintToTTY("✅ Restored %d MCE component(s): %v\n", len(reverted), reverted)
