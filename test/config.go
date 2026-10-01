@@ -733,6 +733,13 @@ type TestConfig struct {
 	CheckHCPScriptPath       string            // Path to the ARM-state check script
 	CAPINamespace            string            // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" in K8S mode)
 	CAPZNamespace            string            // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" in K8S mode)
+	// Workload identity configuration (optional). When these are set, gen.sh wires ASO/ARO
+	// to federated user-assigned managed identities instead of a service principal secret.
+	// See DetectAzureAuthMode / AzureAuthModeWorkloadIdentity.
+	AzureUserAssignedIdentityASO string // USER_ASSIGNED_IDENTITY_ASO: user-assigned identity for ASO
+	AzureUserAssignedIdentityARO string // USER_ASSIGNED_IDENTITY_ARO: user-assigned identity for ARO
+	AzureOIDCResourceGroup       string // OICD_RESOURCE_GROUP: resource group hosting the OIDC issuer
+	AzureWorkloadIdentityEnv     string // ENV: environment selector passed to gen.sh for workload identity (e.g. "int")
 
 	// Management cluster mode
 	// ClusterMode specifies the management cluster deployment mode ("kind" or "mce").
@@ -1013,27 +1020,31 @@ func NewTestConfig() *TestConfig {
 		RepoDir:    getDefaultRepoDir(),
 
 		// Cluster defaults
-		ManagementClusterName:    GetEnvOrDefault("MANAGEMENT_CLUSTER_NAME", defaultMgmtCluster),
-		WorkloadClusterName:      workloadClusterName,
-		ClusterNamePrefix:        prefix,
-		NamePrefix:               GetEnvOrDefault("NAME_PREFIX", ""),
-		OCPVersion:               GetEnvOrDefault("OCP_VERSION", "4.20"),
-		OCPVersionMP:             GetEnvOrDefault("OCP_VERSION_MP", "4.20.17"),
-		Region:                   GetEnvOrDefault(regionEnvVar, defaultRegion),
-		AzureSubscriptionName:    os.Getenv("AZURE_SUBSCRIPTION_NAME"),
-		AzureSubscriptionID:      os.Getenv("AZURE_SUBSCRIPTION_ID"),
-		Environment:              environment,
-		CAPIUser:                 capiUser,
-		WorkloadClusterNamespace: namespace,
-		TestLabelPrefix:          testLabelPrefix,
-		TestRunID:                testRunID,
-		ResourceTags:             resourceTags,
-		ResourceGroupName:        rgName,
-		HCPResourceID:            os.Getenv("HCP_RESOURCE_ID"),
-		HCPResourceName:          os.Getenv("HCP_RESOURCE_NAME"),
-		CheckHCPScriptPath:       GetEnvOrDefault("CHECK_HCP_SCRIPT", "../scripts/check-hcp"),
-		CAPINamespace:            getControllerNamespace(useK8S, "CAPI_NAMESPACE", "capi-system"),
-		CAPZNamespace:            providerNamespace,
+		ManagementClusterName:        GetEnvOrDefault("MANAGEMENT_CLUSTER_NAME", defaultMgmtCluster),
+		WorkloadClusterName:          workloadClusterName,
+		ClusterNamePrefix:            prefix,
+		NamePrefix:                   GetEnvOrDefault("NAME_PREFIX", ""),
+		OCPVersion:                   GetEnvOrDefault("OCP_VERSION", "4.20"),
+		OCPVersionMP:                 GetEnvOrDefault("OCP_VERSION_MP", "4.20.17"),
+		Region:                       GetEnvOrDefault(regionEnvVar, defaultRegion),
+		AzureSubscriptionName:        os.Getenv("AZURE_SUBSCRIPTION_NAME"),
+		AzureSubscriptionID:          os.Getenv("AZURE_SUBSCRIPTION_ID"),
+		AzureUserAssignedIdentityASO: os.Getenv("USER_ASSIGNED_IDENTITY_ASO"),
+		AzureUserAssignedIdentityARO: os.Getenv("USER_ASSIGNED_IDENTITY_ARO"),
+		AzureOIDCResourceGroup:       os.Getenv("OICD_RESOURCE_GROUP"),
+		AzureWorkloadIdentityEnv:     os.Getenv("ENV"),
+		Environment:                  environment,
+		CAPIUser:                     capiUser,
+		WorkloadClusterNamespace:     namespace,
+		TestLabelPrefix:              testLabelPrefix,
+		TestRunID:                    testRunID,
+		ResourceTags:                 resourceTags,
+		ResourceGroupName:            rgName,
+		HCPResourceID:                os.Getenv("HCP_RESOURCE_ID"),
+		HCPResourceName:              os.Getenv("HCP_RESOURCE_NAME"),
+		CheckHCPScriptPath:           GetEnvOrDefault("CHECK_HCP_SCRIPT", "../scripts/check-hcp"),
+		CAPINamespace:                getControllerNamespace(useK8S, "CAPI_NAMESPACE", "capi-system"),
+		CAPZNamespace:                providerNamespace,
 
 		// Management cluster mode
 		ClusterMode: clusterMode,

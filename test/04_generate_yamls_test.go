@@ -50,7 +50,9 @@ func TestInfrastructure_01_ValidateCredentials(t *testing.T) {
 		}
 		authMode := DetectAzureAuthMode(t)
 		t.Logf("Azure auth mode: %s", GetAzureAuthDescription(authMode))
-		if authMode == AzureAuthModeCLI {
+		// Neither Azure CLI nor workload identity uses a service principal client
+		// secret, so those variables are not required for YAML generation in those modes.
+		if authMode == AzureAuthModeCLI || authMode == AzureAuthModeWorkloadIdentity {
 			spOnlyVars["AZURE_CLIENT_ID"] = true
 			spOnlyVars["AZURE_CLIENT_SECRET"] = true
 		}
@@ -233,6 +235,19 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 
 	if config.AzureSubscriptionName != "" {
 		SetEnvVar(t, "AZURE_SUBSCRIPTION_NAME", config.AzureSubscriptionName)
+	}
+
+	// Pass workload identity configuration through to gen.sh when set, so federated
+	// managed-identity auth works regardless of gen.sh's own KIND_CLUSTER_NAME branch.
+	// These are only forwarded when all three are present (a complete workload identity setup).
+	if HasWorkloadIdentityCredentials() {
+		SetEnvVar(t, "USER_ASSIGNED_IDENTITY_ASO", config.AzureUserAssignedIdentityASO)
+		SetEnvVar(t, "USER_ASSIGNED_IDENTITY_ARO", config.AzureUserAssignedIdentityARO)
+		SetEnvVar(t, "OICD_RESOURCE_GROUP", config.AzureOIDCResourceGroup)
+		if config.AzureWorkloadIdentityEnv != "" {
+			SetEnvVar(t, "ENV", config.AzureWorkloadIdentityEnv)
+		}
+		PrintToTTY("Using Azure workload identity for YAML generation\n")
 	}
 
 	PrintToTTY("Workload cluster namespace: %s\n", config.WorkloadClusterNamespace)
