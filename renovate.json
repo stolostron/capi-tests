@@ -1,0 +1,51 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "enabledManagers": [
+    "gomod",
+    "github-actions",
+    "dockerfile"
+  ],
+  "baseBranchPatterns": [
+    "main"
+  ],
+  "timezone": "UTC",
+  "schedule": [
+    "on monday"
+  ],
+  "packageRules": [
+    {
+      "description": "Collect routine updates from every enabled manager into one weekly PR per base branch.",
+      "matchManagers": [
+        "gomod",
+        "github-actions",
+        "dockerfile"
+      ],
+      "groupName": "Weekly dependency updates"
+    },
+    {
+      "description": "Keep dependency-update PRs easy to find.",
+      "addLabels": [
+        "dependencies"
+      ]
+    },
+    {
+      "description": "Keep the OpenShift CI builder image pinned; Renovate cannot authenticate to its registry.",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "matchFileNames": [
+        "Dockerfile.prow"
+      ],
+      "enabled": false
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "groupName": "Security fixes",
+    "labels": [
+      "dependencies",
+      "security"
+    ],
+    "prConcurrentLimit": 1
+  }
+}
