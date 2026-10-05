@@ -153,12 +153,14 @@ All workflows now specify explicit permissions at the workflow level:
 | Auto-assign PR | `pull-requests: write, issues: write` | For assignment |
 | Auto-delete Branch | `contents: write` | For branch deletion |
 
-### Dependabot Configuration
+### Renovate Configuration
 
 | Ecosystem | Status | Schedule | Notes |
 |-----------|--------|----------|-------|
-| Go modules | ✅ Configured | Weekly, Monday 9 AM UTC | Groups minor/patch updates |
-| GitHub Actions | ✅ Configured | Weekly, Monday 9 AM UTC | Groups action updates |
+| Go modules | ✅ Configured | Weekly, Monday | Grouped with other routine updates |
+| GitHub Actions | ✅ Configured | Weekly, Monday | Grouped with other routine updates |
+| Dockerfile images | ✅ Configured | Weekly, Monday | `ocp/builder` stays pinned because its registry requires SSO |
+| Security fixes | ⚠️ Requires repo/app access | On alert | Keep GitHub Dependabot alerts enabled; Renovate needs alert read and PR write access |
 
 ---
 
@@ -258,10 +260,11 @@ These items require manual configuration in GitHub repository settings:
    - Add required checks: `CI / Lint`, `CI / Test`
    - Enable: "Require branches to be up to date before merging"
 
-2. **Enable Dependabot Security Updates**:
+2. **Configure Renovate security updates**:
    - Go to Settings > Security & analysis
    - Enable: "Dependabot alerts"
-   - Enable: "Dependabot security updates"
+   - Ensure Renovate has read access to Dependabot alerts and write access to contents and pull requests
+   - After Renovate is opening fix PRs, disable Dependabot security-update PRs while keeping alerts enabled
 
 ### Future Improvements (Post-V1)
 
@@ -280,7 +283,7 @@ The CI/CD pipeline has been reviewed and improved:
 - **Workflow Coverage**: Complete with unified CI workflow for PRs
 - **Efficiency**: Go module caching enabled, appropriate timeouts set
 - **Security**: All actions pinned to SHAs, minimal permissions configured
-- **Automation**: Dependabot configured for both Go and Actions
+- **Automation**: Renovate is configured to group Go, GitHub Actions, and Dockerfile updates into one weekly PR per branch; app access is required
 
 **Overall Rating**: ✅ **Ready for V1**
 

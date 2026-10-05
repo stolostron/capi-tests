@@ -126,14 +126,18 @@ go list -json -m all | go run github.com/sonatype-nexus-community/nancy@v1.2.0 s
 go run github.com/securego/gosec/v2/cmd/gosec@v2.25.0 ./...
 ```
 
-### Dependabot
+### Renovate
 
-Dependabot is configured in `.github/dependabot.yml` to:
+Renovate is configured in `renovate.json` to check Go modules, GitHub Actions,
+and Dockerfile images weekly on Mondays. Routine updates are grouped into one
+PR per base branch. The `ocp/builder` image remains pinned because its registry
+requires Red Hat SSO authentication.
 
-- Check Go module updates weekly (Mondays at 09:00 UTC)
-- Check GitHub Actions updates weekly
-- Group minor/patch updates to reduce PR noise
-- Auto-assign reviewers
+Keep GitHub's dependency graph and Dependabot alerts enabled. Renovate reads
+those alerts to create grouped security-fix PRs; it needs read access to
+Dependabot alerts and write access to repository contents and pull requests.
+Dependabot version-update and security-update PRs should be disabled only after
+Renovate is active for this repository.
 
 ## cluster-api-installer Dependency
 
@@ -160,7 +164,7 @@ git clone -b $ARO_REPO_BRANCH https://github.com/RadekCap/cluster-api-installer.
 
 ### Weekly Updates (Automated)
 
-1. Dependabot creates PRs for Go and GitHub Actions updates
+1. Renovate creates one grouped weekly PR for dependency updates
 2. CI runs all tests and security scans
 3. Review and merge approved PRs
 
@@ -220,7 +224,7 @@ For critical vulnerabilities:
 - Use `latest` tags in Go dependencies
 - Skip security scans for "minor" updates
 - Add unnecessary dependencies
-- Ignore Dependabot alerts
+- Triage security alerts and follow the Renovate security-fix PR
 - Update multiple major versions at once
 
 ## Troubleshooting
@@ -247,7 +251,7 @@ go mod verify
    - Adding to vulnerability ignore list (with justification)
    - Implementing workaround
 
-### Dependabot PRs failing
+### Renovate PRs failing
 
 1. Check CI logs for specific failure
 2. May need manual intervention for breaking changes

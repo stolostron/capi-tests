@@ -350,7 +350,7 @@ if err := os.WriteFile(kubeconfigPath, decoded, 0600); err != nil {
 8. `0600` permissions for sensitive files (kubeconfig, deployment state)
 
 ### Future Considerations
-1. Consider enabling GitHub Dependabot for automated dependency updates
+1. Keep GitHub Dependabot alerts enabled as Renovate's vulnerability-alert source; Renovate creates the security-fix PRs
 2. Consider enabling GitHub secret scanning if not already active
 3. Periodically review #nosec annotations to ensure they remain valid (currently 7)
 4. Update Go toolchain to pick up stdlib fix for GO-2026-4337 when available
