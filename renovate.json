@@ -12,6 +12,31 @@
   "schedule": [
     "on monday"
   ],
+  "gomod": {
+    "packageRules": [
+      {
+        "description": "Keep indirect Go modules on security-only updates. MintMaker's global config re-enables them from inside its own gomod.packageRules, which Renovate merges after top-level rules. Vulnerability alerts force-override this rule, so security fixes remain enabled.",
+        "matchManagers": [
+          "gomod"
+        ],
+        "matchDepTypes": [
+          "indirect"
+        ],
+        "matchUpdateTypes": [
+          "major",
+          "minor",
+          "patch",
+          "pin",
+          "digest",
+          "pinDigest",
+          "lockFileMaintenance",
+          "rollback",
+          "replacement"
+        ],
+        "enabled": false
+      }
+    ]
+  },
   "packageRules": [
     {
       "description": "Collect routine updates from every enabled manager into one weekly PR per base branch.",

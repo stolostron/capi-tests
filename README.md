@@ -17,6 +17,9 @@
 [![Trivy](https://github.com/stolostron/capi-tests/actions/workflows/security-trivy.yml/badge.svg)](https://github.com/stolostron/capi-tests/actions/workflows/security-trivy.yml)
 [![nancy](https://github.com/stolostron/capi-tests/actions/workflows/security-nancy.yml/badge.svg)](https://github.com/stolostron/capi-tests/actions/workflows/security-nancy.yml)
 
+See [vulnerability management](docs/VULNERABILITY-MANAGEMENT.md) for scanner
+coverage, result reporting, and triage guidance.
+
 **Quality:**
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12771/badge)](https://www.bestpractices.dev/projects/12771)

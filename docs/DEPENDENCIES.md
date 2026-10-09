@@ -108,10 +108,15 @@ The repository includes multiple security scanning workflows:
 
 | Scanner | Workflow | Schedule | Database |
 |---------|----------|----------|----------|
-| **govulncheck** | `security-govulncheck.yml` | Daily 2 AM UTC | Go Vulnerability DB |
+| **govulncheck** | `security-govulncheck.yml` | Daily 2 AM UTC; push/PR on all branches | Go Vulnerability DB |
 | **nancy** | `security-nancy.yml` | Daily 3:30 AM UTC | Sonatype OSS Index |
-| **Trivy** | `security-trivy.yml` | On push/PR | Multiple sources |
-| **gosec** | `security-gosec.yml` | On push/PR | Static analysis |
+| **Trivy** | `security-trivy.yml` | Daily 3 AM UTC; push/PR on all branches | Multiple sources |
+| **gosec** | `security-gosec.yml` | Daily 2:30 AM UTC; push/PR on all branches | Static analysis |
+
+Trivy and govulncheck share branch selection, scan-result verification, and
+branch-specific issue reporting. See
+[VULNERABILITY-MANAGEMENT.md](VULNERABILITY-MANAGEMENT.md) for branch coverage,
+result handling, Renovate security-fix PRs, and triage guidance.
 
 ### Running Scans Locally
 
