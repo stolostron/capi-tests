@@ -216,6 +216,13 @@ Example: `CLUSTER_DEPLOYMENT_TIMEOUT=90m make _deploy-crs` (sets Go step timeout
    export AZURE_SUBSCRIPTION_ID=<your-subscription-id>
    ```
 
+   If you already have an Azure CLI session and want the test suite to avoid
+   running `az login`, set `SKIP_AZURE_LOGIN=true` before starting it. The suite
+   will use the existing CLI session and fail if it is not authenticated:
+   ```bash
+   SKIP_AZURE_LOGIN=true ./test.sh aro
+   ```
+
 3. **Run check dependencies tests**:
    ```bash
    make test
