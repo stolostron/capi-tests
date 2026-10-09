@@ -10,195 +10,214 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
-  govulncheck:
-    name: Go Vulnerability Check
+  resolve_branches:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     permissions:
       contents: read
-      security-events: write
-      issues: write
+    outputs:
+      branches: ${{ steps.set-branches.outputs.branches }}
+    steps:
+      - name: Checkout workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve branches to scan
+        id: set-branches
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: bash .github/scripts/resolve-security-scan-branches.sh
+
+  govulncheck:
+    needs: resolve_branches
+    name: govulncheck (${{ matrix.branch }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ${{ fromJSON(needs.resolve_branches.outputs.branches) }}
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Scheduled runs inspect each maintained branch. Pushes and PRs scan
+          # their pushed branch or merge commit so proposed changes are covered.
+          ref: ${{ github.event_name == 'schedule' && matrix.branch || github.ref }}
 
-    - name: Set up Go
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      with:
-        go-version-file: 'go.mod'
-        cache: true
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
 
-    - name: Install govulncheck
-      # Pin to specific version to prevent supply chain attacks (update manually or via Renovate)
-      run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
-    - name: Run govulncheck
-      run: |
-        echo "# govulncheck Security Scan Results" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "Scanning Go code and dependencies for known vulnerabilities..." >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
+      # govulncheck exits non-zero both for reachable vulnerabilities and for
+      # scan failures. Capture the output and status so those cases can be
+      # reported separately after the issue and artifact steps have run.
+      - name: Run govulncheck
+        id: scan
+        run: |
+          set +e
+          set -o pipefail
+          govulncheck ./... 2>&1 | tee govulncheck-output.txt
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
 
-        # Run govulncheck and capture output
-        if govulncheck ./... 2>&1 | tee govulncheck-output.txt; then
-          echo "## ✅ No vulnerabilities found!" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "All Go dependencies are free from known vulnerabilities." >> $GITHUB_STEP_SUMMARY
-        else
-          echo "## ❌ Vulnerabilities detected!" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat govulncheck-output.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          exit 1
-        fi
+      - name: Classify result
+        if: always()
+        id: classify
+        env:
+          STATUS: ${{ steps.scan.outputs.status }}
+        run: |
+          REACHABLE=$(grep -oE 'Your code is affected by [0-9]+ vulnerabilit' govulncheck-output.txt 2>/dev/null \
+            | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}') || REACHABLE=0
+          COMPLETED=$(grep -cE 'Your code is affected by [0-9]+ vulnerabilit' govulncheck-output.txt 2>/dev/null) || COMPLETED=0
 
-    - name: Upload scan results
-      if: always()
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: govulncheck-results
-        path: govulncheck-output.txt
-        retention-days: 30
+          if [ "${STATUS:-1}" = "0" ] && [ -s govulncheck-output.txt ]; then
+            OUTCOME=clean
+          elif [ "$COMPLETED" -gt 0 ] && [ "$REACHABLE" -gt 0 ]; then
+            OUTCOME=vulnerable
+          else
+            OUTCOME=error
+          fi
 
-    - name: Create GitHub issue on vulnerability
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        SERVER_URL: ${{ github.server_url }}
-        REPO: ${{ github.repository }}
-        RUN_ID: ${{ github.run_id }}
-        REF_NAME: ${{ github.ref_name }}
-        SHA: ${{ github.sha }}
-        EVENT_NAME: ${{ github.event_name }}
-      run: |
-        # Search for existing open issues with security labels (one issue per scanner type)
-        EXISTING_ISSUE=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label "security" --label "govulncheck" --json number --jq ".[0].number" 2>/dev/null || echo "")
+          echo "outcome=$OUTCOME" >> "$GITHUB_OUTPUT"
+          echo "reachable=$REACHABLE" >> "$GITHUB_OUTPUT"
 
-        if [ -n "$EXISTING_ISSUE" ]; then
-          echo "Existing issue found: #$EXISTING_ISSUE"
-
-          # Build comment body using echo statements to avoid YAML heredoc issues
+      - name: Generate summary
+        if: always()
+        env:
+          BRANCH: ${{ matrix.branch }}
+          OUTCOME: ${{ steps.classify.outputs.outcome }}
+          REACHABLE: ${{ steps.classify.outputs.reachable }}
+        run: |
           {
-            echo "## 🔄 Vulnerability Still Present"
-            echo ""
-            echo "**New Detection**: ${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}"
-            echo "**Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-            echo "**Branch**: ${REF_NAME}"
-            echo "**Commit**: ${SHA}"
-            echo ""
-            echo "### Latest Scan Output"
-            echo ""
-            echo "<details>"
-            echo "<summary>Click to expand scan results</summary>"
-            echo ""
-            echo "\`\`\`"
-            cat govulncheck-output.txt 2>/dev/null | head -100 || echo "See workflow logs for full details"
-            echo "\`\`\`"
-            echo ""
-            echo "</details>"
-            echo ""
-            echo "**Action Required**: The vulnerabilities listed in this issue are still present. Please prioritize remediation."
-          } > comment_body.md
-
-          gh issue comment "$EXISTING_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file comment_body.md
-        else
-          echo "Creating new issue..."
-
-          # Count vulnerabilities if possible
-          VULN_COUNT=$(grep -c "Vulnerability" govulncheck-output.txt 2>/dev/null || echo "unknown")
-
-          # Build issue body using echo statements to avoid YAML heredoc issues
-          {
-            echo "# 🚨 Security Alert: Go Vulnerabilities Detected"
-            echo ""
-            echo "## Overview"
-            echo ""
-            echo "The **govulncheck** security scanner has detected vulnerabilities in Go dependencies."
-            echo ""
-            echo "| Field | Value |"
-            echo "|-------|-------|"
-            echo "| **Scanner** | govulncheck (Official Go vulnerability checker) |"
-            echo "| **Status** | ❌ FAILED |"
-            echo "| **Vulnerabilities** | $VULN_COUNT |"
-            echo "| **Workflow Run** | [${RUN_ID}](${SERVER_URL}/${REPO}/actions/runs/${RUN_ID}) |"
-            echo "| **Branch** | \`${REF_NAME}\` |"
-            echo "| **Commit** | \`${SHA}\` |"
-            echo "| **Triggered By** | ${EVENT_NAME} |"
-            echo "| **Date** | $(date -u +"%Y-%m-%d %H:%M:%S UTC") |"
-            echo ""
-            echo "## 📋 Vulnerability Details"
-            echo ""
+            echo "# govulncheck (`$BRANCH`)"
+            echo
+            case "$OUTCOME" in
+              clean)
+                echo "## ✅ No reachable vulnerabilities"
+                echo
+                echo "govulncheck found no vulnerable symbols reachable from this code."
+                ;;
+              vulnerable)
+                echo "## ❌ $REACHABLE reachable vulnerabilities"
+                echo
+                echo "The code reaches vulnerable symbols. Treat these as high-priority findings."
+                ;;
+              *)
+                echo "## ⚠️ Scan did not complete"
+                echo
+                echo "govulncheck failed before it could report a trustworthy result. This is a scan failure, not a vulnerability finding."
+                ;;
+            esac
+            echo
             echo "<details open>"
-            echo "<summary><b>Scan Results (Click to collapse)</b></summary>"
-            echo ""
-            echo "\`\`\`"
-            cat govulncheck-output.txt 2>/dev/null || echo "See workflow run logs for complete details"
-            echo "\`\`\`"
-            echo ""
+            echo "<summary><b>govulncheck output</b></summary>"
+            echo
+            echo '```'
+            head -300 govulncheck-output.txt 2>/dev/null || echo "No output captured."
+            echo '```'
+            echo
             echo "</details>"
-            echo ""
-            echo "## 🔧 Remediation Steps"
-            echo ""
-            echo "### 1️⃣ Review Vulnerabilities"
-            echo "- Examine the scan output above"
-            echo "- Check severity levels and affected packages"
-            echo "- Review [Go Vulnerability Database](https://vuln.go.dev/) for details"
-            echo ""
-            echo "### 2️⃣ Update Dependencies"
-            echo "\`\`\`bash"
-            echo "# Update specific vulnerable package"
-            echo "go get -u <vulnerable-package>@<patched-version>"
-            echo ""
-            echo "# Or update all dependencies (careful - test thoroughly)"
-            echo "go get -u ./..."
-            echo "go mod tidy"
-            echo "\`\`\`"
-            echo ""
-            echo "### 3️⃣ Test Changes"
-            echo "\`\`\`bash"
-            echo "# Run tests"
-            echo "make test"
-            echo ""
-            echo "# Run all security scans"
-            echo "make test-all"
-            echo "\`\`\`"
-            echo ""
-            echo "### 4️⃣ Verify Fix"
-            echo "- Push changes to a branch"
-            echo "- The govulncheck workflow will run automatically"
-            echo "- Verify it passes before merging"
-            echo ""
-            echo "## 📚 Resources"
-            echo ""
-            echo "- [Go Vulnerability Database](https://vuln.go.dev/)"
-            echo "- [govulncheck Documentation](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck)"
-            echo "- [Workflow File](${SERVER_URL}/${REPO}/blob/main/.github/workflows/security-govulncheck.yml)"
-            echo ""
-            echo "## 🔔 Next Steps"
-            echo ""
-            echo "1. **Assign** this issue to a developer"
-            echo "2. **Prioritize** based on vulnerability severity"
-            echo "3. **Update** dependencies as outlined above"
-            echo "4. **Test** thoroughly to ensure no regressions"
-            echo "5. **Close** this issue once the workflow passes"
-            echo ""
-            echo "---"
-            echo ""
-            echo "*🤖 This issue was automatically created by the [govulncheck security workflow](${SERVER_URL}/${REPO}/actions/workflows/security-govulncheck.yml)*"
-          } > issue_body.md
+          } >> "$GITHUB_STEP_SUMMARY"
 
-          # Create issue with security labels
-          gh issue create \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "🚨 [govulncheck] Vulnerabilities detected on ${REF_NAME}" \
-            --label "security" \
-            --label "govulncheck" \
-            --body-file issue_body.md || \
-          echo "Failed to create issue, but continuing workflow"
-        fi
+      - name: Save scan result
+        if: always()
+        env:
+          BRANCH: ${{ matrix.branch }}
+          OUTCOME: ${{ steps.classify.outputs.outcome }}
+          REACHABLE: ${{ steps.classify.outputs.reachable }}
+        run: |
+          jq -n --arg branch "$BRANCH" --arg outcome "$OUTCOME" --arg reachable "${REACHABLE:-0}" \
+            '{branch:$branch,outcome:$outcome,reachable:$reachable}' > scan-result.json
+
+      - name: Upload govulncheck results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: govulncheck-results-${{ strategy.job-index }}
+          path: |
+            govulncheck-output.txt
+            scan-result.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Fail if govulncheck found vulnerabilities or could not complete
+        if: always() && steps.classify.outputs.outcome != 'clean'
+        run: exit 1
+
+  attest-results:
+    needs: [resolve_branches, govulncheck]
+    if: always() && !cancelled() && github.event_name != 'pull_request'
+    name: Attest govulncheck results (${{ matrix.branch }})
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ${{ fromJSON(needs.resolve_branches.outputs.branches) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download scan results
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: govulncheck-results-${{ strategy.job-index }}
+          path: scan-results
+
+      - name: Bundle scan results
+        run: tar -czf govulncheck-results.tar.gz -C scan-results govulncheck-output.txt scan-result.json
+
+      - name: Attest scan results
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: govulncheck-results.tar.gz
+
+      - name: Upload attested results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: govulncheck-attested-${{ strategy.job-index }}
+          path: govulncheck-results.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  create-issues:
+    needs: [resolve_branches, govulncheck, attest-results]
+    if: always() && !cancelled() && github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      attestations: read
+      issues: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download attested scan results
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: govulncheck-attested-*
+          path: govuln-artifacts
+          merge-multiple: false
+        continue-on-error: true
+
+      - name: Create or update issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+          RUN_ID: ${{ github.run_id }}
+          EXPECTED_BRANCHES: ${{ needs.resolve_branches.outputs.branches }}
+        run: bash .github/scripts/report-govulncheck-results.sh

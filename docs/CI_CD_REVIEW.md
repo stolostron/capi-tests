@@ -37,6 +37,10 @@ This document provides a comprehensive review of the GitHub Actions workflows en
 | `auto-assign-pr.yml` | Auto-assign PRs | Assign PRs to RadekCap |
 | `auto-delete-branch.yml` | Auto-delete Branches | Delete merged branches |
 
+Trivy and govulncheck share branch resolution and fail-closed, branch-specific
+reporting. See [VULNERABILITY-MANAGEMENT.md](VULNERABILITY-MANAGEMENT.md) for
+scan coverage and result triage.
+
 ---
 
 ## Workflow Coverage
@@ -148,7 +152,7 @@ All workflows now specify explicit permissions at the workflow level:
 | Test Setup | `contents: read, issues: write` | For auto issue creation |
 | Kind Cluster | `contents: read, issues: write` | For auto issue creation |
 | Full Test Suite | `contents: read, issues: write` | For auto issue creation |
-| Security workflows | `contents: read, security-events: write, issues: write` | For SARIF + issues |
+| Security workflows | `contents: read`; job-scoped `security-events`, `attestations`, or `issues` permissions | Scan, attestation, and issue-reporting jobs receive separate permissions |
 | Auto-assign Issue | `issues: write` | For assignment |
 | Auto-assign PR | `pull-requests: write, issues: write` | For assignment |
 | Auto-delete Branch | `contents: write` | For branch deletion |
