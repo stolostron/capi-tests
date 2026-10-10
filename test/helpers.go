@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -4049,6 +4050,14 @@ func HasServicePrincipalCredentials() bool {
 func ValidateServicePrincipalCredentials(t *testing.T) error {
 	t.Helper()
 
+	if azureLoginDisabled() {
+		if _, err := RunCommandQuiet(t, "az", "account", "show"); err != nil {
+			return fmt.Errorf("SKIP_AZURE_LOGIN is enabled but Azure CLI has no active session; authenticate with `az login` before running the tests: %w", err)
+		}
+		t.Log("SKIP_AZURE_LOGIN is enabled; using the existing Azure CLI session without validating service principal credentials")
+		return nil
+	}
+
 	clientID := os.Getenv("AZURE_CLIENT_ID")
 	clientSecret := os.Getenv("AZURE_CLIENT_SECRET")
 	tenantID := os.Getenv("AZURE_TENANT_ID")
@@ -4115,6 +4124,9 @@ func EnsureAzureCliLogin(t *testing.T) error {
 	t.Helper()
 
 	if _, err := RunCommandQuiet(t, "az", "account", "show"); err != nil {
+		if azureLoginDisabled() {
+			return fmt.Errorf("SKIP_AZURE_LOGIN is enabled but Azure CLI has no active session; authenticate with `az login` before running this operation: %w", err)
+		}
 		if !HasServicePrincipalCredentials() {
 			return fmt.Errorf("azure CLI not logged in and no service principal credentials available (need AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)")
 		}
@@ -4156,6 +4168,13 @@ func EnsureAzureCliLogin(t *testing.T) error {
 
 	t.Log("Azure CLI authenticated and subscription selected")
 	return nil
+}
+
+// azureLoginDisabled reports whether callers must avoid invoking `az login`.
+// Invalid values are treated as false so the flag is opt-in only.
+func azureLoginDisabled() bool {
+	disabled, err := strconv.ParseBool(strings.TrimSpace(os.Getenv("SKIP_AZURE_LOGIN")))
+	return err == nil && disabled
 }
 
 // DeletionResourceStatus holds the status of resources being deleted.
