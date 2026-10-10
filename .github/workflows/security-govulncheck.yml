@@ -102,7 +102,7 @@ jobs:
           REACHABLE: ${{ steps.classify.outputs.reachable }}
         run: |
           {
-            echo "# govulncheck (`$BRANCH`)"
+            echo "# govulncheck (\`$BRANCH\`)"
             echo
             case "$OUTCOME" in
               clean)
