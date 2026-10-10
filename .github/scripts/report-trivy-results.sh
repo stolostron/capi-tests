@@ -75,7 +75,7 @@ for summary_file in "${summary_files[@]}"; do
   if [[ "$outcome" == clean ]]; then
     if [[ -n "$existing_issue" ]]; then
       gh issue comment "$existing_issue" --repo "$repo" --body \
-        "✅ Trivy is now clean on `$branch` as of [run $run_id]($server_url/$repo/actions/runs/$run_id). No findings remain. Safe to close once reviewed." \
+        "✅ Trivy is now clean on \`$branch\` as of [run $run_id]($server_url/$repo/actions/runs/$run_id). No findings remain. Safe to close once reviewed." \
         || fail "Could not comment on resolved Trivy issue #$existing_issue for '$branch'."
     fi
     continue
@@ -103,7 +103,7 @@ for summary_file in "${summary_files[@]}"; do
     echo "| Field | Value |"
     echo "|-------|-------|"
     echo "| **Scanner** | Trivy |"
-    echo "| **Branch** | `$branch` |"
+    echo "| **Branch** | \`$branch\` |"
     echo "| **Findings** | $total |"
     echo "| **Workflow run** | [${run_id}](${server_url}/${repo}/actions/runs/${run_id}) |"
     echo "| **Date** | $(date -u +"%Y-%m-%d %H:%M:%S UTC") |"

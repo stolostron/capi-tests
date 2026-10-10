@@ -36,11 +36,16 @@ ensure_label() {
   fi
 }
 
-for results_dir in govuln-artifacts/govulncheck-attested-*; do
+bundle_files=()
+if [[ -d govuln-artifacts ]]; then
+  mapfile -d '' -t bundle_files < <(find govuln-artifacts -type f -name govulncheck-results.tar.gz -print0)
+fi
+
+for bundle in "${bundle_files[@]}"; do
   processed=$((processed + 1))
-  bundle="$results_dir/govulncheck-results.tar.gz"
+  results_dir="${bundle%/govulncheck-results.tar.gz}"
   if [[ ! -s "$bundle" ]]; then
-    fail "Attested govulncheck bundle is missing for $results_dir."
+    fail "Attested govulncheck bundle is empty: $bundle."
     continue
   fi
   if ! gh attestation verify "$bundle" --repo "$repo" \
@@ -90,7 +95,7 @@ for results_dir in govuln-artifacts/govulncheck-attested-*; do
   if [[ "$outcome" == clean ]]; then
     if [[ -n "$existing_issue" ]]; then
       gh issue comment "$existing_issue" --repo "$repo" --body \
-        "✅ govulncheck is now clean on `$branch` as of [run $run_id]($server_url/$repo/actions/runs/$run_id). No reachable vulnerabilities remain. Safe to close once reviewed." \
+        "✅ govulncheck is now clean on \`$branch\` as of [run $run_id]($server_url/$repo/actions/runs/$run_id). No reachable vulnerabilities remain. Safe to close once reviewed." \
         || fail "Could not comment on resolved govulncheck issue #$existing_issue for '$branch'."
     fi
     continue
@@ -118,7 +123,7 @@ for results_dir in govuln-artifacts/govulncheck-attested-*; do
     echo "| Field | Value |"
     echo "|-------|-------|"
     echo "| **Scanner** | govulncheck |"
-    echo "| **Branch** | `$branch` |"
+    echo "| **Branch** | \`$branch\` |"
     echo "| **Reachable vulnerabilities** | $reachable |"
     echo "| **Workflow run** | [${run_id}](${server_url}/${repo}/actions/runs/${run_id}) |"
     echo "| **Date** | $(date -u +"%Y-%m-%d %H:%M:%S UTC") |"
@@ -132,7 +137,7 @@ for results_dir in govuln-artifacts/govulncheck-attested-*; do
     echo
     echo "</details>"
     echo
-    echo "Reproduce locally with `make verify-govulncheck`. See [vulnerability management](${server_url}/${repo}/blob/main/docs/VULNERABILITY-MANAGEMENT.md)."
+    echo "Reproduce locally with \`go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...\`. See [vulnerability management](${server_url}/${repo}/blob/main/docs/VULNERABILITY-MANAGEMENT.md)."
     echo
     echo "*Automatically reported by the govulncheck workflow. When a later scan is clean, this issue will be updated for human review and can then be closed.*"
   } > issue_body.md
