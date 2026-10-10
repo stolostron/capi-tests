@@ -36,11 +36,16 @@ ensure_label() {
   fi
 }
 
-for results_dir in trivy-artifacts/trivy-results-*; do
+summary_files=()
+if [[ -d trivy-artifacts ]]; then
+  mapfile -d '' -t summary_files < <(find trivy-artifacts -type f -name scan-summary.json -print0)
+fi
+
+for summary_file in "${summary_files[@]}"; do
   processed=$((processed + 1))
-  summary_file="$results_dir/scan-summary.json"
+  results_dir="${summary_file%/scan-summary.json}"
   if [[ ! -s "$summary_file" ]]; then
-    fail "Trivy summary is missing for $results_dir."
+    fail "Trivy summary is empty: $summary_file."
     continue
   fi
   if ! jq -e 'type == "object" and (.branch | type == "string" and length > 0) and (.outcome | type == "string") and (.total | type == "number" and floor == .) and (.counts | type == "object")' "$summary_file" >/dev/null; then
