@@ -25,7 +25,7 @@ Thank you for your interest in contributing to the CAPI Test Suite! This documen
 
 Before contributing, ensure you have:
 
-- **Go 1.21 or later** (`go version`)
+- **Go 1.26 or later** (`go version`)
 - **Docker or Podman** for container operations
 - **Azure CLI** with valid subscription (`az login`)
 - **Required CLI tools**: kind, helm, kubectl, oc, clusterctl
