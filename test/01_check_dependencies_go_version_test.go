@@ -19,7 +19,7 @@ func TestParseGoVersion(t *testing.T) {
 		{name: "go version output", input: "go1.26.9 linux/amd64", want: goVersion{major: 1, minor: 26, patch: 9}},
 		{name: "full go version output", input: "go version go1.26.9 linux/amd64", want: goVersion{major: 1, minor: 26, patch: 9}},
 		{name: "go version with build suffix", input: "go1.26.9-X:nodwarf5 linux/amd64", want: goVersion{major: 1, minor: 26, patch: 9}},
-		{name: "go.mod directive", input: "1.24", want: goVersion{major: 1, minor: 24}},
+		{name: "go.mod directive", input: "1.26.0", want: goVersion{major: 1, minor: 26}},
 		{name: "missing minor version", input: "go1", wantErr: true},
 		{name: "invalid version", input: "not-a-version", wantErr: true},
 	}
@@ -38,11 +38,11 @@ func TestParseGoVersion(t *testing.T) {
 }
 
 func TestMinimumGoVersionFromGoMod(t *testing.T) {
-	got, err := minimumGoVersionFromGoMod("module example.com/test\n\ngo 1.24.2\n")
+	got, err := minimumGoVersionFromGoMod("module example.com/test\n\ngo 1.26.0\n")
 	if err != nil {
 		t.Fatalf("minimumGoVersionFromGoMod() error = %v", err)
 	}
-	want := goVersion{major: 1, minor: 24, patch: 2}
+	want := goVersion{major: 1, minor: 26}
 	if got != want {
 		t.Errorf("minimumGoVersionFromGoMod() = %+v, want %+v", got, want)
 	}
@@ -53,15 +53,15 @@ func TestMinimumGoVersionFromGoMod(t *testing.T) {
 }
 
 func TestGoVersionMeetsMinimum(t *testing.T) {
-	minimum := goVersion{major: 1, minor: 24}
+	minimum := goVersion{major: 1, minor: 26}
 	tests := []struct {
 		name    string
 		current goVersion
 		want    bool
 	}{
-		{name: "below minimum", current: goVersion{major: 1, minor: 23}, want: false},
+		{name: "below minimum", current: goVersion{major: 1, minor: 25}, want: false},
 		{name: "equal to minimum", current: minimum, want: true},
-		{name: "above minimum", current: goVersion{major: 1, minor: 25}, want: true},
+		{name: "above minimum", current: goVersion{major: 1, minor: 27}, want: true},
 		{name: "newer major", current: goVersion{major: 2}, want: true},
 	}
 
