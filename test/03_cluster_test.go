@@ -327,6 +327,9 @@ func TestExternalCluster_02_EnsureMCEComponents(t *testing.T) {
 // For MCE mode (CLUSTER_MODE=mce): skips this test (controllers are pre-installed, validated by TestExternalCluster tests).
 func TestKindCluster_01_ClusterReady(t *testing.T) {
 	config := NewTestConfig()
+	preDeploymentSummary := FormatPreDeploymentSummary(config)
+	PrintToTTY("%s", preDeploymentSummary)
+	t.Log(preDeploymentSummary)
 
 	// Skip if CLUSTER_MODE=mce (MCE cluster - controllers are pre-installed)
 	// Note: MCE mode sets USE_KUBECONFIG, so IsExternalCluster() would also be true,
@@ -375,6 +378,12 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 	}
 
 	if needsDeployment {
+		defer func() {
+			if t.Failed() {
+				printManagementClusterFailureDiagnostics(t, config)
+			}
+		}()
+
 		if config.IsExternalCluster() {
 			PrintToTTY("Deploying controllers to external cluster\n")
 		} else {
@@ -548,6 +557,71 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 	} else {
 		PrintToTTY("📝 Deployment state saved to %s\n", deploymentStateFilePath())
 		t.Logf("Deployment state saved to %s", deploymentStateFilePath())
+	}
+}
+
+type managementClusterFailureDiagnostic struct {
+	name string
+	args []string
+}
+
+func managementClusterFailureDiagnosticCommands(context string, namespaces []string) []managementClusterFailureDiagnostic {
+	diagnostics := make([]managementClusterFailureDiagnostic, 0, len(namespaces)+1)
+	seenNamespaces := make(map[string]struct{}, len(namespaces))
+	for _, namespace := range namespaces {
+		if namespace == "" {
+			continue
+		}
+		if _, seen := seenNamespaces[namespace]; seen {
+			continue
+		}
+		seenNamespaces[namespace] = struct{}{}
+		diagnostics = append(diagnostics, managementClusterFailureDiagnostic{
+			name: "Recent events in " + namespace,
+			args: []string{"--context", context, "-n", namespace, "get", "events", "--sort-by=.lastTimestamp"},
+		})
+	}
+
+	diagnostics = append(diagnostics, managementClusterFailureDiagnostic{
+		name: "Configured images in all Deployments",
+		args: []string{
+			"--context", context,
+			"get", "deployments", "--all-namespaces", "-o",
+			`jsonpath={range .items[*]}{.metadata.namespace}/{.metadata.name}{"\t"}{range .spec.template.spec.initContainers[*]}{.image}{" "}{end}{range .spec.template.spec.containers[*]}{.image}{" "}{end}{"\n"}{end}`,
+		},
+	})
+
+	return diagnostics
+}
+
+func printManagementClusterFailureDiagnostics(t *testing.T, config *TestConfig) {
+	t.Helper()
+
+	context := config.GetKubeContext()
+	PrintToTTY("\n=== Management cluster failure diagnostics (context: %s) ===\n", context)
+	if context == "" {
+		PrintToTTY("⚠️  Could not determine the management-cluster context; skipping kubectl diagnostics\n")
+		return
+	}
+
+	var controllerNamespaces []string
+	for _, controller := range config.AllControllers() {
+		controllerNamespaces = append(controllerNamespaces, controller.Namespace)
+	}
+
+	diagnostics := managementClusterFailureDiagnosticCommands(context, controllerNamespaces)
+
+	for _, diagnostic := range diagnostics {
+		PrintToTTY("\n--- %s ---\n", diagnostic.name)
+		output, err := RunCommand(t, "kubectl", diagnostic.args...)
+		if output != "" {
+			PrintToTTY("%s\n", output)
+			t.Logf("%s:\n%s", diagnostic.name, output)
+		}
+		if err != nil {
+			PrintToTTY("⚠️  Failed to collect %s: %v\n", diagnostic.name, err)
+			t.Logf("Failed to collect %s: %v", diagnostic.name, err)
+		}
 	}
 }
 
