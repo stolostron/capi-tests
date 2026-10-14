@@ -3052,40 +3052,7 @@ func GetComponentVersions(t *testing.T, kubeContext string) []ComponentVersion {
 // Pass nil for config to omit cluster and Azure settings.
 func FormatComponentVersions(versions []ComponentVersion, config *TestConfig) string {
 	var result strings.Builder
-	result.WriteString("\n=== TESTED CONFIGURATION ===\n")
-
-	if config != nil {
-		// Local Kind cluster (management cluster)
-		result.WriteString("\nLocal Kind Cluster:\n")
-		fmt.Fprintf(&result, "  Management Cluster: %s\n", config.ManagementClusterName)
-
-		// Azure ARO cluster (workload cluster)
-		result.WriteString("\nAzure ARO Cluster:\n")
-		fmt.Fprintf(&result, "  Workload Cluster:   %s\n", config.WorkloadClusterName)
-		fmt.Fprintf(&result, "  Region:             %s\n", config.Region)
-		if config.AzureSubscriptionName != "" {
-			fmt.Fprintf(&result, "  Subscription:       %s\n", config.AzureSubscriptionName)
-		}
-		fmt.Fprintf(&result, "  Resource Group:     %s\n", config.ResourceGroupName)
-		fmt.Fprintf(&result, "  OpenShift Version:  %s\n", config.OCPVersion)
-		fmt.Fprintf(&result, "  MP OCP Version:     %s\n", config.OCPVersionMP)
-	}
-
-	// Used repositories
-	// First try in-memory registry (works when tests run in same process)
-	repos := GetClonedRepositories()
-	if len(repos) > 0 {
-		result.WriteString("\n=== USED REPOSITORIES ===\n\n")
-		for _, repo := range repos {
-			fmt.Fprintf(&result, "- %s\n", repo.URL)
-			fmt.Fprintf(&result, "  Branch: %s\n", repo.Branch)
-		}
-	} else if config != nil && config.RepoURL != "" {
-		// Fallback to config values (works across separate test processes)
-		result.WriteString("\n=== USED REPOSITORIES ===\n\n")
-		fmt.Fprintf(&result, "- %s\n", config.RepoURL)
-		fmt.Fprintf(&result, "  Branch: %s\n", config.RepoBranch)
-	}
+	writeConfigurationAndRepositories(&result, config, "TESTED CONFIGURATION")
 
 	// Component versions
 	result.WriteString("\n=== COMPONENT VERSIONS ===\n\n")
@@ -3096,6 +3063,53 @@ func FormatComponentVersions(versions []ComponentVersion, config *TestConfig) st
 	}
 
 	return result.String()
+}
+
+// FormatPreDeploymentSummary formats configuration that is available before
+// management-cluster deployment. Controller versions and images are resolved
+// from live Deployments later, so they remain in the final component summary.
+func FormatPreDeploymentSummary(config *TestConfig) string {
+	var result strings.Builder
+	writeConfigurationAndRepositories(&result, config, "PRE-DEPLOYMENT CONFIGURATION")
+	result.WriteString("\nComponent versions and images: reported after controller deployment.\n")
+	return result.String()
+}
+
+func writeConfigurationAndRepositories(result *strings.Builder, config *TestConfig, heading string) {
+	fmt.Fprintf(result, "\n=== %s ===\n", heading)
+
+	if config != nil {
+		// Local Kind cluster (management cluster)
+		result.WriteString("\nLocal Kind Cluster:\n")
+		fmt.Fprintf(result, "  Management Cluster: %s\n", config.ManagementClusterName)
+
+		// Azure ARO cluster (workload cluster)
+		result.WriteString("\nAzure ARO Cluster:\n")
+		fmt.Fprintf(result, "  Workload Cluster:   %s\n", config.WorkloadClusterName)
+		fmt.Fprintf(result, "  Region:             %s\n", config.Region)
+		if config.AzureSubscriptionName != "" {
+			fmt.Fprintf(result, "  Subscription:       %s\n", config.AzureSubscriptionName)
+		}
+		fmt.Fprintf(result, "  Resource Group:     %s\n", config.ResourceGroupName)
+		fmt.Fprintf(result, "  OpenShift Version:  %s\n", config.OCPVersion)
+		fmt.Fprintf(result, "  MP OCP Version:     %s\n", config.OCPVersionMP)
+	}
+
+	// Used repositories
+	// First try in-memory registry (works when tests run in same process)
+	repos := GetClonedRepositories()
+	if len(repos) > 0 {
+		result.WriteString("\n=== USED REPOSITORIES ===\n\n")
+		for _, repo := range repos {
+			fmt.Fprintf(result, "- %s\n", repo.URL)
+			fmt.Fprintf(result, "  Branch: %s\n", repo.Branch)
+		}
+	} else if config != nil && config.RepoURL != "" {
+		// Fallback to config values (works across separate test processes)
+		result.WriteString("\n=== USED REPOSITORIES ===\n\n")
+		fmt.Fprintf(result, "- %s\n", config.RepoURL)
+		fmt.Fprintf(result, "  Branch: %s\n", config.RepoBranch)
+	}
 }
 
 // ValidateYAMLFile validates that a file contains valid YAML.
