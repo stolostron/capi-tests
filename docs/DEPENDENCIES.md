@@ -20,7 +20,7 @@ The test suite has two categories of dependencies:
 
 ### Go Version
 
-The project requires **Go 1.22** or later, as specified in `go.mod`.
+The project requires **Go 1.26.1** or later, as specified in `go.mod`. Go 1.26.1 includes the standard-library security fix for GO-2026-4602.
 
 ### Dependency Verification
 
@@ -62,7 +62,7 @@ git commit -m "deps(go): add github.com/example/package v1.2.3"
 
 | Tool | Minimum Version | CI Version | Purpose |
 |------|----------------|------------|---------|
-| **Go** | 1.22 | from go.mod | Running tests |
+| **Go** | 1.26.1 | from go.mod | Running tests |
 | **Docker/Podman** | 20.10+ | latest | Container runtime |
 | **Kind** | 0.20.0 | 0.20.0 | Management cluster |
 | **Azure CLI** | 2.50.0 | latest | Azure authentication |
