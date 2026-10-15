@@ -4,12 +4,9 @@ name: Full Cluster Deployment (ARO)(main)
 # This workflow deploys a Kind management cluster and provisions an ARO HCP workload cluster.
 #
 # Triggers:
+#   - Nightly at 2:00 AM UTC
 #   - Manual dispatch
 #   - Reusable workflow call (used by branch-specific caller workflows)
-#
-# Nightly scheduling and no-change detection are handled by
-# schedule-workload-cluster-aro.yml, which dispatches this workflow only when
-# the repository has changed since the last successful deployment.
 #
 # Requires:
 #   - Environment (aro-stage) with:
@@ -21,6 +18,8 @@ name: Full Cluster Deployment (ARO)(main)
 #   - management-cluster-aro.yml: Quick validation, Kind + controllers only (no workload cluster)
 #   - cluster-aro.yml (this file): Full deployment including workload cluster provisioning
 on:
+  schedule:
+    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
       environment:
