@@ -4,7 +4,7 @@ name: Full Cluster Deployment (ARO)(main)
 # This workflow deploys a Kind management cluster and provisions an ARO HCP workload cluster.
 #
 # Triggers:
-#   - Nightly at 2:00 AM UTC
+#   - Nightly at 2:00 AM UTC (skipped if no code changes since last successful run)
 #   - Manual dispatch
 #   - Reusable workflow call (used by branch-specific caller workflows)
 #
@@ -138,8 +138,59 @@ env:
   QUAY_AUTH: ${{ secrets.QUAY_AUTH }}
 
 jobs:
+  check-changes:
+    name: Check for code changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    if: github.event_name != 'schedule' || true
+    outputs:
+      has_changes: ${{ inputs.aro_repo_branch != '' || github.event_name != 'schedule' || steps.check.outputs.has_changes == 'true' }}
+    steps:
+    - name: Check for changes since last successful run
+      id: check
+      if: github.event_name == 'schedule'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        WORKFLOW_FILE: workload-cluster-aro.yml
+        REPO: ${{ github.repository }}
+      run: |
+        LAST_SUCCESS_SHA=$(gh run list \
+          --workflow "$WORKFLOW_FILE" \
+          --repo "$REPO" \
+          --status success \
+          --json headSha \
+          --jq '.[0].headSha // empty' 2>/dev/null || true)
+
+        if [ -z "$LAST_SUCCESS_SHA" ]; then
+          echo "No previous successful run found — running workflow"
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        CURRENT_SHA="${{ github.sha }}"
+        if [ "$LAST_SUCCESS_SHA" = "$CURRENT_SHA" ]; then
+          echo "No new commits since last successful run ($LAST_SUCCESS_SHA)"
+          echo "has_changes=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "New commits detected: $LAST_SUCCESS_SHA..$CURRENT_SHA"
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Explain scheduled no-change skip
+      if: github.event_name == 'schedule' && steps.check.outputs.has_changes == 'false'
+      run: |
+        {
+          echo "## No deployment or cluster tests ran"
+          echo
+          echo "The scheduled run found no commits since the last successful deployment."
+          echo "The Full Cluster job was intentionally skipped; this run is a successful no-change check, not a test result."
+        } >> "$GITHUB_STEP_SUMMARY"
+
   management-cluster:
     name: Full Cluster (${{ inputs.cluster_mode || 'kind' }} → ARO)(${{ inputs.aro_repo_branch || 'main' }})
+    needs: check-changes
+    if: needs.check-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 280  # Maximum selectable phase timeouts (120m each) + Go-step headroom and overhead
     environment: ${{ inputs.environment || 'aro-stage' }}
