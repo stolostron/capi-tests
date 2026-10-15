@@ -539,6 +539,24 @@ jobs:
         FORCE=1 make clean-all
       continue-on-error: true
 
+  report-skipped-deployment:
+    name: Report skipped deployment (ARO)
+    needs: check-changes
+    if: needs.check-changes.outputs.has_changes == 'false'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Mark the scheduled run as unsuccessful
+      run: |
+        {
+          echo "## Full cluster deployment was skipped"
+          echo
+          echo "No code changes were detected since the latest successful run, so no cluster tests ran."
+          echo "This workflow is marked as unsuccessful to avoid reporting an unverified run as green."
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        echo "::error::Full cluster deployment was skipped because no code changes were detected."
+        exit 1
+
   report-failure:
     name: Report failure (ARO)
     needs: management-cluster
