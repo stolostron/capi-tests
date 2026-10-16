@@ -78,7 +78,7 @@ if delay > 60*time.Second {
 | Timeout | Default Value | Configurable | Status | Notes |
 |---------|---------------|--------------|--------|-------|
 | `DeploymentTimeout` | 60m | Yes (`DEPLOYMENT_TIMEOUT`) | ✅ Reasonable | Azure ARO deployment typically 30-45m |
-| `ASOControllerTimeout` | 10m | Yes (`ASO_CONTROLLER_TIMEOUT`) | ✅ Reasonable | ASO has CRD initialization overhead |
+| `ASOControllerTimeout` | 20m | Yes (`ASO_CONTROLLER_TIMEOUT`) | ✅ Reasonable | ASO has CRD initialization overhead |
 | CAPI/CAPZ controller timeout | 10m | No (hardcoded) | ✅ Reasonable | Controller pods typically ready in 2-3m |
 | Webhook timeout | 5m | No (hardcoded) | ✅ Reasonable | Webhooks ready after controllers |
 | Health check timeout | 2m | No (via constant) | ✅ Reasonable | Quick API server check |
@@ -179,7 +179,7 @@ All prerequisite checks are lightweight:
 | Timeout | Default | Min Allowed | Max Allowed | Status |
 |---------|---------|-------------|-------------|--------|
 | `DEPLOYMENT_TIMEOUT` | 60m | 15m | 3h | ✅ Reasonable |
-| `ASO_CONTROLLER_TIMEOUT` | 10m | 2m | 30m | ✅ Reasonable |
+| `ASO_CONTROLLER_TIMEOUT` | 20m | 2m | 30m | ✅ Reasonable |
 
 ### Validation in Check Dependencies
 
