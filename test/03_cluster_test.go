@@ -864,7 +864,11 @@ func TestKindCluster_InfraControllersReady(t *testing.T) {
 			t.Run(ctrl.DisplayName, func(t *testing.T) {
 				timeout := ctrl.Timeout
 				if timeout == 0 {
-					timeout = DefaultControllerTimeout
+					if ctrl.DisplayName == "ASO" {
+						timeout = config.ASOControllerTimeout
+					} else {
+						timeout = DefaultControllerTimeout
+					}
 				}
 				pollInterval := 10 * time.Second
 				startTime := time.Now()

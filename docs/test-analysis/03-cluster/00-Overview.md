@@ -94,7 +94,7 @@ Deploy a Kind cluster with CAPI, CAPZ, and ASO controllers, then verify all cont
 | `USE_KUBECONFIG` | (unset) | Path to external cluster kubeconfig |
 | `MCE_AUTO_ENABLE` | `true` (when USE_KUBECONFIG set) | Auto-enable MCE components |
 | `MCE_ENABLEMENT_TIMEOUT` | `15m` | Timeout for MCE component enablement |
-| `ASO_CONTROLLER_TIMEOUT` | `10m` | Timeout for ASO controller readiness |
+| `ASO_CONTROLLER_TIMEOUT` | `20m` | Timeout for ASO controller readiness |
 
 ---
 

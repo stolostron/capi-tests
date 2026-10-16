@@ -35,7 +35,7 @@ const (
 	// DefaultASOControllerTimeout is the default timeout for ASO controller manager to become ready.
 	// ASO may take longer than other controllers due to its CRD initialization sequence:
 	// scanning existing CRDs, applying missing ones, and restarting to pick up new CRDs.
-	DefaultASOControllerTimeout = 10 * time.Minute
+	DefaultASOControllerTimeout = 20 * time.Minute
 
 	// DefaultMCEEnablementTimeout is the default timeout for waiting after MCE component enablement.
 	// MCE components need time to deploy controllers, pull images, and initialize.
