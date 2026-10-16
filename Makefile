@@ -681,7 +681,13 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 	@echo "Deleting all test resources without prompts..."
 	@echo ""
 	@# Stop management-cluster controllers before cloud cleanup so they cannot recreate resources.
-	@if kind get clusters 2>/dev/null | grep -q "^$(CLEANUP_MANAGEMENT_CLUSTER)$$"; then \
+	@if CLUSTERS=$$(kind get clusters 2>/dev/null); then \
+		:; \
+	else \
+		echo "Failed to list Kind clusters; skipping cloud cleanup."; \
+		exit 1; \
+	fi; \
+	if printf '%s\n' "$$CLUSTERS" | grep -Fxq "$(CLEANUP_MANAGEMENT_CLUSTER)"; then \
 		echo "Deleting management cluster '$(CLEANUP_MANAGEMENT_CLUSTER)'..."; \
 		if ! kind delete cluster --name $(CLEANUP_MANAGEMENT_CLUSTER); then \
 			echo "Failed to delete management cluster; skipping cloud cleanup to avoid resource recreation."; \
