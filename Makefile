@@ -680,17 +680,20 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 	fi
 	@echo "Deleting all test resources without prompts..."
 	@echo ""
-	@# Delete cloud resources (Azure for ARO, AWS for ROSA)
-	@$(MAKE) --no-print-directory _clean-azure-conditional
-	@$(MAKE) --no-print-directory _clean-aws-conditional
-	@echo ""
-	@# Delete management cluster
+	@# Stop management-cluster controllers before cloud cleanup so they cannot recreate resources.
 	@if kind get clusters 2>/dev/null | grep -q "^$(CLEANUP_MANAGEMENT_CLUSTER)$$"; then \
 		echo "Deleting management cluster '$(CLEANUP_MANAGEMENT_CLUSTER)'..."; \
-		kind delete cluster --name $(CLEANUP_MANAGEMENT_CLUSTER) || echo "Failed to delete cluster"; \
+		if ! kind delete cluster --name $(CLEANUP_MANAGEMENT_CLUSTER); then \
+			echo "Failed to delete management cluster; skipping cloud cleanup to avoid resource recreation."; \
+			exit 1; \
+		fi; \
 	else \
 		echo "Management cluster '$(CLEANUP_MANAGEMENT_CLUSTER)' not found (already clean)."; \
 	fi
+	@echo ""
+	@# Delete cloud resources (Azure for ARO, AWS for ROSA)
+	@$(MAKE) --no-print-directory _clean-azure-conditional
+	@$(MAKE) --no-print-directory _clean-aws-conditional
 	@echo ""
 	@# Delete cluster-api-installer directory (use TMPDIR for cross-platform support)
 	@REPO_DIR="$(ARO_REPO_DIR)"; \
