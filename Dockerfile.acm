@@ -1,0 +1,75 @@
+FROM registry.access.redhat.com/ubi9/go-toolset:1.26@sha256:68d6b72cc3eb4c7975b2aca2451f6601c048c095d6b5fc2a310ce3df5ef2ada6
+
+# The Go Toolset image defaults to uid 1001; package installation requires root.
+USER 0
+
+# Tool versions - pin all versions for reproducible builds
+ARG KUBECTL_VERSION=v1.35.2
+ARG HELM_VERSION=v3.16.0
+ARG KIND_VERSION=v0.31.0
+ARG CLUSTERCTL_VERSION=v1.12.8
+# Update CLUSTERCTL_SHA256 when changing CLUSTERCTL_VERSION (no checksum file published by upstream)
+ARG CLUSTERCTL_SHA256=19679fd674731c7f48276b633874834958a62b0e93cb870b87a2df240d6a7ce0
+ARG GOTESTSUM_VERSION=v1.13.0
+
+# Install OpenShift CLI
+ARG OC_VERSION=latest
+RUN curl --retry 3 --retry-delay 5 -fsSL "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/${OC_VERSION}/openshift-client-linux.tar.gz" -o /tmp/oc.tar.gz && \
+    tar xz -C /usr/local/bin -f /tmp/oc.tar.gz oc && \
+    chmod +x /usr/local/bin/oc && \
+    rm -f /tmp/oc.tar.gz
+
+# Install Azure CLI from Microsoft repo and other tools
+RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
+    printf '%s\n' \
+      '[azure-cli]' \
+      'name=Azure CLI' \
+      'baseurl=https://packages.microsoft.com/yumrepos/azure-cli' \
+      'enabled=1' \
+      'gpgcheck=1' \
+      'gpgkey=https://packages.microsoft.com/keys/microsoft.asc' \
+      > /etc/yum.repos.d/azure-cli.repo && \
+    if [ -d /etc/yum.repos.art/ci ]; then \
+      cp /etc/yum.repos.d/azure-cli.repo /etc/yum.repos.art/ci/; \
+    fi && \
+    if [ -d /etc/yum.repos.art/localdev ]; then \
+      cp /etc/yum.repos.d/azure-cli.repo /etc/yum.repos.art/localdev/; \
+    fi && \
+    dnf install -y azure-cli jq gettext libxml2 bc python3-cffi podman && dnf clean all
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# Jenkins uses Docker for kind. Preserve the Docker CLI from the original ACM image.
+RUN dnf install -y dnf-plugins-core && \
+    dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo && \
+    dnf install -y docker-ce-cli && dnf clean all
+
+# Install kubectl (with checksum verification)
+RUN curl --retry 3 --retry-delay 5 -Lo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
+    curl --retry 3 --retry-delay 5 -Lo /tmp/kubectl.sha256 "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256" && \
+    echo "$(cat /tmp/kubectl.sha256)  /usr/local/bin/kubectl" | sha256sum -c && \
+    chmod +x /usr/local/bin/kubectl && rm -f /tmp/kubectl.sha256
+
+# Install helm (with checksum verification)
+RUN curl --retry 3 --retry-delay 5 -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tar.gz && \
+    curl --retry 3 --retry-delay 5 -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz.sha256sum" -o /tmp/helm.sha256sum && \
+    echo "$(awk '{print $1}' /tmp/helm.sha256sum)  /tmp/helm.tar.gz" | sha256sum -c && \
+    tar xz -C /tmp -f /tmp/helm.tar.gz && \
+    mv /tmp/linux-amd64/helm /usr/local/bin/helm && chmod +x /usr/local/bin/helm && \
+    rm -rf /tmp/helm.tar.gz /tmp/helm.sha256sum /tmp/linux-amd64
+
+# Install gotestsum for JUnit XML output
+RUN GOFLAGS='' GOBIN=/usr/local/bin go install gotest.tools/gotestsum@${GOTESTSUM_VERSION}
+
+# Install clusterctl (with checksum verification via hardcoded digest)
+RUN curl --retry 3 --retry-delay 5 -Lo /usr/local/bin/clusterctl "https://github.com/kubernetes-sigs/cluster-api/releases/download/${CLUSTERCTL_VERSION}/clusterctl-linux-amd64" && \
+    echo "${CLUSTERCTL_SHA256}  /usr/local/bin/clusterctl" | sha256sum -c && \
+    chmod +x /usr/local/bin/clusterctl
+
+# Install kind (with checksum verification)
+RUN curl --retry 3 --retry-delay 5 -Lo /usr/local/bin/kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64" && \
+    curl --retry 3 --retry-delay 5 -Lo /tmp/kind.sha256sum "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64.sha256sum" && \
+    echo "$(awk '{print $1}' /tmp/kind.sha256sum)  /usr/local/bin/kind" | sha256sum -c && \
+    chmod +x /usr/local/bin/kind && rm -f /tmp/kind.sha256sum
+
+CMD ["/bin/bash"]
