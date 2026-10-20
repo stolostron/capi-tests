@@ -587,6 +587,30 @@ those defaults.
 | Secret | `MCE_API_PASSWORD` | MCE cluster password (optional, for MCE mode) |
 | Variable | `MCE_API_CA_BUNDLE` | Path to CA bundle for MCE TLS verification (recommended) |
 
+### ACM Jenkins test image
+
+The ACM Jenkins job uses `quay.io/rcap/capi-tests-acm:latest`, built from
+[`Dockerfile.acm`](Dockerfile.acm). This image includes Go, Docker CLI, kind,
+Azure CLI, oc, kubectl, Helm, clusterctl, and gotestsum. Rebuild it when the Go
+version in `go.mod` changes. The Dockerfile pins a public Go Toolset base image
+by digest; update that digest when upgrading Go.
+
+Build and verify a new tag before changing the Jenkins job:
+
+```bash
+IMAGE=quay.io/rcap/capi-tests-acm:go1.26-YYYYMMDD
+podman build --format docker --pull=always -f Dockerfile.acm -t "$IMAGE" .
+podman run --rm "$IMAGE" bash -lc \
+  'go version && docker --version && kind version && oc version --client && kubectl version --client && helm version --short && clusterctl version && gotestsum --version && az version'
+podman push "$IMAGE"
+```
+
+Set the `capz-container` image in
+`stolostron/acmqe-autotest/ci/jenkinsfiles/agent_pod_config/ciAgentPod_capz.yaml`
+to the verified tag and run the Jenkins job. Once that succeeds, publish the
+same image as `quay.io/rcap/capi-tests-acm:latest` if the job should continue
+using `latest`.
+
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
