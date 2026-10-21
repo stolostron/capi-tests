@@ -233,6 +233,21 @@ if [[ "$MP_COUNT" -gt 0 ]]; then
             fi
         fi
 
+        # Null-provisioning uses an ARM mock for ARO resources and a Kind
+        # cluster as the workload API. No CAPI Machine objects are created,
+        # so MachinePool.status.readyReplicas remains zero even after the
+        # mocked AROMachinePool has completed. Treat the requested replicas
+        # as ready only when the mocked infrastructure pool itself is ready.
+        if [[ "${ARO_NULL_PROVISIONING:-}" == "true" \
+            && "$INFRA_MP_KIND" == "AROMachinePool" \
+            && "$INFRA_MP_READY" == "true" \
+            && "$INFRA_MP_PROVISIONING" == "Succeeded" \
+            && "$MP_REPLICAS" -gt 0 \
+            && "$INFRA_MP_REPLICAS" -ge "$MP_REPLICAS" ]]; then
+            MP_READY_REPLICAS="$MP_REPLICAS"
+            MP_AVAILABLE_REPLICAS="$MP_REPLICAS"
+        fi
+
         MP_DATA=$(jq -n \
             --arg name "$MP_NAME" \
             --argjson replicas "$MP_REPLICAS" \
