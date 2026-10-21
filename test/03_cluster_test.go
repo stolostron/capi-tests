@@ -841,6 +841,7 @@ func TestKindCluster_CAPIControllerReady(t *testing.T) {
 
 		if imgErr := CheckPodsForImagePullErrors(t, context, config.CAPINamespace); imgErr != nil {
 			PrintToTTY("\n❌ Image pull errors detected — failing fast\n")
+			printImagePullFailureDiagnostics(t, context, config.CAPINamespace)
 			t.Fatalf("Controller pods have image pull errors in %s namespace.\n%v",
 				config.CAPINamespace, imgErr)
 		}
@@ -934,6 +935,7 @@ func TestKindCluster_InfraControllersReady(t *testing.T) {
 
 					if imgErr := CheckPodsForImagePullErrors(t, context, ctrl.Namespace); imgErr != nil {
 						PrintToTTY("\n❌ Image pull errors detected — failing fast\n")
+						printImagePullFailureDiagnostics(t, context, ctrl.Namespace)
 						t.Fatalf("%s controller pods have image pull errors.\n%v",
 							ctrl.DisplayName, imgErr)
 					}
