@@ -76,13 +76,21 @@ jobs:
           exit-code: '0'
         continue-on-error: true
 
+      - name: Checkout workflow scripts
+        if: always()
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: .workflow-source
+          persist-credentials: false
+
       - name: Classify scan result
         id: summarize
         if: always()
         env:
           BRANCH: ${{ matrix.branch }}
           TRIVY_JSON_OUTCOME: ${{ steps.json.outcome }}
-        run: bash .github/scripts/summarize-trivy.sh
+        run: bash .workflow-source/.github/scripts/summarize-trivy.sh
 
       - name: Upload Trivy results (SARIF)
         if: always() && hashFiles('trivy-results.sarif') != ''
