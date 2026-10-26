@@ -18,7 +18,7 @@
 #   AZURE_SUBSCRIPTION_ID  Azure subscription to scan
 #
 # Exit codes:
-#   0 - No stale resources found
+#   0 - No confirmed stale resources (informational findings may be present)
 #   1 - Stale resources detected
 #   2 - Error (missing prerequisites, auth failure, etc.)
 #
@@ -87,7 +87,7 @@ THRESHOLD_EPOCH=$(date -d "-${MAX_AGE_HOURS} hours" +%s 2>/dev/null) || {
     print_error "Failed to compute threshold time. Ensure GNU date is available."
     exit 2
 }
-THRESHOLD_HUMAN=$(date -d "-${MAX_AGE_HOURS} hours" "+%Y-%m-%d %H:%M UTC" 2>/dev/null)
+THRESHOLD_HUMAN=$(date -u -d "-${MAX_AGE_HOURS} hours" "+%Y-%m-%d %H:%M UTC" 2>/dev/null)
 
 # Accumulators for JSON output
 AZURE_RGS_JSON="[]"
@@ -95,246 +95,201 @@ AZURE_APPS_JSON="[]"
 AZURE_SPS_JSON="[]"
 STALE_FOUND=false
 
-# ─── Azure Detection ────────────────────────────────────────────────────────────
+# Keep errors separate from successfully queried empty collections. JSON mode
+# always emits a report, including when Azure could only be partially inspected.
+OBSERVED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID:-}"
+SCAN_ERRORS_JSON="[]"
+AZURE_UNKNOWN_RGS_JSON="[]"
+AZURE_DELETING_RGS_JSON="[]"
+AZURE_DISAPPEARED_RGS_JSON="[]"
+QUERY_OUTPUT=""
+QUERY_ERROR=""
+QUERY_STDERR=$(mktemp)
+trap 'rm -f "$QUERY_STDERR"' EXIT
+
+azure_query() {
+    QUERY_ERROR=""
+    local status
+    if QUERY_OUTPUT=$(az "$@" 2>"$QUERY_STDERR"); then
+        return 0
+    else
+        status=$?
+    fi
+    QUERY_ERROR=$(cat "$QUERY_STDERR")
+    QUERY_ERROR="${QUERY_ERROR:-Azure CLI exited with status $status}"
+    return 1
+}
+
+record_scan_error() {
+    SCAN_ERRORS_JSON=$(jq --arg context "$1" --arg message "$2" \
+        '. + [{context: $context, message: $message}]' <<<"$SCAN_ERRORS_JSON")
+    print_error "$1: $2"
+}
+
+# Only this specific Azure error confirms absence. An authorization, token,
+# throttling, or transport error must never be interpreted as a missing group.
+group_not_found() {
+    [[ "$1" =~ \(ResourceGroupNotFound\) ]]
+}
+
+# Validate fields before projecting them: malformed responses must follow the
+# incomplete-report path rather than escaping as an unstructured jq failure.
+valid_group_json() {
+    jq -e 'type == "object" and
+        (.name | type == "string" and length > 0) and
+        (.tags == null or (.tags | type == "object" and all(.[]; type == "string"))) and
+        (.properties == null or (.properties | type == "object"))' >/dev/null 2>&1 <<<"$1"
+}
+
+valid_directory_json() {
+    jq -e 'type == "array" and all(.[]; type == "object" and
+        (.appId | type == "string") and (.displayName | type == "string") and
+        (.tags | type == "array" and all(.[]; type == "string")))' >/dev/null 2>&1 <<<"$1"
+}
 
 check_azure_stale() {
     if ! command -v az >/dev/null 2>&1; then
-        print_warning "Azure CLI (az) not installed — skipping Azure check"
+        record_scan_error "Azure CLI" "az is not installed"
         return 0
     fi
-
-    if ! az account show >/dev/null 2>&1; then
-        print_warning "Not logged in to Azure CLI — skipping Azure check"
+    if [[ -n "$SUBSCRIPTION_ID" ]] && ! azure_query account set --subscription "$SUBSCRIPTION_ID"; then
+        record_scan_error "Select subscription" "$QUERY_ERROR"
         return 0
     fi
-
-    if [[ -n "${AZURE_SUBSCRIPTION_ID:-}" ]]; then
-        az account set --subscription "$AZURE_SUBSCRIPTION_ID" >/dev/null 2>&1 || {
-            print_error "Failed to select Azure subscription '${AZURE_SUBSCRIPTION_ID}'"
-            exit 2
-        }
+    if ! azure_query account show -o json; then
+        record_scan_error "Azure account" "$QUERY_ERROR"
+        return 0
     fi
-
-    if ! az extension show --name resource-graph >/dev/null 2>&1; then
-        print_info "Installing Azure Resource Graph extension..."
-        az extension add --name resource-graph --yes 2>/dev/null
+    local account_subscription_id
+    if ! account_subscription_id=$(jq -er '.id | select(type == "string" and length > 0)' <<<"$QUERY_OUTPUT" 2>/dev/null); then
+        record_scan_error "Azure account" "Invalid response or missing subscription ID"
+        return 0
     fi
-
-    print_info "Checking Azure for stale resources (older than ${MAX_AGE_HOURS}h, before ${THRESHOLD_HUMAN})..."
-
-    # 1. Resource groups with capi-test-created-at tag
+    SUBSCRIPTION_ID="$account_subscription_id"
     check_azure_resource_groups
-
-    # 2. Resource groups by naming convention (catches untagged orphans from Prow CI, failed runs)
-    check_azure_resource_groups_by_convention
-
-    # 3. AD Applications with capi-test prefix patterns
     check_azure_ad_apps
-
-    # 4. Service Principals with capi-test prefix patterns
     check_azure_service_principals
 }
 
 check_azure_resource_groups() {
-    print_info "Scanning Azure resource groups with capi-test-created-at tag..."
-
-    local rgs_json
-    rgs_json=$(az group list --query "[?tags.\"capi-test-created-at\" != null].{name: name, location: location, createdAt: tags.\"capi-test-created-at\", user: tags.\"capi-test-user\", env: tags.\"capi-test-env\", runId: tags.\"capi-test-run-id\"}" -o json 2>/dev/null) || {
-        print_warning "Failed to list Azure resource groups"
-        return 0
-    }
-
-    local stale_rgs="[]"
-    local total
-    total=$(echo "$rgs_json" | jq 'length')
-
-    if [[ "$total" -eq 0 ]]; then
-        print_success "No tagged resource groups found"
+    if ! azure_query group list --subscription "$SUBSCRIPTION_ID" -o json; then
+        record_scan_error "List resource groups" "$QUERY_ERROR"
         return 0
     fi
+    if ! jq -e 'type == "array"' >/dev/null 2>&1 <<<"$QUERY_OUTPUT"; then
+        record_scan_error "List resource groups" "Invalid JSON array"
+        return 0
+    fi
+    local listed_rg
+    while IFS= read -r listed_rg; do
+        if ! valid_group_json "$listed_rg"; then
+            record_scan_error "List resource groups" "Invalid resource-group fields"
+            return 0
+        fi
+    done < <(jq -c '.[]' <<<"$QUERY_OUTPUT")
+    local candidates
+    candidates=$(jq '[.[] | select(
+        .tags."capi-test-created-at" != null or
+        (.name | test("^cap[az]-tests(-[a-f0-9]+)?-resgroup$|^capz_node_.*_rg$"))
+    )]' <<<"$QUERY_OUTPUT")
 
-    # Filter by age
+    local rg rg_name created_at resources_json resource_count lookup_error detection
+    local current_rg state enriched created_epoch
     while IFS= read -r rg; do
-        local created_at
-        created_at=$(echo "$rg" | jq -r '.createdAt')
-        local created_epoch
-        created_epoch=$(date -d "$created_at" +%s 2>/dev/null) || continue
+        rg_name=$(jq -r '.name' <<<"$rg")
+        created_at=$(jq -r '.tags."capi-test-created-at" // empty' <<<"$rg")
+        state=$(jq -r '.properties.provisioningState // empty' <<<"$rg")
+        resource_count=null
+        lookup_error=""
+        detection=tag
 
-        if [[ "$created_epoch" -lt "$THRESHOLD_EPOCH" ]]; then
-            stale_rgs=$(echo "$stale_rgs" | jq --argjson rg "$rg" '. + [$rg]')
-        fi
-    done < <(echo "$rgs_json" | jq -c '.[]')
-
-    local stale_count
-    stale_count=$(echo "$stale_rgs" | jq 'length')
-
-    if [[ "$stale_count" -gt 0 ]]; then
-        STALE_FOUND=true
-        AZURE_RGS_JSON="$stale_rgs"
-
-        if [[ "$JSON_OUTPUT" != "true" ]]; then
-            echo ""
-            print_warning "Found ${stale_count} stale Azure resource group(s):"
-            echo ""
-            printf "%-35s | %-15s | %-25s | %-10s | %-8s\n" "NAME" "LOCATION" "CREATED AT" "USER" "ENV"
-            printf "%s\n" "$(printf '%.0s-' {1..100})"
-            echo "$stale_rgs" | jq -r '.[] | "\(.name)|\(.location)|\(.createdAt)|\(.user // "-")|\(.env // "-")"' | while IFS='|' read -r name loc created user env; do
-                printf "%-35s | %-15s | %-25s | %-10s | %-8s\n" "${name:0:35}" "${loc:0:15}" "${created:0:25}" "${user:0:10}" "${env:0:8}"
-            done
-            echo ""
-        fi
-    else
-        print_success "No stale resource groups (checked ${total} tagged groups)"
-    fi
-}
-
-check_azure_resource_groups_by_convention() {
-    print_info "Scanning Azure resource groups by naming convention (untagged orphan detection)..."
-
-    local tagged_rg_names
-    tagged_rg_names=$(echo "$AZURE_RGS_JSON" | jq -r '.[].name' 2>/dev/null || echo "")
-
-    # Cache subscription ID for retroactive tagging (computed once, used per RG)
-    local subscription_id
-    subscription_id=$(az account show --query id -o tsv 2>/dev/null || echo "")
-
-    local all_rgs_json
-    all_rgs_json=$(az group list \
-        --query "[].{name: name, location: location, tags: tags}" \
-        -o json 2>/dev/null) || {
-        print_warning "Failed to list Azure resource groups for convention check"
-        return 0
-    }
-
-    # Match resource groups created by our test suite:
-    #   capz-tests-resgroup, capz-tests-abc12-resgroup, capa-tests-d3a0f-resgroup
-    #   capz_node_*_rg (Azure-managed node resource groups)
-    # Exclude RGs that already have capi-test-created-at tag (handled by tagged detection)
-    local convention_rgs
-    convention_rgs=$(echo "$all_rgs_json" | jq '[
-        .[] | select(
-            (.name | test("^cap[az]-tests(-[a-f0-9]+)?-resgroup$"))
-            or
-            (.name | test("^capz_node_.*_rg$"))
-        )
-        | select(.tags == null or .tags."capi-test-created-at" == null)
-    ]')
-
-    local total
-    total=$(echo "$convention_rgs" | jq 'length')
-
-    if [[ "$total" -eq 0 ]]; then
-        print_success "No untagged resource groups matching naming convention"
-        return 0
-    fi
-
-    print_info "Found ${total} untagged resource group(s) matching naming convention — checking age..."
-
-    local stale_convention_rgs="[]"
-
-    while IFS= read -r rg; do
-        local rg_name rg_location rg_user rg_env
-        rg_name=$(echo "$rg" | jq -r '.name')
-        rg_location=$(echo "$rg" | jq -r '.location')
-        rg_user=$(echo "$rg" | jq -r '.tags."capi-test-user" // "-"')
-        rg_env=$(echo "$rg" | jq -r '.tags."capi-test-env" // "-"')
-
-        # Skip if already found by tagged detection
-        if echo "$tagged_rg_names" | grep -qx "$rg_name" 2>/dev/null; then
-            continue
-        fi
-
-        local created_at=""
-        local resource_count
-        local resources_json
-        resources_json=$(az resource list --resource-group "$rg_name" \
-            --query "[].{createdTime: createdTime}" -o json 2>/dev/null) || resources_json="[]"
-        resource_count=$(echo "$resources_json" | jq 'length')
-
-        if [[ "$resource_count" -gt 0 ]]; then
-            created_at=$(echo "$resources_json" | jq -r '[.[] | .createdTime | select(. != null and . != "")] | sort | .[0] // empty')
-        fi
-
-        if [[ -z "$created_at" || "$created_at" == "null" ]]; then
-            created_at=$(az monitor activity-log list \
-                --resource-group "$rg_name" \
-                --offset "90d" \
-                --query "[?operationName.value=='Microsoft.Resources/subscriptions/resourceGroups/write'] | sort_by(@, &eventTimestamp) | [0].eventTimestamp" \
-                -o tsv 2>/dev/null) || created_at=""
-        fi
-
-        if [[ -z "$created_at" || "$created_at" == "null" || "$created_at" == "None" ]]; then
-            if [[ "$resource_count" -gt 0 ]]; then
-                continue
-            fi
-            local enriched
-            enriched=$(jq -n \
-                --arg name "$rg_name" \
-                --arg location "$rg_location" \
-                --arg createdAt "unknown" \
-                --arg user "$rg_user" \
-                --arg env "$rg_env" \
-                --arg detection "convention (unknown age)" \
-                --argjson resourceCount "$resource_count" \
-                '{name: $name, location: $location, createdAt: $createdAt, user: $user, env: $env, detection: $detection, resourceCount: $resourceCount}')
-            stale_convention_rgs=$(echo "$stale_convention_rgs" | jq --argjson rg "$enriched" '. + [$rg]')
-            continue
-        fi
-
-        local created_epoch
-        created_epoch=$(date -d "$created_at" +%s 2>/dev/null) || continue
-
-        if [[ "$created_epoch" -lt "$THRESHOLD_EPOCH" ]]; then
-            local enriched
-            enriched=$(jq -n \
-                --arg name "$rg_name" \
-                --arg location "$rg_location" \
-                --arg createdAt "$created_at" \
-                --arg user "$rg_user" \
-                --arg env "$rg_env" \
-                --arg detection "convention" \
-                --argjson resourceCount "$resource_count" \
-                '{name: $name, location: $location, createdAt: $createdAt, user: $user, env: $env, detection: $detection, resourceCount: $resourceCount}')
-            stale_convention_rgs=$(echo "$stale_convention_rgs" | jq --argjson rg "$enriched" '. + [$rg]')
-
-            # Retroactively tag the RG so future scans can find it via capi-test-created-at.
-            # Phase 04 defers tagging when ASO hasn't created the RG yet; if the run is killed
-            # before Phase 05 retries, the RG ends up permanently untagged.
-            # az tag update --operation Merge adds tags without removing existing ones.
-            if [[ -n "$subscription_id" ]]; then
-                local resource_id="/subscriptions/${subscription_id}/resourceGroups/${rg_name}"
-                if az tag update --resource-id "$resource_id" --operation Merge \
-                        --tags "capi-test-created-at=$created_at" "capi-test-detection=convention-retroactive" \
-                        >/dev/null 2>&1; then
-                    print_info "Retroactively tagged ${rg_name} with capi-test-created-at=${created_at}"
+        if [[ -z "$created_at" && "${state,,}" != "deleting" ]]; then
+            detection=convention
+            if azure_query resource list --subscription "$SUBSCRIPTION_ID" --resource-group "$rg_name" -o json; then
+                resources_json="$QUERY_OUTPUT"
+                if jq -e 'type == "array" and all(.[]; type == "object" and
+                    (.createdTime == null or (.createdTime | type == "string")))' >/dev/null 2>&1 <<<"$resources_json"; then
+                    resource_count=$(jq 'length' <<<"$resources_json")
+                    created_at=$(jq -r '[.[].createdTime | select(. != null and . != "")] | sort | .[0] // empty' <<<"$resources_json")
                 else
-                    print_warning "Could not retroactively tag ${rg_name} (non-fatal)"
+                    lookup_error="Resource lookup returned an invalid JSON array"
+                fi
+            else
+                lookup_error="$QUERY_ERROR"
+            fi
+            if [[ -z "$created_at" && -z "$lookup_error" ]]; then
+                if azure_query monitor activity-log list --subscription "$SUBSCRIPTION_ID" --resource-group "$rg_name" --offset 90d \
+                    --query "[?operationName.value=='Microsoft.Resources/subscriptions/resourceGroups/write'] | sort_by(@, &eventTimestamp) | [0].eventTimestamp" -o json; then
+                    if jq -e '. == null or type == "string"' >/dev/null 2>&1 <<<"$QUERY_OUTPUT"; then
+                        created_at=$(jq -r '. // empty' <<<"$QUERY_OUTPUT")
+                    else
+                        lookup_error="Activity lookup returned an invalid timestamp response"
+                    fi
+                else
+                    lookup_error="$QUERY_ERROR"
+                fi
+            fi
+            if [[ -n "$created_at" ]] && ! date -d "$created_at" +%s >/dev/null 2>&1; then
+                lookup_error="Azure lookup returned an invalid creation timestamp"
+            fi
+        fi
+
+        # Revalidate after the age/resource lookups, for tagged and untagged
+        # candidates alike. A list snapshot alone is never a final finding.
+        if ! azure_query group show --subscription "$SUBSCRIPTION_ID" --name "$rg_name" -o json; then
+            if group_not_found "$QUERY_ERROR"; then
+                AZURE_DISAPPEARED_RGS_JSON=$(jq --arg name "$rg_name" \
+                    '. + [{name: $name, detection: "disappeared during scan"}]' <<<"$AZURE_DISAPPEARED_RGS_JSON")
+                # A separate non-404 lookup failure still makes the scan incomplete.
+                if [[ -n "$lookup_error" ]] && ! group_not_found "$lookup_error"; then
+                    record_scan_error "Inspect $rg_name" "$lookup_error"
+                fi
+            else
+                record_scan_error "Revalidate $rg_name" "$QUERY_ERROR"
+            fi
+            continue
+        fi
+        current_rg="$QUERY_OUTPUT"
+        if ! valid_group_json "$current_rg" || [[ "$(jq -r '.name' <<<"$current_rg")" != "$rg_name" ]]; then
+            record_scan_error "Revalidate $rg_name" "Invalid resource-group fields"
+            continue
+        fi
+        if ! state=$(jq -er '.properties.provisioningState | select(type == "string" and length > 0)' <<<"$current_rg" 2>/dev/null); then
+            record_scan_error "Revalidate $rg_name" "Invalid response or missing provisioning state"
+            continue
+        fi
+        if [[ -n "$lookup_error" ]]; then
+            record_scan_error "Inspect $rg_name" "$lookup_error"
+            continue
+        fi
+        # Prefer the current ownership timestamp if tags changed during the scan.
+        created_at=$(jq -r --arg fallback "$created_at" '.tags."capi-test-created-at" // $fallback' <<<"$current_rg")
+        enriched=$(jq --arg createdAt "${created_at:-unknown}" --arg detection "$detection" \
+            --argjson resourceCount "$resource_count" \
+            '{name, location, createdAt: $createdAt, user: .tags."capi-test-user",
+              env: .tags."capi-test-env", runId: .tags."capi-test-run-id",
+              provisioningState: .properties.provisioningState, detection: $detection,
+              resourceCount: $resourceCount}' <<<"$current_rg")
+        if [[ "${state,,}" == "deleting" ]]; then
+            AZURE_DELETING_RGS_JSON=$(jq --argjson rg "$enriched" '. + [$rg]' <<<"$AZURE_DELETING_RGS_JSON")
+        elif [[ -z "$created_at" || "$created_at" == "None" || "$created_at" == "null" ]] || \
+            ! created_epoch=$(date -d "$created_at" +%s 2>/dev/null); then
+            enriched=$(jq '.createdAt = "unknown"' <<<"$enriched")
+            AZURE_UNKNOWN_RGS_JSON=$(jq --argjson rg "$enriched" '. + [$rg]' <<<"$AZURE_UNKNOWN_RGS_JSON")
+        elif [[ "$created_epoch" -lt "$THRESHOLD_EPOCH" ]]; then
+            STALE_FOUND=true
+            AZURE_RGS_JSON=$(jq --argjson rg "$enriched" '. + [$rg]' <<<"$AZURE_RGS_JSON")
+            # Preserve existing retroactive tagging for confirmed convention findings.
+            if [[ "$detection" == "convention" ]]; then
+                if ! az tag update --resource-id "/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${rg_name}" \
+                    --operation Merge --tags "capi-test-created-at=$created_at" \
+                    "capi-test-detection=convention-retroactive" >/dev/null 2>&1; then
+                    print_warning "Could not retroactively tag $rg_name (non-fatal)"
                 fi
             fi
         fi
-    done < <(echo "$convention_rgs" | jq -c '.[]')
-
-    local stale_count
-    stale_count=$(echo "$stale_convention_rgs" | jq 'length')
-
-    if [[ "$stale_count" -gt 0 ]]; then
-        STALE_FOUND=true
-        AZURE_RGS_JSON=$(echo "$AZURE_RGS_JSON" | jq --argjson convention "$stale_convention_rgs" '. + $convention')
-
-        if [[ "$JSON_OUTPUT" != "true" ]]; then
-            echo ""
-            print_warning "Found ${stale_count} stale untagged Azure resource group(s) (by naming convention):"
-            echo ""
-            printf "%-45s | %-15s | %-25s | %-10s | %-5s | %-25s\n" "NAME" "LOCATION" "CREATED AT" "USER" "RES#" "DETECTION"
-            printf "%s\n" "$(printf '%.0s-' {1..135})"
-            echo "$stale_convention_rgs" | jq -r '.[] | "\(.name)|\(.location)|\(.createdAt)|\(.user // "-")|\(.resourceCount)|\(.detection)"' | while IFS='|' read -r name loc created user rescount detection; do
-                printf "%-45s | %-15s | %-25s | %-10s | %-5s | %-25s\n" "${name:0:45}" "${loc:0:15}" "${created:0:25}" "${user:0:10}" "${rescount:0:5}" "${detection:0:25}"
-            done
-            echo ""
-        fi
-    else
-        print_success "No stale untagged resource groups (checked ${total} by naming convention)"
-    fi
+    done < <(jq -c '.[]' <<<"$candidates")
 }
 
 check_azure_ad_apps() {
@@ -342,10 +297,16 @@ check_azure_ad_apps() {
 
     # Query all AD apps that have capi-test tags in their tag array
     local apps_json
-    apps_json=$(az ad app list --all --query "[?tags[?starts_with(@, 'capi-test-created-at:')]].{appId: appId, displayName: displayName, tags: tags}" -o json 2>/dev/null) || {
-        print_warning "Failed to list Azure AD Applications"
+    if azure_query ad app list --all --query "[?tags[?starts_with(@, 'capi-test-created-at:')]].{appId: appId, displayName: displayName, tags: tags}" -o json; then
+        apps_json="$QUERY_OUTPUT"
+    else
+        record_scan_error "List Azure AD Applications" "$QUERY_ERROR"
         return 0
-    }
+    fi
+    if ! valid_directory_json "$apps_json"; then
+        record_scan_error "List Azure AD Applications" "Invalid JSON array or application fields"
+        return 0
+    fi
 
     local total
     total=$(echo "$apps_json" | jq 'length')
@@ -399,10 +360,16 @@ check_azure_service_principals() {
     print_info "Scanning Azure Service Principals for stale entries..."
 
     local sps_json
-    sps_json=$(az ad sp list --all --query "[?tags[?starts_with(@, 'capi-test-created-at:')]].{id: id, appId: appId, displayName: displayName, tags: tags}" -o json 2>/dev/null) || {
-        print_warning "Failed to list Azure Service Principals"
+    if azure_query ad sp list --all --query "[?tags[?starts_with(@, 'capi-test-created-at:')]].{id: id, appId: appId, displayName: displayName, tags: tags}" -o json; then
+        sps_json="$QUERY_OUTPUT"
+    else
+        record_scan_error "List Azure Service Principals" "$QUERY_ERROR"
         return 0
-    }
+    fi
+    if ! valid_directory_json "$sps_json"; then
+        record_scan_error "List Azure Service Principals" "Invalid JSON array or service-principal fields"
+        return 0
+    fi
 
     local total
     total=$(echo "$sps_json" | jq 'length')
@@ -468,7 +435,9 @@ generate_summary() {
 
     local total=$((azure_rg_count + azure_app_count + azure_sp_count))
 
-    if [[ ${#parts[@]} -eq 0 ]]; then
+    if [[ "$SCAN_ERRORS_JSON" != "[]" ]]; then
+        echo "Scan incomplete: $(jq length <<<"$SCAN_ERRORS_JSON") Azure lookup error(s); confirmed stale resources: $total"
+    elif [[ ${#parts[@]} -eq 0 ]]; then
         echo "No stale resources found (threshold: ${MAX_AGE_HOURS}h)"
     else
         local joined
@@ -486,6 +455,12 @@ output_json() {
               $(echo "$AZURE_SPS_JSON" | jq 'length') ))
 
     jq -n \
+        --arg observed_at "$OBSERVED_AT" \
+        --arg subscription_id "$SUBSCRIPTION_ID" \
+        --argjson errors "$SCAN_ERRORS_JSON" \
+        --argjson unknown_rgs "$AZURE_UNKNOWN_RGS_JSON" \
+        --argjson deleting_rgs "$AZURE_DELETING_RGS_JSON" \
+        --argjson disappeared_rgs "$AZURE_DISAPPEARED_RGS_JSON" \
         --argjson stale_found "$( [[ "$STALE_FOUND" == "true" ]] && echo "true" || echo "false" )" \
         --argjson total_count "$total" \
         --arg max_age_hours "$MAX_AGE_HOURS" \
@@ -495,12 +470,19 @@ output_json() {
         --argjson azure_apps "$AZURE_APPS_JSON" \
         --argjson azure_sps "$AZURE_SPS_JSON" \
         '{
+            observed_at: $observed_at,
+            subscription_id: $subscription_id,
+            scan_complete: ($errors | length == 0),
+            errors: $errors,
             stale_found: $stale_found,
             total_count: $total_count,
             max_age_hours: $max_age_hours,
             threshold: $threshold,
             azure: {
                 resource_groups: $azure_rgs,
+                unknown_age_resource_groups: $unknown_rgs,
+                deleting_resource_groups: $deleting_rgs,
+                disappeared_resource_groups: $disappeared_rgs,
                 ad_applications: $azure_apps,
                 service_principals: $azure_sps
             },
@@ -518,6 +500,7 @@ main() {
         echo ""
         print_info "Staleness threshold: ${MAX_AGE_HOURS} hours (before ${THRESHOLD_HUMAN})"
         print_info "Provider: Azure"
+        print_info "Observed at: $OBSERVED_AT"
         echo ""
     fi
 
@@ -530,16 +513,32 @@ main() {
         output_json
     else
         echo "========================================"
+        print_info "Subscription: ${SUBSCRIPTION_ID:-unknown}"
         local summary
         summary=$(generate_summary)
-        if [[ "$STALE_FOUND" == "true" ]]; then
-            print_error "$summary"
+        local category groups
+        for category in stale unknown-age deleting disappeared; do
+            case "$category" in
+                stale) groups="$AZURE_RGS_JSON" ;;
+                unknown-age) groups="$AZURE_UNKNOWN_RGS_JSON" ;;
+                deleting) groups="$AZURE_DELETING_RGS_JSON" ;;
+                disappeared) groups="$AZURE_DISAPPEARED_RGS_JSON" ;;
+            esac
+            jq -r --arg category "$category" '.[] | "\($category): \(.name) (state: \(.provisioningState // "absent"), created: \(.createdAt // "unknown"))"' <<<"$groups"
+        done
+        if [[ "$SCAN_ERRORS_JSON" != "[]" ]]; then
+            print_warning "$summary"
+        elif [[ "$STALE_FOUND" == "true" ]]; then
+            print_warning "$summary"
         else
             print_success "$summary"
         fi
         echo "========================================"
     fi
 
+    if [[ "$SCAN_ERRORS_JSON" != "[]" ]]; then
+        exit 2
+    fi
     if [[ "$STALE_FOUND" == "true" ]]; then
         exit 1
     fi
