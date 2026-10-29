@@ -125,7 +125,7 @@ keeps error handling, logging, and cleanup consistent across phases.
 .
 ├── test/                 # Phase-ordered tests + config.go + helpers.go + support code
 ├── scripts/              # Cleanup, monitoring, and reporting shell scripts
-├── openshift-ci/         # Prow / OpenShift CI configuration and step registry
+├── openshift-ci/         # Pointer to the Prow / OpenShift CI config in openshift/release
 ├── .github/workflows/    # GitHub Actions: management/workload cluster runs + security scans
 ├── docs/                 # Architecture, integration, testing, and review documentation
 ├── Makefile              # Primary build/run entry point (test, cleanup, tooling targets)
@@ -148,7 +148,9 @@ keeps error handling, logging, and cleanup consistent across phases.
 GitHub Actions run the fast dependency checks and a battery of security scans
 (CodeQL, gosec, govulncheck, nancy, trivy, scorecard, fuzz) on every change,
 plus scheduled management/workload cluster runs for both providers. Prow /
-OpenShift CI configuration lives under [../openshift-ci/](../openshift-ci/). See
+OpenShift CI configuration lives in
+[openshift/release](https://github.com/openshift/release);
+[../openshift-ci/](../openshift-ci/) points at the relevant paths. See
 [CI_CD_REVIEW.md](CI_CD_REVIEW.md) for a review of the pipeline.
 
 ## Related documentation
