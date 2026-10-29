@@ -665,6 +665,7 @@ When creating pull requests, always read and follow `.github/PULL_REQUEST_TEMPLA
 - `README.md` - Repository overview and quick start
 - `test/README.md` - Detailed test suite documentation
 - `docs/INTEGRATION.md` - Integration patterns with cluster-api-installer
+- `docs/CI_CREDENTIALS.md` - Prow CI credentials in Google Secret Manager (storage, delivery, rotation runbook)
 - `docs/DEPENDENCIES.md` - Dependency management, security scanning, and updates
 - `docs/TESTING_GUIDELINES.md` - Go testing best practices and guidelines
 - `docs/CROSS_PLATFORM.md` - Cross-platform compatibility guide (OS support, shell compatibility, installation)
