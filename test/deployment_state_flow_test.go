@@ -12,14 +12,26 @@ import (
 )
 
 func TestDeploymentStateFlowRoundTrip(t *testing.T) {
+	// Run in a fresh process so repository-path caching from other tests cannot
+	// redirect legacy state cleanup outside this fixture.
+	if os.Getenv("CAPI_STATE_FLOW_ROUNDTRIP") != "1" {
+		executable, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command(executable, "-test.run=^TestDeploymentStateFlowRoundTrip$", "-test.v")
+		cmd.Env = append(os.Environ(), "CAPI_STATE_FLOW_ROUNDTRIP=1")
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("isolated state round trip: %v\n%s", err, output)
+		}
+		return
+	}
 	workspace := t.TempDir()
 	t.Chdir(workspace)
 	t.Setenv("DEPLOYMENT_STATE_FILE", filepath.Join(workspace, "state.json"))
 	t.Setenv("CAPI_TEST_CONTEXT_FILE", filepath.Join(workspace, "context.json"))
 	// Keep legacy cleanup candidates inside this fixture too.
-	originalRepoDir := getDefaultRepoDir()
-	defaultRepoDir = workspace
-	t.Cleanup(func() { defaultRepoDir = originalRepoDir })
+	t.Setenv("ARO_REPO_DIR", workspace)
 	config := &TestConfig{
 		ResourceGroupName: "alice-stage-resgroup", ManagementClusterName: "alice-management",
 		WorkloadClusterName: "alice-workload", WorkloadClusterNamespace: "alice-namespace",
