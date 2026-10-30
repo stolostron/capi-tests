@@ -63,6 +63,10 @@ creates-or-updates without duplicating. This lets an interrupted run resume from
 where it stopped. Deployment state that must survive across phases is persisted
 via the `WriteDeploymentState` / `ReadDeploymentState` helpers.
 
+Manual management CRD removal is outside the ordinary workload lifecycle. See
+[the manual CRD cleanup decision](MANUAL_CRD_CLEANUP_DECISION.md) for the proposed
+isolated uninstall/cleanup/reinstall scenario and its prerequisites.
+
 ## Configuration system
 
 All configuration is centralized in the `TestConfig` struct in
