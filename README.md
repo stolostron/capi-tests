@@ -634,3 +634,10 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 ### Staged ARO identity and role setup
 
 Set `ARO_SPLIT_DEPLOYMENT=true` to run separate identity creation, role assignment, and cluster deployment phases. Configure `ARO_IDENTITY_CREDENTIAL_SECRET` and `ARO_ROLE_CREDENTIAL_SECRET` for distinct bootstrap principals; `ARO_DEPLOYMENT_CREDENTIAL_SECRET` defaults to `aso-credential`. `ARO_PREEXISTING_IDENTITIES=true` supports identities in a separate existing resource group. See [ARO staged deployment](docs/ARO-STAGED-DEPLOYMENT.md) for the three Make targets, credential requirements, external-resource cleanup, and the negative authorization tests still required before claiming least privilege.
+
+Azure prerequisite inventory/readiness checks and the separately selected
+`ARO_TEST_MISSING_INFRA` negative scenario are documented in
+[ARO staged deployment](docs/ARO-STAGED-DEPLOYMENT.md#infrastructure-prerequisite-validation).
+`ARO_MISSING_INFRA_TIMEOUT` defaults to `2m` and bounds negative-scenario API calls
+and observation. The negative scenario is disabled by default and retains its CRs
+for inspection; it is not part of `TestDeployment`.

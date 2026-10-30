@@ -66,3 +66,53 @@ References:
 - [ASO reconcile policies](https://azure.github.io/azure-service-operator/guide/annotations/)
 - [ASO security practices](https://azure.github.io/azure-service-operator/guide/security/)
 - [Azure role assignments and scopes](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments)
+
+## Infrastructure prerequisite validation
+
+Every split phase validates the generated inventory before any apply: it must
+include ASO ResourceGroup, VirtualNetwork, VirtualNetworksSubnet and
+UserAssignedIdentity resources in their expected API groups. A missing entire
+kind fails explicitly rather than bypassing the readiness checks. Each staged
+resource must exist and report `Ready=True` for its current generation before a
+downstream phase proceeds. This checks ASO's provisioning status; it does not
+independently query Azure ARM. The ordinary combined deployment remains unchanged.
+
+### Missing-infrastructure negative scenario
+
+`TestAzurePrerequisites_MissingInfrastructure` is a separate, opt-in integration
+scenario for a disposable management-cluster workload namespace. It deliberately
+applies only the generated CAPI Cluster and AROControlPlane, omitting AROCluster
+and its infrastructure. This tests a missing AROCluster dependency; it does not
+independently remove each Azure resource group, VNet, subnet or managed identity.
+The positive inventory/readiness checks cover those ASO resource kinds.
+Prepare the namespace and deployment identity/credential
+resources first, and generate `aro.yaml` for that namespace. Do **not** run the
+normal deployment or split infrastructure phases there.
+
+```bash
+ARO_TEST_MISSING_INFRA=true ARO_MISSING_INFRA_TIMEOUT=2m \
+  go test -v ./test -run '^TestAzurePrerequisites_MissingInfrastructure$' -count=1
+```
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `ARO_TEST_MISSING_INFRA` | Permit the explicitly selected negative scenario to apply Cluster and AROControlPlane | `false` |
+| `ARO_MISSING_INFRA_TIMEOUT` | Total API/observation deadline; valid range 1s–10m | `2m` |
+
+The test refuses a namespace containing any Cluster, AROCluster, AROControlPlane
+or HcpOpenShiftCluster. After apply, it requires a current-generation False
+condition on AROControlPlane with a nonempty reason and message explicitly naming
+the missing AROCluster. Generic waiting, stale conditions, unrelated credential
+errors and silent reconciliation do not pass. Any AROCluster or HCP appearing
+during observation fails the test. API commands share the bounded deadline.
+
+The scenario writes its reduced bundle under `missing-infrastructure/` in the
+generated output directory and retains the two CRs for inspection. Remove those
+scenario CRs and verify the namespace is empty before starting a normal deployment.
+The guard checks initial state; use an isolated namespace with no concurrent deployer.
+
+The local regression suite uses file and command fixtures to verify the harness,
+including timeout and unexpected-HCP failures. It does **not** prove live CAPZ
+behavior. This integration scenario was not executed against Azure. A CAPZ version
+that silently waits for infrastructure without publishing the explicit condition
+will fail the bounded diagnostic assertion; the test intentionally exposes that gap.

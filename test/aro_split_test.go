@@ -54,7 +54,7 @@ func TestAROSplitPartitionsAndPinsCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.Prerequisites) != 2 || len(plan.Identities) != 1 || len(plan.Roles) != 1 || len(plan.Cluster) != 4 {
+	if len(plan.Prerequisites) != 3 || len(plan.Identities) != 1 || len(plan.Roles) != 1 || len(plan.Cluster) != 4 {
 		t.Fatalf("incorrect partition counts: %+v", plan)
 	}
 	for _, test := range []struct {

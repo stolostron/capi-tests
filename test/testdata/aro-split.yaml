@@ -5,6 +5,9 @@ kind: Cluster
 metadata:
   name: cluster
   namespace: ns
+spec:
+  infrastructureRef: {apiGroup: infrastructure.cluster.x-k8s.io, kind: AROCluster, name: cluster}
+  controlPlaneRef: {apiGroup: controlplane.cluster.x-k8s.io, kind: AROControlPlane, name: cluster}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: AROCluster
@@ -17,6 +20,10 @@ spec:
       kind: ResourceGroup
       metadata: {name: rg, namespace: ns}
       spec: {location: uksouth}
+    - apiVersion: network.azure.com/v1api20201101
+      kind: VirtualNetwork
+      metadata: {name: vnet, namespace: ns}
+      spec: {owner: {name: rg}, location: uksouth}
     - apiVersion: network.azure.com/v1api20201101
       kind: VirtualNetworksSubnet
       metadata: {name: subnet, namespace: ns}
