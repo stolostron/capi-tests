@@ -666,3 +666,10 @@ the same target to resume; updated YAML remains in place. It does not roll back
 a partially completed upgrade. Node pool completion uses ASO's current Ready
 condition and reported version; workload node-by-node rollout validation and
 actual service-supported upgrade paths require an environment test.
+
+## ARO lifecycle regression
+
+Use `ARO_UPGRADE_VERSION=<supported-target> make test-regression` to opt into
+create, verify, version update, and delete through the existing lifecycle.
+See [ARO regression](docs/ARO_REGRESSION.md) for CI opt-in inputs, failure behavior,
+results, and the pending Vincent stability matrix and Polarion contracts.

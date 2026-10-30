@@ -58,6 +58,16 @@ on:
         required: false
         type: string
         default: ''
+      regression_upgrade_version:
+        description: 'Opt-in create/update/delete regression: supported control-plane target (X.Y or X.Y.Z)'
+        required: false
+        type: string
+        default: ''
+      regression_node_pool_version:
+        description: 'Optional node-pool upgrade target; defaults to the control-plane target'
+        required: false
+        type: string
+        default: ''
       deployment_timeout_minutes:
         description: 'Workload cluster deployment timeout (minutes)'
         required: true
@@ -105,6 +115,16 @@ on:
         default: ''
       aso_pr_no:
         description: 'ASO PR number for image override (optional)'
+        required: false
+        type: string
+        default: ''
+      regression_upgrade_version:
+        description: 'Opt-in create/update/delete regression: supported control-plane target (X.Y or X.Y.Z)'
+        required: false
+        type: string
+        default: ''
+      regression_node_pool_version:
+        description: 'Optional node-pool upgrade target; defaults to the control-plane target'
         required: false
         type: string
         default: ''
@@ -182,7 +202,7 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 280  # Maximum selectable phase timeouts (120m each) + Go-step headroom and overhead
+    timeout-minutes: 360  # CI preflight bounds create + upgrade + delete, with 60m overhead
     environment: ${{ inputs.environment || 'aro-stage' }}
     permissions:
       contents: read
@@ -193,6 +213,9 @@ jobs:
     env:
       # Cluster mode selection
       CLUSTER_MODE: ${{ inputs.cluster_mode || 'kind' }}
+      # Repository variables enable the same regression automatically on scheduled runs.
+      ARO_UPGRADE_VERSION: ${{ inputs.regression_upgrade_version || vars.ARO_REGRESSION_UPGRADE_VERSION }}
+      ARO_UPGRADE_NODE_POOL_VERSION: ${{ inputs.regression_node_pool_version || vars.ARO_REGRESSION_NODE_POOL_VERSION }}
 
       # Environment-specific Azure credentials and config
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
@@ -209,6 +232,30 @@ jobs:
       MCE_INSECURE_TLS: ${{ inputs.mce_insecure_tls || false }}
 
     steps:
+    - name: Validate regression settings
+      id: regression-settings
+      shell: bash
+      run: |
+        if [ -n "$ARO_UPGRADE_VERSION" ]; then
+          for name in ARO_UPGRADE_VERSION ARO_UPGRADE_NODE_POOL_VERSION; do
+            value="${!name}"
+            if [ -n "$value" ] && ! [[ "$value" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+              echo "::error::$name must have format X.Y or X.Y.Z"
+              exit 1
+            fi
+          done
+          for value in "$CLUSTER_DEPLOYMENT_TIMEOUT_MINUTES" "$CLUSTER_DELETION_TIMEOUT_MINUTES"; do
+            [[ "$value" =~ ^(60|90|120)$ ]] || { echo "::error::Regression phase timeouts must be 60, 90 or 120 minutes"; exit 1; }
+          done
+          if (( 2 * CLUSTER_DEPLOYMENT_TIMEOUT_MINUTES + CLUSTER_DELETION_TIMEOUT_MINUTES + 60 > 360 )); then
+            echo "::error::Create + upgrade + delete timeouts plus 60m overhead exceed the 360m job limit"
+            exit 1
+          fi
+        elif [ -n "$ARO_UPGRADE_NODE_POOL_VERSION" ]; then
+          echo "::error::A node-pool target requires a control-plane upgrade target"
+          exit 1
+        fi
+
     - name: Validate credentials
       id: secrets
       run: |
@@ -357,7 +404,11 @@ jobs:
         export CLUSTER_DELETION_TIMEOUT="${CLUSTER_DELETION_TIMEOUT_MINUTES}m"
         export GO_STEP_DEPLOY_CRS_TIMEOUT="$((CLUSTER_DEPLOYMENT_TIMEOUT_MINUTES + 15))m"
         export GO_STEP_DELETION_TIMEOUT="$((CLUSTER_DELETION_TIMEOUT_MINUTES + 15))m"
-        make test-all
+        if [ -n "$ARO_UPGRADE_VERSION" ]; then
+          make test-regression
+        else
+          make test-all
+        fi
       continue-on-error: true
       id: phase3
 
@@ -381,6 +432,7 @@ jobs:
             "deploy-monitor": "CR Deployment (Monitor)",
             "deploy-crs": "Deploy CRs",
             "verify": "Verification",
+            "upgrade": "ARO-HCP version upgrade regression",
             "delete": "Deletion",
         }
 
@@ -452,6 +504,7 @@ jobs:
             "junit-deploy-monitor.xml": "test/05_deploy_crs_test.go",
             "junit-deploy-crs.xml": "test/05_deploy_crs_test.go",
             "junit-verify.xml": "test/06_verification_test.go",
+            "junit-upgrade.xml": "test/06_upgrade_test.go",
             "junit-delete.xml": "test/07_deletion_test.go",
         }
 
@@ -512,12 +565,12 @@ jobs:
         exit $EXIT
 
     - name: 'Restore MCE component states'
-      if: always()
+      if: always() && steps.regression-settings.outcome == 'success'
       run: make _mce-teardown || true
       continue-on-error: true
 
     - name: 'Cleanup resources'
-      if: always()
+      if: always() && steps.regression-settings.outcome == 'success'
       run: |
         rm -rf "${DOCKER_SECRETS:-}"
 
