@@ -261,6 +261,54 @@ TEST_VERBOSITY= make test
 TEST_VERBOSITY=-v make test
 ```
 
+#### Analyze saved controller logs
+
+Controller log analysis is opt-in. Set `ANALYZE_CONTROLLER_LOGS=true` when
+running verification to fail on unexpected errors after the existing controller
+log summary has saved its files. The default remains a diagnostic summary.
+
+To analyze an existing artifact directory without contacting a cluster:
+
+```bash
+ANALYZE_CONTROLLER_LOGS=true CONTROLLER_LOG_DIR=/path/to/results \
+  go test -v ./test -run '^TestVerification_ControllerLogAnalysis$' -count=1
+```
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `ANALYZE_CONTROLLER_LOGS` | Enable unexpected-error failures in verification | `false` |
+| `CONTROLLER_LOG_DIR` | Existing directory to analyze | `GetResultsDir()` (uses `TEST_RESULTS_DIR`, then latest results) |
+| `CONTROLLER_LOG_KNOWN_ERRORS_FILE` | File replacing the built-in known-error regex list | Built-in optimistic-concurrency retry pattern |
+
+The analyzer reads top-level regular files named
+`<controller>-YYYYMMDD_HHMMSS.log`, as written by `SaveControllerLogs`, for the
+configured provider's controllers and CAPI. It ignores unrelated test output,
+subdirectories and symlinks. An enabled analysis fails if no matching files exist,
+a file cannot be read, a regex is invalid, or a line exceeds the 1 MiB scan bound.
+At least one controller file is required; missing individual controllers are not
+considered healthy. The file count and first file/line for each error group show
+which artifacts were analyzed. Use a directory from one run: counts include every
+occurrence in every saved snapshot, so overlapping snapshots can count the same
+underlying event more than once. Empty files contain zero error occurrences; this
+check validates saved log content, not successful log collection.
+
+Known errors are grouped by the first matching regex. Unexpected errors are
+grouped by message text (JSON uses message and error fields without timestamps
+or metadata; plain text strips common timestamp/severity prefixes). Every error
+line is counted, independently of the diagnostic summary's sample limit. Warnings
+are not failures. The default exception is narrowly limited to the Kubernetes
+object-modified conflict message that explicitly requests a retry.
+
+A custom patterns file contains one Go regular expression per line; blank lines
+and lines starting with `#` are ignored. Patterns match the entire original log
+line. The file **replaces** the defaults; an empty file disables all exceptions.
+Keep patterns specific to known transient errors, for example:
+
+```text
+# Retry after an optimistic concurrency conflict
+Operation cannot be fulfilled on [^\r\n]+: the object has been modified; please apply your changes to the latest version and try again
+```
+
 #### Using External Cluster (MCE)
 
 Instead of creating a local Kind cluster, you can run tests against an external Kubernetes cluster with pre-installed CAPI/CAPZ/ASO controllers:

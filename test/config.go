@@ -763,6 +763,11 @@ type TestConfig struct {
 	ScriptsPath       string
 	GenScriptPath     string
 
+	// Saved controller log analysis (opt-in; no cluster access).
+	AnalyzeControllerLogs        bool
+	ControllerLogDir             string
+	ControllerLogKnownErrorsFile string
+
 	// Timeouts
 	ClusterDeploymentTimeout time.Duration // CLUSTER_DEPLOYMENT_TIMEOUT: how long the deploy polling loop waits
 	ClusterDeletionTimeout   time.Duration // CLUSTER_DELETION_TIMEOUT: how long the deletion polling loop waits
@@ -1049,6 +1054,10 @@ func NewTestConfig() *TestConfig {
 		ClusterctlBinPath: GetEnvOrDefault("CLUSTERCTL_BIN", "./bin/clusterctl"),
 		ScriptsPath:       GetEnvOrDefault("SCRIPTS_PATH", "./scripts"),
 		GenScriptPath:     GetEnvOrDefault("GEN_SCRIPT_PATH", defaultGenScriptPath),
+
+		AnalyzeControllerLogs:        GetEnvOrDefault("ANALYZE_CONTROLLER_LOGS", "false") == "true",
+		ControllerLogDir:             GetEnvOrDefault("CONTROLLER_LOG_DIR", ""),
+		ControllerLogKnownErrorsFile: GetEnvOrDefault("CONTROLLER_LOG_KNOWN_ERRORS_FILE", ""),
 
 		// Timeouts
 		ClusterDeploymentTimeout: clusterDeployTimeout,
