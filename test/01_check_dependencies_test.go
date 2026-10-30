@@ -439,6 +439,11 @@ func TestCheckDependencies_AzureAuthentication(t *testing.T) {
 			t.Errorf("Service principal authentication failed: %v", err)
 			return
 		}
+		// Graph requires an authenticated CLI session, so check existence after login.
+		if err := ValidateServicePrincipalExists(t, os.Getenv("AZURE_CLIENT_ID")); err != nil {
+			t.Errorf("Service principal existence validation failed: %v", err)
+			return
+		}
 		t.Log("Azure authentication via service principal is valid")
 
 	case AzureAuthModeCLI:

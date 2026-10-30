@@ -4058,6 +4058,29 @@ func HasServicePrincipalCredentials() bool {
 		os.Getenv("AZURE_TENANT_ID") != ""
 }
 
+// ValidateServicePrincipalExists verifies a service principal in the active Azure CLI tenant.
+// Authenticate first so fresh CI sessions can query Microsoft Graph. A failed lookup
+// is only reported as absence when Azure explicitly identifies a missing resource.
+func ValidateServicePrincipalExists(t *testing.T, clientID string) error {
+	t.Helper()
+
+	output, err := RunCommandQuiet(t, "az", "ad", "sp", "show", "--id", clientID, "--output", "none")
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(output, "(Request_ResourceNotFound)") ||
+		strings.Contains(output, fmt.Sprintf("Service principal '%s' doesn't exist", clientID)) {
+		return fmt.Errorf("service principal %s does not exist in Azure AD in the active tenant: %w\n\n"+
+			"Verify AZURE_CLIENT_ID and AZURE_TENANT_ID and the active Azure CLI tenant. "+
+			"If the service principal was deleted, create a replacement and update the deployment credentials:\n"+
+			"  az ad sp create-for-rbac --name <name> --role Contributor --scopes /subscriptions/<subscription-id>", clientID, err)
+	}
+	return fmt.Errorf("could not verify service principal %s exists in Azure AD: %w\n\n"+
+		"Check Azure CLI authentication, Microsoft Graph directory read permissions, and network connectivity. "+
+		"This failure does not confirm that the service principal is missing. "+
+		"Retry: az ad sp show --id <client-id>", clientID, err)
+}
+
 // ValidateServicePrincipalCredentials validates that service principal credentials can authenticate.
 // This performs an actual Azure CLI login with the service principal to verify credentials work.
 // Returns an error if authentication fails.
