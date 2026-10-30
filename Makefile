@@ -1,4 +1,4 @@
-.PHONY: test _init-run-context _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-aws clean-my-resources check-stale help summary scheduled-review fuzz
+.PHONY: test _init-run-context _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _upgrade-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-aws clean-my-resources check-stale help summary scheduled-review fuzz
 
 # Use bash for shell commands (required for PIPESTATUS in test-all target)
 SHELL := /bin/bash
@@ -181,7 +181,7 @@ _init-run-context: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
 	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-init-run-context.xml -- $(TEST_VERBOSITY) ./test -count=1 -run '^TestInitializeRunContext$$'
 
-RUN_CONTEXT_PHASES := _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup
+RUN_CONTEXT_PHASES := _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _upgrade-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup
 ifneq ($(RUN_CONTEXT_INITIALIZED),1)
 $(RUN_CONTEXT_PHASES): _init-run-context
 endif
@@ -317,6 +317,12 @@ _verify-workload-cluster: check-gotestsum
 	fi; \
 	echo ""; \
 	exit $$EXIT_CODE
+
+# Upgrade is intentionally standalone; test-all keeps its existing lifecycle.
+_upgrade-workload-cluster: check-gotestsum ## Upgrade an existing ARO workload cluster (explicit target required)
+	@test -n "$$ARO_UPGRADE_VERSION" || { echo "Set ARO_UPGRADE_VERSION to request an upgrade"; exit 1; }
+	@mkdir -p $(RESULTS_DIR)
+	CLUSTER_DEPLOYMENT_TIMEOUT=$(CLUSTER_DEPLOYMENT_TIMEOUT) TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-upgrade.xml -- $(TEST_VERBOSITY) ./test -count=1 -run '^TestUpgrade_AROCluster$$' -timeout $(GO_STEP_DEPLOY_CRS_TIMEOUT)
 
 _delete-workload-cluster: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
