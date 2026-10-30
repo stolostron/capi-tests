@@ -249,9 +249,6 @@ func NewAWSProvider(namespace string) InfraProvider {
 }
 
 var (
-	defaultRepoDir     string
-	defaultRepoDirOnce sync.Once
-
 	workloadClusterNamespace     string
 	workloadClusterNamespaceOnce sync.Once
 
@@ -271,6 +268,7 @@ var (
 // test run. DeploymentState intentionally remains separate because it records
 // mutable cleanup and controller state.
 type RunContext struct {
+	OutputDir                string `json:"output_dir,omitempty"`
 	ClusterNamePrefix        string `json:"cluster_name_prefix"`
 	ResourceGroupName        string `json:"resource_group_name"`
 	WorkloadClusterName      string `json:"workload_cluster_name"`
@@ -340,7 +338,7 @@ func readValidatedStateFile(path, expectedName string) ([]byte, error) {
 
 func legacyDeploymentStatePaths(contextPath string) []string {
 	paths := []string{filepath.Join(filepath.Dir(contextPath), ".deployment-state.json")}
-	legacyPath := filepath.Join(getDefaultRepoDir(), ".deployment-state.json")
+	legacyPath := filepath.Join(GetEnvOrDefault("ARO_REPO_DIR", filepath.Join(os.TempDir(), "cluster-api-installer-aro")), ".deployment-state.json")
 	if legacyPath != paths[0] {
 		paths = append(paths, legacyPath)
 	}
@@ -571,6 +569,18 @@ func EnsureRunContext() (*RunContext, error) {
 	if err := explicitContextConflicts(context); err != nil {
 		return nil, err
 	}
+	if os.Getenv("CAPI_TEST_OUTPUT_DIR") == "" {
+		// A new run is unique even when the cluster identity was explicitly fixed.
+		context.OutputDir = filepath.Join(GetEnvOrDefault("SHARED_DIR", os.TempDir()), "capi-tests-"+generateRunID(12))
+		if !filepath.IsAbs(context.OutputDir) {
+			context.OutputDir = filepath.Join(runContextWorkspace(), context.OutputDir)
+		}
+	}
+	outputDir, err := resolveArtifactDir(context)
+	if err != nil {
+		return nil, err
+	}
+	context.OutputDir = outputDir
 	if err := writeRunContext(path, context); err != nil {
 		return nil, err
 	}
@@ -583,21 +593,13 @@ func EnsureRunContext() (*RunContext, error) {
 }
 
 // getDefaultRepoDir returns the default repository directory path.
-// The path is stable across test runs to allow sequential execution via separate
+// The path is stable within a run to allow sequential execution via separate
 // make commands (test-prereq, test-setup, test-kind, etc.).
 func getDefaultRepoDir() string {
-	defaultRepoDirOnce.Do(func() {
-		if dir := os.Getenv("ARO_REPO_DIR"); dir != "" {
-			defaultRepoDir = dir
-			return
-		}
-
-		// Use a stable path that persists across test invocations
-		// This allows make test-setup and make test-kind to share the same repository
-		defaultRepoDir = fmt.Sprintf("%s/cluster-api-installer-aro", os.TempDir())
-	})
-
-	return defaultRepoDir
+	if dir := os.Getenv("ARO_REPO_DIR"); dir != "" {
+		return dir
+	}
+	return filepath.Join(GetArtifactDir(), "cluster-api-installer-aro")
 }
 
 // getCAPIUser returns the user identifier from CAPI_USER env var,
@@ -822,12 +824,12 @@ func NewTestConfig() *TestConfig {
 	} else if clusterMode == "mce" {
 		// Step 1: Create temporary kubeconfig file if not already set
 		if useKubeconfig == "" {
-			// Pattern: /tmp/cluster-api-installer-aro.*.kubeconfig
-			repoDir := GetEnvOrDefault("ARO_REPO_DIR", "/tmp/cluster-api-installer-aro")
+			// Keep auto-created management kubeconfigs in this run’s private root.
+			repoDir := getDefaultRepoDir()
 			repoBaseName := filepath.Base(repoDir)
 
 			// Check if kubeconfig already exists from a previous run
-			pattern := filepath.Join("/tmp", repoBaseName+".*.kubeconfig")
+			pattern := filepath.Join(GetArtifactDir(), repoBaseName+".*.kubeconfig")
 			matches, err := filepath.Glob(pattern)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to glob for existing kubeconfig: %v\n", err)
@@ -850,7 +852,7 @@ func NewTestConfig() *TestConfig {
 				}
 			} else {
 				// Create new temporary kubeconfig file (empty, will be populated by oc login)
-				file, err := os.CreateTemp("/tmp", repoBaseName+".*.kubeconfig")
+				file, err := os.CreateTemp(GetArtifactDir(), repoBaseName+".*.kubeconfig")
 				if err != nil {
 					errMsg := fmt.Sprintf("Failed to create temporary kubeconfig file: %v", err)
 					configError = &errMsg
@@ -1002,6 +1004,12 @@ func NewTestConfig() *TestConfig {
 			"capi-test-run-id":     prefix,
 			"capi-test-created-at": time.Now().Format(time.RFC3339),
 		}
+	}
+
+	// Kind writes its management kubeconfig here instead of modifying ~/.kube/config.
+	// A caller-supplied KUBECONFIG remains authoritative.
+	if os.Getenv("USE_KIND") == "true" && useKubeconfig == "" && os.Getenv("KUBECONFIG") == "" {
+		_ = os.Setenv("KUBECONFIG", filepath.Join(GetArtifactDir(), "management-kubeconfig.yaml")) // #nosec G104
 	}
 
 	clusterDeployTimeout := parseClusterDeploymentTimeout()
@@ -1376,14 +1384,10 @@ func (c *TestConfig) GetExpectedFiles() []string {
 	}
 }
 
-// SharedTempDir returns a directory suitable for storing temporary files that
-// must persist across CI steps. In Prow, SHARED_DIR is a volume shared between
-// all step containers. Outside Prow, falls back to os.TempDir().
+// SharedTempDir returns the private run artifact directory. Its default parent
+// is SHARED_DIR in Prow, so files remain available to later step containers.
 func (c *TestConfig) SharedTempDir() string {
-	if dir := GetEnvOrDefault("SHARED_DIR", ""); dir != "" {
-		return dir
-	}
-	return os.TempDir()
+	return GetArtifactDir()
 }
 
 // GetKubeContext returns the kubectl context to use for the management cluster.

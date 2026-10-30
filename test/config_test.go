@@ -2,14 +2,14 @@ package test
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
 
 func TestGetDefaultRepoDir_EnvVariable(t *testing.T) {
-	// This test must check current behavior, not set environment
-	// because sync.Once means the first call wins for the entire test process
+	// Check the active run directory and explicit repository override.
 
 	config := NewTestConfig()
 
@@ -25,8 +25,8 @@ func TestGetDefaultRepoDir_EnvVariable(t *testing.T) {
 		if !strings.Contains(config.RepoDir, "cluster-api-installer-aro") {
 			t.Errorf("When ARO_REPO_DIR not set, should generate stable path, got: %s", config.RepoDir)
 		}
-		if !strings.HasPrefix(config.RepoDir, os.TempDir()) {
-			t.Errorf("Generated path should be in temp directory (%s), got: %s", os.TempDir(), config.RepoDir)
+		if !strings.HasPrefix(config.RepoDir, GetArtifactDir()+string(filepath.Separator)) {
+			t.Errorf("Generated path should be in private run directory (%s), got: %s", GetArtifactDir(), config.RepoDir)
 		}
 		t.Logf("Generated stable path: %s", config.RepoDir)
 	}
@@ -38,7 +38,7 @@ func TestGetDefaultRepoDir_Consistency(t *testing.T) {
 	config2 := NewTestConfig()
 	config3 := NewTestConfig()
 
-	// All should return the same path due to sync.Once
+	// Separate config instances share the persisted run directory.
 	if config1.RepoDir != config2.RepoDir {
 		t.Errorf("getDefaultRepoDir() not consistent across calls: %s != %s", config1.RepoDir, config2.RepoDir)
 	}
@@ -63,14 +63,13 @@ func TestGetDefaultRepoDir_PathFormat(t *testing.T) {
 		t.Errorf("Generated path should contain 'cluster-api-installer-aro' prefix, got: %s", config.RepoDir)
 	}
 
-	// Verify it's in the temp directory
-	if !strings.HasPrefix(config.RepoDir, os.TempDir()) {
-		t.Errorf("Generated path should be in temp directory (%s), got: %s", os.TempDir(), config.RepoDir)
+	// Verify the clone belongs to this run.
+	if !strings.HasPrefix(config.RepoDir, GetArtifactDir()+string(filepath.Separator)) {
+		t.Errorf("Generated path should be in private run directory (%s), got: %s", GetArtifactDir(), config.RepoDir)
 	}
 
-	// Verify stable path format (no PID or timestamp)
-	// Path format: <os.TempDir()>/cluster-api-installer-aro (e.g., /tmp/cluster-api-installer-aro on Linux, /var/folders/.../cluster-api-installer-aro on macOS)
-	expectedPath := os.TempDir() + "/cluster-api-installer-aro"
+	// Verify the default clone path within the persisted artifact root.
+	expectedPath := filepath.Join(GetArtifactDir(), "cluster-api-installer-aro")
 	if config.RepoDir != expectedPath {
 		t.Errorf("Generated path should be %s, got: %s", expectedPath, config.RepoDir)
 	}
@@ -1028,9 +1027,9 @@ func TestClusterMode_MCE_WithoutExistingKubeconfig(t *testing.T) {
 		t.Error("Expected UseKubeconfig to be set for CLUSTER_MODE=mce")
 	}
 
-	// Verify it's a temp file in /tmp
-	if !strings.HasPrefix(config.UseKubeconfig, "/tmp/") {
-		t.Errorf("Expected kubeconfig in /tmp, got %q", config.UseKubeconfig)
+	// Verify the kubeconfig is private to this run.
+	if !strings.HasPrefix(config.UseKubeconfig, GetArtifactDir()+string(filepath.Separator)) {
+		t.Errorf("Expected kubeconfig in private run directory, got %q", config.UseKubeconfig)
 	}
 
 	// Verify the file was created
@@ -1166,7 +1165,7 @@ func TestClusterMode_MCE_FindsMostRecentKubeconfig(t *testing.T) {
 	_ = os.Setenv("ARO_REPO_DIR", "/tmp/"+testRepoDir)
 
 	// Create older file
-	olderFile, err := os.CreateTemp("/tmp", testRepoDir+".*.kubeconfig")
+	olderFile, err := os.CreateTemp(GetArtifactDir(), testRepoDir+".*.kubeconfig")
 	if err != nil {
 		t.Fatalf("Failed to create older kubeconfig: %v", err)
 	}
@@ -1177,7 +1176,7 @@ func TestClusterMode_MCE_FindsMostRecentKubeconfig(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Create newer file
-	newerFile, err := os.CreateTemp("/tmp", testRepoDir+".*.kubeconfig")
+	newerFile, err := os.CreateTemp(GetArtifactDir(), testRepoDir+".*.kubeconfig")
 	if err != nil {
 		t.Fatalf("Failed to create newer kubeconfig: %v", err)
 	}
