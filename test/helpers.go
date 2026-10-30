@@ -3652,14 +3652,17 @@ func RestoreMCEOriginalStates(t *testing.T, kubeContext string) {
 
 // ControllerLogSummary holds summarized log information for a controller.
 type ControllerLogSummary struct {
-	Name       string   // Controller name (e.g., "CAPZ", "ASO", "CAPI")
-	Namespace  string   // Namespace where the controller runs
-	Deployment string   // Deployment name
-	ErrorCount int      // Number of error log lines
-	WarnCount  int      // Number of warning log lines
-	Errors     []string // Sample error messages (limited)
-	Warnings   []string // Sample warning messages (limited)
-	LogFile    string   // Path to saved complete log file
+	Name           string               // Controller name (e.g., "CAPZ", "ASO", "CAPI")
+	Namespace      string               // Namespace where the controller runs
+	Deployment     string               // Deployment name
+	ErrorCount     int                  // Number of error log lines
+	WarnCount      int                  // Number of warning log lines
+	Errors         []string             // Sample error messages (limited)
+	Warnings       []string             // Sample warning messages (limited)
+	LogFile        string               // Path to saved complete log file
+	InfoCount      int                  // Selected informational dependency states
+	Groups         []ControllerLogGroup // Bounded normalized message groups
+	CategoryCounts map[string]int       // Full counts, including groups omitted from samples
 }
 
 // MaxSampleMessages is the maximum number of error/warning messages to keep in summary.
@@ -3792,24 +3795,9 @@ func SummarizeControllerLogs(t *testing.T, kubeContext, namespace, deploymentNam
 		return summary
 	}
 
-	errors, warnings := ParseControllerLogs(logs)
-	summary.ErrorCount = len(errors)
-	summary.WarnCount = len(warnings)
-
-	// Keep only MaxSampleMessages samples
-	if len(errors) > MaxSampleMessages {
-		summary.Errors = errors[:MaxSampleMessages]
-	} else {
-		summary.Errors = errors
-	}
-
-	if len(warnings) > MaxSampleMessages {
-		summary.Warnings = warnings[:MaxSampleMessages]
-	} else {
-		summary.Warnings = warnings
-	}
-
-	return summary
+	parsed := ParseControllerLogSummary(logs)
+	parsed.Name, parsed.Namespace, parsed.Deployment = summary.Name, summary.Namespace, summary.Deployment
+	return parsed
 }
 
 // SaveControllerLogs saves the complete logs from a controller to a file.
@@ -3880,31 +3868,32 @@ func FormatControllerLogSummaries(summaries []ControllerLogSummary) string {
 		}
 
 		fmt.Fprintf(&result, "%s %s Controller:\n", icon, s.Name)
-		fmt.Fprintf(&result, "   Errors: %d | Warnings: %d\n", s.ErrorCount, s.WarnCount)
+		fmt.Fprintf(&result, "   Errors: %d | Warnings: %d | Informational states: %d\n", s.ErrorCount, s.WarnCount, s.InfoCount)
 
 		if s.LogFile != "" {
 			fmt.Fprintf(&result, "   Log file: %s\n", s.LogFile)
 		}
 
-		// Show sample error messages
-		if len(s.Errors) > 0 {
+		if s.CategoryCounts != nil {
+			formatControllerLogGroups(&result, s)
+		} else if len(s.Errors) > 0 {
+			// Preserve sample output for summaries constructed by callers.
 			result.WriteString("   Sample errors:\n")
-			for i, err := range s.Errors {
-				if i >= 3 { // Show only first 3 in summary
-					fmt.Fprintf(&result, "   ... and %d more errors\n", len(s.Errors)-3)
+			for i, message := range s.Errors {
+				if i >= 3 {
+					fmt.Fprintf(&result, "   ... and %d more errors\n", s.ErrorCount-i)
 					break
 				}
-				// Truncate long lines
-				errLine := err
-				if len(errLine) > 200 {
-					errLine = errLine[:200] + "..."
+				if len(message) > 200 {
+					message = message[:200] + "..."
 				}
-				fmt.Fprintf(&result, "     - %s\n", errLine)
+				fmt.Fprintf(&result, "     - %s\n", message)
 			}
 		}
-
 		result.WriteString("\n")
 	}
+
+	result.WriteString("Categories are provisioning heuristics, not proof of recovery; review persistent or repeated messages.\n")
 
 	// Overall summary
 	result.WriteString("─────────────────────────────\n")
