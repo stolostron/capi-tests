@@ -1,8 +1,10 @@
 package test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -336,6 +338,7 @@ var sensitiveEnvKeys = func() map[string]bool {
 		NewAzureProvider("").SensitiveKeyNames(),
 		NewAWSProvider("").SensitiveKeyNames()...,
 	)
+	keys = append(keys, "OCP_PASSWORD")
 	m := make(map[string]bool, len(keys))
 	for _, k := range keys {
 		m[k] = true
@@ -464,6 +467,9 @@ func SetEnvVar(t *testing.T, key, value string) {
 // SetupKubeconfig sets KUBECONFIG when tests use an external management cluster.
 func SetupKubeconfig(t *testing.T, config *TestConfig) {
 	t.Helper()
+	if config.ocpConfigError != nil {
+		t.Fatal(config.ocpConfigError)
+	}
 	if config.IsExternalCluster() {
 		SetEnvVar(t, "KUBECONFIG", config.UseKubeconfig)
 	}
@@ -5283,4 +5289,93 @@ func WaitForMCEController(t *testing.T, kubeContext, namespace, deploymentName s
 
 		time.Sleep(pollInterval)
 	}
+}
+
+// validateOCPCredentials reports variable names only, never their values.
+func validateOCPCredentials(username, password, server string) error {
+	var missing []string
+	for _, item := range []struct{ name, value string }{
+		{"OCP_USERNAME", username}, {"OCP_PASSWORD", password}, {"OCP_SERVER", server},
+	} {
+		if strings.TrimSpace(item.value) == "" {
+			missing = append(missing, item.name)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("OCP login requires OCP_USERNAME, OCP_PASSWORD and OCP_SERVER together; missing: %s", strings.Join(missing, ", "))
+	}
+	endpoint, err := url.Parse(server)
+	if err != nil || endpoint.Scheme != "https" || endpoint.Hostname() == "" || endpoint.User != nil {
+		return fmt.Errorf("OCP_SERVER must be an HTTPS API URL with a hostname and no embedded credentials")
+	}
+	if strings.IndexFunc(password, unicode.IsSpace) >= 0 {
+		return fmt.Errorf("OCP_PASSWORD cannot contain whitespace with oc stdin login; supply USE_KUBECONFIG instead")
+	}
+	return nil
+}
+
+// AuthenticateOCP creates an external management kubeconfig during dependency
+// checks. oc's password prompt accepts nonterminal stdin; credentials never
+// appear in argv or logged command output. TLS uses the system trust store.
+func AuthenticateOCP(config *TestConfig) error {
+	ctx, cancel := context.WithTimeout(context.Background(), config.OCPLoginTimeout)
+	defer cancel()
+	return authenticateOCP(ctx, config)
+}
+
+func authenticateOCP(ctx context.Context, config *TestConfig) error {
+	if !config.ocpLogin {
+		return nil
+	}
+	if config.ocpConfigError != nil {
+		return config.ocpConfigError
+	}
+	dir := filepath.Dir(config.UseKubeconfig)
+	if err := os.Mkdir(dir, 0700); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("create private OCP kubeconfig directory: %w", err)
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return fmt.Errorf("inspect private OCP kubeconfig directory: %w", err)
+	}
+	if !info.IsDir() || info.Mode().Perm() != 0700 {
+		return fmt.Errorf("OCP kubeconfig directory must be a real directory with permissions 0700")
+	}
+	file, err := os.CreateTemp(dir, ".login-*")
+	if err != nil {
+		return fmt.Errorf("create private OCP kubeconfig: %w", err)
+	}
+	path := file.Name()
+	defer os.Remove(path) // #nosec G104 -- temporary login file is removed on every failure
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close private OCP kubeconfig: %w", err)
+	}
+
+	// Pass an explicit path even when KUBECONFIG or HOME points at user config.
+	// Discard all raw output: server errors can contain passwords or tokens.
+	cmd := exec.CommandContext(ctx, "oc", "login", "--username", config.OCPUsername,
+		"--server", config.OCPServer, "--kubeconfig", path, "--insecure-skip-tls-verify=false") // #nosec G204 -- CLI arguments come from test configuration
+	cmd.Stdin = strings.NewReader(config.OCPPassword + "\n")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("OCP login failed; check oc availability, OCP credentials, server reachability and TLS trust (raw output suppressed)")
+	}
+	info, err = os.Stat(path)
+	if err != nil || info.Size() == 0 {
+		return fmt.Errorf("OCP login did not produce a kubeconfig")
+	}
+	cmd = exec.CommandContext(ctx, "kubectl", "config", "current-context", "--kubeconfig", path) // #nosec G204 -- path is a private temporary kubeconfig
+	output, err := cmd.Output()
+	if err != nil || strings.TrimSpace(string(output)) == "" {
+		return fmt.Errorf("OCP login produced no valid current-context (raw output suppressed)")
+	}
+	if err := os.Chmod(path, 0600); err != nil {
+		return fmt.Errorf("secure OCP kubeconfig: %w", err)
+	}
+	if err := os.Rename(path, config.UseKubeconfig); err != nil {
+		return fmt.Errorf("publish OCP kubeconfig: %w", err)
+	}
+	// Authentication can replace an existing context in a reused config.
+	config.kubeContext = ""
+	config.kubeContextOnce = sync.Once{}
+	return nil
 }
