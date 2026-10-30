@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -117,6 +118,12 @@ func RunCommand(t *testing.T, name string, args ...string) (string, error) {
 // The command is still logged to test output for debugging purposes.
 func RunCommandQuiet(t *testing.T, name string, args ...string) (string, error) {
 	t.Helper()
+	return RunCommandQuietContext(context.Background(), t, name, args...)
+}
+
+// RunCommandQuietContext is the deadline-aware form used by bounded phases.
+func RunCommandQuietContext(ctx context.Context, t *testing.T, name string, args ...string) (string, error) {
+	t.Helper()
 
 	// Build command string for logging
 	cmdStr := name
@@ -131,8 +138,14 @@ func RunCommandQuiet(t *testing.T, name string, args ...string) (string, error) 
 	t.Logf("Executing command (quiet): %s", safeCmdStr)
 	logCommandToFile(t.Name(), safeCmdStr)
 
-	cmd := exec.Command(name, args...) // #nosec G204 G702 -- test helper designed to execute arbitrary commands for test orchestration
+	cmd := exec.CommandContext(ctx, name, args...) // #nosec G204 G702 -- test helper designed to execute arbitrary commands for test orchestration
+	if _, bounded := ctx.Deadline(); bounded {
+		cmd.WaitDelay = time.Second // Bound pipes retained by child authentication plugins.
+	}
 	output, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
 	return strings.TrimSpace(string(output)), err
 }
 

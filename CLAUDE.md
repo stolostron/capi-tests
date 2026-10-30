@@ -686,3 +686,7 @@ When creating pull requests, always read and follow `.github/PULL_REQUEST_TEMPLA
 - `LICENSE` - Apache License 2.0
 - `.github/ISSUE_TEMPLATE/` - Issue templates for bugs and features
 - `.github/PULL_REQUEST_TEMPLATE.md` - PR template with checklists
+
+### Staged ARO identity and role setup
+
+Set `ARO_SPLIT_DEPLOYMENT=true` to run separate identity creation, role assignment, and cluster deployment phases. Configure `ARO_IDENTITY_CREDENTIAL_SECRET` and `ARO_ROLE_CREDENTIAL_SECRET` for distinct bootstrap principals; `ARO_DEPLOYMENT_CREDENTIAL_SECRET` defaults to `aso-credential`. `ARO_PREEXISTING_IDENTITIES=true` supports identities in a separate existing resource group. See [ARO staged deployment](docs/ARO-STAGED-DEPLOYMENT.md) for the three Make targets, credential requirements, external-resource cleanup, and the negative authorization tests still required before claiming least privilege.
