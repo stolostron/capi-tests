@@ -213,6 +213,9 @@ func executeAROSplitPhase(config *TestConfig, phase string, commands aroSplitCom
 	if err != nil {
 		return err
 	}
+	if err := validateAROPrerequisiteInventory(plan); err != nil {
+		return err
+	}
 	credentialPath := filepath.Join(outputDir, "credentials.yaml")
 	credentialData, err := os.ReadFile(credentialPath)
 	if err != nil {
@@ -288,17 +291,10 @@ func runAROSplitPhase(t *testing.T, phase string) {
 	commands := aroSplitCommands{
 		run: func(ctx context.Context, args ...string) (string, error) {
 			if kubeContext == "" {
-				if config.IsExternalCluster() {
-					var err error
-					kubeContext, err = RunCommandQuietContext(ctx, t, "kubectl", "config", "current-context", "--kubeconfig", config.UseKubeconfig)
-					if err != nil {
-						return "", err
-					}
-					if kubeContext == "" {
-						return "", fmt.Errorf("external kubeconfig has no current context")
-					}
-				} else {
-					kubeContext = config.GetKubeContext()
+				var err error
+				kubeContext, err = resolveAROKubeContext(ctx, t, config)
+				if err != nil {
+					return "", err
 				}
 			}
 			return RunCommandQuietContext(ctx, t, "kubectl", append([]string{"--context", kubeContext, "-n", config.WorkloadClusterNamespace, "--request-timeout=30s"}, args...)...)
@@ -335,4 +331,20 @@ func runAROSplitPhase(t *testing.T, phase string) {
 		t.Fatalf("ARO %s phase: %v", phase, err)
 	}
 	t.Logf("ARO %s phase complete; credential routing checked, effective Azure privileges require separate authorization testing", phase)
+}
+
+// resolveAROKubeContext shares the phase deadline with external context discovery.
+func resolveAROKubeContext(ctx context.Context, t *testing.T, config *TestConfig) (string, error) {
+	t.Helper()
+	if !config.IsExternalCluster() {
+		return config.GetKubeContext(), nil
+	}
+	kubeContext, err := RunCommandQuietContext(ctx, t, "kubectl", "config", "current-context", "--kubeconfig", config.UseKubeconfig)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(kubeContext) == "" {
+		return "", fmt.Errorf("external kubeconfig has no current context")
+	}
+	return strings.TrimSpace(kubeContext), nil
 }

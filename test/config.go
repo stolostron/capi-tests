@@ -775,11 +775,13 @@ type TestConfig struct {
 	// InfraProviderName is the selected infrastructure provider ("aro" or "rosa").
 	// Set via INFRA_PROVIDER env var. Default: "aro".
 	// Opt-in ARO identity/RBAC provisioning with explicit credential boundaries.
-	AROSplitDeployment            bool
-	AROPreexistingIdentities      bool
-	AROIdentityCredentialSecret   string
-	ARORoleCredentialSecret       string
-	ARODeploymentCredentialSecret string
+	AROTestMissingInfrastructure    bool
+	AROMissingInfrastructureTimeout string
+	AROSplitDeployment              bool
+	AROPreexistingIdentities        bool
+	AROIdentityCredentialSecret     string
+	ARORoleCredentialSecret         string
+	ARODeploymentCredentialSecret   string
 
 	InfraProviderName string
 	// InfraProviders holds the list of infrastructure provider configurations.
@@ -1014,11 +1016,13 @@ func NewTestConfig() *TestConfig {
 	clusterDeployTimeout := parseClusterDeploymentTimeout()
 
 	return &TestConfig{
-		AROSplitDeployment:            GetEnvOrDefault("ARO_SPLIT_DEPLOYMENT", "false") == "true",
-		AROPreexistingIdentities:      GetEnvOrDefault("ARO_PREEXISTING_IDENTITIES", "false") == "true",
-		AROIdentityCredentialSecret:   GetEnvOrDefault("ARO_IDENTITY_CREDENTIAL_SECRET", ""),
-		ARORoleCredentialSecret:       GetEnvOrDefault("ARO_ROLE_CREDENTIAL_SECRET", ""),
-		ARODeploymentCredentialSecret: GetEnvOrDefault("ARO_DEPLOYMENT_CREDENTIAL_SECRET", "aso-credential"),
+		AROTestMissingInfrastructure:    GetEnvOrDefault("ARO_TEST_MISSING_INFRA", "false") == "true",
+		AROMissingInfrastructureTimeout: GetEnvOrDefault("ARO_MISSING_INFRA_TIMEOUT", "2m"),
+		AROSplitDeployment:              GetEnvOrDefault("ARO_SPLIT_DEPLOYMENT", "false") == "true",
+		AROPreexistingIdentities:        GetEnvOrDefault("ARO_PREEXISTING_IDENTITIES", "false") == "true",
+		AROIdentityCredentialSecret:     GetEnvOrDefault("ARO_IDENTITY_CREDENTIAL_SECRET", ""),
+		ARORoleCredentialSecret:         GetEnvOrDefault("ARO_ROLE_CREDENTIAL_SECRET", ""),
+		ARODeploymentCredentialSecret:   GetEnvOrDefault("ARO_DEPLOYMENT_CREDENTIAL_SECRET", "aso-credential"),
 
 		// Repository defaults
 		RepoURL:    GetEnvOrDefault("ARO_REPO_URL", "https://github.com/stolostron/cluster-api-installer"),
