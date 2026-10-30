@@ -3752,11 +3752,7 @@ func ParseControllerLogs(logs string) (errors []string, warnings []string) {
 
 		// Check for error patterns
 		// Common patterns: "level=error", "ERROR", '"level":"error"', "error:"
-		if strings.Contains(lowerLine, "level=error") ||
-			strings.Contains(lowerLine, `"level":"error"`) ||
-			strings.Contains(lowerLine, "\"level\": \"error\"") ||
-			(strings.Contains(lowerLine, " error ") && !strings.Contains(lowerLine, "error=nil")) ||
-			strings.Contains(lowerLine, "error:") {
+		if isControllerErrorLine(line) {
 			if len(errors) < MaxSampleMessages*2 { // Keep more samples initially, trim later
 				errors = append(errors, line)
 			}
@@ -5283,4 +5279,14 @@ func WaitForMCEController(t *testing.T, kubeContext, namespace, deploymentName s
 
 		time.Sleep(pollInterval)
 	}
+}
+
+// isControllerErrorLine preserves the error classification used by log summaries.
+func isControllerErrorLine(line string) bool {
+	lowerLine := strings.ToLower(line)
+	return strings.Contains(lowerLine, "level=error") ||
+		strings.Contains(lowerLine, `"level":"error"`) ||
+		strings.Contains(lowerLine, "\"level\": \"error\"") ||
+		(strings.Contains(lowerLine, " error ") && !strings.Contains(lowerLine, "error=nil")) ||
+		strings.Contains(lowerLine, "error:")
 }
