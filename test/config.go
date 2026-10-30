@@ -734,6 +734,10 @@ type TestConfig struct {
 	CAPINamespace            string            // Namespace for CAPI controller (default: "capi-system", or "multicluster-engine" in K8S mode)
 	CAPZNamespace            string            // Namespace for CAPZ/ASO controllers (default: "capz-system", or "multicluster-engine" in K8S mode)
 
+	// OpenShift version catalog discovery
+	AROVersionAPIVersion         string // API version for the regional ARO HCP version catalog
+	OpenShiftVersionCheckTimeout string // Total timeout for OpenShift version discovery
+
 	// Management cluster mode
 	// ClusterMode specifies the management cluster deployment mode ("kind" or "mce").
 	// - "kind": Deploy local Kind cluster (default behavior)
@@ -1034,6 +1038,10 @@ func NewTestConfig() *TestConfig {
 		CheckHCPScriptPath:       GetEnvOrDefault("CHECK_HCP_SCRIPT", "../scripts/check-hcp"),
 		CAPINamespace:            getControllerNamespace(useK8S, "CAPI_NAMESPACE", "capi-system"),
 		CAPZNamespace:            providerNamespace,
+
+		// OpenShift version catalog discovery
+		AROVersionAPIVersion:         GetEnvOrDefault("ARO_VERSION_API_VERSION", "2026-09-01-preview"),
+		OpenShiftVersionCheckTimeout: GetEnvOrDefault("OPENSHIFT_VERSION_CHECK_TIMEOUT", "1m"),
 
 		// Management cluster mode
 		ClusterMode: clusterMode,
