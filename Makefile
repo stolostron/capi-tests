@@ -1,4 +1,4 @@
-.PHONY: test _init-run-context _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _upgrade-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup test-all _test-all-impl clean clean-all clean-azure clean-aws clean-my-resources check-stale help summary scheduled-review fuzz
+.PHONY: test _init-run-context _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _upgrade-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup test-all test-regression _test-all-impl clean clean-all clean-azure clean-aws clean-my-resources check-stale help summary scheduled-review fuzz
 
 # Use bash for shell commands (required for PIPESTATUS in test-all target)
 SHELL := /bin/bash
@@ -318,11 +318,15 @@ _verify-workload-cluster: check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-# Upgrade is intentionally standalone; test-all keeps its existing lifecycle.
+# Upgrade runs standalone or through the explicitly enabled regression lifecycle.
 _upgrade-workload-cluster: check-gotestsum ## Upgrade an existing ARO workload cluster (explicit target required)
 	@test -n "$$ARO_UPGRADE_VERSION" || { echo "Set ARO_UPGRADE_VERSION to request an upgrade"; exit 1; }
 	@mkdir -p $(RESULTS_DIR)
-	CLUSTER_DEPLOYMENT_TIMEOUT=$(CLUSTER_DEPLOYMENT_TIMEOUT) TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-upgrade.xml -- $(TEST_VERBOSITY) ./test -count=1 -run '^TestUpgrade_AROCluster$$' -timeout $(GO_STEP_DEPLOY_CRS_TIMEOUT)
+	@EXIT_CODE=0; \
+	CLUSTER_DEPLOYMENT_TIMEOUT=$(CLUSTER_DEPLOYMENT_TIMEOUT) TEST_RESULTS_DIR=$(TEST_RESULTS_DIR) $(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-upgrade.xml -- $(TEST_VERBOSITY) ./test -count=1 -run '^TestUpgrade_AROCluster$$' -timeout $(GO_STEP_DEPLOY_CRS_TIMEOUT) || EXIT_CODE=$$?; \
+	mkdir -p $(LATEST_RESULTS_DIR); \
+	cp -f $(RESULTS_DIR)/junit-upgrade.xml $(LATEST_RESULTS_DIR)/ 2>/dev/null || true; \
+	exit $$EXIT_CODE
 
 _delete-workload-cluster: check-gotestsum
 	@mkdir -p $(RESULTS_DIR)
@@ -386,6 +390,19 @@ _validate-cleanup: check-gotestsum
 	fi; \
 	echo ""; \
 	exit $$EXIT_CODE
+
+# A target version alone never changes test-all's normal create/delete lifecycle.
+test-regression: export INFRA_PROVIDER := $(INFRA_PROVIDER)
+test-regression: ## Run opt-in ARO create, version update, and delete regression
+	@test "$$INFRA_PROVIDER" = aro || { echo "Regression requires INFRA_PROVIDER=aro"; exit 1; }
+	@test -n "$$ARO_UPGRADE_VERSION" || { echo "Set ARO_UPGRADE_VERSION to a supported target version"; exit 1; }
+	@for name in ARO_UPGRADE_VERSION ARO_UPGRADE_NODE_POOL_VERSION; do \
+		value="$${!name}"; \
+		if [ -n "$$value" ] && ! [[ "$$value" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$$ ]]; then \
+			echo "$$name must have format X.Y or X.Y.Z"; exit 1; \
+		fi; \
+	done
+	@$(MAKE) --no-print-directory test-all RUN_ARO_UPGRADE=true
 
 test-all: ## Run all test phases sequentially
 	@mkdir -p $(RESULTS_DIR)
@@ -467,6 +484,12 @@ _test-all-impl:
 			echo "❌ ERROR: Workload cluster verification phase failed."; \
 			echo "   Previous stages completed successfully but workload cluster verification encountered issues."; \
 			echo ""; \
+			SUITE_EXIT=1; \
+		}; \
+	fi; \
+	if [ $$SUITE_EXIT -eq 0 ] && [ "$(RUN_ARO_UPGRADE)" = true ]; then \
+		$(MAKE) --no-print-directory _upgrade-workload-cluster RESULTS_DIR=$(RESULTS_DIR) RUN_CONTEXT_INITIALIZED=1 || { \
+			echo "❌ ERROR: Workload cluster upgrade regression failed."; \
 			SUITE_EXIT=1; \
 		}; \
 	fi; \
