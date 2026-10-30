@@ -261,6 +261,25 @@ TEST_VERBOSITY= make test
 TEST_VERBOSITY=-v make test
 ```
 
+#### Controller log summary
+
+The diagnostic summary counts every error and warning in its fetched log window
+(up to the last 5,000 lines per container), while keeping bounded samples. It groups
+normalized messages across changing JSON timestamps, common klog prefixes, and
+logfmt message/error fields. Potential issues appear before transient candidates
+and informational dependency states. Each category includes occurrence counts;
+unlisted groups still contribute to the totals. At most ten distinct groups per
+category are retained and three per category are displayed. Full logs remain
+available in the controller log artifacts.
+
+Connection-down, TLS-handshake and RetryFast messages are provisioning/startup
+hints, not evidence that a failure is harmless or has recovered. WaitingForOwner
+usually indicates dependency ordering. Persistent or repeated messages still need
+investigation; explicit permission/certificate failures remain potential issues.
+No timestamp-based recovery inference is made because controller startup time is
+not available reliably. These annotations do not change the separate opt-in
+analyzer's known-error list or unexpected-error failures.
+
 #### Analyze saved controller logs
 
 Controller log analysis is opt-in. Set `ANALYZE_CONTROLLER_LOGS=true` when
