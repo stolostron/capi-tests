@@ -3953,52 +3953,25 @@ func SaveAllControllerLogs(t *testing.T, kubeContext, outputDir string, summarie
 	return summaries
 }
 
-// GetResultsDir returns the appropriate results directory for saving logs.
-// It checks TEST_RESULTS_DIR env var first (set by Makefile), then falls back
-// to looking for the latest results directory, or creates one if needed.
+// GetResultsDir returns the publishable reports directory for this run.
+// Private kubeconfigs and installer credentials belong in GetArtifactDir().
+func resultsDirectoryPath() string {
+	dir := os.Getenv("TEST_RESULTS_DIR")
+	if dir == "" {
+		dir = filepath.Join(GetArtifactDir(), "results")
+	}
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(runContextWorkspace(), dir)
+	}
+	return filepath.Clean(dir)
+}
+
 func GetResultsDir() string {
-	// Check for environment variable set by Makefile
-	if envDir := os.Getenv("TEST_RESULTS_DIR"); envDir != "" {
-		// Normalize path to resolve relative components like ".."
-		cleanDir := filepath.Clean(envDir)
-		// Ensure directory exists
-		if err := os.MkdirAll(cleanDir, 0750); err == nil { // #nosec G703 -- path from trusted TEST_RESULTS_DIR env var set by Makefile
-			return cleanDir
-		}
+	dir := resultsDirectoryPath()
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		panic(fmt.Sprintf("failed to create results directory %s: %v", dir, err))
 	}
-
-	// Check for latest results directory first
-	latestDir := "results/latest"
-	if DirExists(latestDir) {
-		return latestDir
-	}
-
-	// Look for any timestamped results directory
-	entries, err := os.ReadDir("results")
-	if err == nil && len(entries) > 0 {
-		// Find the most recent directory
-		var latestTimestamp string
-		for _, e := range entries {
-			if e.IsDir() && e.Name() != "latest" {
-				if e.Name() > latestTimestamp {
-					latestTimestamp = e.Name()
-				}
-			}
-		}
-		if latestTimestamp != "" {
-			return fmt.Sprintf("results/%s", latestTimestamp)
-		}
-	}
-
-	// Create a new results directory with current timestamp
-	timestamp := time.Now().Format("20060102_150405")
-	newDir := fmt.Sprintf("results/%s", timestamp)
-	if err := os.MkdirAll(newDir, 0750); err != nil {
-		// Fall back to /tmp if we can't create the directory
-		return os.TempDir()
-	}
-
-	return newDir
+	return filepath.Clean(dir)
 }
 
 // AzureAuthMode represents the method of Azure authentication being used.

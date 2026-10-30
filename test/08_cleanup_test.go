@@ -123,7 +123,7 @@ func TestCleanup_VerifyClonedRepositoryRemoval(t *testing.T) {
 
 	repoDir := config.RepoDir
 	if repoDir == "" {
-		repoDir = filepath.Join(os.TempDir(), "cluster-api-installer-aro")
+		repoDir = getDefaultRepoDir()
 	}
 
 	if DirExists(repoDir) {
@@ -153,7 +153,7 @@ func TestCleanup_VerifyResultsDirectoryRemoval(t *testing.T) {
 	PrintTestHeader(t, "TestCleanup_VerifyResultsDirectoryRemoval",
 		"Verify results directory can be identified for cleanup")
 
-	resultsDir := "results"
+	resultsDir := resultsDirectoryPath()
 	if DirExists(resultsDir) {
 		PrintToTTY("Results directory exists: %s\n", resultsDir)
 
@@ -858,7 +858,7 @@ func TestCleanup_Summary(t *testing.T) {
 	// Repository
 	repoDir := config.RepoDir
 	if repoDir == "" {
-		repoDir = filepath.Join(os.TempDir(), "cluster-api-installer-aro")
+		repoDir = getDefaultRepoDir()
 	}
 	if DirExists(repoDir) {
 		PrintToTTY("  Cloned Repo:      EXISTS at %s\n", repoDir)
@@ -867,7 +867,7 @@ func TestCleanup_Summary(t *testing.T) {
 	}
 
 	// Results
-	if DirExists("results") {
+	if DirExists(resultsDirectoryPath()) {
 		PrintToTTY("  Results Dir:      EXISTS\n")
 	} else {
 		PrintToTTY("  Results Dir:      CLEAN\n")

@@ -97,7 +97,7 @@ Tests are configured via environment variables:
 
 - `ARO_REPO_URL` - cluster-api-installer repository URL (default: `https://github.com/stolostron/cluster-api-installer`)
 - `ARO_REPO_BRANCH` - Branch to use (default: `main`)
-- `ARO_REPO_DIR` - Local repository directory (default: `/tmp/cluster-api-installer-aro`)
+- `ARO_REPO_DIR` - Local repository directory (default: `${CAPI_TEST_OUTPUT_DIR}/cluster-api-installer-aro`)
 
 ### Infrastructure Provider
 
@@ -297,7 +297,7 @@ This will:
 - Deploy CAPI and infrastructure provider charts to your external cluster (Phase 03)
 - Continue with YAML generation and cluster deployment as normal
 
-**Note**: All test targets automatically generate JUnit XML reports in a timestamped `results/` directory. The path to the results directory is displayed when tests run.
+**Note**: All test targets automatically generate JUnit XML reports in the private run directory’s `results/` subdirectory. The path to the results directory is displayed when tests run.
 
 ### All Make Targets
 
@@ -374,23 +374,28 @@ go test -v ./test -timeout 60m
 
 ### Test Results and Reports
 
-All Makefile test targets automatically generate JUnit XML reports for test results. Each test run creates a unique timestamped directory under `results/` containing the XML reports.
+Each run has one private artifact directory, recorded as `output_dir` in its immutable run context. Separate phase invocations reuse this directory, including after changing working directories. The default is `${TMPDIR:-/tmp}/capi-tests-<run-id>`; Prow uses `${SHARED_DIR}/capi-tests-<run-id>` so later containers retain access. Make initializes a unique timestamp/process suffix for new runs; direct Go invocations generate and persist an independent unique suffix.
 
-#### Results Directory Structure
+Legacy contexts without `output_dir` use `.capi-test-artifacts/<test-run-id>` beside the context file, keeping their identity file unchanged and isolating different workspaces.
 
+Set `CAPI_TEST_OUTPUT_DIR` before initializing a run to choose a dedicated empty directory. Changing it for an existing context is rejected. The directory is created with mode `0700` and an ownership marker; cleanup refuses unowned directories and symlinks.
+
+```text
+capi-tests-<run-id>/
+├── .capi-test-context                  # Ownership marker
+├── cluster-api-installer-aro/          # Default clone, generated YAMLs, Kind config
+├── cluster-api-installer-aro.*.kubeconfig # Auto-created MCE kubeconfig
+├── management-kubeconfig.yaml         # Default Kind management kubeconfig
+├── <cluster>-kubeconfig.yaml           # Retrieved workload kubeconfig
+└── results/                           # Publishable reports and redacted YAML copies
+    ├── junit-*.xml
+    ├── commands.log
+    └── terminal-output.log
 ```
-results/
-└── 20251205_093128/               # Timestamp: YYYYMMDD_HHMMSS
-    ├── junit-check-dep.xml        # Check dependencies test results
-    ├── junit-setup.xml            # Setup test results
-    ├── junit-cluster.xml          # Cluster deployment test results
-    ├── junit-generate-yamls.xml   # YAML generation test results
-    ├── junit-deploy-apply.xml     # CR deployment test results (apply phase)
-    ├── junit-deploy-monitor.xml   # CR deployment test results (monitor phase)
-    ├── junit-verify.xml           # Verification test results
-    ├── junit-delete.xml           # Deletion test results
-    └── junit-cleanup.xml          # Cleanup validation test results
-```
+
+Upload only `results/`, never the private root: kubeconfigs and generated credential YAMLs contain secrets. `RESULTS_DIR` (Make) and `TEST_RESULTS_DIR` (Go) can place publishable reports elsewhere, including Prow's `ARTIFACT_DIR`. The report-only `results/latest` compatibility copy remains in the workspace. Explicit `ARO_REPO_DIR` and `USE_KUBECONFIG` paths remain caller-owned and are not deleted by private artifact cleanup. Prow's existing explicit paths and cross-step copies remain supported.
+
+The run context and deployment state remain at their existing configured locations so cleanup can find the run. These control files are intentionally outside the private artifact directory.
 
 #### Using Test Results
 
@@ -399,11 +404,11 @@ When you run a test target, the results path is printed to the terminal:
 ```bash
 $ make test
 === Running Check Dependencies Tests ===
-Results will be saved to: results/20251205_093128
+Results will be saved to: /tmp/capi-tests-20261030_093128-1234/results
 
 # ... test output ...
 
-Test results saved to: results/20251205_093128/junit-check-dep.xml
+Test results saved to: /tmp/capi-tests-20261030_093128-1234/results/junit-check-dep.xml
 ```
 
 The JUnit XML files can be:
@@ -414,7 +419,7 @@ The JUnit XML files can be:
 
 #### Cleanup
 
-The `results/` directory is excluded from git (via `.gitignore`) and can be cleaned up with:
+Cleanup removes the selected run’s private artifact directory after checking its ownership marker. Other runs, explicit external paths, and report copies outside the root are preserved:
 
 ```bash
 make clean      # Interactive cleanup - prompts for confirmation before deleting each resource
@@ -425,9 +430,7 @@ make clean-azure  # Delete only Azure resource group (interactive)
 
 The `make clean` command will interactively ask you to confirm deletion of:
 - Kind cluster (if it exists)
-- Cluster-api-installer repository clone in `/tmp`
-- Kubeconfig files in `/tmp`
-- Results directory
+- The selected private artifact directory (default clone, generated files, kubeconfigs, and reports)
 - **Azure resource group** (`${WORKLOAD_CLUSTER_NAME}-resgroup`, e.g., `capz-tests-resgroup`)
 
 This allows you to selectively clean up resources while preserving anything you want to keep.
@@ -489,7 +492,7 @@ make test-all
 Let tests clone the repository automatically:
 
 ```bash
-# Tests will clone to /tmp/cluster-api-installer-aro
+# Tests clone inside the private run artifact directory
 make test-all
 ```
 

@@ -49,3 +49,6 @@ project-dashboard.html
 CLAUDE.local.md
 .claude/commands/sync-jira.md
 .worktrees/
+
+# Private artifacts for legacy run contexts without output_dir
+.capi-test-artifacts/
