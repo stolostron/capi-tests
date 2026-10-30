@@ -489,6 +489,13 @@ func TestKindCluster_01_ClusterReady(t *testing.T) {
 				}
 			}
 
+			// Helm charts (including cert-manager and CAPI core) are shared by providers.
+			if helmErr := DetectHelmError(output); helmErr != nil {
+				diagnostic := FormatHelmError(helmErr)
+				PrintToTTY("%s", diagnostic)
+				t.Logf("Helm error detected (%s):%s", helmErr.ErrorType, diagnostic)
+			}
+
 			t.Errorf("Failed to deploy controllers: %v\nOutput: %s", err, output)
 			return
 		}

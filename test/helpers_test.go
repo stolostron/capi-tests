@@ -4775,3 +4775,52 @@ func TestSetupKubeconfig_LocalCluster(t *testing.T) {
 		t.Fatalf("KUBECONFIG = %q, want existing-kubeconfig", got)
 	}
 }
+
+func TestDetectHelmError(t *testing.T) {
+	cases := []struct {
+		name, output, errorType string
+		guidance                []string
+	}{
+		{"cert-manager timeout", "Error: INSTALLATION FAILED: context deadline exceeded", "timeout", []string{"network", "timeout", "Kind", "resources"}},
+		{"helm wait timeout", "Error: timed out waiting for the condition", "timeout", []string{"kubectl get pods"}},
+		{"image backoff", "cert-manager: ImagePullBackOff\ncontext deadline exceeded", "image_pull", []string{"registry", "proxy", "imagePullSecrets"}},
+		{"image error", "Warning: ErrImagePull", "image_pull", []string{"registry"}},
+		{"pull failure", "Failed to pull image: denied", "image_pull", []string{"registry"}},
+		{"CRD install failure", "Error: failed to install CRD crds/certificates.yaml: context deadline exceeded", "crd_installation", []string{"cert-manager", "kubectl get crds"}},
+		{"CRD unavailable", "unable to install CRDs: webhook unavailable", "crd_installation", []string{"cert-manager"}},
+		{"missing CRD", "no matches for kind Certificate in version cert-manager.io/v1; ensure CRDs are installed first", "crd_installation", []string{"cert-manager"}},
+		{"case insensitive", "CONTEXT DEADLINE EXCEEDED", "timeout", []string{"timeout"}},
+		{"unknown", "Error: release name is still in use", "", nil},
+		{"success", "CRDs installed; cert-manager deployed", "", nil},
+		{"empty", "", "", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			info := DetectHelmError(tc.output)
+			if tc.errorType == "" {
+				if info != nil {
+					t.Errorf("DetectHelmError(%q) = %+v; want nil", tc.output, info)
+				}
+				return
+			}
+			if info == nil {
+				t.Fatalf("DetectHelmError(%q) = nil; want %s", tc.output, tc.errorType)
+			}
+			if info.ErrorType != tc.errorType {
+				t.Errorf("error type = %q; want %q", info.ErrorType, tc.errorType)
+			}
+			formatted := FormatHelmError(info)
+			for _, want := range append(tc.guidance, info.Message, "Helm Error Detected", "Remediation steps:") {
+				if !strings.Contains(formatted, want) {
+					t.Errorf("formatted diagnostic %q missing %q", formatted, want)
+				}
+			}
+		})
+	}
+}
+
+func TestFormatHelmErrorNil(t *testing.T) {
+	if got := FormatHelmError(nil); got != "" {
+		t.Errorf("FormatHelmError(nil) = %q; want empty", got)
+	}
+}
