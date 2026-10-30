@@ -2591,6 +2591,75 @@ func FormatAzureError(info *AzureErrorInfo) string {
 	return result.String()
 }
 
+// HelmErrorInfo describes a provider-independent chart deployment failure.
+type HelmErrorInfo struct {
+	ErrorType   string
+	Message     string
+	Remediation []string
+}
+
+// DetectHelmError recognizes common deploy-charts.sh failures. More specific
+// image and CRD failures take precedence over a trailing Helm wait timeout.
+// Unknown output returns nil so the original command error remains authoritative.
+func DetectHelmError(output string) *HelmErrorInfo {
+	lowerOutput := strings.ToLower(output)
+	if strings.Contains(lowerOutput, "imagepullbackoff") ||
+		strings.Contains(lowerOutput, "errimagepull") ||
+		strings.Contains(lowerOutput, "failed to pull image") {
+		return &HelmErrorInfo{
+			ErrorType: "image_pull",
+			Message:   "Chart deployment could not pull a container image",
+			Remediation: []string{
+				"Check registry access from the management cluster and verify the image name and tag",
+				"Check proxy settings and registry credentials, including imagePullSecrets",
+				"Inspect pod events: kubectl get pods -A; kubectl describe pod <pod> -n <namespace>",
+			},
+		}
+	}
+	if strings.Contains(lowerOutput, "failed to install crd") ||
+		strings.Contains(lowerOutput, "unable to install crd") ||
+		strings.Contains(lowerOutput, "ensure crds are installed first") {
+		return &HelmErrorInfo{
+			ErrorType: "crd_installation",
+			Message:   "Chart deployment could not install or use required CRDs",
+			Remediation: []string{
+				"Check cert-manager readiness and webhook pod events before retrying the chart installation",
+				"Inspect cert-manager pods: kubectl get pods -n cert-manager",
+				"Check required CRDs and their Established conditions: kubectl get crds; kubectl describe crd <name>",
+			},
+		}
+	}
+	if strings.Contains(lowerOutput, "context deadline exceeded") ||
+		strings.Contains(lowerOutput, "timed out waiting for the condition") {
+		return &HelmErrorInfo{
+			ErrorType: "timeout",
+			Message:   "Chart deployment timed out waiting for resources to become ready",
+			Remediation: []string{
+				"Check network access from the management cluster to image registries and chart repositories",
+				"Inspect pending or unhealthy pods and events: kubectl get pods -A; kubectl get events -A --sort-by=.lastTimestamp",
+				"For a Kind management cluster, check that the container runtime has sufficient CPU, memory and disk resources",
+				"If resources are progressing, increase the Helm timeout used by deploy-charts.sh and retry",
+			},
+		}
+	}
+	return nil
+}
+
+// FormatHelmError formats a chart failure with actionable remediation steps.
+func FormatHelmError(info *HelmErrorInfo) string {
+	if info == nil {
+		return ""
+	}
+	var result strings.Builder
+	fmt.Fprintf(&result, "\n=== Helm Error Detected: %s ===\n", info.Message)
+	result.WriteString("\nRemediation steps:\n")
+	for _, step := range info.Remediation {
+		fmt.Fprintf(&result, "  %s\n", step)
+	}
+	result.WriteString("\n")
+	return result.String()
+}
+
 // NetworkErrorInfo contains information about a detected network error and remediation steps.
 type NetworkErrorInfo struct {
 	ErrorType   string   // Short error type identifier (e.g., "dns_resolution", "connection_refused")
