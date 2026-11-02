@@ -45,10 +45,10 @@ type imagePullEvent struct {
 // derived from a kubelet message: the messages themselves can contain registry
 // responses, tokens or URLs, so they must never be logged verbatim.
 const (
-	categoryPullSecretUnavailable = "image pull secret could not be retrieved"
+	categoryPullSecretUnavailable = "image pull secret could not be retrieved" // #nosec G101 -- fixed diagnostic label, not a credential
 	categoryImageNotFound         = "image repository or tag not found"
 	categoryAuthRejected          = "registry authentication rejected"
-	categoryCredentialsUnparsable = "image pull credentials could not be parsed"
+	categoryCredentialsUnparsable = "image pull credentials could not be parsed" // #nosec G101 -- fixed diagnostic label, not a credential
 	categoryAccessDenied          = "registry access denied or repository unavailable"
 	categoryDNSFailed             = "registry DNS lookup failed"
 	categoryTLSError              = "registry TLS certificate error"
