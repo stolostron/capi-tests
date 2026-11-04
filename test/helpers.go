@@ -1,8 +1,11 @@
 package test
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -5283,4 +5286,385 @@ func WaitForMCEController(t *testing.T, kubeContext, namespace, deploymentName s
 
 		time.Sleep(pollInterval)
 	}
+}
+
+// AROUpgradeResource identifies an embedded ASO resource and its CAPI wrapper.
+type AROUpgradeResource struct {
+	Kind, Name, Namespace, Version string
+	Manifest                       []byte
+}
+
+func upgradeNode(n *yaml.Node, path ...string) *yaml.Node {
+	if n == nil {
+		return nil
+	}
+	if n.Kind == yaml.DocumentNode {
+		if len(n.Content) == 0 {
+			return nil
+		}
+		n = n.Content[0]
+	}
+	for _, key := range path {
+		if n.Kind != yaml.MappingNode {
+			return nil
+		}
+		var next *yaml.Node
+		for i := 0; i < len(n.Content); i += 2 {
+			if n.Content[i].Value == key {
+				next = n.Content[i+1]
+				break
+			}
+		}
+		if next == nil {
+			return nil
+		}
+		n = next
+	}
+	return n
+}
+
+func upgradeValue(n *yaml.Node, path ...string) string {
+	v := upgradeNode(n, path...)
+	if v == nil {
+		return ""
+	}
+	return v.Value
+}
+
+func upgradeVersion(v string) ([3]int, error) {
+	var result [3]int
+	if !regexp.MustCompile(`^[0-9]+\.[0-9]+(\.[0-9]+)?$`).MatchString(v) {
+		return result, fmt.Errorf("invalid OpenShift version %q: expected X.Y or X.Y.Z", v)
+	}
+	for i, s := range strings.Split(v, ".") {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return result, err
+		}
+		result[i] = n
+	}
+	return result, nil
+}
+
+func compareUpgradeVersions(a, b [3]int) int {
+	for i := range a {
+		if a[i] < b[i] {
+			return -1
+		}
+		if a[i] > b[i] {
+			return 1
+		}
+	}
+	return 0
+}
+
+// PrepareAROUpgrade validates both version updates before returning any output.
+// Only the selected control plane and node pools owned by its embedded ASO
+// cluster are changed. Unknown/direct-spec schemas fail rather than guessing.
+func PrepareAROUpgrade(input []byte, controlPlane, namespace, cpVersion, poolVersion string) ([]byte, []AROUpgradeResource, error) {
+	cp, err := upgradeVersion(cpVersion)
+	if err != nil {
+		return nil, nil, err
+	}
+	mp, err := upgradeVersion(poolVersion)
+	if err != nil {
+		return nil, nil, err
+	}
+	if strings.Count(cpVersion, ".") == 1 {
+		cp[2] = mp[2]
+	}
+	if compareUpgradeVersions(mp, cp) > 0 {
+		return nil, nil, fmt.Errorf("node pool target %s exceeds control plane target %s", poolVersion, cpVersion)
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(input))
+	var docs []*yaml.Node
+	for {
+		var doc yaml.Node
+		err := dec.Decode(&doc)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, nil, fmt.Errorf("decode aro.yaml: %w", err)
+		}
+		docs = append(docs, &doc)
+	}
+	var selected *yaml.Node
+	for _, doc := range docs {
+		if upgradeValue(doc, "kind") == "AROControlPlane" && upgradeValue(doc, "metadata", "name") == controlPlane && upgradeValue(doc, "metadata", "namespace") == namespace {
+			if selected != nil {
+				return nil, nil, fmt.Errorf("duplicate control plane %s", controlPlane)
+			}
+			selected = doc
+		}
+	}
+	if selected == nil {
+		return nil, nil, fmt.Errorf("AROControlPlane %s not found in namespace %s", controlPlane, namespace)
+	}
+	var refs []AROUpgradeResource
+	mutate := func(doc *yaml.Node, kind, target string, parsed [3]int, owner string) error {
+		resources := upgradeNode(doc, "spec", "resources")
+		if resources == nil || resources.Kind != yaml.SequenceNode {
+			return fmt.Errorf("%s has no embedded ASO resources", upgradeValue(doc, "kind"))
+		}
+		found := 0
+		for _, resource := range resources.Content {
+			if upgradeValue(resource, "kind") != kind {
+				continue
+			}
+			if owner != "" && upgradeValue(resource, "spec", "owner", "name") != owner {
+				continue
+			}
+			version := upgradeNode(resource, "spec", "properties", "version", "id")
+			if version == nil || version.Kind != yaml.ScalarNode {
+				return fmt.Errorf("%s missing spec.properties.version.id", kind)
+			}
+			old, err := upgradeVersion(version.Value)
+			if err != nil {
+				return err
+			}
+			if strings.Count(target, ".") == 1 {
+				parsed[2] = old[2]
+			}
+			if compareUpgradeVersions(parsed, old) < 0 {
+				return fmt.Errorf("refusing downgrade of %s from %s to %s", kind, version.Value, target)
+			}
+			name := upgradeValue(resource, "metadata", "name")
+			if name == "" {
+				return fmt.Errorf("%s missing metadata.name", kind)
+			}
+			ns := upgradeValue(resource, "metadata", "namespace")
+			if ns != "" && ns != namespace {
+				return fmt.Errorf("%s namespace %s does not match %s", name, ns, namespace)
+			}
+			version.Value = target
+			version.Tag = "!!str"
+			found++
+			refs = append(refs, AROUpgradeResource{Kind: kind, Name: name, Namespace: namespace, Version: target})
+		}
+		if found != 1 {
+			return fmt.Errorf("expected exactly one matching %s in %s, found %d", kind, upgradeValue(doc, "metadata", "name"), found)
+		}
+		manifest, err := yaml.Marshal(doc)
+		if err != nil {
+			return err
+		}
+		refs[len(refs)-1].Manifest = manifest
+		return nil
+	}
+	if err := mutate(selected, "HcpOpenShiftCluster", cpVersion, cp, ""); err != nil {
+		return nil, nil, err
+	}
+	clusterName := refs[0].Name
+	for _, doc := range docs {
+		if upgradeValue(doc, "kind") != "AROMachinePool" || upgradeValue(doc, "metadata", "namespace") != namespace {
+			continue
+		}
+		resources := upgradeNode(doc, "spec", "resources")
+		if resources == nil {
+			continue
+		}
+		matches := false
+		for _, r := range resources.Content {
+			if upgradeValue(r, "kind") == "HcpOpenShiftClustersNodePool" && upgradeValue(r, "spec", "owner", "name") == clusterName {
+				matches = true
+			}
+		}
+		if matches {
+			if err := mutate(doc, "HcpOpenShiftClustersNodePool", poolVersion, mp, clusterName); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	if len(refs) < 2 {
+		return nil, nil, fmt.Errorf("no embedded node pools owned by %s", clusterName)
+	}
+	var out bytes.Buffer
+	enc := yaml.NewEncoder(&out)
+	enc.SetIndent(2)
+	for _, doc := range docs {
+		if err := enc.Encode(doc); err != nil {
+			return nil, nil, err
+		}
+	}
+	if err := enc.Close(); err != nil {
+		return nil, nil, err
+	}
+	return out.Bytes(), refs, nil
+}
+
+// AROUpgradeResourceReady rejects Ready conditions from an older generation.
+func AROUpgradeResourceReady(data []byte, target string) bool {
+	var obj struct {
+		Metadata struct{ Generation int64 }
+		Spec     struct {
+			Properties struct{ Version struct{ ID string } }
+		}
+		Status struct {
+			Properties struct{ Version struct{ ID string } }
+			Conditions []struct {
+				Type, Status       string
+				ObservedGeneration int64
+			}
+		}
+	}
+	if json.Unmarshal(data, &obj) != nil || obj.Metadata.Generation < 1 || obj.Spec.Properties.Version.ID != target || obj.Status.Properties.Version.ID != target {
+		return false
+	}
+	for _, c := range obj.Status.Conditions {
+		if c.Type == "Ready" {
+			return c.Status == "True" && c.ObservedGeneration == obj.Metadata.Generation
+		}
+	}
+	return false
+}
+
+// AROUpgradeClusterVersionReady requires completion of the newest rollout,
+// rather than merely the desired version or an older successful history entry.
+func AROUpgradeClusterVersionReady(data []byte, target string) bool {
+	var obj struct {
+		Status struct {
+			Desired    struct{ Version string }
+			History    []struct{ Version, State string }
+			Conditions []struct{ Type, Status string }
+		}
+	}
+	if json.Unmarshal(data, &obj) != nil {
+		return false
+	}
+	status := obj.Status
+	matches := func(v string) bool {
+		return v == target || (strings.Count(target, ".") == 1 && strings.HasPrefix(v, target+"."))
+	}
+	if !matches(status.Desired.Version) || len(status.History) == 0 || status.History[0].State != "Completed" || !matches(status.History[0].Version) {
+		return false
+	}
+	conditions := map[string]string{}
+	for _, c := range status.Conditions {
+		conditions[c.Type] = c.Status
+	}
+	return conditions["Available"] == "True" && conditions["Progressing"] == "False" && conditions["Failing"] == "False"
+}
+
+// WaitForAROUpgrade bounds retries and retains the last diagnostic on timeout.
+func WaitForAROUpgrade(ctx context.Context, interval time.Duration, check func() error) error {
+	var last error
+	for {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("upgrade did not converge: %w (last check: %v)", err, last)
+		}
+		last = check()
+		if last == nil {
+			return nil
+		}
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return fmt.Errorf("upgrade did not converge: %w (last check: %v)", ctx.Err(), last)
+		case <-timer.C:
+		}
+	}
+}
+
+// RunUpgradeCommand bounds the entire subprocess, including credential plugins.
+func RunUpgradeCommand(t *testing.T, ctx context.Context, stdin []byte, args ...string) (string, error) {
+	t.Helper()
+	cmd := exec.CommandContext(ctx, "kubectl", args...)
+	cmd.WaitDelay = time.Second
+	if stdin != nil {
+		cmd.Stdin = bytes.NewReader(stdin)
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(output), fmt.Errorf("kubectl %s failed: %w: %s", strings.Join(args, " "), err, output)
+	}
+	return string(output), nil
+}
+
+// ValidateAROUpgradeLiveVersion prevents a stale generated manifest from
+// downgrading a resource which was upgraded by another actor.
+func ValidateAROUpgradeLiveVersion(data []byte, target string) error {
+	var obj struct {
+		Spec struct {
+			Properties struct{ Version struct{ ID string } }
+		}
+	}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return fmt.Errorf("decode live resource: %w", err)
+	}
+	current, err := upgradeVersion(obj.Spec.Properties.Version.ID)
+	if err != nil {
+		return fmt.Errorf("live version: %w", err)
+	}
+	desired, err := upgradeVersion(target)
+	if err != nil {
+		return err
+	}
+	if strings.Count(target, ".") == 1 {
+		desired[2] = current[2]
+	}
+	if compareUpgradeVersions(desired, current) < 0 {
+		return fmt.Errorf("refusing live downgrade from %s to %s", obj.Spec.Properties.Version.ID, target)
+	}
+	return nil
+}
+
+// ReconcileAROUpgrade preflights every resource, persists the requested versions,
+// then applies the control plane before permitting any node pool changes.
+// run and save are injected so ordering and failure behavior can be tested
+// without accessing a cluster or overwriting a real generated manifest.
+func ReconcileAROUpgrade(ctx context.Context, resources []AROUpgradeResource, managementArgs []string, workloadConfig string, interval time.Duration,
+	run func(context.Context, []byte, ...string) (string, error), save func() error) error {
+	if len(resources) < 2 || resources[0].Kind != "HcpOpenShiftCluster" {
+		return fmt.Errorf("upgrade requires control plane followed by node pools")
+	}
+	for _, resource := range resources[1:] {
+		if resource.Kind != "HcpOpenShiftClustersNodePool" {
+			return fmt.Errorf("unexpected upgrade resource %s", resource.Kind)
+		}
+	}
+	for _, resource := range resources {
+		args := append(append([]string{}, managementArgs...), "get", resource.Kind+".redhatopenshift.azure.com", resource.Name, "-o", "json")
+		output, err := run(ctx, nil, args...)
+		if err != nil {
+			return fmt.Errorf("upgrade prerequisite: %w", err)
+		}
+		if err := ValidateAROUpgradeLiveVersion([]byte(output), resource.Version); err != nil {
+			return fmt.Errorf("%s/%s: %w", resource.Kind, resource.Name, err)
+		}
+	}
+	if err := save(); err != nil {
+		return fmt.Errorf("save upgrade versions: %w", err)
+	}
+	for i, resource := range resources {
+		args := append(append([]string{}, managementArgs...), "apply", "-f", "-")
+		if _, err := run(ctx, resource.Manifest, args...); err != nil {
+			return fmt.Errorf("apply upgrade %s/%s: %w", resource.Kind, resource.Name, err)
+		}
+		err := WaitForAROUpgrade(ctx, interval, func() error {
+			args := append(append([]string{}, managementArgs...), "get", resource.Kind+".redhatopenshift.azure.com", resource.Name, "-o", "json")
+			output, err := run(ctx, nil, args...)
+			if err != nil {
+				return err
+			}
+			if !AROUpgradeResourceReady([]byte(output), resource.Version) {
+				return fmt.Errorf("%s/%s awaiting target version %s and current Ready condition", resource.Kind, resource.Name, resource.Version)
+			}
+			if i == 0 {
+				output, err = run(ctx, nil, "--kubeconfig", workloadConfig, "--request-timeout=30s", "get", "clusterversion.config.openshift.io", "version", "-o", "json")
+				if err != nil {
+					return err
+				}
+				if !AROUpgradeClusterVersionReady([]byte(output), resource.Version) {
+					return fmt.Errorf("workload ClusterVersion has not completed %s", resource.Version)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("%s/%s: %w", resource.Kind, resource.Name, err)
+		}
+	}
+	return nil
 }

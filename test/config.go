@@ -763,6 +763,10 @@ type TestConfig struct {
 	ScriptsPath       string
 	GenScriptPath     string
 
+	// Upgrade targets are empty by default; upgrades require explicit opt-in.
+	AROUpgradeVersion         string
+	AROUpgradeNodePoolVersion string
+
 	// Timeouts
 	ClusterDeploymentTimeout time.Duration // CLUSTER_DEPLOYMENT_TIMEOUT: how long the deploy polling loop waits
 	ClusterDeletionTimeout   time.Duration // CLUSTER_DELETION_TIMEOUT: how long the deletion polling loop waits
@@ -1049,6 +1053,9 @@ func NewTestConfig() *TestConfig {
 		ClusterctlBinPath: GetEnvOrDefault("CLUSTERCTL_BIN", "./bin/clusterctl"),
 		ScriptsPath:       GetEnvOrDefault("SCRIPTS_PATH", "./scripts"),
 		GenScriptPath:     GetEnvOrDefault("GEN_SCRIPT_PATH", defaultGenScriptPath),
+
+		AROUpgradeVersion:         GetEnvOrDefault("ARO_UPGRADE_VERSION", ""),
+		AROUpgradeNodePoolVersion: GetEnvOrDefault("ARO_UPGRADE_NODE_POOL_VERSION", ""),
 
 		// Timeouts
 		ClusterDeploymentTimeout: clusterDeployTimeout,

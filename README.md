@@ -630,3 +630,39 @@ make fmt           # Format code
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+
+## Opt-in ARO-HCP version upgrade
+
+After deployment and workload verification, use the same `CAPI_TEST_CONTEXT_FILE`,
+installer output directory, and management kubeconfig to upgrade the existing cluster:
+
+```bash
+ARO_UPGRADE_VERSION=4.21 ARO_UPGRADE_NODE_POOL_VERSION=4.21 make _upgrade-workload-cluster
+```
+
+Choose versions supported by your ARO-HCP environment; the example is not a
+statement of service availability. This standalone target is not part of
+`make test-all`. It updates the generated `aro.yaml`, applies the selected
+`AROControlPlane` wrapper, and waits for its embedded ASO resource to report the
+target version with a current `Ready` condition and for the workload
+`ClusterVersion` to complete. It then applies and waits for each matching
+`AROMachinePool` wrapper. The two fields are
+`spec.resources[kind=HcpOpenShiftCluster].spec.properties.version.id` and
+`spec.resources[kind=HcpOpenShiftClustersNodePool].spec.properties.version.id`.
+Other resources and channel groups are preserved. Templates using direct
+`spec.version` fields are not supported and fail before applying changes.
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `ARO_UPGRADE_VERSION` | Control plane target, `X.Y` or `X.Y.Z`; required to opt in | Empty (disabled) |
+| `ARO_UPGRADE_NODE_POOL_VERSION` | Node pool target, no newer than the control plane | Explicit control plane target |
+| `CLUSTER_DEPLOYMENT_TIMEOUT` | Total upgrade reconciliation deadline | Existing deployment timeout |
+
+The phase rejects downgrades against both the generated manifest and live ASO
+specification. Missing resources or workload kubeconfig fail before changes.
+On a reconciliation failure, inspect controller/service diagnostics and rerun
+the same target to resume; updated YAML remains in place. It does not roll back
+a partially completed upgrade. Node pool completion uses ASO's current Ready
+condition and reported version; workload node-by-node rollout validation and
+actual service-supported upgrade paths require an environment test.
