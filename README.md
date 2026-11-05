@@ -124,6 +124,8 @@ When using `INFRA_PROVIDER=rosa`, the following credentials are required:
 - `CS_CLUSTER_NAME` - Cluster name prefix used for YAML generation and Azure resource naming. If not set, auto-generates a unique value: `${CAPI_USER}-${random5hex}` (e.g., `cate-a1b2c`) to enable parallel test runs. The Azure resource group name is controlled by `RESOURCEGROUPNAME` (see above). Max 12 characters (ExternalAuth ID constraint).
 - `OCP_VERSION` - OpenShift version (default: `4.20`)
 - `OCP_VERSION_MP` - Full `x.y.z` OpenShift version for MachinePool workers (default: `4.20.17`)
+- `ARO_VERSION_API_VERSION` - ARO HCP regional version catalog API version (default: `2026-09-01-preview`)
+- `OPENSHIFT_VERSION_CHECK_TIMEOUT` - Total version preflight timeout, including metadata and pagination (default: `1m`, range: `1s`–`5m`)
 - `REGION` - Azure region (default: `uksouth`)
 - `AZURE_SUBSCRIPTION_NAME` - Azure subscription ID
 - `HCP_RESOURCE_ID` - Optional full Azure Resource Manager ID for the HCP resource. Takes precedence over the constructed resource ID.
@@ -630,3 +632,27 @@ make fmt           # Format code
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+### OpenShift version availability preflight
+
+Phase 04 queries the active Azure cloud's regional ARO HCP version catalog before
+running the installer generation script or reusing existing YAMLs. Both
+`OCP_VERSION` and `OCP_VERSION_MP` must match an enabled version in the `stable`
+channel group. A minor selector such as `4.20` matches catalog patches such as
+`4.20.17`; a full patch version must match exactly. Worker and control-plane
+values are checked independently, and their existing defaults are unchanged.
+
+The read-only command uses `az rest` against
+`/subscriptions/{subscriptionId}/providers/Microsoft.RedHatOpenShift/locations/{region}/hcpOpenShiftVersions`,
+with `ARO_VERSION_API_VERSION`. The endpoint and schema are defined by the
+[ARO HCP REST specification](https://github.com/Azure/azure-rest-api-specs/blob/main/specification/redhatopenshift/resource-manager/Microsoft.RedHatOpenShift/hcpopenshiftclusters/preview/2026-09-01-preview/openapi.json).
+It uses `AZURE_SUBSCRIPTION_ID` when set, otherwise the active Azure CLI
+subscription. Catalog query or authentication errors fail the preflight as
+query failures; unsupported-version errors list enabled stable versions for the
+configured region. The classic ARO `az aro get-versions` catalog is not used.
+
+Validation dispatches by infrastructure provider. ARO HCP is implemented; ROSA
+currently logs that catalog validation is not implemented and continues. A future
+ROSA adapter must use its own provider catalog. This preflight does not validate
+version skew, upgrade paths, or availability when Phase 05 is run independently
+of Phase 04.
