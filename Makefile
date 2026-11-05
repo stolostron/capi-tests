@@ -930,3 +930,14 @@ lint: ## Run linters
 deps: ## Download Go dependencies
 	go mod download
 	go mod tidy
+
+# Opt-in privilege setup phases. Credentials must already be provisioned in the
+# selected workload namespace. Role assignment runs only in its explicit phase.
+.PHONY: _create-identities _assign-roles _deploy-cluster
+_create-identities _assign-roles _deploy-cluster: _init-run-context
+_create-identities:
+	ARO_SPLIT_DEPLOYMENT=true go test $(TEST_VERBOSITY) ./test -count=1 -run '^TestDeployment_(00_CreateNamespace|Apply01AROIdentities)$$' -timeout $(GO_STEP_DEPLOY_CRS_TIMEOUT)
+_assign-roles:
+	ARO_SPLIT_DEPLOYMENT=true go test $(TEST_VERBOSITY) ./test -count=1 -run '^TestDeployment_Apply02ARORoles$$' -timeout $(GO_STEP_DEPLOY_CRS_TIMEOUT)
+_deploy-cluster:
+	ARO_SPLIT_DEPLOYMENT=true go test $(TEST_VERBOSITY) ./test -count=1 -run '^TestDeployment_Apply03AROCluster$$' -timeout $(GO_STEP_DEPLOY_CRS_TIMEOUT)

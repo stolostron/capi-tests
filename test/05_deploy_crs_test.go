@@ -121,10 +121,18 @@ func TestDeployment_01_CheckExistingClusters(t *testing.T) {
 	PrintToTTY("✅ All existing clusters match current configuration\n\n")
 }
 
+// Explicit phases preserve the privilege setup boundary before CAPI deployment.
+func TestDeployment_Apply01AROIdentities(t *testing.T) { runAROSplitPhase(t, "identities") }
+func TestDeployment_Apply02ARORoles(t *testing.T)      { runAROSplitPhase(t, "roles") }
+func TestDeployment_Apply03AROCluster(t *testing.T)    { runAROSplitPhase(t, "cluster") }
+
 // TestDeployment_ApplyResources tests applying generated resources to the cluster
 func TestDeployment_ApplyResources(t *testing.T) {
 
 	config := NewTestConfig()
+	if config.AROSplitDeployment {
+		t.Skip("handled by explicit ARO identity, role and cluster phases")
+	}
 
 	// Set KUBECONFIG for external cluster mode
 	SetupKubeconfig(t, config)
@@ -178,6 +186,9 @@ func TestDeployment_ApplyResources(t *testing.T) {
 // (ARO: credentials.yaml, aro.yaml | ROSA: secrets.yaml, is.yaml, rosa.yaml).
 func TestDeployment_ApplyClusterYAMLs(t *testing.T) {
 	config := NewTestConfig()
+	if config.AROSplitDeployment {
+		t.Skip("handled by explicit ARO identity, role and cluster phases")
+	}
 
 	// Set KUBECONFIG for external cluster mode
 	SetupKubeconfig(t, config)
