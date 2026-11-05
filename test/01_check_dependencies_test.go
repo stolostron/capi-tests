@@ -858,7 +858,8 @@ func TestCheckDependencies_DockerCredentialHelper(t *testing.T) {
 }
 
 // TestCheckDependencies_NamingCompliance validates that CAPI_USER, CS_CLUSTER_NAME,
-// and DEPLOYMENT_ENV are RFC 1123 compliant. This prevents late deployment failures
+// DEPLOYMENT_ENV, WORKLOAD_CLUSTER_NAMESPACE, and WORKLOAD_CLUSTER_NAMESPACE_PREFIX
+// are RFC 1123 compliant. This prevents late deployment failures
 // where generated Kubernetes resource names contain invalid characters (e.g., uppercase).
 //
 // The RFC 1123 subdomain naming rules require:
@@ -910,6 +911,21 @@ func TestCheckDependencies_NamingCompliance(t *testing.T) {
 			t.Error(err)
 		} else {
 			t.Logf("WORKLOAD_CLUSTER_NAMESPACE '%s' is RFC 1123 compliant", config.WorkloadClusterNamespace)
+		}
+	})
+
+	// Validate an explicitly configured namespace prefix. Provider defaults are
+	// already covered by the generated WORKLOAD_CLUSTER_NAMESPACE above.
+	t.Run("WORKLOAD_CLUSTER_NAMESPACE_PREFIX", func(t *testing.T) {
+		prefix := os.Getenv("WORKLOAD_CLUSTER_NAMESPACE_PREFIX")
+		if prefix == "" {
+			t.Skip("WORKLOAD_CLUSTER_NAMESPACE_PREFIX is not set; using the provider default")
+		}
+		if err := ValidateRFC1123Name(prefix, "WORKLOAD_CLUSTER_NAMESPACE_PREFIX"); err != nil {
+			validationErrors = append(validationErrors, err.Error())
+			t.Error(err)
+		} else {
+			t.Logf("WORKLOAD_CLUSTER_NAMESPACE_PREFIX '%s' is RFC 1123 compliant", prefix)
 		}
 	})
 
