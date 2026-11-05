@@ -17,6 +17,9 @@ var (
 	// configError stores the error message if NewTestConfig() encountered a fatal error during initialization.
 	// If nil, configuration succeeded. Check with (configError != nil) in first test.
 	configError *string
+
+	// Tracks the legacy MCE-generated path so it is not mistaken for an explicit override.
+	mceGeneratedKubeconfig string
 )
 
 const (
@@ -749,6 +752,16 @@ type TestConfig struct {
 	// - Uses current-context from the kubeconfig
 	UseKubeconfig string
 
+	// OpenShift credentials are an alternative management kubeconfig source.
+	// Explicit USE_KUBECONFIG takes precedence, including over incomplete credentials.
+	OCPUsername     string
+	OCPPassword     string
+	OCPServer       string
+	OCPLoginTimeout time.Duration
+	ocpLogin        bool
+	ocpConfigError  error
+	mceLogin        bool
+
 	// UseKind enables Kind deployment mode (USE_KIND=true).
 	// When true, creates a local Kind management cluster with CAPI/CAPZ/ASO controllers.
 	UseKind bool
@@ -812,14 +825,38 @@ type TestConfig struct {
 // NewTestConfig creates a new test configuration with defaults
 func NewTestConfig() *TestConfig {
 	useKubeconfig := os.Getenv("USE_KUBECONFIG")
+	ocpUsername := GetEnvOrDefault("OCP_USERNAME", "")
+	ocpPassword := GetEnvOrDefault("OCP_PASSWORD", "")
+	ocpServer := GetEnvOrDefault("OCP_SERVER", "")
+	ocpLogin := useKubeconfig == "" && (ocpUsername != "" || ocpPassword != "" || ocpServer != "")
+	var ocpConfigError error
+	ocpLoginTimeout := 2 * time.Minute
+	if ocpLogin {
+		// Keep a stable path across separate phase processes. The login helper
+		// creates its private directory and atomically publishes the kubeconfig.
+		useKubeconfig = filepath.Join(RunContextFilePath()+".ocp", "kubeconfig")
+		ocpConfigError = validateOCPCredentials(ocpUsername, ocpPassword, ocpServer)
+		if ocpConfigError == nil {
+			var err error
+			ocpLoginTimeout, err = time.ParseDuration(GetEnvOrDefault("OCP_LOGIN_TIMEOUT", "2m"))
+			if err != nil || ocpLoginTimeout <= 0 {
+				ocpConfigError = fmt.Errorf("OCP_LOGIN_TIMEOUT must be a positive duration, for example 2m")
+			}
+		}
+		if ocpConfigError != nil {
+			errMsg := ocpConfigError.Error()
+			configError = &errMsg
+		}
+	}
+	mceLogin := !ocpLogin && (useKubeconfig == "" || useKubeconfig == mceGeneratedKubeconfig)
 	deployCharts := parseDeployCharts()
 
 	// Handle CLUSTER_MODE: auto-configure based on cluster mode
 	clusterMode := GetEnvOrDefault("CLUSTER_MODE", "")
-	if clusterMode == "kind" {
+	if clusterMode == "kind" && useKubeconfig == "" {
 		// Set USE_KIND for Kind mode (tests depend on this)
 		_ = os.Setenv("USE_KIND", "true") // #nosec G104
-	} else if clusterMode == "mce" {
+	} else if clusterMode == "mce" && !ocpLogin {
 		// Step 1: Create temporary kubeconfig file if not already set
 		if useKubeconfig == "" {
 			// Pattern: /tmp/cluster-api-installer-aro.*.kubeconfig
@@ -871,6 +908,10 @@ func NewTestConfig() *TestConfig {
 					}
 				}
 			}
+		}
+
+		if mceLogin {
+			mceGeneratedKubeconfig = useKubeconfig
 		}
 
 		// Step 2: Set KUBECONFIG environment variable
@@ -1039,10 +1080,17 @@ func NewTestConfig() *TestConfig {
 		ClusterMode: clusterMode,
 
 		// External cluster
-		UseKubeconfig: useKubeconfig,
+		UseKubeconfig:   useKubeconfig,
+		OCPUsername:     ocpUsername,
+		OCPPassword:     ocpPassword,
+		OCPServer:       ocpServer,
+		OCPLoginTimeout: ocpLoginTimeout,
+		ocpLogin:        ocpLogin,
+		ocpConfigError:  ocpConfigError,
+		mceLogin:        mceLogin,
 
 		// Kind mode
-		UseKind: os.Getenv("USE_KIND") == "true",
+		UseKind: os.Getenv("USE_KIND") == "true" && useKubeconfig == "",
 		UseK8S:  useK8S,
 
 		// Paths
