@@ -69,11 +69,18 @@ All configuration is centralized in the `TestConfig` struct in
 [`../test/config.go`](../test/config.go). Precedence is:
 
 1. Environment variables (highest priority)
-2. Defaults from `NewTestConfig()`
+2. Local `.capi-test-defaults.json` defaults
+3. Defaults from `NewTestConfig()`
 
-Configuration is environment-variable driven (not config files) to fit CI/CD,
-keep secrets out of the repo, and follow 12-factor principles. New configuration
-must be resolved through `GetEnvOrDefault()` — values are never hardcoded.
+Configuration remains environment-variable driven for CI/CD. `TestMain` loads
+an optional Git-ignored JSON defaults file into absent environment variables
+before any phase executes, so configuration helpers, direct environment reads,
+immutable run-context validation, and child commands use the same values.
+Explicit environment settings, including empty values, are preserved. See
+[local developer defaults](../README.md#local-developer-defaults) for file
+selection, validation, disabling the file, and Make-specific limits. New
+configuration must be resolved through `GetEnvOrDefault()` — values are never
+hardcoded.
 
 ## Provider abstraction
 
