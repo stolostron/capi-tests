@@ -16,6 +16,7 @@ func TestInitializeRunContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to initialize run context: %v", err)
 	}
+	t.Logf("private artifacts: %s", GetArtifactDir())
 	t.Logf("run context initialized at %s for %s", RunContextFilePath(), context.ClusterNamePrefix)
 }
 

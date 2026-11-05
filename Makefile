@@ -29,13 +29,18 @@ else
 AZURE_RESOURCE_GROUP ?= $(WORKLOAD_CLUSTER_NAME)-resgroup
 endif
 
-# Repository directory for cluster-api-installer (matches Go default in test/config.go:getDefaultRepoDir)
-ARO_REPO_DIR ?= $(shell echo $${TMPDIR:-/tmp})/cluster-api-installer-aro
-
-# Immutable run context is shared by every separate go test process.
-# Export it so Make-invoked phases and direct CI targets use the same path.
+# Immutable identity and private artifacts are shared across phase processes.
 CAPI_TEST_CONTEXT_FILE ?= $(CURDIR)/.run-context.json
 export CAPI_TEST_CONTEXT_FILE
+CONTEXT_OUTPUT_DIR := $(shell sed -n 's/.*"output_dir": *"\([^"]*\)".*/\1/p' "$(CAPI_TEST_CONTEXT_FILE)" 2>/dev/null)
+CONTEXT_RUN_ID := $(shell sed -n 's/.*"test_run_id": *"\([^"]*\)".*/\1/p' "$(CAPI_TEST_CONTEXT_FILE)" 2>/dev/null)
+ARTIFACT_RUN_ID := $(if $(CONTEXT_RUN_ID),$(CONTEXT_RUN_ID),$(shell date +%Y%m%d_%H%M%S)-$(shell echo $$$$))
+ifeq ($(strip $(CAPI_TEST_OUTPUT_DIR)),)
+CAPI_TEST_OUTPUT_DIR := $(if $(CONTEXT_OUTPUT_DIR),$(CONTEXT_OUTPUT_DIR),$(if $(CONTEXT_RUN_ID),$(dir $(abspath $(CAPI_TEST_CONTEXT_FILE))).capi-test-artifacts/$(CONTEXT_RUN_ID),$(if $(SHARED_DIR),$(SHARED_DIR),$(shell echo $${TMPDIR:-/tmp}))/capi-tests-$(ARTIFACT_RUN_ID)))
+endif
+CAPI_TEST_OUTPUT_DIR := $(abspath $(CAPI_TEST_OUTPUT_DIR))
+export CAPI_TEST_OUTPUT_DIR
+ARO_REPO_DIR ?= $(CAPI_TEST_OUTPUT_DIR)/cluster-api-installer-aro
 
 # Deployment state file - written by Go tests to config.RepoDir during execution.
 # Must point to the repo dir because Go tests os.Chdir(config.RepoDir) before writing.
@@ -102,20 +107,12 @@ GO_STEP_DEPLOY_CRS_TIMEOUT ?= $(shell echo $$(( $$(echo '$(CLUSTER_DEPLOYMENT_TI
 GO_STEP_VERIFY_TIMEOUT ?= 20m
 GO_STEP_DELETION_TIMEOUT ?= $(shell echo $$(( $$(echo '$(CLUSTER_DELETION_TIMEOUT)' | sed 's/m$$//') + 15 ))m)
 
-# Results directory configuration
-# Create unique results directory for each test run using timestamp
-TIMESTAMP := $(shell date +%Y%m%d_%H%M%S)
-RESULTS_DIR := results/$(TIMESTAMP)
+# Only this reports subdirectory is suitable for artifact publishing.
+# Explicit CI report paths remain supported separately from private artifacts.
+RESULTS_DIR ?= $(if $(TEST_RESULTS_DIR),$(TEST_RESULTS_DIR),$(CAPI_TEST_OUTPUT_DIR)/results)
 LATEST_RESULTS_DIR := results/latest
-
-# Resolve TEST_RESULTS_DIR: use RESULTS_DIR as-is if absolute, else prepend CURDIR.
-# This ensures CI can pass RESULTS_DIR=${ARTIFACT_DIR} (an absolute path) without
-# the Makefile accidentally prefixing the repo root directory.
-ifeq ($(patsubst /%,/,$(RESULTS_DIR)),/)
-TEST_RESULTS_DIR := $(RESULTS_DIR)
-else
-TEST_RESULTS_DIR := $(CURDIR)/$(RESULTS_DIR)
-endif
+TEST_RESULTS_DIR := $(abspath $(RESULTS_DIR))
+export TEST_RESULTS_DIR
 
 # Terminal output capture file
 TERMINAL_OUTPUT_FILE := terminal-output.log
@@ -178,8 +175,7 @@ test: _check-dep ## Run check dependencies tests only
 # The Go test is deliberately shared with normal phase configuration logic so
 # shell targets do not duplicate random-name generation algorithms.
 _init-run-context: check-gotestsum
-	@mkdir -p $(RESULTS_DIR)
-	@$(GOTESTSUM) --junitfile=$(RESULTS_DIR)/junit-init-run-context.xml -- $(TEST_VERBOSITY) ./test -count=1 -run '^TestInitializeRunContext$$'
+	@go test $(TEST_VERBOSITY) ./test -count=1 -run '^TestInitializeRunContext$$'
 
 RUN_CONTEXT_PHASES := _check-dep _setup _management_cluster _generate-yamls _deploy-crs _verify-workload-cluster _delete-workload-cluster _mce-teardown _validate-cleanup
 ifneq ($(RUN_CONTEXT_INITIALIZED),1)
@@ -381,7 +377,7 @@ _validate-cleanup: check-gotestsum
 	echo ""; \
 	exit $$EXIT_CODE
 
-test-all: ## Run all test phases sequentially
+test-all: _init-run-context ## Run all test phases sequentially
 	@mkdir -p $(RESULTS_DIR)
 	@mkdir -p $(LATEST_RESULTS_DIR)
 	@# Run the actual test execution with output captured to terminal and file
@@ -530,54 +526,6 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 			echo "Management cluster '$(CLEANUP_MANAGEMENT_CLUSTER)' not found (already clean)."; \
 		fi; \
 		echo ""; \
-	REPO_DIR="$(ARO_REPO_DIR)"; \
-		if [ -d "$$REPO_DIR" ]; then \
-			echo "Directory $$REPO_DIR exists."; \
-			read -p "Delete $$REPO_DIR? [y/N] " -n 1 -r; \
-			echo ""; \
-			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-				echo "Deleting directory..."; \
-				rm -rf "$$REPO_DIR" || echo "Failed to delete directory"; \
-			else \
-				echo "Skipped directory deletion."; \
-			fi; \
-		else \
-			echo "Directory $$REPO_DIR not found (already clean)."; \
-		fi; \
-		echo ""; \
-		TEMP_DIR="$${TMPDIR:-/tmp}"; \
-		KUBECONFIG_FILES=$$(ls "$$TEMP_DIR"/*-kubeconfig.yaml "$$TEMP_DIR"/cluster-api-installer-*.*.kubeconfig 2>/dev/null || true); \
-		if [ -n "$$KUBECONFIG_FILES" ]; then \
-			echo "Kubeconfig files found in $$TEMP_DIR:"; \
-			echo "$$KUBECONFIG_FILES" | tr ' ' '\n'; \
-			read -p "Delete kubeconfig files? [y/N] " -n 1 -r; \
-			echo ""; \
-			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-				echo "Deleting kubeconfig files..."; \
-				rm -f "$$TEMP_DIR"/*-kubeconfig.yaml "$$TEMP_DIR"/cluster-api-installer-*.*.kubeconfig 2>/dev/null || echo "Failed to delete kubeconfig files"; \
-			else \
-				echo "Skipped kubeconfig files deletion."; \
-			fi; \
-		else \
-			echo "No kubeconfig files found in $$TEMP_DIR (already clean)."; \
-		fi; \
-		echo ""; \
-		if [ -d "results" ]; then \
-			echo "Results directory exists."; \
-			echo "Contents:"; \
-			du -sh results/* 2>/dev/null || echo "  (empty)"; \
-			read -p "Delete results directory? [y/N] " -n 1 -r; \
-			echo ""; \
-			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-				echo "Deleting results directory..."; \
-				rm -rf results || echo "Failed to delete results directory"; \
-			else \
-				echo "Skipped results directory deletion."; \
-			fi; \
-		else \
-			echo "Results directory not found (already clean)."; \
-		fi; \
-		echo ""; \
 		if [ "$(INFRA_PROVIDER)" = "aro" ]; then \
 			echo "--- Azure Resources ---"; \
 			echo "Target resource group: $(CLEANUP_RESOURCE_GROUP)"; \
@@ -654,6 +602,14 @@ clean: ## Clean up test resources (interactive, use FORCE=1 to skip prompts)
 			echo "Skipping AWS cleanup (INFRA_PROVIDER=$(INFRA_PROVIDER), not rosa)"; \
 		fi; \
 		echo ""; \
+		read -p "Delete private run artifacts in $(CAPI_TEST_OUTPUT_DIR)? [y/N] " -n 1 -r; \
+		echo ""; \
+		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+			$(MAKE) --no-print-directory _clean-run-artifacts || exit $$?; \
+		else \
+			echo "Preserving artifacts and run context for later cleanup."; \
+			exit 0; \
+		fi; \
 		if [ -f "$(DEPLOYMENT_STATE_FILE)" ]; then \
 			echo "Removing deployment state file..."; \
 			rm -f "$(DEPLOYMENT_STATE_FILE)"; \
@@ -701,34 +657,7 @@ clean-all: ## Clean up ALL test resources without prompting (local + Azure)
 	@$(MAKE) --no-print-directory _clean-azure-conditional
 	@$(MAKE) --no-print-directory _clean-aws-conditional
 	@echo ""
-	@# Delete cluster-api-installer directory (use TMPDIR for cross-platform support)
-	@REPO_DIR="$(ARO_REPO_DIR)"; \
-	if [ -d "$$REPO_DIR" ]; then \
-		echo "Deleting $$REPO_DIR..."; \
-		rm -rf "$$REPO_DIR" || echo "Failed to delete directory"; \
-	else \
-		echo "Directory $$REPO_DIR not found (already clean)."; \
-	fi
-	@echo ""
-	@# Delete kubeconfig files (use TMPDIR for cross-platform support)
-	@TEMP_DIR="$${TMPDIR:-/tmp}"; \
-	KUBECONFIG_FILES=$$(ls "$$TEMP_DIR"/*-kubeconfig.yaml "$$TEMP_DIR"/cluster-api-installer-*.*.kubeconfig 2>/dev/null || true); \
-	if [ -n "$$KUBECONFIG_FILES" ]; then \
-		echo "Deleting kubeconfig files:"; \
-		echo "$$KUBECONFIG_FILES" | tr ' ' '\n'; \
-		rm -f "$$TEMP_DIR"/*-kubeconfig.yaml "$$TEMP_DIR"/cluster-api-installer-*.*.kubeconfig 2>/dev/null || echo "Failed to delete kubeconfig files"; \
-	else \
-		echo "No kubeconfig files found in $$TEMP_DIR (already clean)."; \
-	fi
-	@echo ""
-	@# Delete results directory
-	@if [ -d "results" ]; then \
-		echo "Deleting results directory..."; \
-		rm -rf results || echo "Failed to delete results directory"; \
-	else \
-		echo "Results directory not found (already clean)."; \
-	fi
-	@echo ""
+	@$(MAKE) --no-print-directory _clean-run-artifacts
 	@# Delete deployment state file
 	@if [ -f "$(DEPLOYMENT_STATE_FILE)" ]; then \
 		echo "Removing deployment state file..."; \
@@ -930,3 +859,12 @@ lint: ## Run linters
 deps: ## Download Go dependencies
 	go mod download
 	go mod tidy
+
+# Local files only; caller-facing clean targets handle cloud resources first.
+.PHONY: _clean-run-artifacts
+_clean-run-artifacts:
+	@if [ -f "$(CAPI_TEST_CONTEXT_FILE)" ]; then \
+		CAPI_CLEAN_RUN_ARTIFACTS=1 go test ./test -count=1 -run '^TestCleanRunArtifacts$$'; \
+	else \
+		echo "No run context; no private artifact directory will be removed."; \
+	fi
