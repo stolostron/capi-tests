@@ -1,6 +1,7 @@
 package test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -4751,6 +4752,39 @@ func TestRedactCommand(t *testing.T) {
 				t.Errorf("redactCommand() =\n  %s\nwant:\n  %s", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestFormatDiagnosticResourceMasksSecretsAndPreservesHCPStatus(t *testing.T) {
+	t.Setenv("AZURE_CLIENT_SECRET", "env-client-secret")
+
+	input := `{"apiVersion":"redhatopenshift.azure.com/v1alpha1","kind":"HcpOpenShiftCluster","metadata":{"name":"cluster","namespace":"capz-tests","annotations":{"note":"annotation-secret"}},"spec":{"clientSecret":"inline-client-secret","operatorSpec":{"secrets":{"adminCredentials":{"name":"admin-creds"}}}},"status":{"properties":{"status":{"activeVersions":[{"version":"4.22"}],"conditions":[{"type":"RequirementsValid","status":"True"}]},"message":"failure included env-client-secret"}}}`
+	got := formatDiagnosticResourceOutput(input)
+
+	for _, secret := range []string{"inline-client-secret", "admin-creds", "env-client-secret", "annotation-secret"} {
+		if strings.Contains(got, secret) {
+			t.Errorf("formatDiagnosticResourceOutput() leaked sensitive value %q in %s", secret, got)
+		}
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(got), &result); err != nil {
+		t.Fatalf("formatDiagnosticResourceOutput() returned invalid JSON: %v", err)
+	}
+	spec := result["spec"].(map[string]any)
+	if spec["clientSecret"] != "***REDACTED***" {
+		t.Errorf("clientSecret = %v, want redacted", spec["clientSecret"])
+	}
+	status := result["status"].(map[string]any)
+	properties := status["properties"].(map[string]any)
+	hcpStatus := properties["status"].(map[string]any)
+	activeVersions := hcpStatus["activeVersions"].([]any)
+	version := activeVersions[0].(map[string]any)["version"]
+	if version != "4.22" {
+		t.Errorf("activeVersions[0].version = %v, want 4.22", version)
+	}
+	if _, ok := result["metadata"].(map[string]any)["annotations"]; ok {
+		t.Error("diagnostic snapshot unexpectedly retained metadata annotations")
 	}
 }
 
