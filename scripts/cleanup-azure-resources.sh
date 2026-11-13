@@ -31,6 +31,8 @@
 #   CAPI_USER          User prefix for resource names (e.g., 'cate') - fallback if CS_CLUSTER_NAME not set
 #   DEPLOYMENT_ENV     Deployment environment (default: 'stage') - combined with CAPI_USER as standalone fallback
 #   AZURE_SUBSCRIPTION_ID  Azure subscription ID to search in
+#   CLEANUP_EXCLUDED_AD_APP_IDS  Comma-separated Azure AD app IDs to preserve
+#                                (the matching service principals are preserved too)
 #
 # Examples:
 #   ./scripts/cleanup-azure-resources.sh --dry-run
@@ -71,6 +73,25 @@ print_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 print_success() { echo -e "${GREEN}[OK]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+# Return success when an Azure AD app ID is explicitly protected from cleanup.
+# This is intentionally ID-based: display-name prefixes are not an ownership
+# signal and can match persistent CI identities.
+is_excluded_ad_app_id() {
+    local app_id="$1"
+    local excluded_id
+    local -a excluded_ids=()
+
+    IFS=',' read -r -a excluded_ids <<< "${CLEANUP_EXCLUDED_AD_APP_IDS:-}"
+    for excluded_id in "${excluded_ids[@]}"; do
+        excluded_id="${excluded_id//[[:space:]]/}"
+        if [[ -n "$excluded_id" && "$app_id" == "$excluded_id" ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
 
 # Show usage
 usage() {
@@ -553,6 +574,7 @@ delete_ad_applications() {
     local count
     local deleted=0
     local failed=0
+    local preserved=0
 
     count=$(echo "$apps_json" | jq -r 'length')
 
@@ -560,15 +582,28 @@ delete_ad_applications() {
         return 0
     fi
 
+    while IFS= read -r appId; do
+        if [[ -n "$appId" ]] && is_excluded_ad_app_id "$appId"; then
+            ((preserved++)) || true
+        fi
+    done < <(echo "$apps_json" | jq -r '.[].appId')
+
+    local deletable=$((count - preserved))
+
     if [[ "$DRY_RUN" == "true" ]]; then
-        print_warning "[DRY-RUN] Would delete ${count} Azure AD Application(s)"
+        print_warning "[DRY-RUN] Would delete ${deletable} Azure AD Application(s); preserving ${preserved} explicitly excluded application(s)"
+        return 0
+    fi
+
+    if [[ "$deletable" -eq 0 ]]; then
+        print_info "All matching Azure AD Applications are explicitly excluded from cleanup"
         return 0
     fi
 
     # Confirm deletion unless --force is specified
     if [[ "$FORCE" != "true" ]]; then
         echo ""
-        read -p "Delete all ${count} Azure AD Application(s)? [y/N] " -n 1 -r
+        read -p "Delete ${deletable} Azure AD Application(s)? [y/N] " -n 1 -r
         echo ""
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             print_info "Azure AD Application deletion cancelled"
@@ -591,6 +626,11 @@ delete_ad_applications() {
         local app_name
         app_name=$(echo "$apps_json" | jq -r --arg id "$appId" '.[] | select(.appId == $id) | .displayName')
 
+        if is_excluded_ad_app_id "$appId"; then
+            echo "  Preserving: ${app_name} (${appId}) (explicitly excluded)"
+            continue
+        fi
+
         echo -n "  Deleting: ${app_name} (${appId})... "
 
         # Attempt deletion
@@ -607,6 +647,7 @@ delete_ad_applications() {
     print_info "Azure AD Application deletion summary:"
     echo "  - Deleted: ${deleted}"
     echo "  - Failed: ${failed}"
+    echo "  - Preserved: ${preserved}"
 
     if [[ "$failed" -gt 0 ]]; then
         print_error "${failed} Azure AD application deletion(s) failed"
@@ -656,6 +697,7 @@ delete_service_principals() {
     local count
     local deleted=0
     local failed=0
+    local preserved=0
 
     count=$(echo "$sps_json" | jq -r 'length')
 
@@ -663,8 +705,21 @@ delete_service_principals() {
         return 0
     fi
 
+    while IFS= read -r appId; do
+        if [[ -n "$appId" ]] && is_excluded_ad_app_id "$appId"; then
+            ((preserved++)) || true
+        fi
+    done < <(echo "$sps_json" | jq -r '.[].appId')
+
+    local deletable=$((count - preserved))
+
     if [[ "$DRY_RUN" == "true" ]]; then
-        print_warning "[DRY-RUN] Would delete ${count} Service Principal(s)"
+        print_warning "[DRY-RUN] Would delete ${deletable} Service Principal(s); preserving ${preserved} explicitly excluded service principal(s)"
+        return 0
+    fi
+
+    if [[ "$deletable" -eq 0 ]]; then
+        print_info "All matching Service Principals are explicitly excluded from cleanup"
         return 0
     fi
 
@@ -696,6 +751,14 @@ delete_service_principals() {
         local sp_name
         sp_name=$(echo "$sps_json" | jq -r --arg id "$spId" '.[] | select(.id == $id) | .displayName')
 
+        local sp_app_id
+        sp_app_id=$(echo "$sps_json" | jq -r --arg id "$spId" '.[] | select(.id == $id) | .appId')
+
+        if is_excluded_ad_app_id "$sp_app_id"; then
+            echo "  Preserving: ${sp_name} (${sp_app_id}) (explicitly excluded)"
+            continue
+        fi
+
         echo -n "  Deleting: ${sp_name}... "
 
         # Attempt deletion (may fail if already deleted with its App)
@@ -712,6 +775,7 @@ delete_service_principals() {
     print_info "Service Principal deletion summary:"
     echo "  - Deleted: ${deleted}"
     echo "  - Skipped (already deleted): ${skipped}"
+    echo "  - Preserved: ${preserved}"
 }
 
 # Find soft-deleted Key Vaults matching the prefix
