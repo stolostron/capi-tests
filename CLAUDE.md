@@ -113,6 +113,13 @@ Never hardcode values - always use `GetEnvOrDefault()` for new configuration.
 - `GetControllerLogs` / `ParseControllerLogs` / `SummarizeControllerLogs` / `SaveControllerLogs`
 - `GetAllControllerLogSummaries` / `FormatControllerLogSummaries` / `SaveAllControllerLogs`
 
+- `AnalyzeSavedControllerLogs` streams saved controller files and reports known/unexpected
+  error groups with full counts. `TestVerification_ControllerLogAnalysis` follows log
+  collection in phase 06 and is opt-in via `ANALYZE_CONTROLLER_LOGS=true`.
+- `CONTROLLER_LOG_DIR` overrides the results directory for offline analysis;
+  `CONTROLLER_LOG_KNOWN_ERRORS_FILE` replaces the built-in narrow retry regex list.
+  See README's "Analyze saved controller logs" section for missing-input policy.
+
 **Deployment state:**
 - `WriteDeploymentState` / `ReadDeploymentState` / `DeleteDeploymentState`
 
