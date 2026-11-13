@@ -1,0 +1,61 @@
+# Reduced from cluster-api-installer scripts/aro-hcp/aro-template*.yaml.
+# Owner and ConfigMap references intentionally match the generated structure.
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: cluster
+  namespace: ns
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: AROCluster
+metadata:
+  name: cluster
+  namespace: ns
+spec:
+  resources:
+    - apiVersion: resources.azure.com/v1api20200601
+      kind: ResourceGroup
+      metadata: {name: rg, namespace: ns}
+      spec: {location: uksouth}
+    - apiVersion: network.azure.com/v1api20201101
+      kind: VirtualNetworksSubnet
+      metadata: {name: subnet, namespace: ns}
+      spec: {owner: {name: vnet}}
+    - apiVersion: managedidentity.azure.com/v1api20230131
+      kind: UserAssignedIdentity
+      metadata: {name: identity, namespace: ns}
+      spec:
+        location: uksouth
+        owner: {name: rg}
+        operatorSpec:
+          configMaps:
+            principalId: {name: identity-map, key: principalId}
+    - apiVersion: authorization.azure.com/v1api20220401
+      kind: RoleAssignment
+      metadata: {name: role, namespace: ns}
+      spec:
+        owner: {name: subnet, group: network.azure.com, kind: VirtualNetworksSubnet}
+        principalIdFromConfig: {name: identity-map, key: principalId}
+        roleDefinitionReference:
+          armId: /subscriptions/sub/providers/Microsoft.Authorization/roleDefinitions/88366f10-ed47-4cc0-9fab-c8a06148393e
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+kind: AROControlPlane
+metadata: {name: cluster, namespace: ns}
+spec:
+  identityRef: {kind: AzureClusterIdentity, name: cluster-identity, namespace: ns}
+  resources:
+    - apiVersion: redhatopenshift.azure.com/v1api20251223preview
+      kind: HcpOpenShiftCluster
+      metadata: {name: cluster, namespace: ns}
+      spec: {owner: {name: rg}}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: AROMachinePool
+metadata: {name: pool, namespace: ns}
+spec:
+  resources:
+    - apiVersion: redhatopenshift.azure.com/v1api20251223preview
+      kind: HcpOpenShiftClustersNodePool
+      metadata: {name: pool, namespace: ns}
+      spec: {owner: {name: cluster}}
