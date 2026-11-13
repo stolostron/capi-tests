@@ -8,6 +8,12 @@ name: Stale Resource Detection
 #   - Environment (aro-stage) with Azure credentials
 #   - Repository secrets: JIRA_EMAIL, JIRA_API_TOKEN (for Jira integration)
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/check-stale-resources.sh'
+      - 'test/stale_resources_test.go'
+      - '.github/workflows/stale-resources.yml'
   schedule:
     - cron: '0 6 * * *'  # Daily at 6:00 AM UTC
   workflow_dispatch:
@@ -25,8 +31,26 @@ env:
   MAX_AGE_HOURS: ${{ inputs.max_age_hours || '24' }}
 
 jobs:
+  regression-tests:
+    name: Stale resource regression tests
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: Set up Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: go.mod
+    - name: Test detector and workflow reporting without Azure access
+      run: |
+        shellcheck scripts/check-stale-resources.sh
+        go test -mod=mod ./test -run '^TestStaleResource' -count=1
+
   check-azure:
     name: Check Azure Resources
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: aro-stage
@@ -37,6 +61,7 @@ jobs:
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
     outputs:
       stale_found: ${{ steps.check.outputs.stale_found }}
+      report_found: ${{ steps.check.outputs.report_found }}
       report: ${{ steps.check.outputs.report }}
       summary: ${{ steps.check.outputs.summary }}
     steps:
@@ -90,13 +115,6 @@ jobs:
         EXIT_CODE=$?
         set -e
 
-        if [ "$EXIT_CODE" -eq 2 ]; then
-          echo "::error::Script error during Azure resource check"
-          cat azure-check.stderr >&2 || true
-          echo "stale_found=false" >> "$GITHUB_OUTPUT"
-          exit 1
-        fi
-
         if ! echo "$RESULT" | jq -e . >/dev/null 2>&1; then
           echo "::error::Invalid JSON output from check script"
           cat azure-check.stderr >&2 || true
@@ -109,6 +127,11 @@ jobs:
         SUMMARY=$(echo "$JSON_RESULT" | jq -r '.summary')
 
         echo "stale_found=$STALE" >> "$GITHUB_OUTPUT"
+        REPORT_FOUND=$(echo "$JSON_RESULT" | jq '
+          .stale_found or (.scan_complete == false) or
+          ([.azure.unknown_age_resource_groups[], .azure.deleting_resource_groups[],
+            .azure.disappeared_resource_groups[]] | length > 0)')
+        echo "report_found=$REPORT_FOUND" >> "$GITHUB_OUTPUT"
         {
           echo 'summary<<SUMMARY_EOF'
           echo "$SUMMARY"
@@ -123,8 +146,14 @@ jobs:
           echo 'REPORT_EOF'
         } >> "$GITHUB_OUTPUT"
 
+        if [ "$EXIT_CODE" -gt 1 ]; then
+          echo "::error::Azure resource scan incomplete — see report for lookup errors"
+          cat azure-check.stderr >&2 || true
+          exit 1
+        fi
+
     - name: Upload Azure report
-      if: always() && steps.check.outputs.stale_found == 'true'
+      if: always() && steps.check.outputs.report_found == 'true'
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: azure-stale-report
@@ -134,7 +163,7 @@ jobs:
   report:
     name: Report Findings
     needs: [check-azure]
-    if: always() && needs.check-azure.outputs.stale_found == 'true'
+    if: always() && needs.check-azure.outputs.report_found == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -152,52 +181,58 @@ jobs:
           echo "# Stale Resource Detection Results"
           echo ""
           echo "**Threshold:** ${MAX_AGE_HOURS} hours"
+          echo "$AZURE_REPORT" | jq -r '"**Observed at:** \(.observed_at) (UTC)", "**Subscription:** \(.subscription_id)", "**Scan complete:** \(.scan_complete)"'
+          echo ""
+          echo "$AZURE_SUMMARY"
+          echo ""
+          echo "Unknown-age groups and groups being deleted are informational; they do not fail the stale-resource check. Lookup errors fail the scan as incomplete."
           echo ""
 
-          if [ "$AZURE_STALE" = "true" ]; then
-            echo "## Azure"
+          for CATEGORY in resource_groups unknown_age_resource_groups deleting_resource_groups disappeared_resource_groups; do
+            COUNT=$(echo "$AZURE_REPORT" | jq --arg category "$CATEGORY" '.azure[$category] | length')
+            if [ "$COUNT" -eq 0 ]; then
+              continue
+            fi
+            case "$CATEGORY" in
+              resource_groups) TITLE="Confirmed stale resource groups" ;;
+              unknown_age_resource_groups) TITLE="Unknown-age resource groups" ;;
+              deleting_resource_groups) TITLE="Resource groups being deleted" ;;
+              disappeared_resource_groups) TITLE="Resource groups that disappeared during the scan" ;;
+            esac
+            echo "### $TITLE"
             echo ""
-            echo "$AZURE_SUMMARY"
+            echo "| Name | Location | Created At | State | User | Env |"
+            echo "|------|----------|------------|-------|------|-----|"
+            echo "$AZURE_REPORT" | jq -r --arg category "$CATEGORY" '.azure[$category][] | "| \(.name) | \(.location // "-") | \(.createdAt // "unknown") | \(.provisioningState // "absent") | \(.user // "-") | \(.env // "-") |"'
             echo ""
+          done
 
-            # Resource groups table
-            RG_COUNT=$(echo "$AZURE_REPORT" | jq '.azure.resource_groups | length' 2>/dev/null || echo 0)
-            if [ "$RG_COUNT" -gt 0 ]; then
-              echo "### Resource Groups"
-              echo ""
-              echo "| Name | Location | Created At | User | Env |"
-              echo "|------|----------|------------|------|-----|"
-              echo "$AZURE_REPORT" | jq -r '.azure.resource_groups[] | "| \(.name) | \(.location) | \(.createdAt) | \(.user // "-") | \(.env // "-") |"' 2>/dev/null
-              echo ""
+          for CATEGORY in ad_applications service_principals; do
+            COUNT=$(echo "$AZURE_REPORT" | jq --arg category "$CATEGORY" '.azure[$category] | length')
+            if [ "$COUNT" -eq 0 ]; then
+              continue
             fi
+            case "$CATEGORY" in
+              ad_applications) TITLE="AD Applications" ;;
+              service_principals) TITLE="Service Principals" ;;
+            esac
+            echo "### $TITLE"
+            echo ""
+            echo "| Display Name | App ID | Created At |"
+            echo "|-------------|--------|------------|"
+            echo "$AZURE_REPORT" | jq -r --arg category "$CATEGORY" '.azure[$category][] | "| \(.displayName) | \(.appId) | \(.createdAt) |"'
+            echo ""
+          done
 
-            # AD Applications table
-            APP_COUNT=$(echo "$AZURE_REPORT" | jq '.azure.ad_applications | length' 2>/dev/null || echo 0)
-            if [ "$APP_COUNT" -gt 0 ]; then
-              echo "### AD Applications"
-              echo ""
-              echo "| Display Name | App ID | Created At |"
-              echo "|-------------|--------|------------|"
-              echo "$AZURE_REPORT" | jq -r '.azure.ad_applications[] | "| \(.displayName) | \(.appId) | \(.createdAt) |"' 2>/dev/null
-              echo ""
-            fi
-
-            # Service Principals table
-            SP_COUNT=$(echo "$AZURE_REPORT" | jq '.azure.service_principals | length' 2>/dev/null || echo 0)
-            if [ "$SP_COUNT" -gt 0 ]; then
-              echo "### Service Principals"
-              echo ""
-              echo "| Display Name | App ID | Created At |"
-              echo "|-------------|--------|------------|"
-              echo "$AZURE_REPORT" | jq -r '.azure.service_principals[] | "| \(.displayName) | \(.appId) | \(.createdAt) |"' 2>/dev/null
-              echo ""
-            fi
+          if [ "$(echo "$AZURE_REPORT" | jq '.errors | length')" -gt 0 ]; then
+            echo "### Scan errors"
+            echo ""
+            echo "$AZURE_REPORT" | jq -r '.errors[] | "- \(.context): \(.message)"'
           fi
-
         } >> "$GITHUB_STEP_SUMMARY"
 
     - name: Create or update Jira issue
-      if: env.JIRA_EMAIL != '' && env.JIRA_API_TOKEN != ''
+      if: env.AZURE_STALE == 'true' && env.JIRA_EMAIL != '' && env.JIRA_API_TOKEN != ''
       run: |
         echo "::add-mask::${JIRA_API_TOKEN}"
         TODAY=$(date +%Y-%m-%d)
@@ -301,6 +336,7 @@ jobs:
         fi
 
     - name: Fail workflow
+      if: env.AZURE_STALE == 'true'
       run: |
         echo "::error::Stale cloud resources detected — see step summary for details"
         exit 1
