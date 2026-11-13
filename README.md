@@ -91,7 +91,57 @@ jq --version
 
 ## Configuration
 
-Tests are configured via environment variables:
+Tests resolve settings in this order: explicit environment variables, optional
+local defaults, then the built-in defaults in `test/config.go`.
+
+### Local developer defaults
+
+Create `.capi-test-defaults.json` in the repository root to customize defaults
+without editing tracked files. This file is ignored by Git. Use a JSON object
+whose keys are environment-variable names and whose values are strings:
+
+```json
+{
+  "REGION": "uksouth",
+  "CAPI_USER": "alice",
+  "DEPLOYMENT_ENV": "dev",
+  "USE_KIND": "true"
+}
+```
+
+The test process loads this file once, before any phase runs, for both `make test`
+and direct `go test ./test` invocations. Values are literal: shell commands,
+variable expansion, `export` statements, and comments are not supported. Defaults
+are inherited by commands started by the tests. An explicitly set environment
+variable always wins, including an empty value; existing configuration helpers
+still interpret empty values as their built-in fallback where applicable.
+
+Set `CAPI_TEST_DEFAULTS_FILE=/path/to/defaults.json` to select another file.
+Relative paths resolve from the repository workspace (`CAPI_TEST_WORKSPACE` if
+set). A missing default file is ignored; an explicitly selected missing file,
+unreadable file, or invalid JSON/name/value stops the process before tests run.
+Set `CAPI_TEST_DEFAULTS_FILE=` to disable loading, for example in CI or when
+running unit tests against built-in defaults.
+
+Immutable run identity still applies: local identity settings seed a new run,
+and conflicting settings on a resumed run fail validation. Changing defaults
+does not silently retarget an existing run.
+
+The file configures Go tests and their child commands. Make's own settings,
+shell cleanup targets, results directory, and exported run-context path remain
+controlled by Make/environment variables. Use explicit environment variables
+for settings also needed by shell targets (such as `ARO_REPO_DIR` or
+`INFRA_PROVIDER`). Local polling timeouts do not change Make's outer Go process
+deadline; when increasing them, also set `GO_STEP_DEPLOY_CRS_TIMEOUT` or
+`GO_STEP_DELETION_TIMEOUT` with enough headroom. For example, with a local
+`CLUSTER_DEPLOYMENT_TIMEOUT` of `"180m"`, run:
+
+```bash
+GO_STEP_DEPLOY_CRS_TIMEOUT=195m make _deploy-crs
+```
+
+Alternatively, `CLUSTER_DEPLOYMENT_TIMEOUT=180m make _deploy-crs` overrides the
+local value explicitly and lets Make calculate the 195-minute outer deadline.
 
 ### Repository Configuration
 

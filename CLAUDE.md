@@ -58,7 +58,12 @@ kind delete cluster --name capz-tests-stage
 All test configuration is centralized in `test/config.go` via the `TestConfig` struct. Configuration follows this precedence:
 
 1. Environment variables (highest priority)
-2. Defaults in `NewTestConfig()`
+2. Local `.capi-test-defaults.json` values loaded at test-process startup
+3. Defaults in `NewTestConfig()`
+
+See [README.md](README.md#local-developer-defaults) for file format,
+`CAPI_TEST_DEFAULTS_FILE`, and Make-specific settings. Explicit environment
+variables (including empty values) are never overwritten by the local file.
 
 Key configuration pattern:
 ```go
@@ -436,7 +441,8 @@ Unlike typical Go tests that run in parallel, these tests MUST run sequentially 
 
 ### Why Configuration is Environment-Based
 
-Configuration uses environment variables rather than config files because:
+Environment variables remain the primary configuration interface, with an
+optional Git-ignored local defaults file for developers:
 - Easier CI/CD integration (GitHub Actions, etc.)
 - No sensitive data in repository
 - Flexibility for different environments (dev, stage, prod)
