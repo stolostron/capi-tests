@@ -134,6 +134,18 @@ When using `INFRA_PROVIDER=rosa`, the following credentials are required:
 - `WORKLOAD_CLUSTER_NAMESPACE` - Namespace for workload cluster resources. If set, uses the exact value provided (for resume scenarios). If not set, auto-generates a unique namespace per test run using `${WORKLOAD_CLUSTER_NAMESPACE_PREFIX}-${TIMESTAMP}` format.
 - `WORKLOAD_CLUSTER_NAMESPACE_PREFIX` - Prefix for auto-generated namespace (default: provider-specific — `capz-test` for ARO, `capa-test` for ROSA). Only used when `WORKLOAD_CLUSTER_NAMESPACE` is not set.
 
+#### ARO HCP control-plane logging
+
+Every ARO deployment tests control-plane logging. Phase 05 creates a StorageV2 account and a Standard Event Hubs namespace in the run's resource group and HCP region. One ASO DiagnosticSetting on the HCP sends all nine categories below to both the account and the `control-plane-logs` event hub. The test reads the setting back from Azure Monitor and checks the storage account ID, hub name, namespace authorization rule ID, and enabled categories. Phase 07 removes the setting first, then deletes the test-owned account and Event Hubs namespace, including their logs.
+
+| Source | Enabled log categories |
+|--------|------------------------|
+| API and audit | `kube-apiserver`, `kube-audit`, `kube-audit-admin` |
+| Control-plane components | `kube-controller-manager`, `kube-scheduler`, `cloud-controller-manager` |
+| Storage controllers | `csi-azuredisk-controller`, `csi-azurefile-controller`, `csi-snapshot-controller` |
+
+The test runner needs Azure Monitor read access and permission to provision, read, and clean up storage accounts, Event Hubs namespaces, event hubs, and namespace authorization rules in the run's resource group. The ASO identity needs permission to manage diagnostic settings on the HCP and use the storage destination, plus `Microsoft.EventHub/namespaces/authorizationRules/listKeys/action` on the Event Hubs rule. The test creates the namespace rule with the `Manage`, `Send`, and `Listen` rights required by Azure Monitor. External management clusters must serve `DiagnosticSetting` at `insights.azure.com/v1api20210501preview`. [Azure HCP logging prerequisites](https://learn.microsoft.com/en-us/azure/openshift/howto-enable-control-plane-logs#prerequisites) · [Azure Monitor destination requirements](https://learn.microsoft.com/en-us/azure/azure-monitor/data-collection/diagnostic-settings#destinations)
+
 #### Naming Requirements (RFC 1123)
 
 The following variables must be **RFC 1123 compliant** to avoid deployment failures:

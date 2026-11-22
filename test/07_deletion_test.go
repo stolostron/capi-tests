@@ -7,6 +7,46 @@ import (
 	"time"
 )
 
+// TestDeletion_DeleteHCPDiagnosticSetting removes the setting while the parent is still queryable.
+func TestDeletion_DeleteHCPDiagnosticSetting(t *testing.T) {
+	cleanupHCPDiagnostics(t, diagnosticSettingConfig(t))
+}
+
+func cleanupHCPDiagnostics(t *testing.T, config *TestConfig) {
+	t.Helper()
+	served := diagnosticKubectl(t, config, "get", "crd", diagnosticResource, "--ignore-not-found", "-o", "name") != ""
+	if served {
+		diagnosticKubectl(t, config, "delete", diagnosticResource, diagnosticSettingName(config),
+			"--ignore-not-found", "--wait=true", "--timeout="+config.ASOControllerTimeout.String())
+	}
+	// Release both destinations after finalization even if the Azure read-back fails.
+	if diagnosticResourceGroupExists(t, config) {
+		defer deleteDiagnosticStorage(t, config)
+		defer deleteDiagnosticEventHubNamespace(t, config)
+	}
+	if !served {
+		return
+	}
+	_, resourceID := diagnosticHCP(t, config)
+	if resourceID == "" {
+		t.Log("HCP has no Azure resource ID; finished Kubernetes cleanup")
+		return
+	}
+	// ARM list can briefly lag behind ASO finalization.
+	policy := RetryPolicy{MaxAttempts: 6, InitialDelay: 2 * time.Second, MaxDelay: 10 * time.Second}
+	err := policy.Execute(func() error {
+		count := diagnosticAzure(t, "list", "--resource", resourceID, "--query",
+			"length(not_null(value, @)[?name=='"+diagnosticAzureName+"'])", "-o", "tsv")
+		if count != "0" {
+			return fmt.Errorf("expected zero Azure settings named %s on %s, got %q", diagnosticAzureName, resourceID, count)
+		}
+		return nil
+	}, func(error) bool { return true })
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestDeletion_DeleteCluster tests deleting the workload cluster from the management cluster.
 // This initiates the deletion by removing the Cluster resource, which triggers
 // CAPI to clean up all associated resources including cloud provider resources.
