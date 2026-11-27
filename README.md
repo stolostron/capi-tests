@@ -226,6 +226,18 @@ Example: `CLUSTER_DEPLOYMENT_TIMEOUT=90m make _deploy-crs` (sets Go step timeout
    SKIP_AZURE_LOGIN=true ./test.sh aro
    ```
 
+   When service principal credentials are configured, the phase 1 authentication
+   check also runs `az ad sp show --id "$AZURE_CLIENT_ID"` after login. The active
+   CLI identity needs Microsoft Graph permissions to read the service principal
+   in the intended tenant. With `SKIP_AZURE_LOGIN=true`, this lookup uses your
+   existing session; ensure it targets `AZURE_TENANT_ID`.
+
+   A confirmed missing principal stops the phase with replacement instructions.
+   Authentication, directory permission, and network failures also stop the
+   phase, but report that existence could not be verified. Resolve that lookup
+   failure before creating a replacement. Azure CLI authentication without service
+   principal credentials does not perform this lookup.
+
 3. **Run check dependencies tests**:
    ```bash
    make test
