@@ -261,6 +261,39 @@ TEST_VERBOSITY= make test
 TEST_VERBOSITY=-v make test
 ```
 
+#### Using OpenShift login credentials
+
+As an alternative to `USE_KUBECONFIG`, set the three credentials (each defaults
+to empty). The login timeout is optional:
+
+| Variable | Purpose |
+|----------|---------|
+| `OCP_USERNAME` | OpenShift username |
+| `OCP_PASSWORD` | OpenShift password; inject it from your secret store |
+| `OCP_SERVER` | HTTPS OpenShift API server URL without embedded credentials, for example `https://api.example.com:6443` |
+| `OCP_LOGIN_TIMEOUT` | Positive duration for login/context validation (default: `2m`) |
+
+During dependency checks, the suite runs `oc login` and validates the resulting
+current context before using the existing external-management-cluster path.
+An explicit `USE_KUBECONFIG` takes precedence over OCP and MCE login, even if
+only some OCP credentials are set. Otherwise, partial OCP credentials fail with
+the missing variable names. OCP login disables Kind creation and also works
+with `CLUSTER_MODE=mce`; it does not require `MCE_API_*` credentials.
+
+The generated file is `<run-context-file>.ocp/kubeconfig` (see
+`CAPI_TEST_CONTEXT_FILE`), with directory permissions `0700` and file permissions
+`0600`. Keep it for later phase processes and remove it when the run is finished.
+Login atomically replaces this file after success and never writes
+`~/.kube/config`. The password is passed through stdin; raw login output is
+suppressed, and `OCP_LOGIN_TIMEOUT` bounds login/context validation (default:
+two minutes). TLS uses the system trust store. Because `oc` splits nonterminal
+password input on whitespace, passwords containing whitespace are rejected;
+supply an explicit `USE_KUBECONFIG` for those accounts. Run dependency checks
+before running individual later phases.
+
+These credentials authenticate to the **management cluster**. Azure/AWS runner
+credentials and workload-cluster authentication remain separate requirements.
+
 #### Using External Cluster (MCE)
 
 Instead of creating a local Kind cluster, you can run tests against an external Kubernetes cluster with pre-installed CAPI/CAPZ/ASO controllers:

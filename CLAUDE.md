@@ -384,6 +384,8 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
   - Creates a local Kind management cluster with CAPI/CAPZ/ASO controllers
 
 ### External Cluster Mode
+- `OCP_USERNAME`, `OCP_PASSWORD`, `OCP_SERVER` - OpenShift login credentials (all default empty). Set all three to generate a private management kubeconfig during dependency checks. `USE_KUBECONFIG` takes precedence, including over partial credentials. OCP login also supersedes MCE login and disables Kind creation.
+- OCP login stores its kubeconfig at `<CAPI_TEST_CONTEXT_FILE>.ocp/kubeconfig` (using the resolved default context path if unset), with `0700` directory / `0600` file permissions. It uses password stdin, system TLS trust, a positive `OCP_LOGIN_TIMEOUT` duration (default: `2m`), and suppresses raw output. Keep the file for later phases; remove it after the run. It never writes the user's home kubeconfig and does not replace cloud-runner authentication. Passwords containing whitespace require an explicit `USE_KUBECONFIG` because oc tokenizes nonterminal password input.
 - `USE_KUBECONFIG` - Path to an external kubeconfig file. When set, the test suite runs in "external cluster mode":
   - Skips Kind cluster creation (Phase 03) by default
   - Skips repository cloning (Phase 02) when controllers are pre-installed

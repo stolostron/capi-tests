@@ -13,12 +13,10 @@ import (
 
 // TestCheckDependencies_ToolAvailable verifies all required tools are installed
 func TestCheckDependencies_ToolAvailable(t *testing.T) {
-	// Check if config initialization failed
+	config := NewTestConfig()
 	if configError != nil {
 		t.Fatalf("Configuration initialization failed: %s", *configError)
 	}
-
-	config := NewTestConfig()
 
 	// Common tools required regardless of provider
 	// docker and kind are only needed for Kind mode (local management cluster)
@@ -79,6 +77,18 @@ func TestCheckDependencies_OptionalTools(t *testing.T) {
 	}
 }
 
+// TestCheckDependencies_OCPAuthentication runs before external kubeconfig validation.
+func TestCheckDependencies_OCPAuthentication(t *testing.T) {
+	config := NewTestConfig()
+	if !config.ocpLogin {
+		t.Skip("OCP credentials are not the selected kubeconfig source")
+	}
+	if err := AuthenticateOCP(config); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("Authenticated OpenShift management cluster; kubeconfig: %s", config.UseKubeconfig)
+}
+
 // TestCheckDependencies_MCEAuthentication performs MCE cluster authentication when CLUSTER_MODE=mce.
 // This test runs when CLUSTER_MODE is set to "mce", and:
 // 1. Uses kubeconfig created by NewTestConfig() in /tmp
@@ -96,8 +106,8 @@ func TestCheckDependencies_MCEAuthentication(t *testing.T) {
 	config := NewTestConfig()
 
 	// Skip if not in MCE mode
-	if config.ClusterMode != "mce" {
-		t.Skip("CLUSTER_MODE is not 'mce', skipping MCE authentication")
+	if config.ClusterMode != "mce" || !config.mceLogin {
+		t.Skip("MCE login is not the selected kubeconfig source")
 		return
 	}
 
