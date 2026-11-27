@@ -451,6 +451,27 @@ func TestVerification_ControllerLogSummary(t *testing.T) {
 	t.Logf("Controller logs saved to: %s", resultsDir)
 }
 
+// TestVerification_ControllerLogAnalysis runs after ControllerLogSummary saves logs.
+// Select this test alone to analyze existing artifacts without cluster access.
+func TestVerification_ControllerLogAnalysis(t *testing.T) {
+	config := NewTestConfig()
+	if !config.AnalyzeControllerLogs {
+		t.Skip("Set ANALYZE_CONTROLLER_LOGS=true to analyze saved controller logs")
+	}
+	dir := config.ControllerLogDir
+	if dir == "" {
+		dir = GetResultsDir()
+	}
+	report, err := AnalyzeSavedControllerLogs(dir, config.AllControllers(), config.ControllerLogKnownErrorsFile)
+	if err != nil {
+		t.Fatalf("Controller log analysis failed: %v", err)
+	}
+	t.Log(report.String())
+	if report.UnexpectedCount > 0 {
+		t.Errorf("Found %d unexpected controller error occurrences; see grouped report above", report.UnexpectedCount)
+	}
+}
+
 // rewriteKindInternalServer detects Docker-internal Kind server addresses in a kubeconfig
 // and replaces them with host-accessible addresses. Kind containers use DNS names like
 // "cluster-name-control-plane:6443" which are only resolvable inside the Docker network.
