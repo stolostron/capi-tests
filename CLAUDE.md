@@ -47,7 +47,7 @@ All test phases are designed to be idempotent and safe to re-run:
 **To force regeneration:**
 ```bash
 # Delete output directory to regenerate YAMLs
-rm -rf /tmp/cluster-api-installer-aro/cate-stage/
+rm -rf "${CAPI_TEST_OUTPUT_DIR}/cluster-api-installer-aro/cate-stage/"
 
 # Delete Kind cluster to redeploy
 kind delete cluster --name capz-tests-stage
@@ -207,9 +207,7 @@ make clean-azure
 
 The `make clean` command is interactive by default and will prompt you to confirm deletion of:
 - Kind cluster
-- Cluster-api-installer repository clone
-- Kubeconfig files
-- Results directory
+- The selected private run directory (default installer clone, generated files, kubeconfigs, and reports); explicit external paths and report-only compatibility copies are preserved
 - Azure resource group (`${WORKLOAD_CLUSTER_NAME}-resgroup`)
 - Orphaned Azure resources (resources with `${WORKLOAD_CLUSTER_NAME}` prefix that survive RG deletion)
 
@@ -298,7 +296,7 @@ Tests require access to the [cluster-api-installer](https://github.com/RadekCap/
    ```
 
 2. **Automatic Clone** (CI/CD, default)
-   - Tests auto-clone to `/tmp/cluster-api-installer-aro`
+   - Tests auto-clone to `${CAPI_TEST_OUTPUT_DIR}/cluster-api-installer-aro`
    - No manual setup needed
 
 3. **Existing Clone** (manual)
@@ -356,7 +354,8 @@ export AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 ### Repository Configuration
 - `ARO_REPO_URL` - cluster-api-installer URL (default: RadekCap/cluster-api-installer)
 - `ARO_REPO_BRANCH` - Branch to use (default: `ARO-ASO`)
-- `ARO_REPO_DIR` - Local path (default: `/tmp/cluster-api-installer-aro`)
+- `CAPI_TEST_OUTPUT_DIR` - Private run artifact root (default: a unique `capi-tests-*` directory under `SHARED_DIR` or the OS temporary directory). Persisted in the run context; must be dedicated and empty on first use. Upload only its `results/` subdirectory.
+- `ARO_REPO_DIR` - Local path (default: `${CAPI_TEST_OUTPUT_DIR}/cluster-api-installer-aro`)
 
 ### Infrastructure Provider
 - `INFRA_PROVIDER` - Infrastructure provider to use (values: `aro`, `rosa`; default: `aro`). Selects which CAPI infrastructure provider configuration to load:
