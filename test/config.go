@@ -774,6 +774,13 @@ type TestConfig struct {
 	// Infrastructure providers
 	// InfraProviderName is the selected infrastructure provider ("aro" or "rosa").
 	// Set via INFRA_PROVIDER env var. Default: "aro".
+	// Opt-in ARO identity/RBAC provisioning with explicit credential boundaries.
+	AROSplitDeployment            bool
+	AROPreexistingIdentities      bool
+	AROIdentityCredentialSecret   string
+	ARORoleCredentialSecret       string
+	ARODeploymentCredentialSecret string
+
 	InfraProviderName string
 	// InfraProviders holds the list of infrastructure provider configurations.
 	// Each provider defines its controllers, webhooks, and credential secrets.
@@ -1007,6 +1014,12 @@ func NewTestConfig() *TestConfig {
 	clusterDeployTimeout := parseClusterDeploymentTimeout()
 
 	return &TestConfig{
+		AROSplitDeployment:            GetEnvOrDefault("ARO_SPLIT_DEPLOYMENT", "false") == "true",
+		AROPreexistingIdentities:      GetEnvOrDefault("ARO_PREEXISTING_IDENTITIES", "false") == "true",
+		AROIdentityCredentialSecret:   GetEnvOrDefault("ARO_IDENTITY_CREDENTIAL_SECRET", ""),
+		ARORoleCredentialSecret:       GetEnvOrDefault("ARO_ROLE_CREDENTIAL_SECRET", ""),
+		ARODeploymentCredentialSecret: GetEnvOrDefault("ARO_DEPLOYMENT_CREDENTIAL_SECRET", "aso-credential"),
+
 		// Repository defaults
 		RepoURL:    GetEnvOrDefault("ARO_REPO_URL", "https://github.com/stolostron/cluster-api-installer"),
 		RepoBranch: GetEnvOrDefault("ARO_REPO_BRANCH", "main"),
