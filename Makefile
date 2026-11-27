@@ -41,15 +41,19 @@ export CAPI_TEST_CONTEXT_FILE
 # Must point to the repo dir because Go tests os.Chdir(config.RepoDir) before writing.
 # Prow exports RESOURCEGROUPNAME for the whole job, so use it to select the
 # same run-scoped file across separate Make/go-test invocations.
-DEPLOYMENT_STATE_FILE_NAME := .deployment-state.json
 ifneq ($(strip $(DEPLOYMENT_STATE_FILE)),)
-DEPLOYMENT_STATE_FILE_NAME := $(notdir $(DEPLOYMENT_STATE_FILE))
-else ifneq ($(strip $(RESOURCEGROUPNAME)),)
+# Go writes relative overrides from the installer directory and honors absolute
+# overrides verbatim. Preserve subdirectories for environment and CLI overrides.
+override DEPLOYMENT_STATE_FILE := $(if $(filter /%,$(DEPLOYMENT_STATE_FILE)),$(DEPLOYMENT_STATE_FILE),$(abspath $(ARO_REPO_DIR)/$(DEPLOYMENT_STATE_FILE)))
+else
+DEPLOYMENT_STATE_FILE_NAME := .deployment-state.json
+ifneq ($(strip $(RESOURCEGROUPNAME)),)
 DEPLOYMENT_STATE_FILE_NAME := .deployment-state-$(RESOURCEGROUPNAME).json
 else ifneq ($(strip $(shell printenv CS_CLUSTER_NAME)),)
 DEPLOYMENT_STATE_FILE_NAME := .deployment-state-$(shell printenv CS_CLUSTER_NAME).json
 endif
-DEPLOYMENT_STATE_FILE := $(ARO_REPO_DIR)/$(DEPLOYMENT_STATE_FILE_NAME)
+DEPLOYMENT_STATE_FILE := $(abspath $(ARO_REPO_DIR)/$(DEPLOYMENT_STATE_FILE_NAME))
+endif
 
 STATE_FILE_CANDIDATES := $(DEPLOYMENT_STATE_FILE) $(ARO_REPO_DIR)/.deployment-state.json
 define read_state_field
