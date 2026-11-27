@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -119,6 +120,11 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 
 	if !DirExists(config.RepoDir) {
 		t.Skipf("Repository not cloned yet at %s", config.RepoDir)
+	}
+
+	// Check the live regional catalog before generation or reuse of existing YAMLs.
+	if err := ValidateOpenShiftVersionAvailability(context.Background(), t, config); err != nil {
+		t.Fatalf("OpenShift version preflight failed: %v", err)
 	}
 
 	// Validate domain prefix length before attempting YAML generation
