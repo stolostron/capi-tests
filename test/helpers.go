@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -1596,8 +1597,202 @@ func DumpNotReadyResourceDiagnostics(t *testing.T, context, namespace string, no
 	saveDiagnosticsToFile(t, diagLog.String())
 }
 
+// DumpControlPlaneDiagnostics captures the CAPI control-plane and ASO HCP resource
+// objects, their events, and the ARM HCP resource state. This is called on deployment
+// failure because the ARM resource can contain status fields that are not represented
+// in the ASO Kubernetes status schema (for example, properties.status.activeVersions).
+func DumpControlPlaneDiagnostics(t *testing.T, context, namespace, controlPlaneName, hcpResourceName, hcpResourceID string) {
+	t.Helper()
+
+	var diagLog strings.Builder
+	header := fmt.Sprintf("=== DIAGNOSTICS: Control-plane failure snapshot (%s) ===", time.Now().Format("2006-01-02 15:04:05"))
+	PrintToTTY("\n%s\n", header)
+	diagLog.WriteString(header + "\n")
+	diagLog.WriteString(fmt.Sprintf("Namespace: %s\n", namespace))
+
+	resources := []struct {
+		kind         string
+		resourceType string
+		name         string
+	}{
+		{
+			kind:         "AROControlPlane",
+			resourceType: "arocontrolplane.controlplane.cluster.x-k8s.io",
+			name:         controlPlaneName,
+		},
+		{
+			kind:         "HcpOpenShiftCluster",
+			resourceType: "hcpopenshiftcluster.redhatopenshift.azure.com",
+			name:         hcpResourceName,
+		},
+	}
+
+	for _, resource := range resources {
+		sectionHeader := fmt.Sprintf("\n--- %s/%s ---", resource.kind, resource.name)
+		PrintToTTY("%s\n", sectionHeader)
+		diagLog.WriteString(sectionHeader + "\n")
+		if resource.name == "" {
+			msg := fmt.Sprintf("Could not fetch %s: resource name is empty", resource.kind)
+			PrintToTTY("%s\n", msg)
+			diagLog.WriteString(msg + "\n")
+			continue
+		}
+
+		objectOutput, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", namespace,
+			"get", resource.resourceType, resource.name, "-o", "json", "--request-timeout=10s")
+		objectOutput = formatDiagnosticResourceOutput(objectOutput)
+		if err != nil {
+			msg := fmt.Sprintf("Could not fetch object: %v", err)
+			PrintToTTY("%s\n", msg)
+			diagLog.WriteString(msg + "\n")
+		}
+		if strings.TrimSpace(objectOutput) == "" {
+			if err == nil {
+				msg := "Object query returned no output"
+				PrintToTTY("%s\n", msg)
+				diagLog.WriteString(msg + "\n")
+			}
+		} else {
+			PrintToTTY("%s\n", objectOutput)
+			t.Logf("%s/%s snapshot:\n%s", resource.kind, resource.name, objectOutput)
+			diagLog.WriteString(objectOutput + "\n")
+		}
+
+		eventOutput, eventErr := RunCommandQuiet(t, "kubectl", "--context", context, "-n", namespace,
+			"get", "events",
+			"--field-selector", fmt.Sprintf("involvedObject.kind=%s,involvedObject.name=%s", resource.kind, resource.name),
+			"--sort-by=.lastTimestamp", "-o", "json", "--request-timeout=10s")
+		eventOutput = redactDiagnosticOutput(eventOutput)
+		if eventErr != nil {
+			msg := fmt.Sprintf("Could not fetch object events: %v", eventErr)
+			PrintToTTY("%s\n", msg)
+			diagLog.WriteString(msg + "\n")
+		} else if strings.TrimSpace(eventOutput) == "" {
+			msg := "No events returned for this object"
+			PrintToTTY("%s\n", msg)
+			diagLog.WriteString(msg + "\n")
+		} else {
+			PrintToTTY("Events:\n%s\n", eventOutput)
+			t.Logf("%s/%s events:\n%s", resource.kind, resource.name, eventOutput)
+			diagLog.WriteString("Events:\n" + eventOutput + "\n")
+		}
+	}
+
+	if hcpResourceID == "" {
+		msg := "Could not query ARM HCP resource: resource ID is empty"
+		PrintToTTY("%s\n", msg)
+		diagLog.WriteString("\n--- ARM HcpOpenShiftCluster ---\n" + msg + "\n")
+	} else {
+		sectionHeader := "\n--- ARM HcpOpenShiftCluster state ---"
+		PrintToTTY("%s\n", sectionHeader)
+		diagLog.WriteString(sectionHeader + "\n")
+		armOutput, err := RunCommandQuietWithTimeout(t, 30*time.Second, "az", "resource", "show",
+			"--ids", hcpResourceID, "--query", "properties.{provisioningState:provisioningState,status:status}",
+			"--output", "json", "--only-show-errors")
+		armOutput = redactDiagnosticOutput(armOutput)
+		if err != nil {
+			msg := fmt.Sprintf("Could not fetch ARM HCP resource: %v", err)
+			PrintToTTY("%s\n", msg)
+			diagLog.WriteString(msg + "\n")
+		}
+		if strings.TrimSpace(armOutput) != "" {
+			PrintToTTY("%s\n", armOutput)
+			t.Logf("ARM HcpOpenShiftCluster snapshot:\n%s", armOutput)
+			diagLog.WriteString(armOutput + "\n")
+		}
+	}
+
+	PrintToTTY("=== END CONTROL-PLANE DIAGNOSTICS ===\n\n")
+	diagLog.WriteString("\n=== END CONTROL-PLANE DIAGNOSTICS ===\n")
+	saveDiagnosticsToFileWithPrefix(t, "control-plane-diagnostics", diagLog.String())
+}
+
+// redactDiagnosticOutput masks sensitive fields in structured diagnostics and known
+// credential values from the process environment before output is printed or saved.
+func redactDiagnosticOutput(output string) string {
+	for key := range sensitiveEnvKeys {
+		if secret := os.Getenv(key); secret != "" {
+			output = strings.ReplaceAll(output, secret, "***REDACTED***")
+		}
+	}
+
+	var value any
+	if err := json.Unmarshal([]byte(output), &value); err != nil {
+		return redactCommand(output)
+	}
+	redactDiagnosticValue(value)
+
+	redacted, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return redactCommand(output)
+	}
+	return redactCommand(string(redacted))
+}
+
+func formatDiagnosticResourceOutput(output string) string {
+	var resource map[string]any
+	if err := json.Unmarshal([]byte(output), &resource); err != nil {
+		return redactDiagnosticOutput(output)
+	}
+	if kind, _ := resource["kind"].(string); kind == "Status" {
+		return redactDiagnosticOutput(output)
+	}
+
+	snapshot := make(map[string]any, 4)
+	for _, key := range []string{"apiVersion", "kind", "spec", "status"} {
+		if value, ok := resource[key]; ok {
+			snapshot[key] = value
+		}
+	}
+	if metadata, ok := resource["metadata"].(map[string]any); ok {
+		metadataSnapshot := make(map[string]any, 5)
+		for _, key := range []string{"name", "namespace", "uid", "generation", "creationTimestamp"} {
+			if value, ok := metadata[key]; ok {
+				metadataSnapshot[key] = value
+			}
+		}
+		snapshot["metadata"] = metadataSnapshot
+	}
+	formatted, err := json.MarshalIndent(snapshot, "", "  ")
+	if err != nil {
+		return redactDiagnosticOutput(output)
+	}
+	return redactDiagnosticOutput(string(formatted))
+}
+
+func redactDiagnosticValue(value any) {
+	switch typedValue := value.(type) {
+	case map[string]any:
+		for key, nestedValue := range typedValue {
+			if isSensitiveDiagnosticField(key) {
+				typedValue[key] = "***REDACTED***"
+				continue
+			}
+			redactDiagnosticValue(nestedValue)
+		}
+	case []any:
+		for _, nestedValue := range typedValue {
+			redactDiagnosticValue(nestedValue)
+		}
+	}
+}
+
+func isSensitiveDiagnosticField(key string) bool {
+	normalized := strings.ToLower(strings.NewReplacer("-", "", "_", "", ".", "", " ", "").Replace(key))
+	for _, marker := range []string{"secret", "password", "passwd", "token", "credential", "privatekey", "connectionstring", "authorization", "sharedaccesssignature", "sas"} {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return strings.Contains(normalized, "accesskey") && !strings.Contains(normalized, "id")
+}
+
 // saveDiagnosticsToFile writes diagnostic output to a timestamped file in the results directory.
 func saveDiagnosticsToFile(t *testing.T, content string) {
+	saveDiagnosticsToFileWithPrefix(t, "infra-diagnostics", content)
+}
+
+func saveDiagnosticsToFileWithPrefix(t *testing.T, prefix, content string) {
 	t.Helper()
 
 	resultsDir := GetResultsDir()
@@ -1606,7 +1801,7 @@ func saveDiagnosticsToFile(t *testing.T, content string) {
 		return
 	}
 
-	filename := fmt.Sprintf("infra-diagnostics-%s.log", time.Now().Format("20060102_150405"))
+	filename := fmt.Sprintf("%s-%s.log", prefix, time.Now().Format("20060102_150405"))
 	filePath := filepath.Join(resultsDir, filename)
 
 	if err := os.WriteFile(filePath, []byte(content), 0600); err != nil {
@@ -1616,6 +1811,35 @@ func saveDiagnosticsToFile(t *testing.T, content string) {
 
 	PrintToTTY("📄 Diagnostics saved to: %s\n", filePath)
 	t.Logf("Diagnostics saved to: %s", filePath)
+}
+
+// RunCommandQuietWithTimeout executes a command without printing it to TTY and stops
+// it if it exceeds timeout. The command is logged; the caller handles command output.
+func RunCommandQuietWithTimeout(t *testing.T, timeout time.Duration, name string, args ...string) (string, error) {
+	t.Helper()
+
+	cmdStr := name
+	if len(args) > 0 {
+		cmdStr = fmt.Sprintf("%s %s", name, strings.Join(args, " "))
+	}
+	safeCmdStr := redactCommand(cmdStr)
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "--ids" {
+			safeCmdStr = strings.Replace(safeCmdStr, args[i+1], "***RESOURCE-ID-REDACTED***", 1)
+		}
+	}
+	t.Logf("Executing command (quiet, timeout %s): %s", timeout, safeCmdStr)
+	logCommandToFile(t.Name(), safeCmdStr)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, name, args...) // #nosec G204 G702 -- test helper designed to execute arbitrary commands for test orchestration
+	output, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		return strings.TrimSpace(string(output)), fmt.Errorf("command timed out after %s: %w", timeout, ctx.Err())
+	}
+	return strings.TrimSpace(string(output)), err
 }
 
 // diagnosticsDeadline is the maximum time allowed for the entire diagnostics sweep.
@@ -1661,6 +1885,21 @@ func CollectAndDumpInfraDiagnostics(t *testing.T, context, namespace, clusterNam
 // collectInfraDiagnostics is the inner implementation of CollectAndDumpInfraDiagnostics.
 func collectInfraDiagnostics(t *testing.T, context, namespace, clusterName string) {
 	t.Helper()
+	config := NewTestConfig()
+	controlPlaneName := config.GetProvisionedControlPlaneName()
+	hcpResourceName := config.HCPResourceName
+	if hcpResourceName == "" {
+		hcpResourceName = controlPlaneName
+	}
+	hcpResourceID := config.BuildHCPResourceID()
+	if hcpResourceID == "" && hcpResourceName != "" {
+		if resourceID, err := RunCommandQuiet(t, "kubectl", "--context", context, "-n", namespace,
+			"get", "hcpopenshiftcluster.redhatopenshift.azure.com", hcpResourceName,
+			"-o", "jsonpath={.status.id}", "--request-timeout=10s"); err == nil {
+			hcpResourceID = strings.TrimSpace(resourceID)
+		}
+	}
+	DumpControlPlaneDiagnostics(t, context, namespace, controlPlaneName, hcpResourceName, hcpResourceID)
 
 	data, err := MonitorCluster(t, context, namespace, clusterName)
 	if err != nil {

@@ -727,6 +727,53 @@ esac
 	}
 }
 
+// TestCleanup_PreservesExcludedAzureIdentity verifies that a persistent Azure AD
+// identity can be excluded by app ID, including its service principal.
+func TestCleanup_PreservesExcludedAzureIdentity(t *testing.T) {
+	cleanupScript := "../scripts/cleanup-azure-resources.sh"
+	binDir := t.TempDir()
+	azLog := filepath.Join(t.TempDir(), "az.log")
+	const appID = "6c35b111-a695-4e3d-9f16-229c34bbe53d"
+
+	fakeAzureCLI := fmt.Sprintf(`#!/usr/bin/env bash
+set -euo pipefail
+echo "$*" >> "$FAKE_AZ_LOG"
+case "$1 ${2:-} ${3:-}" in
+  "account show"|"extension show") exit 0 ;;
+  "graph query") echo '{"data":[]}' ;;
+  "keyvault list-deleted") echo '[]' ;;
+  "ad app list") echo '[{"appId":"%s","displayName":"capz-tests-ci"}]' ;;
+  "ad sp list") echo '[{"appId":"%s","displayName":"capz-tests-ci","id":"d610e9d4-89bb-4851-a78c-ed5dca799ff6"}]' ;;
+  "ad app delete"|"ad sp delete") echo "unexpected deletion: $*" >> "$FAKE_AZ_LOG"; exit 0 ;;
+  *) echo '[]' ;;
+esac
+`, appID, appID)
+	azPath := filepath.Join(binDir, "az")
+	if err := os.WriteFile(azPath, []byte(fakeAzureCLI), 0o755); err != nil {
+		t.Fatalf("failed to write fake Azure CLI: %v", err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("FAKE_AZ_LOG", azLog)
+	t.Setenv("CLEANUP_EXCLUDED_AD_APP_IDS", appID)
+
+	cmd := exec.Command("bash", cleanupScript, "--prefix", "capz-tests", "--force")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("cleanup failed while preserving excluded identity: %v\noutput:\n%s", err, output)
+	}
+	if !strings.Contains(string(output), "explicitly excluded") {
+		t.Fatalf("cleanup did not report the excluded identity:\n%s", output)
+	}
+
+	logBytes, readErr := os.ReadFile(azLog)
+	if readErr != nil {
+		t.Fatalf("failed to read fake Azure CLI log: %v", readErr)
+	}
+	if strings.Contains(string(logBytes), "unexpected deletion") {
+		t.Fatalf("cleanup attempted to delete the excluded identity:\n%s", logBytes)
+	}
+}
+
 // ============================================================================
 // Edge Case Tests
 // ============================================================================
