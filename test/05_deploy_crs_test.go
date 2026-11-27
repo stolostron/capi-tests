@@ -824,6 +824,48 @@ func TestDeployment_WaitForControlPlane(t *testing.T) {
 	}
 }
 
+// TestDeployment_VerifyHCPDiagnosticSetting exercises customer-managed control-plane logging through ASO.
+func TestDeployment_VerifyHCPDiagnosticSetting(t *testing.T) {
+	config := diagnosticSettingConfig(t)
+	if !diagnosticSettingServed(t, config) {
+		t.Fatalf("%s is required for HCP logging; install the DiagnosticSetting CRD on the management cluster", diagnosticAPIVersion)
+	}
+	owner, resourceID := diagnosticHCP(t, config)
+	if resourceID == "" {
+		t.Fatalf("HcpOpenShiftCluster %q has no ARM resource ID in namespace %s", owner, config.WorkloadClusterNamespace)
+	}
+	categories := diagnosticAzure(t, "categories", "list", "--resource", resourceID,
+		"--query", "(value || @)[?categoryType=='Logs'].name", "-o", "tsv")
+	if missing := missingDiagnosticCategories(strings.Fields(categories)); len(missing) > 0 {
+		t.Fatalf("HCP %s does not advertise these log categories: %s", resourceID, strings.Join(missing, ", "))
+	}
+
+	if err := resolveHCPSubscriptionID(t, config); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(strings.ToLower(resourceID), "/subscriptions/"+strings.ToLower(config.AzureSubscriptionID)+"/") {
+		t.Fatalf("HCP %s is outside the diagnostic destinations' subscription %s", resourceID, config.AzureSubscriptionID)
+	}
+	location := diagnosticKubectl(t, config, "get", "hcpopenshiftclusters.redhatopenshift.azure.com", owner, "-o", "jsonpath={.spec.location}")
+	if location == "" {
+		t.Fatalf("HcpOpenShiftCluster %s has no location for diagnostic destinations", owner)
+	}
+	// Phase 07 might never run if provisioning or ASO reconciliation fails.
+	t.Cleanup(func() {
+		if t.Failed() {
+			cleanupHCPDiagnostics(t, config)
+		}
+	})
+	storageID := createDiagnosticStorage(t, config, location)
+	ruleID := createDiagnosticEventHub(t, config, location)
+	applyDiagnosticSetting(t, config, owner, storageID, ruleID)
+	waitForDiagnosticSetting(t, config)
+	output := diagnosticAzure(t, "show", "--name", diagnosticAzureName, "--resource", resourceID, "-o", "json")
+	if err := verifyDiagnosticDestination(output, storageID, ruleID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestDeployment_WaitForExternalAuthReady waits for the ExternalAuthReady condition on the control plane
 // to become True. ExternalAuth requires at least one ready machine pool, so this test must run after
 // TestDeployment_WaitForControlPlane (which waits for both ControlPlane.Ready and MachinePool.Ready).
