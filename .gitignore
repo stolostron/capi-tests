@@ -34,6 +34,7 @@ credentials.yaml
 kubeconfig
 *-kubeconfig.yaml
 .env
+.capi-test-defaults.json
 .env.*
 !.env.example
 
