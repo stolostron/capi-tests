@@ -136,6 +136,12 @@ func TestDeployment_ApplyResources(t *testing.T) {
 		t.Skipf("Output directory does not exist: %s", outputDir)
 	}
 
+	if config.HasProvider("aro") {
+		if err := ValidateGeneratedARONodePools(filepath.Join(outputDir, config.ClusterYAML)); err != nil {
+			t.Fatalf("ARO node pool validation failed before apply: %v", err)
+		}
+	}
+
 	PrintToTTY("\n=== Applying Kubernetes resources ===\n")
 
 	// Get files to apply (provider-specific YAML files)
@@ -187,6 +193,12 @@ func TestDeployment_ApplyClusterYAMLs(t *testing.T) {
 	if !DirExists(outputDir) {
 		PrintToTTY("⚠️  Output directory does not exist: %s\n\n", outputDir)
 		t.Skipf("Output directory does not exist: %s", outputDir)
+	}
+
+	if config.HasProvider("aro") {
+		if err := ValidateGeneratedARONodePools(filepath.Join(outputDir, config.ClusterYAML)); err != nil {
+			t.Fatalf("ARO node pool validation failed before apply: %v", err)
+		}
 	}
 
 	context := config.GetKubeContext()

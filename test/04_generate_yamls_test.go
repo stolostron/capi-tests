@@ -177,6 +177,11 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 						existingNamespace, config.WorkloadClusterNamespace)
 					// Fall through to regeneration
 				} else {
+					if config.HasProvider("aro") {
+						if err := ValidateGeneratedARONodePools(clusterYAMLPath); err != nil {
+							t.Fatalf("Existing ARO node pool manifest is unsafe to reuse: %v", err)
+						}
+					}
 					// Both prefix and namespace match - safe to skip generation
 					PrintToTTY("\n=== Infrastructure YAML files already exist ===\n")
 					PrintToTTY("✅ All expected files found in: %s\n", outputDir)
@@ -297,6 +302,9 @@ func TestInfrastructure_GenerateResources(t *testing.T) {
 
 	if config.HasProvider("aro") {
 		clusterYAMLPath := filepath.Join(outputDir, config.ClusterYAML)
+		if err := ValidateGeneratedARONodePools(clusterYAMLPath); err != nil {
+			t.Fatalf("Generated ARO node pool validation failed: %v", err)
+		}
 		LogGeneratedResourceGroup(t, config.ResourceGroupName, clusterYAMLPath)
 	}
 
@@ -470,6 +478,12 @@ func TestInfrastructure_VerifyGeneratedYAMLs(t *testing.T) {
 			if err := ValidateYAMLFile(filePath); err != nil {
 				t.Errorf("%s validation failed: %v", filename, err)
 				return
+			}
+
+			if config.HasProvider("aro") && filename == config.ClusterYAML {
+				if err := ValidateGeneratedARONodePools(filePath); err != nil {
+					t.Fatalf("ARO node pool validation failed: %v", err)
+				}
 			}
 
 			info, err := os.Stat(filePath)
